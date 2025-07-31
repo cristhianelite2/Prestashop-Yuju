@@ -1,0 +1,460 @@
+/*
+* 2024 Yuju Integration
+*
+* NOTICE OF LICENSE
+*
+* This source file is subject to the Academic Free License (AFL 3.0)
+* that is bundled with this package in the file LICENSE.txt.
+* It is also available through the world-wide-web at this URL:
+* http://opensource.org/licenses/afl-3.0.php
+* If you did not receive a copy of the license and are unable to
+* obtain it through the world-wide-web, please send an email
+* to license@prestashop.com so we can send you a copy immediately.
+*
+* @author    Yuju Integration Team
+* @copyright 2024 Yuju Integration
+* @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+*/
+
+/* Yuju Module Admin Styles */
+
+/* General Module Styles */
+.yuju-module {
+    font-family: 'Open Sans', sans-serif;
+}
+
+.yuju-module .panel {
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.yuju-module .panel-heading {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 4px 4px 0 0;
+}
+
+.yuju-module .panel-heading h3 {
+    color: white;
+    margin: 0;
+}
+
+/* Status Indicators */
+.yuju-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.yuju-status.connected {
+    background-color: #5cb85c;
+    color: white;
+}
+
+.yuju-status.disconnected {
+    background-color: #d9534f;
+    color: white;
+}
+
+.yuju-status.syncing {
+    background-color: #f0ad4e;
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+
+.yuju-status.synced {
+    background-color: #5bc0de;
+    color: white;
+}
+
+.yuju-status.error {
+    background-color: #d9534f;
+    color: white;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.yuju-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Progress Bars */
+.yuju-progress {
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.yuju-progress-bar {
+    height: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+    line-height: 20px;
+    transition: width 0.3s ease;
+}
+
+/* Statistics Cards */
+.yuju-stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    transition: transform 0.2s ease;
+}
+
+.yuju-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.yuju-stat-number {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 5px;
+}
+
+.yuju-stat-label {
+    color: #666;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Sync Controls */
+.yuju-sync-controls {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.yuju-sync-button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.yuju-sync-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.yuju-sync-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.yuju-sync-button.danger {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+}
+
+.yuju-sync-button.success {
+    background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+}
+
+/* Log Viewer */
+.yuju-log-viewer {
+    background: #2d3748;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 15px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.yuju-log-entry {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.yuju-log-entry.error {
+    color: #fc8181;
+}
+
+.yuju-log-entry.warning {
+    color: #f6e05e;
+}
+
+.yuju-log-entry.info {
+    color: #63b3ed;
+}
+
+.yuju-log-entry.debug {
+    color: #9ca3af;
+}
+
+.yuju-log-timestamp {
+    color: #a0aec0;
+    margin-right: 10px;
+}
+
+/* Webhook Status */
+.yuju-webhook-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.yuju-webhook-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.yuju-webhook-indicator.active {
+    background-color: #5cb85c;
+    box-shadow: 0 0 6px rgba(92, 184, 92, 0.6);
+}
+
+.yuju-webhook-indicator.inactive {
+    background-color: #d9534f;
+}
+
+.yuju-webhook-indicator.pending {
+    background-color: #f0ad4e;
+    animation: pulse 1.5s infinite;
+}
+
+/* Form Enhancements */
+.yuju-form-group {
+    margin-bottom: 20px;
+}
+
+.yuju-form-label {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.yuju-form-control {
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 12px;
+    transition: border-color 0.2s ease;
+}
+
+.yuju-form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
+.yuju-help-text {
+    font-size: 0.85em;
+    color: #718096;
+    margin-top: 5px;
+}
+
+/* Tables */
+.yuju-table {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.yuju-table th {
+    background: #f7fafc;
+    font-weight: 600;
+    color: #2d3748;
+    padding: 12px 15px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.yuju-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f7fafc;
+}
+
+.yuju-table tr:hover {
+    background-color: #f7fafc;
+}
+
+/* Alerts */
+.yuju-alert {
+    border-radius: 6px;
+    padding: 15px;
+    margin: 15px 0;
+    border-left: 4px solid;
+}
+
+.yuju-alert.success {
+    background-color: #f0fff4;
+    border-left-color: #38a169;
+    color: #2f855a;
+}
+
+.yuju-alert.error {
+    background-color: #fed7d7;
+    border-left-color: #e53e3e;
+    color: #c53030;
+}
+
+.yuju-alert.warning {
+    background-color: #fffbeb;
+    border-left-color: #d69e2e;
+    color: #b7791f;
+}
+
+.yuju-alert.info {
+    background-color: #ebf8ff;
+    border-left-color: #3182ce;
+    color: #2c5282;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .yuju-stat-card {
+        margin-bottom: 15px;
+    }
+    
+    .yuju-sync-controls {
+        padding: 15px;
+    }
+    
+    .yuju-sync-button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .yuju-log-viewer {
+        font-size: 11px;
+        max-height: 300px;
+    }
+}
+
+/* Loading States */
+.yuju-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.yuju-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Tooltips */
+.yuju-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.yuju-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2d3748;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    z-index: 1000;
+}
+
+.yuju-tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Copy to Clipboard */
+.yuju-copy-button {
+    background: #e2e8f0;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.yuju-copy-button:hover {
+    background: #cbd5e0;
+}
+
+.yuju-copy-button.copied {
+    background: #48bb78;
+    color: white;
+}
+
+/* JSON Viewer */
+.yuju-json-viewer {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 15px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 400px;
+    overflow: auto;
+}
+
+.yuju-json-key {
+    color: #d53f8c;
+    font-weight: bold;
+}
+
+.yuju-json-string {
+    color: #38a169;
+}
+
+.yuju-json-number {
+    color: #3182ce;
+}
+
+.yuju-json-boolean {
+    color: #d69e2e;
+}
+
+.yuju-json-null {
+    color: #a0aec0;
+    font-style: italic;
+}
