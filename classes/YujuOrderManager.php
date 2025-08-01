@@ -578,6 +578,7 @@ class YujuOrderManager
             'prestashop_order_id' => (int) $prestashop_order_id,
             'yuju_order_id' => pSQL($yuju_order_id),
             'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
         ]);
     }
 

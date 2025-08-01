@@ -16,23 +16,26 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+{extends file="./layout.tpl"}
+
+{block name="content"}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-dashboard"></i>
-        {l s='Yuju Integration Dashboard' mod='prestashopyuju'}
+        Panel de Control de Integración Yuju
     </div>
     <div class="panel-body">
         <div class="row">
             <div class="col-md-12">
-                <h3>{l s='Welcome to Yuju Integration' mod='prestashopyuju'}</h3>
-                <p>{l s='This module allows you to synchronize your PrestaShop store with the Yuju platform.' mod='prestashopyuju'}</p>
+                <h3>Bienvenido a la Integración Yuju</h3>
+                <p>Este módulo le permite sincronizar su tienda PrestaShop con la plataforma Yuju.</p>
                 
                 <div class="alert alert-info">
-                    <h4>{l s='Module Information' mod='prestashopyuju'}</h4>
+                    <h4>Información del Módulo</h4>
                     <ul>
-                        <li><strong>{l s='Module Name:' mod='prestashopyuju'}</strong> {$module_name|escape:'html':'UTF-8'}</li>
-                        <li><strong>{l s='Version:' mod='prestashopyuju'}</strong> {$module_version|escape:'html':'UTF-8'}</li>
-                        <li><strong>{l s='Status:' mod='prestashopyuju'}</strong> {l s='Active' mod='prestashopyuju'}</li>
+                        <li><strong>Nombre del Módulo:</strong> {$module_name|escape:'html':'UTF-8'}</li>
+                        <li><strong>Versión:</strong> {$module_version|escape:'html':'UTF-8'}</li>
+                        <li><strong>Estado:</strong> Activo</li>
                     </ul>
                 </div>
                 
@@ -40,12 +43,12 @@
                     <div class="col-md-4">
                         <div class="panel panel-default">
                             <div class="panel-heading">
-                                <h4>{l s='Configuration' mod='prestashopyuju'}</h4>
+                                <h4>Configuración</h4>
                             </div>
                             <div class="panel-body">
-                                <p>{l s='Configure your Yuju API settings and synchronization options.' mod='prestashopyuju'}</p>
+                                <p>Configure sus ajustes de API de Yuju y opciones de sincronización.</p>
                                 <a href="{$link->getAdminLink('AdminYujuConfiguration')|escape:'html':'UTF-8'}" class="btn btn-primary">
-                                    {l s='Configure' mod='prestashopyuju'}
+                                    Configurar
                                 </a>
                             </div>
                         </div>
@@ -54,12 +57,12 @@
                     <div class="col-md-4">
                         <div class="panel panel-default">
                             <div class="panel-heading">
-                                <h4>{l s='Synchronization' mod='prestashopyuju'}</h4>
+                                <h4>Sincronización</h4>
                             </div>
                             <div class="panel-body">
-                                <p>{l s='Manage product, category, and order synchronization.' mod='prestashopyuju'}</p>
+                                <p>Gestione la sincronización de productos, categorías y pedidos.</p>
                                 <a href="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}" class="btn btn-primary">
-                                    {l s='Synchronize' mod='prestashopyuju'}
+                                    Sincronizar
                                 </a>
                             </div>
                         </div>
@@ -68,12 +71,12 @@
                     <div class="col-md-4">
                         <div class="panel panel-default">
                             <div class="panel-heading">
-                                <h4>{l s='Logs' mod='prestashopyuju'}</h4>
+                                <h4>Registros</h4>
                             </div>
                             <div class="panel-body">
-                                <p>{l s='View synchronization logs and troubleshoot issues.' mod='prestashopyuju'}</p>
+                                <p>Vea los registros de sincronización y solucione problemas.</p>
                                 <a href="{$link->getAdminLink('AdminYujuLogs')|escape:'html':'UTF-8'}" class="btn btn-primary">
-                                    {l s='View Logs' mod='prestashopyuju'}
+                                    Ver Registros
                                 </a>
                             </div>
                         </div>
@@ -83,3 +86,4 @@
         </div>
     </div>
 </div>
+{/block}

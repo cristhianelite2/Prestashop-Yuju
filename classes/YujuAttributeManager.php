@@ -452,7 +452,7 @@ class YujuAttributeManager
             $sql .= ' WHERE is_active = 1';
         }
 
-        $sql .= ' ORDER BY created_at DESC';
+        $sql .= ' ORDER BY `created_at` DESC';
 
         return Db::getInstance()->executeS($sql);
     }
@@ -524,7 +524,7 @@ class YujuAttributeManager
             JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON a.id_attribute_group = agl.id_attribute_group
             WHERE al.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
             AND agl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
-            ORDER BY agl.name, al.name
+            ORDER BY `agl`.`name`, `al`.`name`
         ');
     }
 
@@ -538,7 +538,7 @@ class YujuAttributeManager
             FROM ' . _DB_PREFIX_ . 'attribute_group ag
             JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON ag.id_attribute_group = agl.id_attribute_group
             WHERE agl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
-            ORDER BY ag.position, agl.name
+            ORDER BY `ag`.`position`, `agl`.`name`
         ');
     }
 

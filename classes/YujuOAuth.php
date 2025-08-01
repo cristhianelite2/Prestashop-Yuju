@@ -35,11 +35,11 @@ class YujuOAuth
 
     public function __construct()
     {
-        $environment = Configuration::get('YUJU_API_ENVIRONMENT', null) ?: 'sandbox';
+        $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
         $this->auth_url = ($environment === 'production') ? self::PRODUCTION_AUTH_URL : self::SANDBOX_AUTH_URL;
 
-        $this->client_id = Configuration::get('YUJU_API_CLIENT_ID');
-        $this->client_secret = Configuration::get('YUJU_API_CLIENT_SECRET');
+        $this->client_id = Configuration::get('YUJU_CLIENT_ID');
+        $this->client_secret = Configuration::get('YUJU_CLIENT_SECRET');
         $this->redirect_uri = $this->getRedirectUri();
         $this->logger = new YujuLogger();
     }
@@ -53,19 +53,26 @@ class YujuOAuth
             throw new Exception('Client ID no configurado');
         }
 
+        // Generar o usar el estado proporcionado
+        $oauth_state = $state ?: $this->generateState();
+        
+        // Guardar el estado para validación posterior
+        Configuration::updateValue('YUJU_OAUTH_STATE', $oauth_state);
+
+        // Según la documentación de Yuju, la autorización se hace directamente
+        // redirigiendo a la URL de autorización con los parámetros necesarios
         $params = [
-            'response_type' => 'code',
             'client_id' => $this->client_id,
             'redirect_uri' => $this->redirect_uri,
-            'scope' => 'read write',
-            'state' => $state ?: $this->generateState(),
+            'state' => $oauth_state,
         ];
 
-        return $this->auth_url . '/oauth/authorize?' . http_build_query($params);
+        // URL de autorización según documentación de Yuju
+        return 'https://api.tp.yuju.io/auth-generate-token?' . http_build_query($params);
     }
 
     /**
-     * Intercambia el código de autorización por un access token.
+     * Intercambia el código de autorización por un access token usando la API de Yuju.
      */
     public function exchangeCodeForToken($code, $state = null)
     {
@@ -74,14 +81,12 @@ class YujuOAuth
         }
 
         $data = [
-            'grant_type' => 'authorization_code',
             'client_id' => $this->client_id,
-            'client_secret' => $this->client_secret,
+            'secret_key' => $this->client_secret,
             'code' => $code,
-            'redirect_uri' => $this->redirect_uri,
         ];
 
-        $response = $this->makeTokenRequest($data);
+        $response = $this->makeYujuTokenRequest($data);
 
         if ($response['success']) {
             $this->saveTokenData($response['data']);
@@ -170,7 +175,70 @@ class YujuOAuth
     }
 
     /**
-     * Realiza una petición para obtener o refrescar tokens.
+     * Realiza una petición para obtener token usando el endpoint específico de Yuju.
+     */
+    private function makeYujuTokenRequest($data)
+    {
+        $url = 'https://api.tp.yuju.io/auth-generate-token';
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($data),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+
+        $response_body = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+
+        if ($curl_error) {
+            return [
+                'success' => false,
+                'message' => 'cURL Error: ' . $curl_error,
+            ];
+        }
+
+        $response_data = json_decode($response_body, true);
+
+        if ($http_code >= 200 && $http_code < 300) {
+            if (isset($response_data['token'])) {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'access_token' => $response_data['token'],
+                        'token_type' => 'Bearer',
+                        'expires_in' => 3600, // Default 1 hour
+                        'scope' => 'read write',
+                    ],
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'Token no encontrado en la respuesta',
+                ];
+            }
+        } else {
+            $error_message = isset($response_data['message']) ? $response_data['message'] : 'Error desconocido';
+            return [
+                'success' => false,
+                'message' => $error_message,
+                'http_code' => $http_code,
+            ];
+        }
+    }
+
+    /**
+     * Realiza una petición para obtener o refrescar tokens (método legacy).
      */
     private function makeTokenRequest($data)
     {
@@ -251,14 +319,14 @@ class YujuOAuth
         if ($oauth_record) {
             // Actualizar registro existente
             $result = Db::getInstance()->update(
-                'yuju_oauth',
+                'yuju_oauth_tokens',
                 $data,
-                'id_oauth = ' . (int) $oauth_record['id_oauth']
+                'id = ' . (int) $oauth_record['id']
             );
         } else {
             // Crear nuevo registro
             $data['created_at'] = date('Y-m-d H:i:s');
-            $result = Db::getInstance()->insert('yuju_oauth', $data);
+            $result = Db::getInstance()->insert('yuju_oauth_tokens', $data);
         }
 
         if (!$result) {
@@ -271,9 +339,25 @@ class YujuOAuth
      */
     private function getStoredTokenData()
     {
-        $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_oauth` ORDER BY id_oauth DESC LIMIT 1';
-
-        return Db::getInstance()->getRow($sql);
+        try {
+            // Verificar si la tabla existe
+            $tableExists = Db::getInstance()->executeS(
+                "SHOW TABLES LIKE '" . _DB_PREFIX_ . "yuju_oauth_tokens'"
+            );
+            
+            if (empty($tableExists)) {
+                // Si la tabla no existe, retornar null
+                return null;
+            }
+            
+            $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_oauth_tokens` ORDER BY `id` DESC LIMIT 1';
+            
+            return Db::getInstance()->getRow($sql);
+        } catch (Exception $e) {
+            // Log del error y retornar null
+            PrestaShopLogger::addLog('Error in getStoredTokenData: ' . $e->getMessage(), 3);
+            return null;
+        }
     }
 
     /**
@@ -342,7 +426,7 @@ class YujuOAuth
      */
     private function clearStoredTokenData()
     {
-        return Db::getInstance()->delete('yuju_oauth', '1=1');
+        return Db::getInstance()->delete('yuju_oauth_tokens', '1=1');
     }
 
     /**
@@ -370,11 +454,12 @@ class YujuOAuth
 
         return [
             'configured' => $this->isConfigured(),
-            'has_token' => !empty($oauth_data['access_token']),
+            'has_token' => !empty($oauth_data) && !empty($oauth_data['access_token']),
             'token_valid' => $this->hasValidToken(),
-            'token_expires' => $oauth_data ? $oauth_data['token_expires'] : null,
-            'scope' => $oauth_data ? $oauth_data['scope'] : null,
-            'last_updated' => $oauth_data ? $oauth_data['updated_at'] : null,
+            'is_connected' => $this->hasValidToken(),
+            'token_expires' => $oauth_data && isset($oauth_data['token_expires']) ? $oauth_data['token_expires'] : null,
+            'scope' => $oauth_data && isset($oauth_data['scope']) ? $oauth_data['scope'] : null,
+            'last_updated' => $oauth_data && isset($oauth_data['updated_at']) ? $oauth_data['updated_at'] : null,
         ];
     }
 
@@ -386,8 +471,8 @@ class YujuOAuth
         $this->client_id = $client_id;
         $this->client_secret = $client_secret;
 
-        Configuration::updateValue('YUJU_API_CLIENT_ID', $client_id);
-        Configuration::updateValue('YUJU_API_CLIENT_SECRET', $client_secret);
+        Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
+        Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
 
         // Si las credenciales cambian, limpiar tokens existentes
         $this->clearStoredTokenData();

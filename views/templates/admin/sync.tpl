@@ -16,24 +16,27 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+{extends file="./layout.tpl"}
+
+{block name="content"}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-refresh"></i>
-        {l s='Yuju Synchronization' mod='prestashopyuju'}
+        Sincronización Yuju
     </div>
     
     <div class="panel-body">
         {if isset($sync_status) && $sync_status.is_running}
             <div class="alert alert-info">
                 <i class="icon-refresh icon-spin"></i>
-                {l s='Synchronization is currently running...' mod='prestashopyuju'}
+                La sincronización está ejecutándose actualmente...
                 <div class="progress" style="margin-top: 10px;">
                     <div class="progress-bar" role="progressbar" style="width: {$sync_status.progress|default:0|escape:'html':'UTF-8'}%">
                         {$sync_status.progress|default:0|escape:'html':'UTF-8'}%
                     </div>
                 </div>
                 <button type="button" class="btn btn-danger btn-sm" onclick="stopSync()">
-                    <i class="icon-stop"></i> {l s='Stop Sync' mod='prestashopyuju'}
+                    <i class="icon-stop"></i> Detener Sincronización
                 </button>
             </div>
         {/if}
@@ -41,13 +44,13 @@
         {if isset($last_sync)}
             <div class="alert alert-success">
                 <i class="icon-info"></i>
-                {l s='Last synchronization:' mod='prestashopyuju'} {$last_sync.date|escape:'html':'UTF-8'}
+                Última sincronización: {$last_sync.date|escape:'html':'UTF-8'}
                 <br>
                 <small>
-                    {l s='Products:' mod='prestashopyuju'} {$last_sync.products_synced|default:0|escape:'html':'UTF-8'} |
-                    {l s='Categories:' mod='prestashopyuju'} {$last_sync.categories_synced|default:0|escape:'html':'UTF-8'} |
-                    {l s='Stock:' mod='prestashopyuju'} {$last_sync.stock_synced|default:0|escape:'html':'UTF-8'} |
-                    {l s='Prices:' mod='prestashopyuju'} {$last_sync.prices_synced|default:0|escape:'html':'UTF-8'}
+                    Productos: {$last_sync.products_synced|default:0|escape:'html':'UTF-8'} |
+                    Categorías: {$last_sync.categories_synced|default:0|escape:'html':'UTF-8'} |
+                    Stock: {$last_sync.stock_synced|default:0|escape:'html':'UTF-8'} |
+                    Precios: {$last_sync.prices_synced|default:0|escape:'html':'UTF-8'}
                 </small>
             </div>
         {/if}
@@ -58,40 +61,40 @@
                     <div class="panel-heading">
                         <h3 class="panel-title">
                             <i class="icon-download"></i>
-                            {l s='Full Synchronization' mod='prestashopyuju'}
+                            Sincronización Completa
                         </h3>
                     </div>
                     <div class="panel-body">
-                        <p>{l s='Synchronize all data between PrestaShop and Yuju. This may take several minutes.' mod='prestashopyuju'}</p>
+                        <p>Sincronizar todos los datos entre PrestaShop y Yuju. Esto puede tomar varios minutos.</p>
                         
                         <form id="full_sync_form">
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_products" value="1" checked>
-                                    {l s='Products' mod='prestashopyuju'}
+                                    Productos
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_categories" value="1" checked>
-                                    {l s='Categories' mod='prestashopyuju'}
+                                    Categorías
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_stock" value="1" checked>
-                                    {l s='Stock' mod='prestashopyuju'}
+                                    Stock
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_prices" value="1" checked>
-                                    {l s='Prices' mod='prestashopyuju'}
+                                    Precios
                                 </label>
                             </div>
                             
                             <button type="button" class="btn btn-primary btn-block" onclick="startFullSync()" {if isset($sync_status) && $sync_status.is_running}disabled{/if}>
-                                <i class="icon-download"></i> {l s='Start Full Sync' mod='prestashopyuju'}
+                                <i class="icon-download"></i> Iniciar Sincronización Completa
                             </button>
                         </form>
                     </div>
@@ -103,40 +106,40 @@
                     <div class="panel-heading">
                         <h3 class="panel-title">
                             <i class="icon-refresh"></i>
-                            {l s='Incremental Synchronization' mod='prestashopyuju'}
+                            Sincronización Incremental
                         </h3>
                     </div>
                     <div class="panel-body">
-                        <p>{l s='Synchronize only items that have changed since the last sync.' mod='prestashopyuju'}</p>
+                        <p>Sincronizar solo elementos que han cambiado desde la última sincronización.</p>
                         
                         <form id="incremental_sync_form">
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_products" value="1" checked>
-                                    {l s='Products' mod='prestashopyuju'}
+                                    Productos
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_categories" value="1" checked>
-                                    {l s='Categories' mod='prestashopyuju'}
+                                    Categorías
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_stock" value="1" checked>
-                                    {l s='Stock' mod='prestashopyuju'}
+                                    Stock
                                 </label>
                             </div>
                             <div class="checkbox">
                                 <label>
                                     <input type="checkbox" name="sync_prices" value="1" checked>
-                                    {l s='Prices' mod='prestashopyuju'}
+                                    Precios
                                 </label>
                             </div>
                             
                             <button type="button" class="btn btn-success btn-block" onclick="startIncrementalSync()" {if isset($sync_status) && $sync_status.is_running}disabled{/if}>
-                                <i class="icon-refresh"></i> {l s='Start Incremental Sync' mod='prestashopyuju'}
+                                <i class="icon-refresh"></i> Iniciar Sincronización Incremental
                             </button>
                         </form>
                     </div>
@@ -149,7 +152,7 @@
             <div class="panel-heading">
                 <h3 class="panel-title">
                     <i class="icon-bar-chart"></i>
-                    {l s='Synchronization Statistics' mod='prestashopyuju'}
+                    Estadísticas de Sincronización
                 </h3>
             </div>
             <div class="panel-body">
@@ -157,25 +160,25 @@
                     <div class="col-lg-3">
                         <div class="text-center">
                             <h4>{$stats.total_syncs|default:0|escape:'html':'UTF-8'}</h4>
-                            <p class="text-muted">{l s='Total Syncs' mod='prestashopyuju'}</p>
+                            <p class="text-muted">Sincronizaciones Totales</p>
                         </div>
                     </div>
                     <div class="col-lg-3">
                         <div class="text-center">
                             <h4>{$stats.successful_syncs|default:0|escape:'html':'UTF-8'}</h4>
-                            <p class="text-muted">{l s='Successful' mod='prestashopyuju'}</p>
+                            <p class="text-muted">Exitosas</p>
                         </div>
                     </div>
                     <div class="col-lg-3">
                         <div class="text-center">
                             <h4>{$stats.failed_syncs|default:0|escape:'html':'UTF-8'}</h4>
-                            <p class="text-muted">{l s='Failed' mod='prestashopyuju'}</p>
+                            <p class="text-muted">Fallidas</p>
                         </div>
                     </div>
                     <div class="col-lg-3">
                         <div class="text-center">
                             <h4>{$stats.items_synced|default:0|escape:'html':'UTF-8'}</h4>
-                            <p class="text-muted">{l s='Items Synced' mod='prestashopyuju'}</p>
+                            <p class="text-muted">Elementos Sincronizados</p>
                         </div>
                     </div>
                 </div>
@@ -187,7 +190,7 @@
             <div class="panel-heading">
                 <h3 class="panel-title">
                     <i class="icon-list"></i>
-                    {l s='Recent Sync Logs' mod='prestashopyuju'}
+                    Registros de Sincronización Recientes
                 </h3>
             </div>
             <div class="panel-body">
@@ -196,12 +199,12 @@
                         <table class="table table-striped">
                             <thead>
                                 <tr>
-                                    <th>{l s='Date' mod='prestashopyuju'}</th>
-                                    <th>{l s='Type' mod='prestashopyuju'}</th>
-                                    <th>{l s='Status' mod='prestashopyuju'}</th>
-                                    <th>{l s='Items' mod='prestashopyuju'}</th>
-                                    <th>{l s='Duration' mod='prestashopyuju'}</th>
-                                    <th>{l s='Actions' mod='prestashopyuju'}</th>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Estado</th>
+                                    <th>Elementos</th>
+                                    <th>Duración</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -213,11 +216,11 @@
                                         </td>
                                         <td>
                                             {if $log.status == 'completed'}
-                                                <span class="label label-success">{l s='Completed' mod='prestashopyuju'}</span>
+                                                <span class="label label-success">Completado</span>
                                             {elseif $log.status == 'failed'}
-                                                <span class="label label-danger">{l s='Failed' mod='prestashopyuju'}</span>
+                                                <span class="label label-danger">Fallido</span>
                                             {elseif $log.status == 'running'}
-                                                <span class="label label-warning">{l s='Running' mod='prestashopyuju'}</span>
+                                                <span class="label label-warning">Ejecutándose</span>
                                             {else}
                                                 <span class="label label-default">{$log.status|escape:'html':'UTF-8'}</span>
                                             {/if}
@@ -226,7 +229,7 @@
                                         <td>{$log.duration|default:'-'|escape:'html':'UTF-8'}</td>
                                         <td>
                                             <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=viewLog&id_log={$log.id_log|escape:'html':'UTF-8'}" class="btn btn-default btn-xs">
-                                                <i class="icon-eye"></i> {l s='View' mod='prestashopyuju'}
+                                                <i class="icon-eye"></i> Ver
                                             </a>
                                         </td>
                                     </tr>
@@ -237,14 +240,14 @@
                     
                     <div class="text-center">
                         <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=viewAllLogs" class="btn btn-default">
-                            <i class="icon-list"></i> {l s='View All Logs' mod='prestashopyuju'}
+                            <i class="icon-list"></i> Ver Todos los Registros
                         </a>
                         <button type="button" class="btn btn-warning" onclick="cleanLogs()">
-                            <i class="icon-trash"></i> {l s='Clean Old Logs' mod='prestashopyuju'}
+                            <i class="icon-trash"></i> Limpiar Registros Antiguos
                         </button>
                     </div>
                 {else}
-                    <p class="text-muted text-center">{l s='No sync logs available' mod='prestashopyuju'}</p>
+                    <p class="text-muted text-center">No hay registros de sincronización disponibles</p>
                 {/if}
             </div>
         </div>
@@ -261,7 +264,7 @@ function startFullSync() {
     var formData = $('#full_sync_form').serialize();
     formData += '&sync_mode=full';
     
-    if (confirm('{l s='Are you sure you want to start a full synchronization? This may take several minutes.' mod='prestashopyuju'}')) {
+    if (confirm('¿Está seguro de que desea iniciar una sincronización completa? Esto puede tomar varios minutos.')) {
         $.ajax({
             url: startSyncUrl,
             type: 'POST',
@@ -271,11 +274,11 @@ function startFullSync() {
                 if (response.success) {
                     location.reload();
                 } else {
-                    alert(response.message || '{l s='Error starting synchronization' mod='prestashopyuju'}');
+                    alert(response.message || 'Error al iniciar la sincronización');
                 }
             },
             error: function() {
-                alert('{l s='Error starting synchronization' mod='prestashopyuju'}');
+                alert('Error al iniciar la sincronización');
             }
         });
     }
@@ -294,17 +297,17 @@ function startIncrementalSync() {
             if (response.success) {
                 location.reload();
             } else {
-                alert(response.message || '{l s='Error starting synchronization' mod='prestashopyuju'}');
+                alert(response.message || 'Error al iniciar la sincronización');
             }
         },
         error: function() {
-            alert('{l s='Error starting synchronization' mod='prestashopyuju'}');
+            alert('Error al iniciar la sincronización');
         }
     });
 }
 
 function stopSync() {
-    if (confirm('{l s='Are you sure you want to stop the current synchronization?' mod='prestashopyuju'}')) {
+    if (confirm('¿Está seguro de que desea detener la sincronización actual?')) {
         $.ajax({
             url: stopSyncUrl,
             type: 'POST',
@@ -313,32 +316,32 @@ function stopSync() {
                 if (response.success) {
                     location.reload();
                 } else {
-                    alert(response.message || '{l s='Error stopping synchronization' mod='prestashopyuju'}');
+                    alert(response.message || 'Error al detener la sincronización');
                 }
             },
             error: function() {
-                alert('{l s='Error stopping synchronization' mod='prestashopyuju'}');
+                alert('Error al detener la sincronización');
             }
         });
     }
 }
 
 function cleanLogs() {
-    if (confirm('{l s='Are you sure you want to clean old logs? This action cannot be undone.' mod='prestashopyuju'}')) {
+    if (confirm('¿Está seguro de que desea limpiar los registros antiguos? Esta acción no se puede deshacer.')) {
         $.ajax({
             url: cleanLogsUrl,
             type: 'POST',
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    alert(response.message || '{l s='Logs cleaned successfully' mod='prestashopyuju'}');
+                    alert(response.message || 'Registros limpiados exitosamente');
                     location.reload();
                 } else {
-                    alert(response.message || '{l s='Error cleaning logs' mod='prestashopyuju'}');
+                    alert(response.message || 'Error al limpiar registros');
                 }
             },
             error: function() {
-                alert('{l s='Error cleaning logs' mod='prestashopyuju'}');
+                alert('Error al limpiar registros');
             }
         });
     }
@@ -362,3 +365,4 @@ setInterval(function() {
 }, 5000); // Check every 5 seconds
 {/if}
 </script>
+{/block}

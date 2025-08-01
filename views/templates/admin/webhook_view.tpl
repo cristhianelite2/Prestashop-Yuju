@@ -16,50 +16,53 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+{extends file="./layout.tpl"}
+
+{block name="content"}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-eye"></i>
-        {l s='Webhook Details' mod='prestashopyuju'} - ID: {$webhook_log.id|escape:'html':'UTF-8'}
+        Detalles del Webhook - ID: {$webhook_log.id|escape:'html':'UTF-8'}
     </div>
     <div class="panel-body">
         <div class="row">
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Basic Information' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Información Básica</h4>
                     </div>
                     <div class="panel-body">
                         <dl class="dl-horizontal">
-                            <dt>{l s='ID:' mod='prestashopyuju'}</dt>
+                            <dt>ID:</dt>
                             <dd>{$webhook_log.id|escape:'html':'UTF-8'}</dd>
                             
-                            <dt>{l s='Event Type:' mod='prestashopyuju'}</dt>
+                            <dt>Tipo de Evento:</dt>
                             <dd><span class="label label-info">{$webhook_log.event_type|escape:'html':'UTF-8'}</span></dd>
                             
-                            <dt>{l s='Entity ID:' mod='prestashopyuju'}</dt>
+                            <dt>ID de Entidad:</dt>
                             <dd>{$webhook_log.entity_id|default:'-'|escape:'html':'UTF-8'}</dd>
                             
-                            <dt>{l s='Status:' mod='prestashopyuju'}</dt>
+                            <dt>Estado:</dt>
                             <dd>
                                 {if $webhook_log.status == 'processed'}
-                                    <span class="label label-success">{l s='Processed' mod='prestashopyuju'}</span>
+                                    <span class="label label-success">Procesado</span>
                                 {elseif $webhook_log.status == 'failed'}
-                                    <span class="label label-danger">{l s='Failed' mod='prestashopyuju'}</span>
+                                    <span class="label label-danger">Fallido</span>
                                 {else}
-                                    <span class="label label-warning">{l s='Processing' mod='prestashopyuju'}</span>
+                                    <span class="label label-warning">Procesando</span>
                                 {/if}
                             </dd>
                             
-                            <dt>{l s='Received At:' mod='prestashopyuju'}</dt>
+                            <dt>Recibido en:</dt>
                             <dd>{$webhook_log.received_at|escape:'html':'UTF-8'}</dd>
                             
-                            <dt>{l s='Processed At:' mod='prestashopyuju'}</dt>
+                            <dt>Procesado en:</dt>
                             <dd>{$webhook_log.processed_at|default:'-'|escape:'html':'UTF-8'}</dd>
                         </dl>
                         
                         {if $webhook_log.error_message}
                         <div class="alert alert-danger">
-                            <strong>{l s='Error Message:' mod='prestashopyuju'}</strong><br>
+                            <strong>Mensaje de Error:</strong><br>
                             {$webhook_log.error_message|escape:'html':'UTF-8'}
                         </div>
                         {/if}
@@ -70,21 +73,21 @@
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Actions' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Acciones</h4>
                     </div>
                     <div class="panel-body">
                         {if $webhook_log.status == 'failed'}
                         <button type="button" class="btn btn-warning" onclick="retryWebhook({$webhook_log.id|escape:'javascript':'UTF-8'})">
-                            <i class="icon-refresh"></i> {l s='Retry Webhook' mod='prestashopyuju'}
+                            <i class="icon-refresh"></i> Reintentar Webhook
                         </button>
                         {/if}
                         
                         <button type="button" class="btn btn-info" onclick="exportWebhookLog({$webhook_log.id|escape:'javascript':'UTF-8'})">
-                            <i class="icon-download"></i> {l s='Export Log' mod='prestashopyuju'}
+                            <i class="icon-download"></i> Exportar Registro
                         </button>
                         
                         <a href="{$link->getAdminLink('AdminYujuWebhook')|escape:'html':'UTF-8'}" class="btn btn-default">
-                            <i class="icon-arrow-left"></i> {l s='Back to List' mod='prestashopyuju'}
+                            <i class="icon-arrow-left"></i> Volver a la Lista
                         </a>
                     </div>
                 </div>
@@ -95,7 +98,7 @@
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Request Headers' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Encabezados de Solicitud</h4>
                     </div>
                     <div class="panel-body">
                         {if $webhook_log.headers_decoded}
@@ -103,8 +106,8 @@
                                 <table class="table table-striped table-condensed">
                                     <thead>
                                         <tr>
-                                            <th>{l s='Header' mod='prestashopyuju'}</th>
-                                            <th>{l s='Value' mod='prestashopyuju'}</th>
+                                            <th>Encabezado</th>
+                                            <th>Valor</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -118,7 +121,7 @@
                                 </table>
                             </div>
                         {else}
-                            <p class="text-muted">{l s='No headers available' mod='prestashopyuju'}</p>
+                            <p class="text-muted">No hay encabezados disponibles</p>
                         {/if}
                     </div>
                 </div>
@@ -127,13 +130,13 @@
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Response Data' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Datos de Respuesta</h4>
                     </div>
                     <div class="panel-body">
                         {if $webhook_log.response_decoded}
                             <pre class="prettyprint lang-json">{$webhook_log.response|escape:'html':'UTF-8'}</pre>
                         {else}
-                            <p class="text-muted">{l s='No response data available' mod='prestashopyuju'}</p>
+                            <p class="text-muted">No hay datos de respuesta disponibles</p>
                         {/if}
                     </div>
                 </div>
@@ -197,7 +200,7 @@
 
 <script>
 function retryWebhook(webhookId) {
-    if (confirm('{l s='Are you sure you want to retry this webhook?' mod='prestashopyuju'}')) {
+    if (confirm('¿Está seguro de que desea reintentar este webhook?')) {
         $.ajax({
             url: '{$link->getAdminLink('AdminYujuWebhook')|escape:'javascript':'UTF-8'}',
             type: 'POST',
@@ -208,14 +211,14 @@ function retryWebhook(webhookId) {
             },
             success: function(response) {
                 if (response.success) {
-                    showSuccessMessage('{l s='Webhook retried successfully' mod='prestashopyuju'}');
+                    showSuccessMessage('Webhook reintentado exitosamente');
                     location.reload();
                 } else {
-                    showErrorMessage(response.error || '{l s='Error retrying webhook' mod='prestashopyuju'}');
+                    showErrorMessage(response.error || 'Error al reintentar webhook');
                 }
             },
             error: function() {
-                showErrorMessage('{l s='Error retrying webhook' mod='prestashopyuju'}');
+                showErrorMessage('Error al reintentar webhook');
             }
         });
     }
@@ -263,3 +266,4 @@ code {
     padding: 4px 8px;
 }
 </style>
+{/block}

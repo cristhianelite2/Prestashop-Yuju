@@ -601,13 +601,13 @@ class YujuWebhookManager
             SELECT event_type, COUNT(*) as count
             FROM ' . _DB_PREFIX_ . 'yuju_webhook_logs
             GROUP BY event_type
-            ORDER BY count DESC
+            ORDER BY `count` DESC
         ');
 
         // Recent webhooks
         $stats['recent_webhooks'] = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_webhook_logs
-            ORDER BY received_at DESC
+            ORDER BY `received_at` DESC
             LIMIT 10
         ');
 

@@ -47,7 +47,7 @@ class YujuProductManager
         $this->field_mappings = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
             WHERE is_active = 1
-            ORDER BY prestashop_field
+            ORDER BY `prestashop_field`
         ');
     }
 

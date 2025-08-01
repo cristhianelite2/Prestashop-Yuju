@@ -31,7 +31,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
     {
         $this->table = 'yuju_category_mapping';
         $this->className = 'YujuCategoryMapping';
-        $this->identifier = 'id_mapping';
+        $this->identifier = 'id';
         $this->bootstrap = true;
         $this->lang = false;
 
@@ -40,33 +40,33 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $this->logger = new YujuLogger();
 
         $this->fields_list = [
-        'id_mapping' => [
-        'title' => $this->l('ID'),
+        'id' => [
+        'title' => $this->trans('ID', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'prestashop_category_name' => [
-        'title' => $this->l('PrestaShop Category'),
+        'title' => $this->trans('PrestaShop Category', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 200,
         ],
         'yuju_category_id' => [
-        'title' => $this->l('Yuju Category ID'),
+        'title' => $this->trans('Yuju Category ID', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'width' => 150,
         ],
         'yuju_category_name' => [
-        'title' => $this->l('Yuju Category Name'),
+        'title' => $this->trans('Yuju Category Name', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 200,
         ],
         'sync_enabled' => [
-        'title' => $this->l('Sync Enabled'),
+        'title' => $this->trans('Sync Enabled', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'active' => 'status',
         'type' => 'bool',
         'class' => 'fixed-width-sm',
         ],
         'created_at' => [
-        'title' => $this->l('Created'),
+        'title' => $this->trans('Created', array(), 'Modules.Prestashopyuju.Admin'),
         'type' => 'datetime',
         'width' => 150,
         ],
@@ -75,27 +75,35 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $this->actions = ['edit', 'delete'];
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->l('Delete selected'),
-        'confirm' => $this->l('Delete selected items?'),
+        'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
+        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         'enableSync' => [
-        'text' => $this->l('Enable sync'),
+        'text' => $this->trans('Enable sync', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         'disableSync' => [
-        'text' => $this->l('Disable sync'),
+        'text' => $this->trans('Disable sync', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ];
 
         $this->toolbar_btn['new'] = [
         'href' => self::$currentIndex . '&add' . $this->table . '&token=' . $this->token,
-        'desc' => $this->l('Add new mapping'),
+        'desc' => $this->trans('Add new mapping', array(), 'Modules.Prestashopyuju.Admin'),
         ];
 
         $this->toolbar_btn['sync_categories'] = [
         'href' => self::$currentIndex . '&syncYujuCategories&token=' . $this->token,
-        'desc' => $this->l('Sync Yuju Categories'),
+        'desc' => $this->trans('Sync Yuju Categories', array(), 'Modules.Prestashopyuju.Admin'),
         'class' => 'process-icon-refresh',
         ];
+    }
+
+    public function initContent()
+    {
+        $this->context->smarty->assign('current_controller', 'AdminYujuCategoryMapping');
+        parent::initContent();
+        
+        $this->setTemplate('category_mapping.tpl');
     }
 
     public function renderList()
@@ -130,13 +138,13 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Category Mapping'),
+        'title' => $this->trans('Category Mapping', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-tags',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->l('PrestaShop Category'),
+        'label' => $this->trans('PrestaShop Category', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'prestashop_category_id',
         'required' => true,
         'options' => [
@@ -147,7 +155,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Yuju Category'),
+        'label' => $this->trans('Yuju Category', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'yuju_category_id',
         'required' => true,
         'options' => [
@@ -158,25 +166,25 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Enable Synchronization'),
+        'label' => $this->trans('Enable Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'sync_enabled',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'sync_enabled_on',
         'value' => 1,
-        'label' => $this->l('Enabled'),
+        'label' => $this->trans('Enabled', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         [
         'id' => 'sync_enabled_off',
         'value' => 0,
-        'label' => $this->l('Disabled'),
+        'label' => $this->trans('Disabled', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ],
         ],
         ],
         'submit' => [
-        'title' => $this->l('Save'),
+        'title' => $this->trans('Save', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ];
 
@@ -210,7 +218,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         );
 
         if ($existing) {
-            $this->errors[] = $this->l('This PrestaShop category is already mapped.');
+            $this->errors[] = $this->trans('This PrestaShop category is already mapped.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -219,7 +227,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
 
         if (!$yuju_category_name) {
-            $this->errors[] = $this->l('Invalid Yuju category selected.');
+            $this->errors[] = $this->trans('Invalid Yuju category selected.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -246,10 +254,10 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         }
 
         if ($result) {
-            $this->confirmations[] = $this->l('Category mapping saved successfully.');
+            $this->confirmations[] = $this->trans('Category mapping saved successfully.', array(), 'Modules.Prestashopyuju.Admin');
             $this->logger->log('Category mapping saved: PS Category ' . $prestashop_category_id . ' -> Yuju Category ' . $yuju_category_id, 'info');
         } else {
-            $this->errors[] = $this->l('Error saving category mapping.');
+            $this->errors[] = $this->trans('Error saving category mapping.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -272,16 +280,17 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                     'parent_id' => pSQL($category['parent_id'] ?? ''),
                     'level' => (int) ($category['level'] ?? 0),
                     'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
                     ]);
                 }
 
-                $this->confirmations[] = $this->l('Yuju categories synchronized successfully.');
+                $this->confirmations[] = $this->trans('Yuju categories synchronized successfully.', array(), 'Modules.Prestashopyuju.Admin');
                 $this->logger->log('Yuju categories synchronized: ' . count($categories['data']) . ' categories', 'info');
             } else {
-                $this->errors[] = $this->l('No categories found in Yuju.');
+                $this->errors[] = $this->trans('No categories found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Error synchronizing Yuju categories: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Error synchronizing Yuju categories: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
             $this->logger->log('Error synchronizing Yuju categories: ' . $e->getMessage(), 'error');
         }
     }
@@ -330,7 +339,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Sync enabled for selected mappings.');
+                $this->confirmations[] = $this->trans('Sync enabled for selected mappings.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }
@@ -347,7 +356,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Sync disabled for selected mappings.');
+                $this->confirmations[] = $this->trans('Sync disabled for selected mappings.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }

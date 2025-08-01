@@ -27,7 +27,7 @@ class AdminYujuController extends ModuleAdminController
         parent::__construct();
 
         $this->bootstrap = true;
-        $this->meta_title = $this->l('Yuju Integration');
+        $this->meta_title = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
     }
 
     public function initContent()
@@ -38,6 +38,7 @@ class AdminYujuController extends ModuleAdminController
         'module_dir' => $this->module->getPathUri(),
         'module_name' => $this->module->displayName,
         'module_version' => $this->module->version,
+        'current_controller' => get_class($this),
         ]);
 
         $this->setTemplate('dashboard.tpl');

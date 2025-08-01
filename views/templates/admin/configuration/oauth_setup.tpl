@@ -125,11 +125,11 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            {l s='Webhook Secret' mod='prestashopyuju'}
+                            Secreto de Webhook
                         </label>
                         <div class="col-lg-9">
                             <input type="text" name="webhook_secret" value="{$oauth_status.webhook_secret|escape:'html':'UTF-8'}" class="form-control">
-                            <p class="help-block">{l s='Secret key for webhook validation (optional but recommended)' mod='prestashopyuju'}</p>
+                            <p class="help-block">Clave secreta para validación de webhook (opcional pero recomendado)</p>
                         </div>
                     </div>
                     

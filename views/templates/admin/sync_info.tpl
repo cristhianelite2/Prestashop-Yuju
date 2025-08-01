@@ -16,6 +16,9 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+{extends file="./layout.tpl"}
+
+{block name="content"}
 <div class="panel panel-default yuju-sync-info">
     <div class="panel-heading">
         <i class="icon-refresh"></i>
@@ -165,3 +168,4 @@ setInterval(function() {
     }
 }, 30000);
 </script>
+{/block}

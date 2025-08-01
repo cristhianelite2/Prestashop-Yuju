@@ -34,6 +34,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $this->bootstrap = true;
         $this->table = 'yuju_product_status';
         $this->className = 'YujuProductStatus';
+        $this->identifier = 'id';
         $this->lang = false;
         $this->addRowAction('edit');
         $this->addRowAction('delete');
@@ -44,91 +45,100 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         parent::__construct();
 
-        $this->meta_title = $this->l('Product Synchronization Status');
+        $this->meta_title = 'Estado de Sincronización de Productos';
 
         $this->fields_list = [
         'id' => [
-        'title' => $this->l('ID'),
+        'title' => 'ID',
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'prestashop_product_id' => [
-        'title' => $this->l('PS Product ID'),
+        'title' => 'ID Producto PS',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'product_name' => [
-        'title' => $this->l('Product Name'),
+        'title' => 'Nombre del Producto',
         'callback' => 'getProductName',
         ],
         'yuju_product_id' => [
-        'title' => $this->l('Yuju Product ID'),
+        'title' => 'ID Producto Yuju',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'sync_status' => [
-        'title' => $this->l('Sync Status'),
+        'title' => 'Estado de Sincronización',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         'callback' => 'displaySyncStatus',
         ],
         'sync_direction' => [
-        'title' => $this->l('Direction'),
+        'title' => 'Dirección',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
-        'last_sync_date' => [
-        'title' => $this->l('Last Sync'),
-        'align' => 'center',
-        'type' => 'datetime',
+        'last_sync_at' => [
+            'title' => 'Última Sincronización',
+            'align' => 'center',
+            'type' => 'datetime',
         ],
         'error_count' => [
-        'title' => $this->l('Errors'),
+        'title' => 'Errores',
         'align' => 'center',
         'class' => 'fixed-width-xs',
         'callback' => 'displayErrorCount',
         ],
-        'is_active' => [
-        'title' => $this->l('Active'),
-        'align' => 'center',
-        'class' => 'fixed-width-xs',
-        'type' => 'bool',
-        'icon' => [
-        0 => 'disabled.gif',
-        1 => 'enabled.gif',
-        ],
-        ],
+        // TODO: Uncomment when is_active column is added to yuju_product_status table
+        // 'is_active' => [
+        // 'title' => 'Activo',
+        // 'align' => 'center',
+        // 'class' => 'fixed-width-xs',
+        // 'type' => 'bool',
+        // 'icon' => [
+        // 0 => 'disabled.gif',
+        // 1 => 'enabled.gif',
+        // ],
+        // ],
         ];
 
         $this->bulk_actions = [
         'enableSync' => [
-        'text' => $this->l('Enable sync'),
+        'text' => 'Habilitar sincronización',
         'icon' => 'icon-power-off text-success',
         ],
         'disableSync' => [
-        'text' => $this->l('Disable sync'),
+        'text' => 'Deshabilitar sincronización',
         'icon' => 'icon-power-off text-danger',
         ],
         'syncSelected' => [
-        'text' => $this->l('Sync selected'),
+        'text' => 'Sincronizar seleccionados',
         'icon' => 'icon-refresh',
         ],
         'resetErrors' => [
-        'text' => $this->l('Reset errors'),
+        'text' => 'Reiniciar errores',
         'icon' => 'icon-eraser',
         ],
         'delete' => [
-        'text' => $this->l('Delete selected'),
+        'text' => 'Eliminar seleccionados',
         'icon' => 'icon-trash',
-        'confirm' => $this->l('Delete selected items?'),
+        'confirm' => '¿Eliminar elementos seleccionados?',
         ],
         ];
 
         $this->_select = 'pl.name as product_name';
         $this->_join = 'LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON (a.prestashop_product_id = pl.id_product AND pl.id_lang = ' . (int) $this->context->language->id . ')';
 
-        $this->_orderBy = 'last_sync_date';
+        $this->_orderBy = 'last_sync_at';
         $this->_orderWay = 'DESC';
+    }
+
+    public function initContent()
+    {
+        $this->context->smarty->assign('current_controller', 'AdminYujuProductStatus');
+        parent::initContent();
+        
+        $this->setTemplate('product_status.tpl');
     }
 
     public function renderList()
@@ -136,19 +146,19 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Add toolbar buttons
         $this->toolbar_btn['sync_all'] = [
         'href' => self::$currentIndex . '&action=syncAll&token=' . $this->token,
-        'desc' => $this->l('Sync All Products'),
+        'desc' => 'Sincronizar Todos los Productos',
         'icon' => 'process-icon-refresh',
         ];
 
         $this->toolbar_btn['import_status'] = [
         'href' => self::$currentIndex . '&action=importStatus&token=' . $this->token,
-        'desc' => $this->l('Import Status'),
+        'desc' => 'Importar Estado',
         'icon' => 'process-icon-import',
         ];
 
         $this->toolbar_btn['export_status'] = [
         'href' => self::$currentIndex . '&action=exportStatus&token=' . $this->token,
-        'desc' => $this->l('Export Status'),
+        'desc' => 'Exportar Estado',
         'icon' => 'process-icon-export',
         ];
 
@@ -156,10 +166,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $this->fields_list['sync_status']['filter_key'] = 'a!sync_status';
         $this->fields_list['sync_status']['filter_type'] = 'select';
         $this->fields_list['sync_status']['select'] = [
-        'synced' => $this->l('Synced'),
-        'pending' => $this->l('Pending'),
-        'error' => $this->l('Error'),
-        'disabled' => $this->l('Disabled'),
+        'synced' => 'Sincronizado',
+        'pending' => 'Pendiente',
+        'error' => 'Error',
+        'disabled' => 'Deshabilitado',
         ];
 
         // Add statistics
@@ -212,7 +222,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $product_ids = Tools::getValue($this->table . 'Box');
 
         if (empty($product_ids)) {
-            $this->errors[] = $this->l('No products selected');
+            $this->errors[] = 'No hay productos seleccionados';
 
             return;
         }
@@ -225,7 +235,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
         }
 
-        $this->confirmations[] = sprintf($this->l('Enabled sync for %d products'), $success_count);
+        $this->confirmations[] = sprintf('Sincronización habilitada para %d productos', $success_count);
     }
 
     protected function processBulkDisableSync()
@@ -233,7 +243,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $product_ids = Tools::getValue($this->table . 'Box');
 
         if (empty($product_ids)) {
-            $this->errors[] = $this->l('No products selected');
+            $this->errors[] = 'No hay productos seleccionados';
 
             return;
         }
@@ -246,7 +256,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
         }
 
-        $this->confirmations[] = sprintf($this->l('Disabled sync for %d products'), $success_count);
+        $this->confirmations[] = sprintf('Sincronización deshabilitada para %d productos', $success_count);
     }
 
     protected function processBulkSyncSelected()
@@ -254,7 +264,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $product_ids = Tools::getValue($this->table . 'Box');
 
         if (empty($product_ids)) {
-            $this->errors[] = $this->l('No products selected');
+            $this->errors[] = 'No hay productos seleccionados';
 
             return;
         }
@@ -279,15 +289,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
                 if ($results['success']) {
                     $this->confirmations[] = sprintf(
-                        $this->l('Synchronized %d products successfully'),
+                        'Se sincronizaron %d productos exitosamente',
                         $results['synced_count']
                     );
                 } else {
-                    $this->errors[] = $this->l('Synchronization failed: ') . implode(', ', $results['errors']);
+                    $this->errors[] = 'Error en la sincronización: ' . implode(', ', $results['errors']);
                 }
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Synchronization error: ') . $e->getMessage();
+            $this->errors[] = 'Error de sincronización: ' . $e->getMessage();
         }
     }
 
@@ -296,7 +306,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $product_ids = Tools::getValue($this->table . 'Box');
 
         if (empty($product_ids)) {
-            $this->errors[] = $this->l('No products selected');
+            $this->errors[] = 'No hay productos seleccionados';
 
             return;
         }
@@ -309,13 +319,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
         }
 
-        $this->confirmations[] = sprintf($this->l('Reset errors for %d products'), $success_count);
+        $this->confirmations[] = sprintf('Errores reiniciados para %d productos', $success_count);
     }
 
     protected function processSyncAll()
     {
         if ($this->sync_manager->isSyncRunning()) {
-            $this->errors[] = $this->l('Synchronization is already running. Please wait for it to complete.');
+            $this->errors[] = 'La sincronización ya está en ejecución. Por favor espere a que termine.';
 
             return;
         }
@@ -325,15 +335,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Full synchronization completed successfully. Products: %d, Time: %d seconds'),
+                    'Sincronización completa exitosa. Productos: %d, Tiempo: %d segundos',
                     isset($results['products']['synced_count']) ? $results['products']['synced_count'] : 0,
                     $results['total_time']
                 );
             } else {
-                $this->errors[] = $this->l('Synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = 'Error en la sincronización: ' . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Synchronization error: ') . $e->getMessage();
+            $this->errors[] = 'Error de sincronización: ' . $e->getMessage();
         }
     }
 
@@ -342,7 +352,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $status_id = (int) Tools::getValue('id');
 
         if (!$status_id) {
-            $this->errors[] = $this->l('Invalid product status ID');
+            $this->errors[] = 'ID de estado de producto inválido';
 
             return;
         }
@@ -355,7 +365,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             );
 
             if (!$status) {
-                $this->errors[] = $this->l('Product status not found');
+                $this->errors[] = 'Estado de producto no encontrado';
 
                 return;
             }
@@ -363,19 +373,19 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $results = $this->product_manager->syncSpecificProducts([$status['prestashop_product_id']]);
 
             if ($results['success']) {
-                $this->confirmations[] = $this->l('Product synchronized successfully');
+                $this->confirmations[] = 'Producto sincronizado exitosamente';
             } else {
-                $this->errors[] = $this->l('Product synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = 'Error en la sincronización del producto: ' . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Synchronization error: ') . $e->getMessage();
+            $this->errors[] = 'Error de sincronización: ' . $e->getMessage();
         }
     }
 
     protected function processImportStatus()
     {
         if (!isset($_FILES['import_file']) || $_FILES['import_file']['error'] !== UPLOAD_ERR_OK) {
-            $this->errors[] = $this->l('Please select a valid CSV file');
+            $this->errors[] = 'Por favor seleccione un archivo CSV válido';
 
             return;
         }
@@ -384,9 +394,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $file_path = $_FILES['import_file']['tmp_name'];
             $imported_count = $this->importProductStatus($file_path);
 
-            $this->confirmations[] = sprintf($this->l('Imported %d product status records'), $imported_count);
+            $this->confirmations[] = sprintf('Se importaron %d registros de estado de producto', $imported_count);
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Import error: ') . $e->getMessage();
+            $this->errors[] = 'Error de importación: ' . $e->getMessage();
         }
     }
 
@@ -403,7 +413,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             unlink($export_file);
             exit;
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Export error: ') . $e->getMessage();
+            $this->errors[] = 'Error de exportación: ' . $e->getMessage();
         }
     }
 
@@ -411,7 +421,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
     {
         return Db::getInstance()->update(
             'yuju_product_status',
-            ['is_active' => 1, 'updated_at' => date('Y-m-d H:i:s')],
+            ['sync_enabled' => 1, 'updated_at' => date('Y-m-d H:i:s')],
             'id = ' . (int) $status_id
         );
     }
@@ -420,7 +430,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
     {
         return Db::getInstance()->update(
             'yuju_product_status',
-            ['is_active' => 0, 'updated_at' => date('Y-m-d H:i:s')],
+            ['sync_enabled' => 0, 'updated_at' => date('Y-m-d H:i:s')],
             'id = ' . (int) $status_id
         );
     }
@@ -456,7 +466,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         // Active vs inactive
         $stats['active'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE is_active = 1
+        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE sync_enabled = 1
         ');
 
         $stats['inactive'] = $stats['total'] - $stats['active'];
@@ -469,7 +479,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Recent syncs
         $stats['recent_syncs'] = (int) Db::getInstance()->getValue('
         SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        WHERE last_sync_date >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        WHERE last_sync_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
         ');
 
         return $stats;
@@ -488,7 +498,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     $prestashop_product_id = (int) $data[0];
                     $yuju_product_id = $data[1];
                     $sync_status = $data[2];
-                    $is_active = (int) $data[3];
+                    $sync_enabled = (int) $data[3];
 
                     // Check if product exists
                     $product = new Product($prestashop_product_id);
@@ -508,7 +518,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     'prestashop_product_id' => $prestashop_product_id,
                     'yuju_product_id' => pSQL($yuju_product_id),
                     'sync_status' => pSQL($sync_status),
-                    'is_active' => $is_active,
+                    'sync_enabled' => $sync_enabled,
                     'updated_at' => date('Y-m-d H:i:s'),
                     ];
 
@@ -545,7 +555,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'Last Sync Date',
         'Error Count',
         'Last Error Message',
-        'Is Active',
+        'Sync Enabled',
         'Created At',
         'Updated At',
         ]);
@@ -566,10 +576,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $record['yuju_product_id'],
             $record['sync_status'],
             $record['sync_direction'],
-            $record['last_sync_date'],
+            $record['last_sync_at'],
             $record['error_count'],
             $record['last_error_message'],
-            $record['is_active'],
+            $record['sync_enabled'],
             $record['created_at'],
             $record['updated_at'],
             ]);
@@ -588,7 +598,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         $product = new Product($row['prestashop_product_id'], false, $this->context->language->id);
 
-        return Validate::isLoadedObject($product) ? $product->name : $this->l('Product not found');
+        return Validate::isLoadedObject($product) ? $product->name : 'Producto no encontrado';
     }
 
     public function displaySyncStatus($value, $row)
@@ -620,31 +630,31 @@ class AdminYujuProductStatusController extends ModuleAdminController
     {
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Product Synchronization Status'),
+        'title' => 'Estado de Sincronización de Productos',
         'icon' => 'icon-cogs',
         ],
         'input' => [
         [
         'type' => 'text',
-        'label' => $this->l('PrestaShop Product ID'),
+        'label' => 'ID Producto PrestaShop',
         'name' => 'prestashop_product_id',
         'required' => true,
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Yuju Product ID'),
+        'label' => 'ID Producto Yuju',
         'name' => 'yuju_product_id',
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Sync Status'),
+        'label' => 'Estado de Sincronización',
         'name' => 'sync_status',
         'options' => [
         'query' => [
-        ['id' => 'synced', 'name' => $this->l('Synced')],
-        ['id' => 'pending', 'name' => $this->l('Pending')],
-        ['id' => 'error', 'name' => $this->l('Error')],
-        ['id' => 'disabled', 'name' => $this->l('Disabled')],
+        ['id' => 'synced', 'name' => 'Sincronizado'],
+        ['id' => 'pending', 'name' => 'Pendiente'],
+        ['id' => 'error', 'name' => 'Error'],
+        ['id' => 'disabled', 'name' => 'Deshabilitado'],
         ],
         'id' => 'id',
         'name' => 'name',
@@ -652,13 +662,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Sync Direction'),
+        'label' => 'Dirección de Sincronización',
         'name' => 'sync_direction',
         'options' => [
         'query' => [
-        ['id' => 'bidirectional', 'name' => $this->l('Bidirectional')],
-        ['id' => 'yuju_to_ps', 'name' => $this->l('Yuju to PrestaShop')],
-        ['id' => 'ps_to_yuju', 'name' => $this->l('PrestaShop to Yuju')],
+        ['id' => 'bidirectional', 'name' => 'Bidireccional'],
+        ['id' => 'yuju_to_ps', 'name' => 'Yuju a PrestaShop'],
+        ['id' => 'ps_to_yuju', 'name' => 'PrestaShop a Yuju'],
         ],
         'id' => 'id',
         'name' => 'name',
@@ -666,17 +676,17 @@ class AdminYujuProductStatusController extends ModuleAdminController
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Active'),
-        'name' => 'is_active',
+        'label' => 'Sincronización Habilitada',
+        'name' => 'sync_enabled',
         'is_bool' => true,
         'values' => [
-        ['id' => 'is_active_on', 'value' => 1, 'label' => $this->l('Enabled')],
-        ['id' => 'is_active_off', 'value' => 0, 'label' => $this->l('Disabled')],
+        ['id' => 'sync_enabled_on', 'value' => 1, 'label' => 'Habilitado'],
+        ['id' => 'sync_enabled_off', 'value' => 0, 'label' => 'Deshabilitado'],
         ],
         ],
         ],
         'submit' => [
-        'title' => $this->l('Save'),
+        'title' => 'Guardar',
         'class' => 'btn btn-default pull-right',
         ],
         ];

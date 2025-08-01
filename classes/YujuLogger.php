@@ -269,18 +269,18 @@ class YujuLogger
         }
 
         if (isset($filters['date_from'])) {
-            $where_conditions[] = 'created_at >= \'' . pSQL($filters['date_from']) . '\'';
+            $where_conditions[] = 'start_time >= \'' . pSQL($filters['date_from']) . '\'';
         }
 
         if (isset($filters['date_to'])) {
-            $where_conditions[] = 'created_at <= \'' . pSQL($filters['date_to']) . '\'';
+            $where_conditions[] = 'start_time <= \'' . pSQL($filters['date_to']) . '\'';
         }
 
         $where_clause = implode(' AND ', $where_conditions);
 
         $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_sync_logs`
                 WHERE ' . $where_clause . '
-                ORDER BY created_at DESC
+                ORDER BY `start_time` DESC
                 LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset;
 
         return Db::getInstance()->executeS($sql);
@@ -306,11 +306,11 @@ class YujuLogger
         }
 
         if (isset($filters['date_from'])) {
-            $where_conditions[] = 'created_at >= \'' . pSQL($filters['date_from']) . '\'';
+            $where_conditions[] = 'start_time >= \'' . pSQL($filters['date_from']) . '\'';
         }
 
         if (isset($filters['date_to'])) {
-            $where_conditions[] = 'created_at <= \'' . pSQL($filters['date_to']) . '\'';
+            $where_conditions[] = 'start_time <= \'' . pSQL($filters['date_to']) . '\'';
         }
 
         $where_clause = implode(' AND ', $where_conditions);
@@ -366,7 +366,7 @@ class YujuLogger
 
         // Estadísticas de base de datos
         $sql = 'SELECT status, COUNT(*) as count FROM `' . _DB_PREFIX_ . 'yuju_sync_logs`
-                WHERE created_at >= CURDATE()
+                WHERE start_time >= CURDATE()
                 GROUP BY status';
         $db_stats = Db::getInstance()->executeS($sql);
 

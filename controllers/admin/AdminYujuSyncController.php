@@ -34,6 +34,7 @@ class AdminYujuSyncController extends ModuleAdminController
         $this->bootstrap = true;
         $this->table = 'yuju_sync_logs';
         $this->className = 'YujuSyncLog';
+        $this->identifier = 'id';
         $this->lang = false;
         $this->addRowAction('view');
         $this->addRowAction('delete');
@@ -43,56 +44,56 @@ class AdminYujuSyncController extends ModuleAdminController
 
         parent::__construct();
 
-        $this->meta_title = $this->l('Yuju Synchronization');
+        $this->meta_title = $this->trans('Yuju Synchronization', array(), 'Modules.Prestashopyuju.Admin');
 
         $this->fields_list = [
         'id' => [
-        'title' => $this->l('ID'),
+        'title' => $this->trans('ID', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'sync_type' => [
-        'title' => $this->l('Type'),
+        'title' => $this->trans('Type', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'sync_direction' => [
-        'title' => $this->l('Direction'),
+        'title' => $this->trans('Direction', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
-        'categories_synced' => [
-        'title' => $this->l('Categories'),
+        'entity_type' => [
+        'title' => $this->trans('Entity', array(), 'Modules.Prestashopyuju.Admin'),
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
+        ],
+        'total_items' => [
+        'title' => $this->trans('Total', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
-        'products_synced' => [
-        'title' => $this->l('Products'),
+        'success_items' => [
+        'title' => $this->trans('Success', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
-        'execution_time' => [
-        'title' => $this->l('Time (s)'),
+        'duration' => [
+        'title' => $this->trans('Time (s)', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
-        'success' => [
-        'title' => $this->l('Status'),
+        'status' => [
+        'title' => $this->trans('Status', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
-        'class' => 'fixed-width-xs',
-        'type' => 'bool',
-        'icon' => [
-        0 => 'disabled.gif',
-        1 => 'enabled.gif',
+        'class' => 'fixed-width-sm',
         ],
-        ],
-        'error_count' => [
-        'title' => $this->l('Errors'),
+        'error_items' => [
+        'title' => $this->trans('Errors', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
-        'created_at' => [
-        'title' => $this->l('Date'),
+        'start_time' => [
+        'title' => $this->trans('Date', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'type' => 'datetime',
         ],
@@ -100,11 +101,17 @@ class AdminYujuSyncController extends ModuleAdminController
 
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->l('Delete selected'),
+        'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-trash',
-        'confirm' => $this->l('Delete selected items?'),
+        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ];
+    }
+
+    public function initContent()
+    {
+        $this->context->smarty->assign('current_controller', 'AdminYujuSync');
+        parent::initContent();
     }
 
     public function renderList()
@@ -112,37 +119,37 @@ class AdminYujuSyncController extends ModuleAdminController
         // Add toolbar buttons
         $this->toolbar_btn['sync_full'] = [
         'href' => self::$currentIndex . '&action=syncFull&token=' . $this->token,
-        'desc' => $this->l('Full Sync'),
+        'desc' => $this->trans('Full Sync', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-refresh',
         ];
 
         $this->toolbar_btn['sync_incremental'] = [
         'href' => self::$currentIndex . '&action=syncIncremental&token=' . $this->token,
-        'desc' => $this->l('Incremental Sync'),
+        'desc' => $this->trans('Incremental Sync', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-update',
         ];
 
         $this->toolbar_btn['sync_categories'] = [
         'href' => self::$currentIndex . '&action=syncCategories&token=' . $this->token,
-        'desc' => $this->l('Sync Categories'),
+        'desc' => $this->trans('Sync Categories', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-category',
         ];
 
         $this->toolbar_btn['sync_products'] = [
         'href' => self::$currentIndex . '&action=syncProducts&token=' . $this->token,
-        'desc' => $this->l('Sync Products'),
+        'desc' => $this->trans('Sync Products', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-product',
         ];
 
         $this->toolbar_btn['sync_stock'] = [
         'href' => self::$currentIndex . '&action=syncStock&token=' . $this->token,
-        'desc' => $this->l('Sync Stock'),
+        'desc' => $this->trans('Sync Stock', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-quantity',
         ];
 
         $this->toolbar_btn['sync_prices'] = [
         'href' => self::$currentIndex . '&action=syncPrices&token=' . $this->token,
-        'desc' => $this->l('Sync Prices'),
+        'desc' => $this->trans('Sync Prices', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'process-icon-dollar',
         ];
 
@@ -198,7 +205,7 @@ class AdminYujuSyncController extends ModuleAdminController
     protected function processSyncFull()
     {
         if ($this->sync_manager->isSyncRunning()) {
-            $this->errors[] = $this->l('Synchronization is already running. Please wait for it to complete.');
+            $this->errors[] = $this->trans('Synchronization is already running. Please wait for it to complete.', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -213,16 +220,16 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Full synchronization completed successfully. Categories: %d, Products: %d, Time: %d seconds'),
+                    $this->trans('Full synchronization completed successfully. Categories: %d, Products: %d, Time: %d seconds', array(), 'Modules.Prestashopyuju.Admin'),
                     isset($results['categories']['synced_count']) ? $results['categories']['synced_count'] : 0,
                     isset($results['products']['synced_count']) ? $results['products']['synced_count'] : 0,
                     $results['total_time']
                 );
             } else {
-                $this->errors[] = $this->l('Full synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = $this->trans('Full synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         } finally {
             $this->sync_manager->removeSyncLock();
         }
@@ -231,7 +238,7 @@ class AdminYujuSyncController extends ModuleAdminController
     protected function processSyncIncremental()
     {
         if ($this->sync_manager->isSyncRunning()) {
-            $this->errors[] = $this->l('Synchronization is already running. Please wait for it to complete.');
+            $this->errors[] = $this->trans('Synchronization is already running. Please wait for it to complete.', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -244,15 +251,15 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Incremental synchronization completed successfully. Categories: %d, Products: %d'),
+                    $this->trans('Incremental synchronization completed successfully. Categories: %d, Products: %d', array(), 'Modules.Prestashopyuju.Admin'),
                     $results['categories']['synced_count'],
                     $results['products']['synced_count']
                 );
             } else {
-                $this->errors[] = $this->l('Incremental synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = $this->trans('Incremental synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         } finally {
             $this->sync_manager->removeSyncLock();
         }
@@ -266,14 +273,14 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Category synchronization completed successfully. Synced: %d'),
+                    $this->trans('Category synchronization completed successfully. Synced: %d', array(), 'Modules.Prestashopyuju.Admin'),
                     isset($results['synced_count']) ? $results['synced_count'] : 0
                 );
             } else {
-                $this->errors[] = $this->l('Category synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = $this->trans('Category synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Category synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Category synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
     }
 
@@ -292,14 +299,14 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Product synchronization completed successfully. Synced: %d'),
+                    $this->trans('Product synchronization completed successfully. Synced: %d', array(), 'Modules.Prestashopyuju.Admin'),
                     isset($results['synced_count']) ? $results['synced_count'] : 0
                 );
             } else {
-                $this->errors[] = $this->l('Product synchronization failed: ') . implode(', ', $results['errors']);
+                $this->errors[] = $this->trans('Product synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Product synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Product synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
     }
 
@@ -316,14 +323,14 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Stock synchronization completed successfully. Updated: %d products'),
+                    $this->trans('Stock synchronization completed successfully. Updated: %d products', array(), 'Modules.Prestashopyuju.Admin'),
                     $results['updated_count']
                 );
             } else {
-                $this->errors[] = $this->l('Stock synchronization failed: ') . $results['error'];
+                $this->errors[] = $this->trans('Stock synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . $results['error'];
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Stock synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Stock synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
     }
 
@@ -340,14 +347,14 @@ class AdminYujuSyncController extends ModuleAdminController
 
             if ($results['success']) {
                 $this->confirmations[] = sprintf(
-                    $this->l('Price synchronization completed successfully. Updated: %d products'),
+                    $this->trans('Price synchronization completed successfully. Updated: %d products', array(), 'Modules.Prestashopyuju.Admin'),
                     $results['updated_count']
                 );
             } else {
-                $this->errors[] = $this->l('Price synchronization failed: ') . $results['error'];
+                $this->errors[] = $this->trans('Price synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . $results['error'];
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Price synchronization error: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Price synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
     }
 
@@ -355,9 +362,9 @@ class AdminYujuSyncController extends ModuleAdminController
     {
         try {
             $this->sync_manager->removeSyncLock();
-            $this->confirmations[] = $this->l('Synchronization stopped successfully.');
+            $this->confirmations[] = $this->trans('Synchronization stopped successfully.', array(), 'Modules.Prestashopyuju.Admin');
         } catch (Exception $e) {
-            $this->errors[] = $this->l('Error stopping synchronization: ') . $e->getMessage();
+            $this->errors[] = $this->trans('Error stopping synchronization: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
     }
 
@@ -366,7 +373,7 @@ class AdminYujuSyncController extends ModuleAdminController
         $log_id = (int) Tools::getValue('id');
 
         if (!$log_id) {
-            $this->errors[] = $this->l('Invalid log ID');
+            $this->errors[] = $this->trans('Invalid log ID', array(), 'Modules.Prestashopyuju.Admin');
 
             return $this->renderList();
         }
@@ -378,7 +385,7 @@ class AdminYujuSyncController extends ModuleAdminController
         );
 
         if (!$log) {
-            $this->errors[] = $this->l('Log not found');
+            $this->errors[] = $this->trans('Log not found', array(), 'Modules.Prestashopyuju.Admin');
 
             return $this->renderList();
         }
@@ -403,19 +410,19 @@ class AdminYujuSyncController extends ModuleAdminController
         // Sync configuration form
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Synchronization Settings'),
+        'title' => $this->trans('Synchronization Settings', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-cogs',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->l('Sync Direction'),
+        'label' => $this->trans('Sync Direction', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'sync_direction',
         'options' => [
         'query' => [
-        ['id' => 'bidirectional', 'name' => $this->l('Bidirectional')],
-        ['id' => 'yuju_to_ps', 'name' => $this->l('Yuju to PrestaShop')],
-        ['id' => 'ps_to_yuju', 'name' => $this->l('PrestaShop to Yuju')],
+        ['id' => 'bidirectional', 'name' => $this->trans('Bidirectional', array(), 'Modules.Prestashopyuju.Admin')],
+        ['id' => 'yuju_to_ps', 'name' => $this->trans('Yuju to PrestaShop', array(), 'Modules.Prestashopyuju.Admin')],
+        ['id' => 'ps_to_yuju', 'name' => $this->trans('PrestaShop to Yuju', array(), 'Modules.Prestashopyuju.Admin')],
         ],
         'id' => 'id',
         'name' => 'name',
@@ -423,35 +430,35 @@ class AdminYujuSyncController extends ModuleAdminController
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Force Update'),
+        'label' => $this->trans('Force Update', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'force_update',
         'is_bool' => true,
         'values' => [
-        ['id' => 'force_update_on', 'value' => 1, 'label' => $this->l('Enabled')],
-        ['id' => 'force_update_off', 'value' => 0, 'label' => $this->l('Disabled')],
+        ['id' => 'force_update_on', 'value' => 1, 'label' => $this->trans('Enabled', array(), 'Modules.Prestashopyuju.Admin')],
+        ['id' => 'force_update_off', 'value' => 0, 'label' => $this->trans('Disabled', array(), 'Modules.Prestashopyuju.Admin')],
         ],
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Category IDs'),
+        'label' => $this->trans('Category IDs', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'category_ids',
-        'desc' => $this->l('Comma-separated list of category IDs (for product sync only)'),
+        'desc' => $this->trans('Comma-separated list of category IDs (for product sync only)', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Product IDs'),
+        'label' => $this->trans('Product IDs', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'product_ids',
-        'desc' => $this->l('Comma-separated list of product IDs (for stock/price sync only)'),
+        'desc' => $this->trans('Comma-separated list of product IDs (for stock/price sync only)', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         [
         'type' => 'datetime',
-        'label' => $this->l('Since Date'),
+        'label' => $this->trans('Since Date', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'since_date',
-        'desc' => $this->l('For incremental sync only'),
+        'desc' => $this->trans('For incremental sync only', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ],
         'submit' => [
-        'title' => $this->l('Execute Sync'),
+        'title' => $this->trans('Execute Sync', array(), 'Modules.Prestashopyuju.Admin'),
         'class' => 'btn btn-default pull-right',
         ],
         ];
@@ -481,7 +488,7 @@ class AdminYujuSyncController extends ModuleAdminController
 
             $response = [
             'success' => true,
-            'message' => sprintf($this->l('Deleted %d old log entries'), $deleted_count),
+            'message' => sprintf($this->trans('Deleted %d old log entries', array(), 'Modules.Prestashopyuju.Admin'), $deleted_count),
             ];
         } catch (Exception $e) {
             $response = [

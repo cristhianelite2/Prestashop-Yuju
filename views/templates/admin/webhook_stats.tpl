@@ -16,10 +16,12 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+
+{block name="content"}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-bar-chart"></i>
-        {l s='Webhook Statistics' mod='prestashopyuju'}
+        Estadísticas de Webhooks
     </div>
     <div class="panel-body">
         <div class="row">
@@ -29,7 +31,7 @@
                         <i class="icon-globe"></i>
                     </div>
                     <div class="info-box-content">
-                        <span class="info-box-text">{l s='Total Webhooks' mod='prestashopyuju'}</span>
+                        <span class="info-box-text">Total de Webhooks</span>
                         <span class="info-box-number">{$webhook_stats.total_received|default:0|escape:'html':'UTF-8'}</span>
                     </div>
                 </div>
@@ -41,7 +43,7 @@
                         <i class="icon-check"></i>
                     </div>
                     <div class="info-box-content">
-                        <span class="info-box-text">{l s='Processed' mod='prestashopyuju'}</span>
+                        <span class="info-box-text">Procesados</span>
                         <span class="info-box-number">
                             {assign var="processed" value=0}
                             {foreach from=$webhook_stats.by_status item=status}
@@ -61,7 +63,7 @@
                         <i class="icon-times"></i>
                     </div>
                     <div class="info-box-content">
-                        <span class="info-box-text">{l s='Failed' mod='prestashopyuju'}</span>
+                        <span class="info-box-text">Fallidos</span>
                         <span class="info-box-number">
                             {assign var="failed" value=0}
                             {foreach from=$webhook_stats.by_status item=status}
@@ -81,7 +83,7 @@
                         <i class="icon-clock-o"></i>
                     </div>
                     <div class="info-box-content">
-                        <span class="info-box-text">{l s='Processing' mod='prestashopyuju'}</span>
+                        <span class="info-box-text">Procesando</span>
                         <span class="info-box-number">
                             {assign var="processing" value=0}
                             {foreach from=$webhook_stats.by_status item=status}
@@ -100,16 +102,16 @@
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Webhook URL' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">URL del Webhook</h4>
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
-                            <label>{l s='Current Webhook URL:' mod='prestashopyuju'}</label>
+                            <label>URL Actual del Webhook:</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" value="{$webhook_url|escape:'html':'UTF-8'}" readonly>
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default" type="button" onclick="copyToClipboard('{$webhook_url|escape:'javascript':'UTF-8}')">
-                                        <i class="icon-copy"></i> {l s='Copy' mod='prestashopyuju'}
+                                    <button class="btn btn-default" type="button" onclick="copyToClipboard(&quot;{$webhook_url|escape:'javascript':'UTF-8'}&quot;)">
+                                        <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
@@ -121,7 +123,7 @@
             <div class="col-lg-6">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Registered Webhooks' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Webhooks Registrados</h4>
                     </div>
                     <div class="panel-body">
                         {if $webhook_stats.registered_webhooks && count($webhook_stats.registered_webhooks) > 0}
@@ -134,7 +136,7 @@
                                 {/foreach}
                             </ul>
                         {else}
-                            <p class="text-muted">{l s='No webhooks registered' mod='prestashopyuju'}</p>
+                            <p class="text-muted">No hay webhooks registrados</p>
                         {/if}
                     </div>
                 </div>
@@ -146,16 +148,16 @@
             <div class="col-lg-12">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Webhooks by Event Type' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Webhooks por Tipo de Evento</h4>
                     </div>
                     <div class="panel-body">
                         <div class="table-responsive">
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>{l s='Event Type' mod='prestashopyuju'}</th>
-                                        <th>{l s='Count' mod='prestashopyuju'}</th>
-                                        <th>{l s='Percentage' mod='prestashopyuju'}</th>
+                                        <th>Tipo de Evento</th>
+                                        <th>Cantidad</th>
+                                        <th>Porcentaje</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -187,17 +189,17 @@
             <div class="col-lg-12">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">{l s='Recent Webhooks' mod='prestashopyuju'}</h4>
+                        <h4 class="panel-title">Webhooks Recientes</h4>
                     </div>
                     <div class="panel-body">
                         <div class="table-responsive">
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>{l s='Event Type' mod='prestashopyuju'}</th>
-                                        <th>{l s='Entity ID' mod='prestashopyuju'}</th>
-                                        <th>{l s='Status' mod='prestashopyuju'}</th>
-                                        <th>{l s='Received At' mod='prestashopyuju'}</th>
+                                        <th>Tipo de Evento</th>
+                                        <th>ID de Entidad</th>
+                                        <th>Estado</th>
+                                        <th>Recibido en</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -207,11 +209,11 @@
                                             <td>{$webhook.entity_id|escape:'html':'UTF-8'}</td>
                                             <td>
                                                 {if $webhook.status == 'processed'}
-                                                    <span class="label label-success">{l s='Processed' mod='prestashopyuju'}</span>
+                                                    <span class="label label-success">Procesado</span>
                                                 {elseif $webhook.status == 'failed'}
-                                                    <span class="label label-danger">{l s='Failed' mod='prestashopyuju'}</span>
+                                                    <span class="label label-danger">Fallido</span>
                                                 {else}
-                                                    <span class="label label-warning">{l s='Processing' mod='prestashopyuju'}</span>
+                                                    <span class="label label-warning">Procesando</span>
                                                 {/if}
                                             </td>
                                             <td>{$webhook.received_at|escape:'html':'UTF-8'}</td>
@@ -231,7 +233,7 @@
 <script>
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function() {
-        showSuccessMessage('{l s='URL copied to clipboard' mod='prestashopyuju'}');
+        showSuccessMessage('URL copiada al portapapeles');
     }, function(err) {
         console.error('Could not copy text: ', err);
     });
@@ -292,3 +294,4 @@ function copyToClipboard(text) {
 .bg-red { background-color: #dd4b39 !important; }
 .bg-yellow { background-color: #f39c12 !important; }
 </style>
+{/block}

@@ -412,7 +412,7 @@ class YujuCategoryManager
             $sql .= ' WHERE cm.sync_enabled = 1';
         }
 
-        $sql .= ' ORDER BY cl.name';
+        $sql .= ' ORDER BY `cl`.`name`';
 
         return Db::getInstance()->executeS($sql);
     }
@@ -437,7 +437,7 @@ class YujuCategoryManager
         ');
 
         $stats['sync_errors'] = (int) Db::getInstance()->getValue('
-            SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE sync_status = \'error\'
+            SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE sync_enabled = 0
         ');
 
         return $stats;

@@ -37,7 +37,7 @@ class YujuApiClient
 
     public function __construct()
     {
-        $environment = Configuration::get('YUJU_API_ENVIRONMENT', null) ?: 'sandbox';
+        $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
         $this->base_url = ($environment === 'production') ? self::PRODUCTION_BASE_URL : self::SANDBOX_BASE_URL;
         $this->oauth = new YujuOAuth();
         $this->logger = new YujuLogger();
@@ -199,7 +199,7 @@ class YujuApiClient
     }
 
     /**
-     * Obtiene los headers necesarios para la petición.
+     * Obtiene los headers necesarios para la petición según la documentación de Yuju.
      */
     private function getHeaders()
     {
@@ -212,7 +212,8 @@ class YujuApiClient
         $access_token = $this->oauth->getValidAccessToken();
 
         if ($access_token) {
-            $headers[] = 'Authorization: Bearer ' . $access_token;
+            // Según la documentación de Yuju, el token se envía directamente en Authorization
+            $headers[] = 'Authorization: ' . $access_token;
         }
 
         return $headers;
@@ -315,32 +316,58 @@ class YujuApiClient
     public function testConnection()
     {
         try {
-            if (!$this->isApiAvailable()) {
+            // Verificar que tenemos un token válido
+            $access_token = $this->oauth->getValidAccessToken();
+            if (!$access_token) {
                 return [
                     'success' => false,
-                    'message' => 'API is not available',
+                    'message' => 'No hay token de acceso válido. Por favor, autoriza la aplicación primero.',
                 ];
             }
 
-            $user_info = $this->getUserInfo();
+            // Probar la conexión con el endpoint de webhooks
+            $response = $this->get('webhook-sub');
 
-            if ($user_info['success']) {
+            if ($response['success']) {
                 return [
                     'success' => true,
-                    'message' => 'Connection successful',
-                    'data' => $user_info['data'],
+                    'message' => 'Conexión exitosa con la API de Yuju',
+                    'data' => [
+                        'token_valid' => true,
+                        'api_accessible' => true,
+                        'timestamp' => date('Y-m-d H:i:s'),
+                    ],
                 ];
             } else {
                 return [
                     'success' => false,
-                    'message' => 'Failed to get user info: ' . ($user_info['message'] ?? 'Unknown error'),
+                    'message' => 'Error al conectar con la API: ' . ($response['message'] ?? 'Error desconocido'),
                 ];
             }
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Connection test failed: ' . $e->getMessage(),
+                'message' => 'Error de conexión: ' . $e->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * Obtiene las tiendas disponibles en Yuju.
+     */
+    public function getStores($params = [])
+    {
+        try {
+            $response = $this->get('stores', $params);
+            
+            if (isset($response['data'])) {
+                return $response['data'];
+            }
+            
+            return $response;
+        } catch (Exception $e) {
+            $this->logger->error('Error getting stores: ' . $e->getMessage());
+            throw $e;
         }
     }
 

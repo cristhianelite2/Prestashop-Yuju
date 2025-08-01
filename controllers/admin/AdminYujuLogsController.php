@@ -37,6 +37,7 @@ class AdminYujuLogsController extends ModuleAdminController
 
     public function initContent()
     {
+        $this->context->smarty->assign('current_controller', 'AdminYujuLogs');
         parent::initContent();
 
         $logs = $this->getLogs();

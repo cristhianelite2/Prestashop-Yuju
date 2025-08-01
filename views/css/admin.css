@@ -49,6 +49,93 @@
     text-transform: uppercase;
 }
 
+/* Sidebar Navigation Styles */
+.yuju-admin-layout {
+    margin: 0;
+}
+
+.yuju-sidebar {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.yuju-sidebar .panel-heading {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 4px 4px 0 0;
+    padding: 12px 15px;
+    font-weight: 600;
+}
+
+.yuju-sidebar .panel-heading i {
+    margin-right: 8px;
+}
+
+.yuju-sidebar .panel-body {
+    padding: 0;
+}
+
+.yuju-nav {
+    margin: 0;
+    list-style: none;
+}
+
+.yuju-nav li {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.yuju-nav li:last-child {
+    border-bottom: none;
+}
+
+.yuju-nav li a {
+    display: block;
+    padding: 12px 15px;
+    color: #555;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border-radius: 0;
+}
+
+.yuju-nav li a:hover {
+    background-color: #f8f9fa;
+    color: #667eea;
+    text-decoration: none;
+}
+
+.yuju-nav li.active a {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+}
+
+.yuju-nav li.active a:hover {
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    color: white;
+}
+
+.yuju-nav li a i {
+    margin-right: 10px;
+    width: 16px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .yuju-admin-layout .col-md-3,
+    .yuju-admin-layout .col-md-9 {
+        width: 100%;
+        float: none;
+    }
+    
+    .yuju-sidebar {
+        margin-bottom: 15px;
+    }
+}
+
 .yuju-status.connected {
     background-color: #5cb85c;
     color: white;

@@ -57,9 +57,9 @@ class Prestashopyuju extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Yuju Integration');
-        $this->description = $this->l('Synchronize your PrestaShop store with Yuju platform for seamless inventory, product, and order management.');
-        $this->confirmUninstall = $this->l('Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.');
+        $this->displayName = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
+        $this->description = $this->trans('Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.', array(), 'Modules.Prestashopyuju.Admin');
+        $this->confirmUninstall = $this->trans('Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.', array(), 'Modules.Prestashopyuju.Admin');
 
         // Initialize components
         // Temporarily commented for installation
@@ -106,7 +106,8 @@ class Prestashopyuju extends Module
         $sql_file = dirname(__FILE__) . '/sql/install.sql';
 
         if (!file_exists($sql_file)) {
-            $this->logger->error('Install SQL file not found: ' . $sql_file);
+            // Use PrestaShop's error logging instead of $this->logger during installation
+            PrestaShopLogger::addLog('Install SQL file not found: ' . $sql_file, 3);
 
             return false;
         }
@@ -121,7 +122,8 @@ class Prestashopyuju extends Module
 
             if (!empty($query)) {
                 if (!Db::getInstance()->execute($query)) {
-                    $this->logger->error('Failed to execute query: ' . $query);
+                    // Use PrestaShop's error logging instead of $this->logger during installation
+                    PrestaShopLogger::addLog('Failed to execute query: ' . $query, 3);
 
                     return false;
                 }
@@ -130,6 +132,8 @@ class Prestashopyuju extends Module
 
         return true;
     }
+
+
 
     /**
      * Uninstall database tables.
@@ -166,56 +170,56 @@ class Prestashopyuju extends Module
         $tabs = [
         [
         'class_name' => 'AdminYuju',
-        'name' => 'Yuju Integration',
+        'name' => $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'CONFIGURE',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuConfiguration',
-        'name' => 'Configuration',
+        'name' => $this->trans('Configuration', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuSync',
-        'name' => 'Synchronization',
+        'name' => $this->trans('Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuProductMapping',
-        'name' => 'Product Mapping',
+        'name' => $this->trans('Product Mapping', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuAttributeMapping',
-        'name' => 'Attribute Mapping',
+        'name' => $this->trans('Attribute Mapping', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuProductStatus',
-        'name' => 'Product Status',
+        'name' => $this->trans('Product Status', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuWebhook',
-        'name' => 'Webhooks',
+        'name' => $this->trans('Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuLogs',
-        'name' => 'Logs',
+        'name' => $this->trans('Logs', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
@@ -233,7 +237,7 @@ class Prestashopyuju extends Module
             $tab->id_parent = (Validate::isLoadedObject($parent_tab) && isset($parent_tab->id)) ? (int) $parent_tab->id : 0;
 
             foreach (Language::getLanguages(false) as $language) {
-                $tab->name[$language['id_lang']] = $tab_data['name'];
+                $tab->name[$language['id_lang']] = is_string($tab_data['name']) ? $tab_data['name'] : $tab_data['name'];
             }
 
             if (!$tab->save()) {
@@ -385,261 +389,12 @@ class Prestashopyuju extends Module
      */
     public function getContent()
     {
-        $output = '';
-
-        // Handle OAuth callback
-
-        if (Tools::isSubmit('oauth_callback')) {
-            $output .= $this->handleOAuthCallback();
-        }
-
-        // Handle form submission
-
-        if (Tools::isSubmit('submitYujuConfiguration')) {
-            $output .= $this->postProcess();
-        }
-
-        // Handle OAuth authorization
-
-        if (Tools::isSubmit('authorize_yuju')) {
-            $output .= $this->handleOAuthAuthorization();
-        }
-
-        // Handle test connection
-
-        if (Tools::isSubmit('test_connection')) {
-            $output .= $this->testConnection();
-        }
-
-        return $output . $this->renderForm();
+        // Redirigir al controlador personalizado de configuración
+        $admin_link = $this->context->link->getAdminLink('AdminYujuConfiguration');
+        Tools::redirectAdmin($admin_link);
     }
 
-    /**
-     * Handle OAuth callback.
-     */
-    protected function handleOAuthCallback()
-    {
-        $code = Tools::getValue('code');
-        $state = Tools::getValue('state');
-        $error = Tools::getValue('error');
 
-        if ($error) {
-            return $this->displayError($this->l('OAuth authorization failed: ') . $error);
-        }
-
-        if (!$code) {
-            return $this->displayError($this->l('No authorization code received'));
-        }
-
-        try {
-            $token_data = $this->oauth->exchangeCodeForToken($code);
-
-            if ($token_data) {
-                return $this->displayConfirmation($this->l('Successfully connected to Yuju!'));
-            } else {
-                return $this->displayError($this->l('Failed to exchange authorization code for token'));
-            }
-        } catch (Exception $e) {
-            $this->logger->error('OAuth callback error: ' . $e->getMessage());
-
-            return $this->displayError($this->l('OAuth error: ') . $e->getMessage());
-        }
-    }
-
-    /**
-     * Handle OAuth authorization.
-     */
-    protected function handleOAuthAuthorization()
-    {
-        try {
-            $auth_url = $this->oauth->getAuthorizationUrl();
-            Tools::redirect($auth_url);
-        } catch (Exception $e) {
-            $this->logger->error('OAuth authorization error: ' . $e->getMessage());
-
-            return $this->displayError($this->l('Failed to generate authorization URL: ') . $e->getMessage());
-        }
-    }
-
-    /**
-     * Test API connection.
-     */
-    protected function testConnection()
-    {
-        try {
-            if ($this->api_client->testConnection()) {
-                return $this->displayConfirmation($this->l('Connection test successful!'));
-            } else {
-                return $this->displayError($this->l('Connection test failed'));
-            }
-        } catch (Exception $e) {
-            $this->logger->error('Connection test error: ' . $e->getMessage());
-
-            return $this->displayError($this->l('Connection test error: ') . $e->getMessage());
-        }
-    }
-
-    /**
-     * Process form submission.
-     */
-    protected function postProcess()
-    {
-        $form_values = $this->getConfigFormValues();
-
-        foreach (array_keys($form_values) as $key) {
-            Configuration::updateValue($key, Tools::getValue($key));
-        }
-
-        return $this->displayConfirmation($this->l('Settings updated successfully'));
-    }
-
-    /**
-     * Render configuration form.
-     */
-    protected function renderForm()
-    {
-        $helper = new HelperForm();
-
-        $helper->show_toolbar = false;
-        $helper->table = $this->table;
-        $helper->module = $this;
-        $helper->default_form_language = $this->context->language->id;
-        $helper->allow_employee_form_lang = Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
-
-        $helper->identifier = $this->identifier;
-        $helper->submit_action = 'submitYujuConfiguration';
-        $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false)
-        . '&configure=' . $this->name . '&tab_module=' . $this->tab . '&module_name=' . $this->name;
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-
-        $helper->tpl_vars = [
-        'fields_value' => $this->getConfigFormValues(),
-        'languages' => $this->context->controller->getLanguages(),
-        'id_language' => $this->context->language->id,
-        ];
-
-        return $helper->generateForm([$this->getConfigForm()]);
-    }
-
-    /**
-     * Get configuration form structure.
-     */
-    protected function getConfigForm()
-    {
-        return [
-        'form' => [
-        'legend' => [
-        'title' => $this->l('Yuju Integration Settings'),
-        'icon' => 'icon-cogs',
-        ],
-        'input' => [
-        [
-        'type' => 'select',
-        'label' => $this->l('Environment'),
-        'name' => 'YUJU_API_ENVIRONMENT',
-        'required' => true,
-        'options' => [
-        'query' => [
-        ['id' => 'sandbox', 'name' => 'Sandbox'],
-        ['id' => 'production', 'name' => 'Production'],
-        ],
-        'id' => 'id',
-        'name' => 'name',
-        ],
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Client ID'),
-        'name' => 'YUJU_CLIENT_ID',
-        'required' => true,
-        'size' => 50,
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Client Secret'),
-        'name' => 'YUJU_CLIENT_SECRET',
-        'required' => true,
-        'size' => 50,
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Redirect URI'),
-        'name' => 'YUJU_REDIRECT_URI',
-        'size' => 100,
-        'desc' => $this->l('Leave empty to use default'),
-        ],
-        [
-        'type' => 'switch',
-        'label' => $this->l('Enable Auto Sync'),
-        'name' => 'YUJU_ENABLE_AUTO_SYNC',
-        'is_bool' => true,
-        'values' => [
-        ['id' => 'active_on', 'value' => true, 'label' => $this->l('Enabled')],
-        ['id' => 'active_off', 'value' => false, 'label' => $this->l('Disabled')],
-        ],
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Sync Frequency (seconds)'),
-        'name' => 'YUJU_SYNC_FREQUENCY',
-        'class' => 'fixed-width-sm',
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Batch Size'),
-        'name' => 'YUJU_SYNC_BATCH_SIZE',
-        'class' => 'fixed-width-sm',
-        ],
-        [
-        'type' => 'switch',
-        'label' => $this->l('Enable Email Notifications'),
-        'name' => 'YUJU_ENABLE_EMAIL_NOTIFICATIONS',
-        'is_bool' => true,
-        'values' => [
-        ['id' => 'active_on', 'value' => true, 'label' => $this->l('Enabled')],
-        ['id' => 'active_off', 'value' => false, 'label' => $this->l('Disabled')],
-        ],
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->l('Notification Email'),
-        'name' => 'YUJU_NOTIFICATION_EMAIL',
-        'size' => 50,
-        ],
-        ],
-        'submit' => [
-        'title' => $this->l('Save'),
-        ],
-        'buttons' => [
-        [
-        'href' => AdminController::$currentIndex . '&configure=' . $this->name . '&authorize_yuju&token=' . Tools::getAdminTokenLite('AdminModules'),
-        'title' => $this->l('Authorize with Yuju'),
-        'icon' => 'process-icon-cogs',
-        ],
-        [
-        'href' => AdminController::$currentIndex . '&configure=' . $this->name . '&test_connection&token=' . Tools::getAdminTokenLite('AdminModules'),
-        'title' => $this->l('Test Connection'),
-        'icon' => 'process-icon-refresh',
-        ],
-        ],
-        ],
-        ];
-    }
-
-    /**
-     * Get configuration form values.
-     */
-    protected function getConfigFormValues()
-    {
-        $defaults = YujuConfig::getDefaults();
-        $values = [];
-
-        foreach ($defaults as $key => $default_value) {
-            $values[$key] = YujuConfig::get($key, $default_value);
-        }
-
-        return $values;
-    }
 
     // Hook implementations
 
@@ -680,6 +435,16 @@ class Prestashopyuju extends Module
     {
         if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_STOCK_SYNC')) {
             $this->sync_manager->queueStockSync($params['id_product'], $params['id_product_attribute']);
+        }
+    }
+
+    /**
+     * Product attribute update hook.
+     */
+    public function hookActionProductAttributeUpdate($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_update');
         }
     }
 
@@ -730,6 +495,106 @@ class Prestashopyuju extends Module
     {
         if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
             $this->sync_manager->queueOrderSync($params['order']->id, 'create');
+        }
+    }
+
+    /**
+     * Order return hook.
+     */
+    public function hookActionOrderReturn($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
+            $this->sync_manager->queueOrderSync($params['order']->id, 'return');
+        }
+    }
+
+    /**
+     * Product attribute delete hook.
+     */
+    public function hookActionProductAttributeDelete($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_delete');
+        }
+    }
+
+    /**
+     * Attribute group delete hook.
+     */
+    public function hookActionAttributeGroupDelete($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
+            $this->sync_manager->queueAttributeSync($params['object']->id, 'group_delete');
+        }
+    }
+
+    /**
+     * Attribute delete hook.
+     */
+    public function hookActionAttributeDelete($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
+            $this->sync_manager->queueAttributeSync($params['object']->id, 'delete');
+        }
+    }
+
+    /**
+     * Carrier update hook.
+     */
+    public function hookActionCarrierUpdate($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CARRIER_SYNC')) {
+            $this->sync_manager->queueCarrierSync($params['carrier']->id, 'update');
+        }
+    }
+
+    /**
+     * Customer account add hook.
+     */
+    public function hookActionCustomerAccountAdd($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CUSTOMER_SYNC')) {
+            $this->sync_manager->queueCustomerSync($params['newCustomer']->id, 'create');
+        }
+    }
+
+    /**
+     * Customer account update hook.
+     */
+    public function hookActionCustomerAccountUpdate($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CUSTOMER_SYNC')) {
+            $this->sync_manager->queueCustomerSync($params['customer']->id, 'update');
+        }
+    }
+
+    /**
+     * Manufacturer add hook.
+     */
+    public function hookActionObjectManufacturerAddAfter($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
+            $this->sync_manager->queueManufacturerSync($params['object']->id, 'create');
+        }
+    }
+
+    /**
+     * Manufacturer update hook.
+     */
+    public function hookActionObjectManufacturerUpdateAfter($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
+            $this->sync_manager->queueManufacturerSync($params['object']->id, 'update');
+        }
+    }
+
+    /**
+     * Manufacturer delete hook.
+     */
+    public function hookActionObjectManufacturerDeleteAfter($params)
+    {
+        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
+            $this->sync_manager->queueManufacturerSync($params['object']->id, 'delete');
         }
     }
 

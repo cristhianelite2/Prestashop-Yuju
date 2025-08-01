@@ -16,10 +16,13 @@
 * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
+{extends file="./layout.tpl"}
+
+{block name="content"}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-file-text"></i>
-        {l s='Yuju Integration Logs' mod='prestashopyuju'}
+        Registros de Integración Yuju
     </div>
     <div class="panel-body">
         {if $logs && count($logs) > 0}
@@ -27,10 +30,10 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>{l s='Log File' mod='prestashopyuju'}</th>
-                            <th>{l s='Size' mod='prestashopyuju'}</th>
-                            <th>{l s='Last Modified' mod='prestashopyuju'}</th>
-                            <th>{l s='Actions' mod='prestashopyuju'}</th>
+                            <th>Archivo de Registro</th>
+                            <th>Tamaño</th>
+                            <th>Última Modificación</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -41,10 +44,10 @@
                                 <td>{$log.modified|date_format:"%Y-%m-%d %H:%M:%S"|escape:'html':'UTF-8'}</td>
                                 <td>
                                     <a href="{$module_dir|escape:'html':'UTF-8'}logs/{$log.filename|escape:'html':'UTF-8'}" target="_blank" class="btn btn-sm btn-default">
-                                        <i class="icon-eye"></i> {l s='View' mod='prestashopyuju'}
+                                        <i class="icon-eye"></i> Ver
                                     </a>
                                     <a href="{$module_dir|escape:'html':'UTF-8'}logs/{$log.filename|escape:'html':'UTF-8'}" download class="btn btn-sm btn-primary">
-                                        <i class="icon-download"></i> {l s='Download' mod='prestashopyuju'}
+                                        <i class="icon-download"></i> Descargar
                                     </a>
                                 </td>
                             </tr>
@@ -54,29 +57,30 @@
             </div>
         {else}
             <div class="alert alert-info">
-                <h4>{l s='No logs found' mod='prestashopyuju'}</h4>
-                <p>{l s='No log files have been created yet. Logs will appear here once synchronization activities begin.' mod='prestashopyuju'}</p>
+                <h4>No se encontraron registros</h4>
+                <p>Aún no se han creado archivos de registro. Los registros aparecerán aquí una vez que comiencen las actividades de sincronización.</p>
             </div>
         {/if}
         
         <div class="panel panel-default">
             <div class="panel-heading">
-                <h4>{l s='Log Information' mod='prestashopyuju'}</h4>
+                <h4>Información de Registros</h4>
             </div>
             <div class="panel-body">
-                <p>{l s='Log files are automatically created during synchronization processes. They contain detailed information about:' mod='prestashopyuju'}</p>
+                <p>Los archivos de registro se crean automáticamente durante los procesos de sincronización. Contienen información detallada sobre:</p>
                 <ul>
-                    <li>{l s='API requests and responses' mod='prestashopyuju'}</li>
-                    <li>{l s='Synchronization results' mod='prestashopyuju'}</li>
-                    <li>{l s='Error messages and debugging information' mod='prestashopyuju'}</li>
-                    <li>{l s='Performance metrics' mod='prestashopyuju'}</li>
+                    <li>Solicitudes y respuestas de API</li>
+                    <li>Resultados de sincronización</li>
+                    <li>Mensajes de error e información de depuración</li>
+                    <li>Métricas de rendimiento</li>
                 </ul>
                 
                 <div class="alert alert-warning">
-                    <strong>{l s='Note:' mod='prestashopyuju'}</strong>
-                    {l s='Log files are automatically rotated and old files are deleted according to your configuration settings.' mod='prestashopyuju'}
+                    <strong>Nota:</strong>
+                    Los archivos de registro se rotan automáticamente y los archivos antiguos se eliminan según su configuración.
                 </div>
             </div>
         </div>
     </div>
 </div>
+{/block}

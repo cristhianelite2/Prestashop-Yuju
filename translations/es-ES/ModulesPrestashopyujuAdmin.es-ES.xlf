@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file source-language="en" target-language="es-ES" datatype="plaintext" original="Modules/Prestashopyuju/Admin">
+    <header>
+      <tool tool-id="prestashop" tool-name="PrestaShop" tool-version="8.0.0" />
+    </header>
+    <body>
+      <!-- Module Information -->
+      <trans-unit id="1" resname="Modules.Prestashopyuju.Admin">
+        <source>Yuju Integration</source>
+        <target>Integración Yuju</target>
+      </trans-unit>
+      <trans-unit id="2" resname="Modules.Prestashopyuju.Admin">
+        <source>Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.</source>
+        <target>Sincroniza tu tienda PrestaShop con la plataforma Yuju para una gestión perfecta de inventario, productos y pedidos.</target>
+      </trans-unit>
+      <trans-unit id="3" resname="Modules.Prestashopyuju.Admin">
+        <source>Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.</source>
+        <target>¿Está seguro de que desea desinstalar el módulo de Integración Yuju? Esto eliminará todos los datos de sincronización.</target>
+      </trans-unit>
+      
+      <!-- Menu Items -->
+      <trans-unit id="4" resname="Modules.Prestashopyuju.Admin">
+        <source>Configuration</source>
+        <target>Configuración</target>
+      </trans-unit>
+      <trans-unit id="5" resname="Modules.Prestashopyuju.Admin">
+        <source>Synchronization</source>
+        <target>Sincronización</target>
+      </trans-unit>
+      <trans-unit id="6" resname="Modules.Prestashopyuju.Admin">
+        <source>Product Mapping</source>
+        <target>Mapeo de Productos</target>
+      </trans-unit>
+      <trans-unit id="7" resname="Modules.Prestashopyuju.Admin">
+        <source>Attribute Mapping</source>
+        <target>Mapeo de Atributos</target>
+      </trans-unit>
+      <trans-unit id="7a" resname="Modules.Prestashopyuju.Admin">
+        <source>Category Mapping</source>
+        <target>Mapeo de Categorías</target>
+      </trans-unit>
+      <trans-unit id="8" resname="Modules.Prestashopyuju.Admin">
+        <source>Product Status</source>
+        <target>Estado de Productos</target>
+      </trans-unit>
+      <trans-unit id="9" resname="Modules.Prestashopyuju.Admin">
+        <source>Webhooks</source>
+        <target>Webhooks</target>
+      </trans-unit>
+      <trans-unit id="10" resname="Modules.Prestashopyuju.Admin">
+        <source>Logs</source>
+        <target>Registros</target>
+      </trans-unit>
+      
+      <!-- Configuration -->
+      <trans-unit id="10a" resname="Modules.Prestashopyuju.Admin">
+        <source>Yuju Configuration</source>
+        <target>Configuración Yuju</target>
+      </trans-unit>
+      <trans-unit id="11" resname="Modules.Prestashopyuju.Admin">
+        <source>Yuju Integration Configuration</source>
+        <target>Configuración de Integración Yuju</target>
+      </trans-unit>
+      <trans-unit id="12" resname="Modules.Prestashopyuju.Admin">
+        <source>Configuración de API</source>
+        <target>Configuración de API</target>
+      </trans-unit>
+      <trans-unit id="13" resname="Modules.Prestashopyuju.Admin">
+        <source>URLs Importantes</source>
+        <target>URLs Importantes</target>
+      </trans-unit>
+      <trans-unit id="14" resname="Modules.Prestashopyuju.Admin">
+        <source>Configuración de Sincronización</source>
+        <target>Configuración de Sincronización</target>
+      </trans-unit>
+      <trans-unit id="15" resname="Modules.Prestashopyuju.Admin">
+        <source>Client ID</source>
+        <target>Client ID</target>
+      </trans-unit>
+      <trans-unit id="16" resname="Modules.Prestashopyuju.Admin">
+        <source>Client Secret</source>
+        <target>Client Secret</target>
+      </trans-unit>
+      <trans-unit id="17" resname="Modules.Prestashopyuju.Admin">
+        <source>Entorno Yuju</source>
+        <target>Entorno Yuju</target>
+      </trans-unit>
+      <trans-unit id="18" resname="Modules.Prestashopyuju.Admin">
+        <source>Producción</source>
+        <target>Producción</target>
+      </trans-unit>
+      <trans-unit id="19" resname="Modules.Prestashopyuju.Admin">
+        <source>Sandbox</source>
+        <target>Sandbox</target>
+      </trans-unit>
+      <trans-unit id="20" resname="Modules.Prestashopyuju.Admin">
+        <source>Guardar Configuración</source>
+        <target>Guardar Configuración</target>
+      </trans-unit>
+      
+      <!-- Common Actions -->
+      <trans-unit id="21" resname="Modules.Prestashopyuju.Admin">
+        <source>Guardar</source>
+        <target>Guardar</target>
+      </trans-unit>
+      <trans-unit id="22" resname="Modules.Prestashopyuju.Admin">
+        <source>Cancelar</source>
+        <target>Cancelar</target>
+      </trans-unit>
+      <trans-unit id="23" resname="Modules.Prestashopyuju.Admin">
+        <source>Eliminar</source>
+        <target>Eliminar</target>
+      </trans-unit>
+      <trans-unit id="24" resname="Modules.Prestashopyuju.Admin">
+        <source>Editar</source>
+        <target>Editar</target>
+      </trans-unit>
+      <trans-unit id="25" resname="Modules.Prestashopyuju.Admin">
+        <source>Ver</source>
+        <target>Ver</target>
+      </trans-unit>
+      
+      <!-- Status -->
+      <trans-unit id="26" resname="Modules.Prestashopyuju.Admin">
+        <source>Habilitado</source>
+        <target>Habilitado</target>
+      </trans-unit>
+      <trans-unit id="27" resname="Modules.Prestashopyuju.Admin">
+        <source>Deshabilitado</source>
+        <target>Deshabilitado</target>
+      </trans-unit>
+      <trans-unit id="28" resname="Modules.Prestashopyuju.Admin">
+        <source>Activo</source>
+        <target>Activo</target>
+      </trans-unit>
+      <trans-unit id="29" resname="Modules.Prestashopyuju.Admin">
+        <source>Inactivo</source>
+        <target>Inactivo</target>
+      </trans-unit>
+      <trans-unit id="30" resname="Modules.Prestashopyuju.Admin">
+        <source>Sí</source>
+        <target>Sí</target>
+      </trans-unit>
+      <trans-unit id="31" resname="Modules.Prestashopyuju.Admin">
+        <source>No</source>
+        <target>No</target>
+      </trans-unit>
+      
+      <!-- Messages -->
+      <trans-unit id="32" resname="Modules.Prestashopyuju.Admin">
+        <source>Configuración guardada correctamente</source>
+        <target>Configuración guardada correctamente</target>
+      </trans-unit>
+      <trans-unit id="33" resname="Modules.Prestashopyuju.Admin">
+        <source>Error al guardar configuración</source>
+        <target>Error al guardar configuración</target>
+      </trans-unit>
+      <trans-unit id="34" resname="Modules.Prestashopyuju.Admin">
+        <source>Conexión exitosa</source>
+        <target>Conexión exitosa</target>
+      </trans-unit>
+      <trans-unit id="35" resname="Modules.Prestashopyuju.Admin">
+        <source>Error de conexión</source>
+        <target>Error de conexión</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

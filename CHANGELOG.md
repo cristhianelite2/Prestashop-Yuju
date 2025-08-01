@@ -5,6 +5,28 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-01-08
+
+### Added
+- ✨ Botón "Test Connectivity" en la configuración para verificar conexión con API de Yuju
+- 🔗 Método `getStores()` en YujuApiClient para obtener tiendas disponibles
+- 📋 Validación de conectividad con manejo de errores detallado
+
+### Fixed
+- 🐛 Corregido botón de copiar que no funcionaba correctamente
+- 🎯 Mejorada funcionalidad de copia al portapapeles con mensajes en español
+- ✅ Agregado mensaje de confirmación "¡Copiado!" al copiar URLs
+- 🔧 Solucionado error de instalación por datos duplicados en install.sql
+- 📊 Eliminadas inserciones duplicadas en tabla yuju_product_mapping
+- 🛡️ Implementado INSERT IGNORE para evitar conflictos en reinstalaciones
+- 🎨 Preservado HTML original del botón incluyendo iconos
+- 🌐 Mejorado manejo de errores con fallback para navegadores antiguos
+
+### Changed
+- 🔄 Función copyToClipboard mejorada con mejor UX y manejo de errores
+- 📝 Actualizado install.sql para prevenir violaciones de restricción única
+- 🎯 Optimizada experiencia de usuario en botones de copia
+
 ## [1.0.0] - 2024-12-19
 
 ### Added

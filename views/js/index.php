@@ -23,6 +23,7 @@
  * @license   https://opensource.org/licenses/AFL-3.0 Academic Free License (AFL 3.0)
  *            International Registered Trademark & Property of ETS-Soft
  */
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }

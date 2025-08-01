@@ -458,13 +458,15 @@ class YujuSyncManager
     {
         $log_data = [
             'sync_type' => 'full',
+            'entity_type' => 'products',
             'sync_direction' => 'bidirectional',
-            'categories_synced' => isset($results['categories']['synced_count']) ? $results['categories']['synced_count'] : 0,
-            'products_synced' => isset($results['products']['synced_count']) ? $results['products']['synced_count'] : 0,
-            'execution_time' => $results['total_time'],
-            'success' => $results['success'],
-            'error_count' => count($results['errors']),
-            'created_at' => date('Y-m-d H:i:s'),
+            'status' => $results['success'] ? 'completed' : 'failed',
+            'total_items' => isset($results['total_items']) ? $results['total_items'] : 0,
+            'processed_items' => isset($results['processed_items']) ? $results['processed_items'] : 0,
+            'success_items' => isset($results['success_items']) ? $results['success_items'] : 0,
+            'error_items' => count($results['errors']),
+            'start_time' => date('Y-m-d H:i:s'),
+            'duration' => isset($results['total_time']) ? $results['total_time'] : 0,
         ];
 
         Db::getInstance()->insert('yuju_sync_logs', $log_data);
@@ -528,7 +530,7 @@ class YujuSyncManager
         // Get recent sync logs
         $stats['recent_syncs'] = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_sync_logs
-            ORDER BY created_at DESC
+            ORDER BY `start_time` DESC
             LIMIT 10
         ');
 

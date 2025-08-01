@@ -57,6 +57,12 @@ var YujuAdmin = {
             self.testApiConnection();
         });
 
+        // Test Connectivity button
+        $(document).on('click', '#yuju-test-connectivity', function(e) {
+            e.preventDefault();
+            self.testConnectivity();
+        });
+
         // OAuth Authorization button
         $(document).on('click', '#yuju-authorize', function(e) {
             e.preventDefault();
@@ -181,6 +187,56 @@ var YujuAdmin = {
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-check"></i> Test Connection');
+            }
+        });
+    },
+
+    /**
+     * Test connectivity and show stores
+     */
+    testConnectivity: function() {
+        var self = this;
+        var $button = $('#yuju-test-connectivity');
+        var $result = $('#connectivity-result');
+
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Probando...');
+        $result.hide();
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'testConnectivity',
+                ajax: true,
+                token: this.config.token
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    var html = '<strong>Conexión exitosa!</strong><br>';
+                    if (response.data && response.data.stores && response.data.stores.length > 0) {
+                        html += '<strong>Tiendas disponibles:</strong><ul>';
+                        response.data.stores.forEach(function(store) {
+                            html += '<li>' + store.name + ' (ID: ' + store.id + ')</li>';
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += 'No se encontraron tiendas disponibles.';
+                    }
+                    $result.removeClass().addClass('alert alert-success').html(html).show();
+                } else {
+                    $result.removeClass().addClass('alert alert-danger')
+                        .html('<strong>Error de conexión:</strong> ' + (response.message || 'Error desconocido'))
+                        .show();
+                }
+            },
+            error: function() {
+                $result.removeClass().addClass('alert alert-danger')
+                    .html('<strong>Error:</strong> No se pudo conectar con la API de Yuju')
+                    .show();
+            },
+            complete: function() {
+                $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
             }
         });
     },
@@ -505,25 +561,52 @@ var YujuAdmin = {
      * Copy text to clipboard
      */
     copyToClipboard: function(text, $button) {
+        // Guardar el contenido HTML original del botón
+        var originalHtml = $button.html();
+        
         if (navigator.clipboard) {
             navigator.clipboard.writeText(text).then(function() {
-                $button.addClass('copied').text('Copied!');
+                // Mostrar mensaje de éxito
+                $button.addClass('copied').html('<i class="icon-check"></i> ¡Copiado!');
+                
+                // Restaurar el botón después de 2 segundos
                 setTimeout(function() {
-                    $button.removeClass('copied').text('Copy');
+                    $button.removeClass('copied').html(originalHtml);
                 }, 2000);
+            }).catch(function(err) {
+                console.error('Error al copiar al portapapeles:', err);
+                // Fallback si falla la API moderna
+                YujuAdmin.fallbackCopyToClipboard(text, $button, originalHtml);
             });
         } else {
-            // Fallback for older browsers
+            // Fallback para navegadores antiguos
+            YujuAdmin.fallbackCopyToClipboard(text, $button, originalHtml);
+        }
+    },
+    
+    /**
+     * Fallback method for copying to clipboard
+     */
+    fallbackCopyToClipboard: function(text, $button, originalHtml) {
+        try {
             var $temp = $('<textarea>');
             $('body').append($temp);
             $temp.val(text).select();
-            document.execCommand('copy');
+            var successful = document.execCommand('copy');
             $temp.remove();
             
-            $button.addClass('copied').text('Copied!');
-            setTimeout(function() {
-                $button.removeClass('copied').text('Copy');
-            }, 2000);
+            if (successful) {
+                $button.addClass('copied').html('<i class="icon-check"></i> ¡Copiado!');
+                setTimeout(function() {
+                    $button.removeClass('copied').html(originalHtml);
+                }, 2000);
+            } else {
+                // Si todo falla, mostrar el texto en un alert
+                alert('Copie esta URL manualmente: ' + text);
+            }
+        } catch (err) {
+            console.error('Error en fallback de copia:', err);
+            alert('Copie esta URL manualmente: ' + text);
         }
     },
 

@@ -108,6 +108,14 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ];
     }
 
+    public function initContent()
+    {
+        $this->context->smarty->assign('current_controller', 'AdminYujuProductMapping');
+        parent::initContent();
+        
+        $this->setTemplate('product_mapping.tpl');
+    }
+
     public function renderForm()
     {
         // PrestaShop product fields

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file source-language="en" target-language="es-ES" datatype="plaintext" original="Modules/Prestashopyuju/Shop">
+    <header>
+      <tool tool-id="prestashop" tool-name="PrestaShop" tool-version="8.0.0" />
+    </header>
+    <body>
+      <!-- Shop/Front Office Translations -->
+      <trans-unit id="1" resname="Modules.Prestashopyuju.Shop">
+        <source>Yuju Integration</source>
+        <target>Integración Yuju</target>
+      </trans-unit>
+      <trans-unit id="2" resname="Modules.Prestashopyuju.Shop">
+        <source>Product synchronized successfully</source>
+        <target>Producto sincronizado exitosamente</target>
+      </trans-unit>
+      <trans-unit id="3" resname="Modules.Prestashopyuju.Shop">
+        <source>Synchronization in progress</source>
+        <target>Sincronización en progreso</target>
+      </trans-unit>
+      <trans-unit id="4" resname="Modules.Prestashopyuju.Shop">
+        <source>Synchronization completed</source>
+        <target>Sincronización completada</target>
+      </trans-unit>
+      <trans-unit id="5" resname="Modules.Prestashopyuju.Shop">
+        <source>Synchronization failed</source>
+        <target>Sincronización falló</target>
+      </trans-unit>
+      <trans-unit id="6" resname="Modules.Prestashopyuju.Shop">
+        <source>Webhook received</source>
+        <target>Webhook recibido</target>
+      </trans-unit>
+      <trans-unit id="7" resname="Modules.Prestashopyuju.Shop">
+        <source>Webhook processed successfully</source>
+        <target>Webhook procesado exitosamente</target>
+      </trans-unit>
+      <trans-unit id="8" resname="Modules.Prestashopyuju.Shop">
+        <source>Invalid webhook signature</source>
+        <target>Firma de webhook inválida</target>
+      </trans-unit>
+      <trans-unit id="9" resname="Modules.Prestashopyuju.Shop">
+        <source>OAuth authorization successful</source>
+        <target>Autorización OAuth exitosa</target>
+      </trans-unit>
+      <trans-unit id="10" resname="Modules.Prestashopyuju.Shop">
+        <source>OAuth authorization failed</source>
+        <target>Autorización OAuth falló</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
