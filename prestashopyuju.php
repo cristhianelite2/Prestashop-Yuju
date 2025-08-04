@@ -308,6 +308,7 @@ class Prestashopyuju extends Module
         'actionObjectManufacturerDeleteAfter',
         'displayBackOfficeHeader',
         'displayAdminProductsExtra',
+        'actionAdminControllerSetMedia',
         ];
 
         foreach ($hooks as $hook) {
@@ -603,9 +604,42 @@ class Prestashopyuju extends Module
      */
     public function hookDisplayBackOfficeHeader()
     {
-        if (Tools::getValue('controller') == 'AdminModules' && Tools::getValue('configure') == $this->name) {
+        $controller = Tools::getValue('controller');
+        
+        // Cargar CSS/JS en página de configuración del módulo
+        if ($controller == 'AdminModules' && Tools::getValue('configure') == $this->name) {
             $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
             $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+        }
+        
+        // Cargar CSS/JS en TODOS los controladores del módulo Yuju
+        if (strpos($controller, 'AdminYuju') === 0) {
+            $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
+            $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+        }
+    }
+
+    /**
+     * Hook para cargar assets en controladores admin (PrestaShop 8 compatible).
+     */
+    public function hookActionAdminControllerSetMedia($params)
+    {
+        // Only load on module's configuration page and all Yuju module controllers
+        if (isset($this->context->controller)) {
+            $controller = get_class($this->context->controller);
+            
+            // Load on module configuration page
+            if ($this->context->controller instanceof AdminModulesController && 
+                Tools::getValue('configure') == $this->name) {
+                $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
+                $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+            }
+            
+            // Load on all Yuju module controllers
+            if (strpos($controller, 'AdminYuju') !== false) {
+                $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
+                $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+            }
         }
     }
 

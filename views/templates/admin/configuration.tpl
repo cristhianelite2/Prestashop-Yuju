@@ -79,7 +79,7 @@
                                 <input type="text" class="form-control" value="{$yuju_urls.terms_conditions|escape:'html':'UTF-8'}" readonly id="terms_url">
                                 <span class="input-group-btn">
                                     <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_urls.terms_conditions|escape:'html':'UTF-8'}">
-                                        <i class="icon-copy"></i> Copiar
+                                        <i class="icon-copy"></i> CopiarX
                                     </button>
                                 </span>
                             </div>
@@ -342,33 +342,93 @@
         </form>
     </div>
 </div>
+
+<!-- Sección de Pruebas de JavaScript -->
+<div class="panel">
+    <div class="panel-heading">
+        <i class="icon-bug"></i>
+        Pruebas de JavaScript - Diagnóstico del Portapapeles
+    </div>
+    
+    <div class="panel-body">
+        <div class="alert alert-info">
+            <i class="icon-info"></i>
+            <strong>Sección de Diagnóstico:</strong> Use estos botones para probar paso a paso la funcionalidad del copiado al portapapeles.
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h4>Prueba 1: Verificar jQuery</h4>
+                <button type="button" class="btn btn-info" id="test-jquery">
+                    <i class="icon-code"></i> Probar jQuery
+                </button>
+                <div id="jquery-result" class="test-result"></div>
+            </div>
+            
+            <div class="col-md-6">
+                <h4>Prueba 2: Verificar YujuAdmin</h4>
+                <button type="button" class="btn btn-info" id="test-yuju-admin">
+                    <i class="icon-cogs"></i> Probar YujuAdmin
+                </button>
+                <div id="yuju-admin-result" class="test-result"></div>
+            </div>
+        </div>
+        
+        <div class="row" style="margin-top: 20px;">
+            <div class="col-md-6">
+                <h4>Prueba 3: Clipboard API</h4>
+                <button type="button" class="btn btn-info" id="test-clipboard-api">
+                    <i class="icon-clipboard"></i> Probar Clipboard API
+                </button>
+                <div id="clipboard-api-result" class="test-result"></div>
+            </div>
+            
+            <div class="col-md-6">
+                <h4>Prueba 4: Fallback Copy</h4>
+                <button type="button" class="btn btn-info" id="test-fallback-copy">
+                    <i class="icon-copy"></i> Probar Fallback
+                </button>
+                <div id="fallback-copy-result" class="test-result"></div>
+            </div>
+        </div>
+        
+        <div class="row" style="margin-top: 20px;">
+            <div class="col-md-12">
+                <h4>Prueba 5: Botón de Copia Real</h4>
+                <div class="input-group">
+                    <input type="text" class="form-control" value="https://ejemplo.com/test-url" readonly>
+                    <span class="input-group-btn">
+                        <button type="button" class="btn btn-primary yuju-copy-button" data-copy-text="https://ejemplo.com/test-url">
+                            <i class="icon-copy"></i> Copiar URL de Prueba
+                        </button>
+                    </span>
+                </div>
+                <div id="real-copy-result" class="test-result"></div>
+            </div>
+        </div>
+        
+        <div class="row" style="margin-top: 20px;">
+            <div class="col-md-12">
+                <h4>Consola de Resultados</h4>
+                <textarea id="test-console" class="form-control" rows="8" readonly placeholder="Los resultados de las pruebas aparecerán aquí..."></textarea>
+                <button type="button" class="btn btn-default" id="clear-console" style="margin-top: 10px;">
+                    <i class="icon-trash"></i> Limpiar Consola
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {/block}
 
+<!-- ✅ SOLUCIÓN COMPATIBLE CON PRESTASHOP -->
+<!-- Reemplaza TODO el bloque <script> en configuration.tpl con esto: -->
+
 <script type="text/javascript">
-$(document).ready(function() {
-    // Form validation
-    $('#configuration_form').on('submit', function(e) {
-        var clientId = $('input[name="YUJU_CLIENT_ID"]').val();
-        var clientSecret = $('input[name="YUJU_CLIENT_SECRET"]').val();
-        
-        if (!clientId || !clientSecret) {
-            e.preventDefault();
-            alert('Por favor complete tanto el ID de Cliente como el Secreto de Cliente');
-            return false;
-        }
-    });
-    
-    // Copy functionality is now handled by admin.js
-    
-    // Initialize YujuAdmin
-    if (typeof YujuAdmin !== 'undefined') {
-        YujuAdmin.init({
-            ajaxUrl: '{$ajax_url|escape:'javascript':'UTF-8'}',
-            token: '{$token|escape:'javascript':'UTF-8'}'
-        });
-    }
-});
+// JavaScript functionality is now handled in admin.js
+// This ensures compatibility with PrestaShop 8 module loading system
+console.log('✅ Configuration template loaded - JavaScript handled by admin.js');
 </script>
+
 
 <style>
 /* Copy button styles are now in admin.css */
@@ -385,5 +445,39 @@ $(document).ready(function() {
     margin-top: 8px;
     font-size: 12px;
     color: #666;
+}
+
+/* Estilos para la sección de pruebas */
+.test-result {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    min-height: 30px;
+}
+
+.test-result.success {
+    background-color: #dff0d8;
+    border: 1px solid #d6e9c6;
+    color: #3c763d;
+}
+
+.test-result.error {
+    background-color: #f2dede;
+    border: 1px solid #ebccd1;
+    color: #a94442;
+}
+
+.test-result.info {
+    background-color: #d9edf7;
+    border: 1px solid #bce8f1;
+    color: #31708f;
+}
+
+#test-console {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
 }
 </style>

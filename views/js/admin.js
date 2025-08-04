@@ -42,6 +42,7 @@ var YujuAdmin = {
         this.config = Object.assign(this.config, config);
         this.bindEvents();
         this.initTooltips();
+        this.initCopyButtons();
         this.startAutoRefresh();
     },
 
@@ -96,12 +97,7 @@ var YujuAdmin = {
             self.viewLogDetails(logId);
         });
 
-        // Copy to clipboard
-        $(document).on('click', '.yuju-copy-button', function(e) {
-            e.preventDefault();
-            var text = $(this).data('copy-text') || $(this).prev().text();
-            self.copyToClipboard(text, $(this));
-        });
+        // Copy to clipboard functionality is now handled in initCopyButtons()
 
         // Form validation
         $(document).on('submit', '#yuju-config-form', function(e) {
@@ -558,56 +554,201 @@ var YujuAdmin = {
     },
 
     /**
-     * Copy text to clipboard
+     * Copy text to clipboard with fallback
      */
     copyToClipboard: function(text, $button) {
-        // Guardar el contenido HTML original del botón
+        var self = this;
+        
+        if (!text) {
+            console.error('No text provided to copy');
+            return;
+        }
+        
+        // Guardar el HTML original del botón
         var originalHtml = $button.html();
         
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(function() {
-                // Mostrar mensaje de éxito
-                $button.addClass('copied').html('<i class="icon-check"></i> ¡Copiado!');
-                
-                // Restaurar el botón después de 2 segundos
-                setTimeout(function() {
-                    $button.removeClass('copied').html(originalHtml);
-                }, 2000);
-            }).catch(function(err) {
-                console.error('Error al copiar al portapapeles:', err);
-                // Fallback si falla la API moderna
-                YujuAdmin.fallbackCopyToClipboard(text, $button, originalHtml);
-            });
-        } else {
-            // Fallback para navegadores antiguos
-            YujuAdmin.fallbackCopyToClipboard(text, $button, originalHtml);
+        // Mostrar estado de "copiando"
+        $button.html('<i class="icon-refresh icon-spin"></i> Copiando...');
+        $button.prop('disabled', true);
+        $button.css('background-color', '#ffc107');
+        
+        // Función para ejecutar la copia
+        function ejecutarCopia() {
+            try {
+                // Intentar usar la API moderna primero
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        console.log('✅ Texto copiado usando navigator.clipboard');
+                        self.showCopySuccess($button, originalHtml);
+                    }).catch(function(err) {
+                        console.warn('❌ navigator.clipboard falló, usando fallback:', err);
+                        self.fallbackCopyToClipboard(text, $button, originalHtml);
+                    });
+                } else {
+                    // Usar fallback directamente
+                    self.fallbackCopyToClipboard(text, $button, originalHtml);
+                }
+            } catch (err) {
+                console.error('❌ Error general en copyToClipboard:', err);
+                self.showCopyError($button, originalHtml, text);
+            }
+        }
+        
+        // Ejecutar con un pequeño delay
+        setTimeout(ejecutarCopia, 100);
+    },
+    
+    /**
+     * Fallback copy method for older browsers
+     */
+    fallbackCopyToClipboard: function(text, $button, originalHtml) {
+        var self = this;
+        
+        try {
+            // Crear textarea temporal
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.top = '0';
+            textarea.style.left = '0';
+            textarea.style.width = '2em';
+            textarea.style.height = '2em';
+            textarea.style.padding = '0';
+            textarea.style.border = 'none';
+            textarea.style.outline = 'none';
+            textarea.style.boxShadow = 'none';
+            textarea.style.background = 'transparent';
+            textarea.setAttribute('readonly', '');
+            
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            
+            var successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            if (successful) {
+                console.log('✅ Texto copiado usando execCommand');
+                self.showCopySuccess($button, originalHtml);
+            } else {
+                throw new Error('execCommand falló');
+            }
+        } catch (err) {
+            console.error('❌ Fallback copy falló:', err);
+            self.showCopyError($button, originalHtml, text);
         }
     },
     
     /**
-     * Fallback method for copying to clipboard
+     * Show copy success state
      */
-    fallbackCopyToClipboard: function(text, $button, originalHtml) {
-        try {
-            var $temp = $('<textarea>');
-            $('body').append($temp);
-            $temp.val(text).select();
-            var successful = document.execCommand('copy');
-            $temp.remove();
+    showCopySuccess: function($button, originalHtml) {
+        $button.html('<i class="icon-check"></i> ¡Copiado!');
+        $button.css({
+            'background-color': '#5cb85c',
+            'border-color': '#5cb85c',
+            'color': 'white'
+        });
+        
+        // Restaurar después de 2.5 segundos
+        setTimeout(function() {
+            $button.html(originalHtml);
+            $button.css({
+                'background-color': '',
+                'border-color': '',
+                'color': ''
+            });
+            $button.prop('disabled', false);
+        }, 2500);
+    },
+    
+    /**
+     * Show copy error state
+     */
+    showCopyError: function($button, originalHtml, text) {
+        var self = this;
+        
+        $button.html('<i class="icon-warning"></i> Error');
+        $button.css({
+            'background-color': '#d9534f',
+            'border-color': '#d9534f',
+            'color': 'white'
+        });
+        
+        // Mostrar alert después de un breve delay
+        setTimeout(function() {
+            alert('No se pudo copiar automáticamente.\n\nCopie esta URL manualmente:\n\n' + text);
             
-            if (successful) {
-                $button.addClass('copied').html('<i class="icon-check"></i> ¡Copiado!');
-                setTimeout(function() {
-                    $button.removeClass('copied').html(originalHtml);
-                }, 2000);
-            } else {
-                // Si todo falla, mostrar el texto en un alert
-                alert('Copie esta URL manualmente: ' + text);
+            // Restaurar botón
+            $button.html(originalHtml);
+            $button.css({
+                'background-color': '',
+                'border-color': '',
+                'color': ''
+            });
+            $button.prop('disabled', false);
+        }, 500);
+    },
+    
+    /**
+     * Initialize copy buttons with delegated events
+     */
+    initCopyButtons: function() {
+        var self = this;
+        
+        console.log('🔧 Configurando botones de copiar...');
+        
+        // Usar delegated events para compatibilidad con PrestaShop 8
+        $(document).off('click.yuju-copy').on('click.yuju-copy', '.yuju-copy-button', function(e) {
+            console.log('🖱️ DELEGATED: Click detectado en botón de copiar');
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var $button = $(this);
+            var textToCopy = $button.attr('data-copy-text');
+            
+            if (!textToCopy) {
+                console.log('❌ No se encontró data-copy-text');
+                alert('Error: No se encontró URL para copiar');
+                return false;
             }
-        } catch (err) {
-            console.error('Error en fallback de copia:', err);
-            alert('Copie esta URL manualmente: ' + text);
+            
+            console.log('📋 Copiando:', textToCopy);
+            self.copyToClipboard(textToCopy, $button);
+            
+            return false;
+        });
+        
+        // Verificar que los botones existen
+        var buttonCount = $('.yuju-copy-button').length;
+        console.log('📊 Botones encontrados:', buttonCount);
+        
+        if (buttonCount > 0) {
+            console.log('✅ Configuración de event delegation completada');
+            
+            // Listar cada botón para verificar
+            $('.yuju-copy-button').each(function(index) {
+                var copyText = $(this).attr('data-copy-text');
+                console.log('🔘 Botón ' + (index + 1) + ':', copyText ? copyText.substring(0, 50) + '...' : 'SIN DATA');
+            });
+        } else {
+            console.log('⚠️ No se encontraron botones .yuju-copy-button');
         }
+        
+        // Función de prueba global
+        window.testYujuCopy = function(index) {
+            var buttons = $('.yuju-copy-button');
+            if (buttons.length > (index || 0)) {
+                console.log('🧪 Simulando click en botón ' + ((index || 0) + 1));
+                buttons.eq(index || 0).trigger('click');
+            } else {
+                console.log('❌ Botón no encontrado en índice ' + (index || 0));
+            }
+        };
+        
+        console.log('🎯 Configuración completada. Usa testYujuCopy(0) para probar el primer botón');
     },
 
     /**
@@ -719,17 +860,208 @@ var YujuAdmin = {
             clearTimeout(timeout);
             timeout = setTimeout(later, wait);
         };
+    },
+
+    /**
+     * Inicializar pruebas de diagnóstico
+     */
+    initDiagnosticTests: function() {
+        console.log('🔧 Inicializando pruebas de diagnóstico...');
+        
+        var self = this;
+        
+        // Función para escribir en la consola de pruebas
+        function writeToConsole(message, type) {
+            type = type || 'info';
+            var timestamp = new Date().toLocaleTimeString();
+            var prefix = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            var fullMessage = '[' + timestamp + '] ' + prefix + ' ' + message;
+            
+            var console = $('#test-console');
+            var currentText = console.val();
+            console.val(currentText + fullMessage + '\n');
+            console.scrollTop(console[0].scrollHeight);
+        }
+        
+        // Función para mostrar resultado en div específico
+        function showResult(elementId, message, type) {
+            var element = $('#' + elementId);
+            element.removeClass('success error info').addClass(type);
+            element.html(message);
+        }
+        
+        // Prueba 1: Verificar jQuery
+        $('#test-jquery').on('click', function() {
+            writeToConsole('Iniciando prueba de jQuery...');
+            
+            try {
+                if (typeof $ !== 'undefined' && typeof jQuery !== 'undefined') {
+                    var version = $.fn.jquery || 'desconocida';
+                    var message = 'jQuery disponible (versión: ' + version + ')';
+                    showResult('jquery-result', message, 'success');
+                    writeToConsole(message, 'success');
+                } else {
+                    var message = 'jQuery NO está disponible';
+                    showResult('jquery-result', message, 'error');
+                    writeToConsole(message, 'error');
+                }
+            } catch (e) {
+                var message = 'Error al verificar jQuery: ' + e.message;
+                showResult('jquery-result', message, 'error');
+                writeToConsole(message, 'error');
+            }
+        });
+        
+        // Prueba 2: Verificar YujuAdmin
+        $('#test-yuju-admin').on('click', function() {
+            writeToConsole('Iniciando prueba de YujuAdmin...');
+            
+            try {
+                if (typeof YujuAdmin !== 'undefined') {
+                    var methods = Object.keys(YujuAdmin);
+                    var message = 'YujuAdmin disponible con ' + methods.length + ' métodos: ' + methods.slice(0, 5).join(', ');
+                    showResult('yuju-admin-result', message, 'success');
+                    writeToConsole(message, 'success');
+                } else {
+                    var message = 'YujuAdmin NO está disponible';
+                    showResult('yuju-admin-result', message, 'error');
+                    writeToConsole(message, 'error');
+                }
+            } catch (e) {
+                var message = 'Error al verificar YujuAdmin: ' + e.message;
+                showResult('yuju-admin-result', message, 'error');
+                writeToConsole(message, 'error');
+            }
+        });
+        
+        // Prueba 3: Clipboard API
+        $('#test-clipboard-api').on('click', function() {
+            writeToConsole('Iniciando prueba de Clipboard API...');
+            
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('Prueba de Clipboard API').then(function() {
+                        var message = 'Clipboard API disponible y funcionando';
+                        showResult('clipboard-api-result', message, 'success');
+                        writeToConsole(message, 'success');
+                    }).catch(function(err) {
+                        var message = 'Clipboard API disponible pero falló: ' + err.message;
+                        showResult('clipboard-api-result', message, 'error');
+                        writeToConsole(message, 'error');
+                    });
+                } else {
+                    var message = 'Clipboard API NO está disponible (se usará fallback)';
+                    showResult('clipboard-api-result', message, 'info');
+                    writeToConsole(message, 'info');
+                }
+            } catch (e) {
+                var message = 'Error al verificar Clipboard API: ' + e.message;
+                showResult('clipboard-api-result', message, 'error');
+                writeToConsole(message, 'error');
+            }
+        });
+        
+        // Prueba 4: Fallback Copy
+        $('#test-fallback-copy').on('click', function() {
+            writeToConsole('Iniciando prueba de Fallback Copy...');
+            
+            try {
+                var testText = 'Prueba de fallback copy - ' + new Date().getTime();
+                var result = self.fallbackCopyToClipboard(testText);
+                
+                if (result) {
+                    var message = 'Fallback copy funcionando correctamente';
+                    showResult('fallback-copy-result', message, 'success');
+                    writeToConsole(message, 'success');
+                } else {
+                    var message = 'Fallback copy falló';
+                    showResult('fallback-copy-result', message, 'error');
+                    writeToConsole(message, 'error');
+                }
+            } catch (e) {
+                var message = 'Error en fallback copy: ' + e.message;
+                showResult('fallback-copy-result', message, 'error');
+                writeToConsole(message, 'error');
+            }
+        });
+        
+        // Limpiar consola
+        $('#clear-console').on('click', function() {
+            $('#test-console').val('');
+            $('.test-result').removeClass('success error info').html('');
+            writeToConsole('Consola limpiada');
+        });
+        
+        writeToConsole('Sistema de diagnóstico inicializado correctamente', 'success');
     }
 };
 
-// Initialize when document is ready
+// Initialize when document is ready - VERSIÓN CORREGIDA
 $(document).ready(function() {
-    // Check if we're on a Yuju admin page
-    if ($('.yuju-module').length > 0) {
-        // Configuration will be set by the template
+    console.log('✅ PrestaShop Compatible: Iniciando YujuAdmin...');
+    
+    // Detectar página Yuju de múltiples formas
+    var isYujuPage = $('.yuju-module').length > 0 || 
+                     $('.yuju-copy-button').length > 0 ||
+                     window.location.href.indexOf('AdminYuju') !== -1 ||
+                     $('body').hasClass('adminyujuconfiguration');
+    
+    if (isYujuPage) {
+        // Configuración para inicializar YujuAdmin
+        var config = {
+            ajaxUrl: window.currentIndex || '',
+            token: window.token || ''
+        };
+        
+        // Buscar configuración específica si existe
         if (typeof yujuAdminConfig !== 'undefined') {
-            YujuAdmin.init(yujuAdminConfig);
+            config = Object.assign(config, yujuAdminConfig);
         }
+        
+        // Inicializar YujuAdmin
+        YujuAdmin.init(config);
+        
+        console.log('YujuAdmin initialized for Yuju page');
+    } else {
+        // Aún así inicializar los botones de copiar para cualquier página que los tenga
+        YujuAdmin.initCopyButtons();
+    }
+    
+    // Form validation específica para configuración
+    $('#configuration_form').on('submit', function(e) {
+        var clientId = $('input[name="YUJU_CLIENT_ID"]').val();
+        var clientSecret = $('input[name="YUJU_CLIENT_SECRET"]').val();
+        
+        if (!clientId || !clientSecret) {
+            e.preventDefault();
+            alert('Por favor complete tanto el ID de Cliente como el Secreto de Cliente');
+            return false;
+        }
+    });
+    
+    // Global form validation
+    $('form').on('submit', function() {
+        return YujuAdmin.validateForm(this);
+    });
+    
+    // Auto-save configuration changes
+    $('input[name^="YUJU_"], select[name^="YUJU_"]').on('change', function() {
+        YujuAdmin.autoSaveConfig();
+    });
+    
+    // Función de prueba global
+    window.testYujuCopy = function(index) {
+        var buttons = $('.yuju-copy-button');
+        if (buttons.length > (index || 0)) {
+            var $button = buttons.eq(index || 0);
+            var text = $button.attr('data-copy-text');
+            $button.trigger('click');
+        }
+    };
+    
+    // Inicializar botones de diagnóstico si existen
+    if ($('#test-jquery').length > 0) {
+        YujuAdmin.initDiagnosticTests();
     }
 });
 

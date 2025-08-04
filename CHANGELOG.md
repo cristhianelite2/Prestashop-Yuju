@@ -5,6 +5,25 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-01-31
+
+### Corregido
+- Solucionado error "registerStylesheet" en AdminModulesController para PrestaShop 8
+- Migrado JavaScript inline a archivo externo para mejor compatibilidad
+- Corregidos métodos de registro de assets para AdminController
+- Implementado hookActionAdminControllerSetMedia correctamente
+
+### Mejorado
+- JavaScript del botón "Copiar" ahora funciona correctamente
+- Mejor compatibilidad con PrestaShop 8
+- Código JavaScript más modular y mantenible
+- Eliminado JavaScript inline del template
+
+### Técnico
+- Reemplazado registerStylesheet/registerJavascript por addCSS/addJS en AdminController
+- Centralizada funcionalidad JavaScript en admin.js
+- Mejorada estructura de carga de assets
+
 ## [1.0.1] - 2025-01-08
 
 ### Added
