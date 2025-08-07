@@ -5,6 +5,22 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-01-31
+
+### Corregido
+- 🐛 Solucionado error SQL "SQLSTATE[42S22]: Column not found: 1054 Unknown column 'created_at' in 'where clause'"
+- 🔧 Corregidas consultas SQL en tabla yuju_sync_logs para usar 'start_time' en lugar de 'created_at'
+- 📊 Actualizado método getDashboardStats() para usar columnas correctas
+- 🔄 Corregido método getRecentSyncItems() con columnas apropiadas
+- 📅 Solucionado método getLastSyncDate() para usar start_time
+- 🧹 Corregido método cleanOldLogs() en YujuLogger
+- ✅ Actualizados valores de estado de 'error'/'warning' a 'failed'/'cancelled' según enum de tabla
+
+### Técnico
+- 🗃️ Alineadas consultas SQL con estructura real de tabla yuju_sync_logs
+- 📋 Verificada consistencia entre install.sql y consultas en código
+- 🎯 Eliminadas todas las referencias incorrectas a 'created_at' en yuju_sync_logs
+
 ## [1.0.2] - 2025-01-31
 
 ### Corregido
