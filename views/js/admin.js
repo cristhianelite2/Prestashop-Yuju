@@ -208,28 +208,73 @@ var YujuAdmin = {
             },
             dataType: 'json',
             success: function(response) {
+                var html = '';
+                
                 if (response.success) {
-                    var html = '<strong>Conexión exitosa!</strong><br>';
-                    if (response.data && response.data.stores && response.data.stores.length > 0) {
-                        html += '<strong>Tiendas disponibles:</strong><ul>';
-                        response.data.stores.forEach(function(store) {
-                            html += '<li>' + store.name + ' (ID: ' + store.id + ')</li>';
-                        });
-                        html += '</ul>';
-                    } else {
-                        html += 'No se encontraron tiendas disponibles.';
+                    html += '<strong>Conexión exitosa!</strong><br>';
+                    
+                    // Show debug info
+                    if (response.data && response.data.debug_info) {
+                        var debug = response.data.debug_info;
+                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
+                        html += '<strong>Información de Debug:</strong><br>';
+                        html += '<small>';
+                        html += 'URL Base: ' + (debug.base_url || 'N/A') + '<br>';
+                        html += 'Entorno: ' + (debug.environment || 'N/A') + '<br>';
+                        html += 'Conexión exitosa: ' + (debug.connection_test_result && debug.connection_test_result.success ? 'Sí' : 'No') + '<br>';
+                        html += 'Cantidad de tiendas: ' + (debug.stores_count || 0) + '<br>';
+                        html += '</small>';
+                        html += '</div>';
                     }
+                    
+                    if (response.data && response.data.stores && response.data.stores.length > 0) {
+                        html += '<div style="margin-top: 10px;"><strong>Tiendas disponibles:</strong><ul>';
+                        response.data.stores.forEach(function(store) {
+                            html += '<li>' + (store.name || 'Sin nombre') + ' (ID: ' + (store.id || 'N/A') + ')</li>';
+                        });
+                        html += '</ul></div>';
+                    } else {
+                        html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">No se encontraron tiendas disponibles.</div>';
+                    }
+                    
                     $result.removeClass().addClass('alert alert-success').html(html).show();
                 } else {
-                    $result.removeClass().addClass('alert alert-danger')
-                        .html('<strong>Error de conexión:</strong> ' + (response.message || 'Error desconocido'))
-                        .show();
+                    html += '<strong>Error de conexión:</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    
+                    // Show debug info for errors
+                    if (response.debug_info) {
+                        var debug = response.debug_info;
+                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
+                        html += '<strong>Información de Debug:</strong><br>';
+                        html += '<small>';
+                        if (debug.base_url) html += 'URL Base: ' + debug.base_url + '<br>';
+                        if (debug.environment) html += 'Entorno: ' + debug.environment + '<br>';
+                        if (debug.connection_test_result) {
+                            html += 'Resultado de conexión: ' + JSON.stringify(debug.connection_test_result) + '<br>';
+                        }
+                        if (debug.exception) {
+                            html += 'Error: ' + debug.exception.message + '<br>';
+                            html += 'Archivo: ' + debug.exception.file + ':' + debug.exception.line + '<br>';
+                        }
+                        html += '</small>';
+                        html += '</div>';
+                    }
+                    
+                    $result.removeClass().addClass('alert alert-danger').html(html).show();
                 }
             },
-            error: function() {
-                $result.removeClass().addClass('alert alert-danger')
-                    .html('<strong>Error:</strong> No se pudo conectar con la API de Yuju')
-                    .show();
+            error: function(xhr, status, error) {
+                var html = '<strong>Error:</strong> No se pudo conectar con la API de Yuju<br>';
+                html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
+                html += '<strong>Error AJAX:</strong><br>';
+                html += '<small>';
+                html += 'Status: ' + status + '<br>';
+                html += 'Error: ' + error + '<br>';
+                html += 'Response: ' + (xhr.responseText || 'N/A') + '<br>';
+                html += '</small>';
+                html += '</div>';
+                
+                $result.removeClass().addClass('alert alert-danger').html(html).show();
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');

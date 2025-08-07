@@ -213,7 +213,7 @@ class AdminYujuSyncController extends ModuleAdminController
         try {
             $this->sync_manager->createSyncLock();
 
-            $direction = Tools::getValue('direction', 'bidirectional');
+            $direction = Tools::getValue('direction', 'prestashop_to_yuju');
             $force_update = (bool) Tools::getValue('force_update', false);
 
             $results = $this->sync_manager->executeFullSync($direction, $force_update);
@@ -268,7 +268,7 @@ class AdminYujuSyncController extends ModuleAdminController
     protected function processSyncCategories()
     {
         try {
-            $direction = Tools::getValue('direction', 'bidirectional');
+            $direction = Tools::getValue('direction', 'prestashop_to_yuju');
             $results = $this->sync_manager->syncCategories($direction);
 
             if ($results['success']) {

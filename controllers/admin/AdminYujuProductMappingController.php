@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductMapping.php';
 
 class AdminYujuProductMappingController extends ModuleAdminController
 {
@@ -64,11 +65,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         'type' => 'bool',
         'class' => 'fixed-width-sm',
         ],
-        'sync_direction' => [
-        'title' => $this->l('Sync Direction'),
-        'align' => 'center',
-        'width' => 120,
-        ],
+
         'transformation_rule' => [
         'title' => $this->l('Transformation'),
         'width' => 150,
@@ -87,12 +84,15 @@ class AdminYujuProductMappingController extends ModuleAdminController
         'delete' => [
         'text' => $this->l('Delete selected'),
         'confirm' => $this->l('Delete selected items?'),
+        'icon' => 'icon-trash'
         ],
         'enableMapping' => [
         'text' => $this->l('Enable mapping'),
+        'icon' => 'icon-check'
         ],
         'disableMapping' => [
         'text' => $this->l('Disable mapping'),
+        'icon' => 'icon-remove'
         ],
         ];
 
@@ -110,7 +110,18 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
     public function initContent()
     {
-        $this->context->smarty->assign('current_controller', 'AdminYujuProductMapping');
+        // Assign data to Smarty
+        $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuProductMapping',
+            'product_mappings' => $this->getProductMappings(),
+            'prestashop_fields' => $this->getPrestashopFields(),
+            'yuju_fields' => $this->getYujuFields(),
+            'field_types' => $this->getFieldTypes(),
+
+            'transformation_rules' => $this->getTransformationRules(),
+            'ajax_url' => $this->context->link->getAdminLink('AdminYujuProductMapping'),
+        ]);
+        
         parent::initContent();
         
         $this->setTemplate('product_mapping.tpl');
@@ -171,42 +182,38 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ];
 
         $field_types = [
-        ['id' => 'string', 'name' => $this->l('String')],
-        ['id' => 'integer', 'name' => $this->l('Integer')],
-        ['id' => 'decimal', 'name' => $this->l('Decimal')],
-        ['id' => 'boolean', 'name' => $this->l('Boolean')],
-        ['id' => 'date', 'name' => $this->l('Date')],
-        ['id' => 'datetime', 'name' => $this->l('DateTime')],
-        ['id' => 'array', 'name' => $this->l('Array')],
-        ['id' => 'object', 'name' => $this->l('Object')],
+        ['id' => 'string', 'name' => $this->l('Cadena de texto')],
+        ['id' => 'integer', 'name' => $this->l('Número entero')],
+        ['id' => 'decimal', 'name' => $this->l('Número decimal')],
+        ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
+        ['id' => 'date', 'name' => $this->l('Fecha')],
+        ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
+        ['id' => 'array', 'name' => $this->l('Lista')],
+        ['id' => 'object', 'name' => $this->l('Objeto')],
         ];
 
-        $sync_directions = [
-        ['id' => 'ps_to_yuju', 'name' => $this->l('PrestaShop → Yuju')],
-        ['id' => 'yuju_to_ps', 'name' => $this->l('Yuju → PrestaShop')],
-        ['id' => 'bidirectional', 'name' => $this->l('Bidirectional')],
-        ];
+
 
         $transformation_rules = [
-        ['id' => 'none', 'name' => $this->l('None')],
-        ['id' => 'uppercase', 'name' => $this->l('Uppercase')],
-        ['id' => 'lowercase', 'name' => $this->l('Lowercase')],
-        ['id' => 'capitalize', 'name' => $this->l('Capitalize')],
-        ['id' => 'strip_html', 'name' => $this->l('Strip HTML')],
-        ['id' => 'currency_convert', 'name' => $this->l('Currency Convert')],
-        ['id' => 'date_format', 'name' => $this->l('Date Format')],
-        ['id' => 'custom', 'name' => $this->l('Custom Function')],
+        ['id' => 'none', 'name' => $this->l('Ninguna')],
+        ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
+        ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
+        ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
+        ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
+        ['id' => 'currency_convert', 'name' => $this->l('Convertir Moneda')],
+        ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
+        ['id' => 'custom', 'name' => $this->l('Función Personalizada')],
         ];
 
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Product Field Mapping'),
+        'title' => $this->l('Mapeo de Campos de Producto'),
         'icon' => 'icon-cogs',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->l('PrestaShop Field'),
+        'label' => $this->l('Campo PrestaShop'),
         'name' => 'prestashop_field',
         'required' => true,
         'options' => [
@@ -217,7 +224,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Yuju Field'),
+        'label' => $this->l('Campo Yuju'),
         'name' => 'yuju_field',
         'required' => true,
         'options' => [
@@ -228,7 +235,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Field Type'),
+        'label' => $this->l('Tipo de Campo'),
         'name' => 'field_type',
         'required' => true,
         'options' => [
@@ -237,20 +244,10 @@ class AdminYujuProductMappingController extends ModuleAdminController
         'name' => 'name',
         ],
         ],
+
         [
         'type' => 'select',
-        'label' => $this->l('Sync Direction'),
-        'name' => 'sync_direction',
-        'required' => true,
-        'options' => [
-        'query' => $sync_directions,
-        'id' => 'id',
-        'name' => 'name',
-        ],
-        ],
-        [
-        'type' => 'select',
-        'label' => $this->l('Transformation Rule'),
+        'label' => $this->l('Regla de Transformación'),
         'name' => 'transformation_rule',
         'options' => [
         'query' => $transformation_rules,
@@ -260,26 +257,26 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'textarea',
-        'label' => $this->l('Custom Transformation'),
+        'label' => $this->l('Transformación Personalizada'),
         'name' => 'custom_transformation',
-        'desc' => $this->l('PHP code for custom transformation (only if transformation rule is \'custom\')'),
+        'desc' => $this->l('Código PHP para transformación personalizada (solo si la regla de transformación es \'custom\')'),
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Default Value'),
+        'label' => $this->l('Valor por Defecto'),
         'name' => 'default_value',
-        'desc' => $this->l('Default value if source field is empty'),
+        'desc' => $this->l('Valor por defecto si el campo origen está vacío'),
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Required Field'),
+        'label' => $this->l('Campo Requerido'),
         'name' => 'is_required',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_required_on',
         'value' => 1,
-        'label' => $this->l('Yes'),
+        'label' => $this->l('Sí'),
         ],
         [
         'id' => 'is_required_off',
@@ -290,25 +287,25 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Active'),
+        'label' => $this->l('Activo'),
         'name' => 'is_active',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_active_on',
         'value' => 1,
-        'label' => $this->l('Enabled'),
+        'label' => $this->l('Habilitado'),
         ],
         [
         'id' => 'is_active_off',
         'value' => 0,
-        'label' => $this->l('Disabled'),
+        'label' => $this->l('Deshabilitado'),
         ],
         ],
         ],
         ],
         'submit' => [
-        'title' => $this->l('Save'),
+        'title' => $this->l('Guardar'),
         ],
         ];
 
@@ -351,7 +348,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         'prestashop_field' => pSQL($prestashop_field),
         'yuju_field' => pSQL($yuju_field),
         'field_type' => pSQL(Tools::getValue('field_type')),
-        'sync_direction' => pSQL(Tools::getValue('sync_direction')),
+
         'transformation_rule' => pSQL(Tools::getValue('transformation_rule')),
         'custom_transformation' => pSQL(Tools::getValue('custom_transformation')),
         'default_value' => pSQL(Tools::getValue('default_value')),
@@ -392,7 +389,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         'prestashop_field' => 'name',
         'yuju_field' => 'title',
         'field_type' => 'string',
-        'sync_direction' => 'bidirectional',
+        'sync_direction' => 'ps_to_yuju',
         'is_required' => 1,
         ],
         [
@@ -514,5 +511,305 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 $this->confirmations[] = $this->l('Selected mappings disabled.');
             }
         }
+    }
+
+    // AJAX Methods
+    public function ajaxProcessSaveMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id_mapping = (int) Tools::getValue('id_mapping');
+            $prestashop_field = Tools::getValue('prestashop_field');
+            $yuju_field = Tools::getValue('yuju_field');
+            $field_type = Tools::getValue('field_type');
+
+            $transformation_rule = Tools::getValue('transformation_rule');
+            $custom_transformation = Tools::getValue('custom_transformation');
+            $default_value = Tools::getValue('default_value');
+            $is_required = (int) Tools::getValue('is_required');
+            $is_active = (int) Tools::getValue('is_active');
+
+            // Validation
+            if (empty($prestashop_field) || empty($yuju_field) || empty($field_type)) {
+                throw new Exception($this->l('Required fields are missing.'));
+            }
+
+            // Check if mapping already exists (for different mapping)
+            $existing_query = '
+                SELECT id_mapping FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
+                WHERE prestashop_field = "' . pSQL($prestashop_field) . '"
+            ';
+            if ($id_mapping > 0) {
+                $existing_query .= ' AND id_mapping != ' . $id_mapping;
+            }
+
+            $existing = Db::getInstance()->getRow($existing_query);
+            if ($existing) {
+                throw new Exception($this->l('This PrestaShop field is already mapped.'));
+            }
+
+            $data = [
+                'prestashop_field' => pSQL($prestashop_field),
+                'yuju_field' => pSQL($yuju_field),
+                'field_type' => pSQL($field_type),
+                'sync_direction' => 'ps_to_yuju',
+                'transformation_rule' => pSQL($transformation_rule),
+                'custom_transformation' => pSQL($custom_transformation),
+                'default_value' => pSQL($default_value),
+                'is_required' => $is_required,
+                'is_active' => $is_active,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+
+            if ($id_mapping > 0) {
+                // Update existing mapping
+                $result = Db::getInstance()->update(
+                    'yuju_product_mapping',
+                    $data,
+                    'id_mapping = ' . $id_mapping
+                );
+                $message = $this->l('Product mapping updated successfully.');
+            } else {
+                // Create new mapping
+                $data['created_at'] = date('Y-m-d H:i:s');
+                $result = Db::getInstance()->insert('yuju_product_mapping', $data);
+                $message = $this->l('Product mapping created successfully.');
+            }
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $message;
+                $this->logger->log('Product mapping saved: ' . $prestashop_field . ' -> ' . $yuju_field, 'info');
+            } else {
+                throw new Exception($this->l('Error saving product mapping.'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error saving product mapping: ' . $e->getMessage(), 'error');
+        }
+
+        $this->ajaxRender(json_encode($response));
+    }
+
+    public function ajaxProcessGetMapping()
+    {
+        $response = ['success' => false, 'data' => null];
+
+        try {
+            $id_mapping = (int) Tools::getValue('id_mapping');
+            if ($id_mapping <= 0) {
+                throw new Exception($this->l('Invalid mapping ID.'));
+            }
+
+            $mapping = Db::getInstance()->getRow('
+                SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
+                WHERE id_mapping = ' . $id_mapping
+            );
+
+            if ($mapping) {
+                $response['success'] = true;
+                $response['data'] = $mapping;
+            } else {
+                throw new Exception($this->l('Mapping not found.'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        $this->ajaxRender(json_encode($response));
+    }
+
+    public function ajaxProcessDeleteMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id_mapping = (int) Tools::getValue('id_mapping');
+            if ($id_mapping <= 0) {
+                throw new Exception($this->l('Invalid mapping ID.'));
+            }
+
+            $result = Db::getInstance()->delete(
+                'yuju_product_mapping',
+                'id_mapping = ' . $id_mapping
+            );
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $this->l('Product mapping deleted successfully.');
+                $this->logger->log('Product mapping deleted: ID ' . $id_mapping, 'info');
+            } else {
+                throw new Exception($this->l('Error deleting product mapping.'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error deleting product mapping: ' . $e->getMessage(), 'error');
+        }
+
+        $this->ajaxRender(json_encode($response));
+    }
+
+    public function ajaxProcessToggleMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id_mapping = (int) Tools::getValue('id_mapping');
+            $is_active = (int) Tools::getValue('is_active');
+
+            if ($id_mapping <= 0) {
+                throw new Exception($this->l('Invalid mapping ID.'));
+            }
+
+            $result = Db::getInstance()->update(
+                'yuju_product_mapping',
+                ['is_active' => $is_active],
+                'id_mapping = ' . $id_mapping
+            );
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $is_active ? 
+                    $this->l('Product mapping enabled successfully.') : 
+                    $this->l('Product mapping disabled successfully.');
+                $this->logger->log('Product mapping toggled: ID ' . $id_mapping . ' -> ' . ($is_active ? 'enabled' : 'disabled'), 'info');
+            } else {
+                throw new Exception($this->l('Error updating product mapping status.'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error toggling product mapping: ' . $e->getMessage(), 'error');
+        }
+
+        $this->ajaxRender(json_encode($response));
+    }
+
+    public function ajaxProcessRefreshYujuFields()
+    {
+        $response = ['success' => false, 'message' => '', 'data' => []];
+
+        try {
+            // This would typically fetch from Yuju API
+            // For now, return the static list
+            $yuju_fields = $this->getYujuFields();
+            
+            $response['success'] = true;
+            $response['data'] = $yuju_fields;
+            $response['message'] = $this->l('Yuju fields refreshed successfully.');
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error refreshing Yuju fields: ' . $e->getMessage(), 'error');
+        }
+
+        $this->ajaxRender(json_encode($response));
+    }
+
+    // Helper Methods
+    protected function getProductMappings()
+    {
+        return Db::getInstance()->executeS('
+            SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
+            ORDER BY prestashop_field ASC
+        ');
+    }
+
+    protected function getPrestashopFields()
+    {
+        return [
+            ['id' => 'name', 'name' => $this->l('Product Name')],
+            ['id' => 'description', 'name' => $this->l('Description')],
+            ['id' => 'description_short', 'name' => $this->l('Short Description')],
+            ['id' => 'price', 'name' => $this->l('Price')],
+            ['id' => 'wholesale_price', 'name' => $this->l('Wholesale Price')],
+            ['id' => 'reference', 'name' => $this->l('Reference/SKU')],
+            ['id' => 'ean13', 'name' => $this->l('EAN13')],
+            ['id' => 'upc', 'name' => $this->l('UPC')],
+            ['id' => 'isbn', 'name' => $this->l('ISBN')],
+            ['id' => 'mpn', 'name' => $this->l('MPN')],
+            ['id' => 'quantity', 'name' => $this->l('Quantity')],
+            ['id' => 'minimal_quantity', 'name' => $this->l('Minimal Quantity')],
+            ['id' => 'weight', 'name' => $this->l('Weight')],
+            ['id' => 'width', 'name' => $this->l('Width')],
+            ['id' => 'height', 'name' => $this->l('Height')],
+            ['id' => 'depth', 'name' => $this->l('Depth')],
+            ['id' => 'active', 'name' => $this->l('Active')],
+            ['id' => 'available_for_order', 'name' => $this->l('Available for Order')],
+            ['id' => 'show_price', 'name' => $this->l('Show Price')],
+            ['id' => 'online_only', 'name' => $this->l('Online Only')],
+            ['id' => 'condition', 'name' => $this->l('Condition')],
+            ['id' => 'visibility', 'name' => $this->l('Visibility')],
+            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
+            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
+            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
+            ['id' => 'link_rewrite', 'name' => $this->l('Friendly URL')],
+            ['id' => 'available_now', 'name' => $this->l('Available Now Text')],
+            ['id' => 'available_later', 'name' => $this->l('Available Later Text')],
+        ];
+    }
+
+    protected function getYujuFields()
+    {
+        return [
+            ['id' => 'title', 'name' => $this->l('Title')],
+            ['id' => 'description', 'name' => $this->l('Description')],
+            ['id' => 'short_description', 'name' => $this->l('Short Description')],
+            ['id' => 'price', 'name' => $this->l('Price')],
+            ['id' => 'cost_price', 'name' => $this->l('Cost Price')],
+            ['id' => 'sku', 'name' => $this->l('SKU')],
+            ['id' => 'barcode', 'name' => $this->l('Barcode')],
+            ['id' => 'gtin', 'name' => $this->l('GTIN')],
+            ['id' => 'mpn', 'name' => $this->l('MPN')],
+            ['id' => 'stock_quantity', 'name' => $this->l('Stock Quantity')],
+            ['id' => 'min_stock', 'name' => $this->l('Minimum Stock')],
+            ['id' => 'weight', 'name' => $this->l('Weight')],
+            ['id' => 'width', 'name' => $this->l('Width')],
+            ['id' => 'height', 'name' => $this->l('Height')],
+            ['id' => 'length', 'name' => $this->l('Length')],
+            ['id' => 'status', 'name' => $this->l('Status')],
+            ['id' => 'visibility', 'name' => $this->l('Visibility')],
+            ['id' => 'condition', 'name' => $this->l('Condition')],
+            ['id' => 'brand', 'name' => $this->l('Brand')],
+            ['id' => 'category', 'name' => $this->l('Category')],
+            ['id' => 'tags', 'name' => $this->l('Tags')],
+            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
+            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
+            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
+            ['id' => 'slug', 'name' => $this->l('URL Slug')],
+        ];
+    }
+
+    protected function getFieldTypes()
+    {
+        return [
+            ['id' => 'string', 'name' => $this->l('Cadena de texto')],
+            ['id' => 'integer', 'name' => $this->l('Número entero')],
+            ['id' => 'decimal', 'name' => $this->l('Número decimal')],
+            ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
+            ['id' => 'date', 'name' => $this->l('Fecha')],
+            ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
+            ['id' => 'text', 'name' => $this->l('Texto')],
+            ['id' => 'html', 'name' => $this->l('HTML')],
+            ['id' => 'json', 'name' => $this->l('JSON')],
+        ];
+    }
+
+
+
+    protected function getTransformationRules()
+    {
+        return [
+            ['id' => 'none', 'name' => $this->l('Ninguna')],
+            ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
+            ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
+            ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
+            ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
+            ['id' => 'strip_tags', 'name' => $this->l('Eliminar Etiquetas')],
+            ['id' => 'trim', 'name' => $this->l('Recortar Espacios')],
+            ['id' => 'number_format', 'name' => $this->l('Formato de Número')],
+            ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
+            ['id' => 'boolean_convert', 'name' => $this->l('Convertir a Booleano')],
+            ['id' => 'custom', 'name' => $this->l('Código PHP Personalizado')],
+        ];
     }
 }

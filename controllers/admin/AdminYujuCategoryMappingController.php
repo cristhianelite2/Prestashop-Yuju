@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
 
 class AdminYujuCategoryMappingController extends ModuleAdminController
 {
@@ -80,9 +81,11 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         'enableSync' => [
         'text' => $this->trans('Enable sync', array(), 'Modules.Prestashopyuju.Admin'),
+        'icon' => 'icon-check'
         ],
         'disableSync' => [
         'text' => $this->trans('Disable sync', array(), 'Modules.Prestashopyuju.Admin'),
+        'icon' => 'icon-remove'
         ],
         ];
 
@@ -100,9 +103,21 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
     public function initContent()
     {
-        $this->context->smarty->assign('current_controller', 'AdminYujuCategoryMapping');
-        parent::initContent();
+        // Get existing mappings with category names
+        $mappings = $this->getCategoryMappings();
+        $prestashop_categories = $this->getPrestashopCategories();
+        $yuju_categories = $this->getYujuCategories();
         
+        $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuCategoryMapping',
+            'category_mappings' => $mappings,
+            'prestashop_categories' => $prestashop_categories,
+            'yuju_categories' => $yuju_categories,
+            'ajax_url' => $this->context->link->getAdminLink('AdminYujuCategoryMapping'),
+            'token' => $this->token
+        ]);
+        
+        parent::initContent();
         $this->setTemplate('category_mapping.tpl');
     }
 
@@ -138,13 +153,13 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
         $this->fields_form = [
         'legend' => [
-        'title' => $this->trans('Category Mapping', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Mapeo de Categorías', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-tags',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->trans('PrestaShop Category', array(), 'Modules.Prestashopyuju.Admin'),
+        'label' => $this->trans('Categoría PrestaShop', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'prestashop_category_id',
         'required' => true,
         'options' => [
@@ -155,7 +170,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->trans('Yuju Category', array(), 'Modules.Prestashopyuju.Admin'),
+        'label' => $this->trans('Categoría Yuju', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'yuju_category_id',
         'required' => true,
         'options' => [
@@ -166,19 +181,19 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         [
         'type' => 'switch',
-        'label' => $this->trans('Enable Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
+        'label' => $this->trans('Habilitar Sincronización', array(), 'Modules.Prestashopyuju.Admin'),
         'name' => 'sync_enabled',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'sync_enabled_on',
         'value' => 1,
-        'label' => $this->trans('Enabled', array(), 'Modules.Prestashopyuju.Admin'),
+        'label' => $this->trans('Habilitado', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         [
         'id' => 'sync_enabled_off',
         'value' => 0,
-        'label' => $this->trans('Disabled', array(), 'Modules.Prestashopyuju.Admin'),
+        'label' => $this->trans('Deshabilitado', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ],
         ],
@@ -359,5 +374,219 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 $this->confirmations[] = $this->trans('Sync disabled for selected mappings.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
+    }
+
+    // AJAX Methods
+    public function ajaxProcessSaveMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+        
+        try {
+            $id = (int) Tools::getValue('id');
+            $prestashop_category_id = (int) Tools::getValue('prestashop_category_id');
+            $yuju_category_id = Tools::getValue('yuju_category_id');
+            $sync_enabled = (int) Tools::getValue('sync_enabled');
+            
+            // Validate required fields
+            if (!$prestashop_category_id || !$yuju_category_id) {
+                throw new Exception('PrestaShop category and Yuju category are required.');
+            }
+            
+            // Check if mapping already exists (for different mapping)
+            $existing = Db::getInstance()->getRow(
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping 
+                WHERE prestashop_category_id = ' . (int) $prestashop_category_id . '
+                AND id != ' . (int) $id
+            );
+            
+            if ($existing) {
+                throw new Exception('This PrestaShop category is already mapped.');
+            }
+            
+            // Get Yuju category name
+            $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
+            if (!$yuju_category_name) {
+                throw new Exception('Invalid Yuju category selected.');
+            }
+            
+            $data = [
+                'prestashop_category_id' => $prestashop_category_id,
+                'yuju_category_id' => pSQL($yuju_category_id),
+                'yuju_category_name' => pSQL($yuju_category_name),
+                'sync_enabled' => $sync_enabled,
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+            
+            if ($id > 0) {
+                // Update existing mapping
+                $result = Db::getInstance()->update(
+                    'yuju_category_mapping',
+                    $data,
+                    'id = ' . (int) $id
+                );
+            } else {
+                // Create new mapping
+                $data['created_at'] = date('Y-m-d H:i:s');
+                $result = Db::getInstance()->insert('yuju_category_mapping', $data);
+            }
+            
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = 'Category mapping saved successfully.';
+                $this->logger->log('Category mapping saved: PS Category ' . $prestashop_category_id . ' -> Yuju Category ' . $yuju_category_id, 'info');
+            } else {
+                throw new Exception('Error saving category mapping to database.');
+            }
+            
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error saving category mapping: ' . $e->getMessage(), 'error');
+        }
+        
+        die(json_encode($response));
+    }
+    
+    public function ajaxProcessGetMapping()
+    {
+        $response = ['success' => false, 'data' => null];
+        
+        try {
+            $id = (int) Tools::getValue('id');
+            
+            $mapping = Db::getInstance()->getRow(
+                'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE id = ' . (int) $id
+            );
+            
+            if ($mapping) {
+                $response['success'] = true;
+                $response['data'] = $mapping;
+            } else {
+                throw new Exception('Mapping not found.');
+            }
+            
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+        
+        die(json_encode($response));
+    }
+    
+    public function ajaxProcessDeleteMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+        
+        try {
+            $id = (int) Tools::getValue('id');
+            
+            $result = Db::getInstance()->delete(
+                'yuju_category_mapping',
+                'id = ' . (int) $id
+            );
+            
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = 'Category mapping deleted successfully.';
+                $this->logger->log('Category mapping deleted: ID ' . $id, 'info');
+            } else {
+                throw new Exception('Error deleting category mapping.');
+            }
+            
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error deleting category mapping: ' . $e->getMessage(), 'error');
+        }
+        
+        die(json_encode($response));
+    }
+    
+    public function ajaxProcessSyncMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+        
+        try {
+            $id = (int) Tools::getValue('id');
+            
+            // Get mapping details
+            $mapping = Db::getInstance()->getRow(
+                'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE id = ' . (int) $id
+            );
+            
+            if (!$mapping) {
+                throw new Exception('Mapping not found.');
+            }
+            
+            // Update last sync date
+            Db::getInstance()->update(
+                'yuju_category_mapping',
+                ['last_sync_at' => date('Y-m-d H:i:s')],
+                'id = ' . (int) $id
+            );
+            
+            $response['success'] = true;
+            $response['message'] = 'Category synchronized successfully.';
+            $this->logger->log('Category mapping synced: ID ' . $id, 'info');
+            
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error syncing category mapping: ' . $e->getMessage(), 'error');
+        }
+        
+        die(json_encode($response));
+    }
+    
+    public function ajaxProcessRefreshYujuCategories()
+    {
+        $response = ['success' => false, 'message' => '', 'categories' => []];
+        
+        try {
+            $this->syncYujuCategories();
+            $categories = $this->getYujuCategories();
+            
+            $response['success'] = true;
+            $response['message'] = 'Yuju categories refreshed successfully.';
+            $response['categories'] = $categories;
+            
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+        
+        die(json_encode($response));
+    }
+    
+    protected function getCategoryMappings()
+    {
+        $sql = '
+            SELECT 
+                cm.id,
+                cm.prestashop_category_id,
+                cm.yuju_category_id,
+                cm.yuju_category_name,
+                cm.sync_enabled,
+                cm.last_sync_at,
+                cm.created_at,
+                cl.name as prestashop_category_name
+            FROM ' . _DB_PREFIX_ . 'yuju_category_mapping cm
+            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl ON (cm.prestashop_category_id = cl.id_category AND cl.id_lang = ' . (int) $this->context->language->id . ')
+            ORDER BY cm.created_at DESC
+        ';
+        
+        return Db::getInstance()->executeS($sql) ?: [];
+    }
+    
+    protected function getPrestashopCategories()
+    {
+        $categories = Category::getCategories($this->context->language->id, true, false);
+        $category_options = [];
+        
+        foreach ($categories as $category) {
+            if ($category['id_category'] != 1) { // Exclude root category
+                $category_options[] = [
+                    'id' => $category['id_category'],
+                    'name' => str_repeat('- ', $category['level_depth'] - 1) . $category['name']
+                ];
+            }
+        }
+        
+        return $category_options;
     }
 }

@@ -48,7 +48,7 @@
                         <li class="{if $current_controller == 'AdminYujuProductMapping'}active{/if}">
                             <a href="{$link->getAdminLink('AdminYujuProductMapping')|escape:'html':'UTF-8'}">
                                 <i class="icon-shopping-cart"></i>
-                                Mapeo de Productos
+                                Mapeo de Campos
                             </a>
                         </li>
                         <li class="{if $current_controller == 'AdminYujuCategoryMapping'}active{/if}">

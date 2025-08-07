@@ -79,7 +79,7 @@
                                 <input type="text" class="form-control" value="{$yuju_urls.terms_conditions|escape:'html':'UTF-8'}" readonly id="terms_url">
                                 <span class="input-group-btn">
                                     <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_urls.terms_conditions|escape:'html':'UTF-8'}">
-                                        <i class="icon-copy"></i> CopiarX
+                                        <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
@@ -179,7 +179,7 @@
                                 <option value="sandbox" {if $config.YUJU_ENVIRONMENT == 'sandbox'}selected{/if}>
                                     Sandbox (Pruebas)
                                 </option>
-                                <option value="production" {if $config.YUJU_ENVIRONMENT == 'production'}selected{/if}>
+                                <option value="production" {if $config.YUJU_ENVIRONMENT == 'production' || !$config.YUJU_ENVIRONMENT}selected{/if}>
                                     Producción
                                 </option>
                             </select>
@@ -247,9 +247,9 @@
                         </label>
                         <div class="col-lg-9">
                             <span class="switch prestashop-switch fixed-width-lg">
-                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_on" value="1" {if $config.YUJU_AUTO_SYNC}checked="checked"{/if}>
+                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_on" value="1" {if $config.YUJU_AUTO_SYNC || $config.YUJU_AUTO_SYNC === null}checked="checked"{/if}>
                                 <label for="auto_sync_on">Sí</label>
-                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_off" value="0" {if !$config.YUJU_AUTO_SYNC}checked="checked"{/if}>
+                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_off" value="0" {if $config.YUJU_AUTO_SYNC === 0}checked="checked"{/if}>
                                 <label for="auto_sync_off">No</label>
                                 <a class="slide-button btn"></a>
                             </span>
@@ -272,7 +272,7 @@
                             Tamaño de Lote
                         </label>
                         <div class="col-lg-9">
-                            <input type="number" name="YUJU_BATCH_SIZE" value="{$config.YUJU_BATCH_SIZE|default:50|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
+                            <input type="number" name="YUJU_BATCH_SIZE" value="{$config.YUJU_BATCH_SIZE|default:100|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
                             <p class="help-block">Número de elementos a procesar por lote (1-500)</p>
                         </div>
                     </div>
@@ -343,81 +343,7 @@
     </div>
 </div>
 
-<!-- Sección de Pruebas de JavaScript -->
-<div class="panel">
-    <div class="panel-heading">
-        <i class="icon-bug"></i>
-        Pruebas de JavaScript - Diagnóstico del Portapapeles
-    </div>
-    
-    <div class="panel-body">
-        <div class="alert alert-info">
-            <i class="icon-info"></i>
-            <strong>Sección de Diagnóstico:</strong> Use estos botones para probar paso a paso la funcionalidad del copiado al portapapeles.
-        </div>
-        
-        <div class="row">
-            <div class="col-md-6">
-                <h4>Prueba 1: Verificar jQuery</h4>
-                <button type="button" class="btn btn-info" id="test-jquery">
-                    <i class="icon-code"></i> Probar jQuery
-                </button>
-                <div id="jquery-result" class="test-result"></div>
-            </div>
-            
-            <div class="col-md-6">
-                <h4>Prueba 2: Verificar YujuAdmin</h4>
-                <button type="button" class="btn btn-info" id="test-yuju-admin">
-                    <i class="icon-cogs"></i> Probar YujuAdmin
-                </button>
-                <div id="yuju-admin-result" class="test-result"></div>
-            </div>
-        </div>
-        
-        <div class="row" style="margin-top: 20px;">
-            <div class="col-md-6">
-                <h4>Prueba 3: Clipboard API</h4>
-                <button type="button" class="btn btn-info" id="test-clipboard-api">
-                    <i class="icon-clipboard"></i> Probar Clipboard API
-                </button>
-                <div id="clipboard-api-result" class="test-result"></div>
-            </div>
-            
-            <div class="col-md-6">
-                <h4>Prueba 4: Fallback Copy</h4>
-                <button type="button" class="btn btn-info" id="test-fallback-copy">
-                    <i class="icon-copy"></i> Probar Fallback
-                </button>
-                <div id="fallback-copy-result" class="test-result"></div>
-            </div>
-        </div>
-        
-        <div class="row" style="margin-top: 20px;">
-            <div class="col-md-12">
-                <h4>Prueba 5: Botón de Copia Real</h4>
-                <div class="input-group">
-                    <input type="text" class="form-control" value="https://ejemplo.com/test-url" readonly>
-                    <span class="input-group-btn">
-                        <button type="button" class="btn btn-primary yuju-copy-button" data-copy-text="https://ejemplo.com/test-url">
-                            <i class="icon-copy"></i> Copiar URL de Prueba
-                        </button>
-                    </span>
-                </div>
-                <div id="real-copy-result" class="test-result"></div>
-            </div>
-        </div>
-        
-        <div class="row" style="margin-top: 20px;">
-            <div class="col-md-12">
-                <h4>Consola de Resultados</h4>
-                <textarea id="test-console" class="form-control" rows="8" readonly placeholder="Los resultados de las pruebas aparecerán aquí..."></textarea>
-                <button type="button" class="btn btn-default" id="clear-console" style="margin-top: 10px;">
-                    <i class="icon-trash"></i> Limpiar Consola
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+
 {/block}
 
 <!-- ✅ SOLUCIÓN COMPATIBLE CON PRESTASHOP -->
@@ -447,37 +373,5 @@ console.log('✅ Configuration template loaded - JavaScript handled by admin.js'
     color: #666;
 }
 
-/* Estilos para la sección de pruebas */
-.test-result {
-    margin-top: 10px;
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    min-height: 30px;
-}
 
-.test-result.success {
-    background-color: #dff0d8;
-    border: 1px solid #d6e9c6;
-    color: #3c763d;
-}
-
-.test-result.error {
-    background-color: #f2dede;
-    border: 1px solid #ebccd1;
-    color: #a94442;
-}
-
-.test-result.info {
-    background-color: #d9edf7;
-    border: 1px solid #bce8f1;
-    color: #31708f;
-}
-
-#test-console {
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    background-color: #f8f8f8;
-    border: 1px solid #ddd;
-}
 </style>

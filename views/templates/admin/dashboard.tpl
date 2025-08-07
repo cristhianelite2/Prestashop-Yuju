@@ -30,13 +30,76 @@
                 <h3>Bienvenido a la Integración Yuju</h3>
                 <p>Este módulo le permite sincronizar su tienda PrestaShop con la plataforma Yuju.</p>
                 
-                <div class="alert alert-info">
-                    <h4>Información del Módulo</h4>
-                    <ul>
-                        <li><strong>Nombre del Módulo:</strong> {$module_name|escape:'html':'UTF-8'}</li>
-                        <li><strong>Versión:</strong> {$module_version|escape:'html':'UTF-8'}</li>
-                        <li><strong>Estado:</strong> Activo</li>
-                    </ul>
+                <!-- Estadísticas de la última semana -->
+                <div class="row" style="margin-bottom: 20px;">
+                    <div class="col-md-3">
+                        <div class="panel panel-danger">
+                            <div class="panel-heading">
+                                <h4><i class="icon-exclamation-triangle"></i> Errores (Última Semana)</h4>
+                            </div>
+                            <div class="panel-body text-center">
+                                <h2 class="text-danger">{$dashboard_stats.errors_last_week|escape:'html':'UTF-8'}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="panel panel-warning">
+                            <div class="panel-heading">
+                                <h4><i class="icon-warning"></i> Advertencias (Última Semana)</h4>
+                            </div>
+                            <div class="panel-body text-center">
+                                <h2 class="text-warning">{$dashboard_stats.warnings_last_week|escape:'html':'UTF-8'}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="panel panel-info">
+                            <div class="panel-heading">
+                                <h4><i class="icon-calendar"></i> Última Sincronización</h4>
+                            </div>
+                            <div class="panel-body text-center">
+                                {if $last_sync_date}
+                                    <small>{$last_sync_date|date_format:"%d/%m/%Y %H:%M"}</small>
+                                {else}
+                                    <small class="text-muted">Nunca</small>
+                                {/if}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="panel panel-success">
+                            <div class="panel-heading">
+                                <h4><i class="icon-info"></i> Estado del Módulo</h4>
+                            </div>
+                            <div class="panel-body text-center">
+                                <span class="label label-success">Activo</span><br>
+                                <small>v{$module_version|escape:'html':'UTF-8'}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Elementos sincronizados en la última semana -->
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4><i class="icon-sync"></i> Elementos Sincronizados (Última Semana)</h4>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-primary">{$recent_syncs.products|escape:'html':'UTF-8'}</h3>
+                                <p><strong>Productos</strong></p>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-info">{$recent_syncs.categories|escape:'html':'UTF-8'}</h3>
+                                <p><strong>Categorías</strong></p>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-success">{$recent_syncs.attributes|escape:'html':'UTF-8'}</h3>
+                                <p><strong>Atributos</strong></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="row">

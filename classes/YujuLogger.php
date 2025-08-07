@@ -328,7 +328,7 @@ class YujuLogger
         $cutoff_date = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 
         // Limpiar base de datos
-        $sql = 'DELETE FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE created_at < "' . pSQL($cutoff_date) . '"';
+        $sql = 'DELETE FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE start_time < "' . pSQL($cutoff_date) . '"';
         $deleted_db = Db::getInstance()->execute($sql);
 
         // Limpiar archivos

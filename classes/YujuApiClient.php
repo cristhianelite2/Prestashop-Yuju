@@ -26,8 +26,8 @@ require_once dirname(__FILE__) . '/YujuLogger.php';
 class YujuApiClient
 {
     public const API_VERSION = 'v1';
-    public const SANDBOX_BASE_URL = 'https://api-sandbox.yuju.io';
-    public const PRODUCTION_BASE_URL = 'https://api.yuju.io';
+    public const SANDBOX_BASE_URL = 'https://api.tp.yuju.io';
+    public const PRODUCTION_BASE_URL = 'https://api.tp.yuju.io';
 
     private $base_url;
     private $oauth;
@@ -83,17 +83,39 @@ class YujuApiClient
         $url = $this->buildUrl($endpoint, $params);
         $headers = $this->getHeaders();
 
+        $this->logger->info('Making API request', [
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'url' => $url,
+            'headers' => $headers,
+            'data' => $data,
+            'params' => $params
+        ]);
+
         $start_time = microtime(true);
         $retry_count = 0;
 
         do {
             $response = $this->executeRequest($method, $url, $headers, $data);
 
+            $this->logger->info('API response received', [
+                'method' => $method,
+                'endpoint' => $endpoint,
+                'retry_count' => $retry_count,
+                'http_code' => $response['http_code'] ?? 'unknown',
+                'success' => $response['success'] ?? false,
+                'response' => $response
+            ]);
+
             if ($response['success'] || $retry_count >= $this->max_retries) {
                 break;
             }
 
             ++$retry_count;
+            $this->logger->warning('Request failed, retrying', [
+                'retry_count' => $retry_count,
+                'max_retries' => $this->max_retries
+            ]);
             sleep(pow(2, $retry_count)); // Exponential backoff
         } while ($retry_count <= $this->max_retries);
 
@@ -212,8 +234,8 @@ class YujuApiClient
         $access_token = $this->oauth->getValidAccessToken();
 
         if ($access_token) {
-            // Según la documentación de Yuju, el token se envía directamente en Authorization
-            $headers[] = 'Authorization: ' . $access_token;
+            // Según la documentación de Yuju, el token se envía con el formato 'Token {token}'
+            $headers[] = 'Authorization: Token ' . $access_token;
         }
 
         return $headers;
@@ -316,19 +338,37 @@ class YujuApiClient
     public function testConnection()
     {
         try {
+            $this->logger->info('Starting connection test', [
+                'base_url' => $this->base_url,
+                'environment' => Configuration::get('YUJU_ENVIRONMENT', 'sandbox')
+            ]);
+            
             // Verificar que tenemos un token válido
             $access_token = $this->oauth->getValidAccessToken();
             if (!$access_token) {
+                $this->logger->error('Failed to obtain valid access token');
                 return [
                     'success' => false,
                     'message' => 'No hay token de acceso válido. Por favor, autoriza la aplicación primero.',
                 ];
             }
 
+            $this->logger->info('Access token obtained successfully');
+            
             // Probar la conexión con el endpoint de webhooks
+            $url = $this->buildUrl('webhook-sub');
+            $this->logger->info('Testing connection with webhook-sub endpoint', [
+                'url' => $url
+            ]);
+            
             $response = $this->get('webhook-sub');
+            
+            $this->logger->info('webhook-sub response received', [
+                'response' => $response
+            ]);
 
             if ($response['success']) {
+                $this->logger->info('Connection test successful');
                 return [
                     'success' => true,
                     'message' => 'Conexión exitosa con la API de Yuju',
@@ -339,12 +379,18 @@ class YujuApiClient
                     ],
                 ];
             } else {
+                $this->logger->error('API connection failed', [
+                    'response' => $response
+                ]);
                 return [
                     'success' => false,
                     'message' => 'Error al conectar con la API: ' . ($response['message'] ?? 'Error desconocido'),
                 ];
             }
         } catch (Exception $e) {
+            $this->logger->error('Connection test failed: ' . $e->getMessage(), [
+                'exception' => $e->getTraceAsString()
+            ]);
             return [
                 'success' => false,
                 'message' => 'Error de conexión: ' . $e->getMessage(),
@@ -358,7 +404,20 @@ class YujuApiClient
     public function getStores($params = [])
     {
         try {
-            $response = $this->get('stores', $params);
+            $url = $this->buildUrl('shops/', $params);
+            $this->logger->info('Calling getStores endpoint', [
+                'url' => $url,
+                'params' => $params,
+                'base_url' => $this->base_url
+            ]);
+            
+            $response = $this->get('shops/', $params);
+            
+            $this->logger->info('getStores response received', [
+                'response' => $response,
+                'success' => isset($response['success']) ? $response['success'] : 'unknown',
+                'data_count' => isset($response['data']) ? count($response['data']) : 0
+            ]);
             
             if (isset($response['data'])) {
                 return $response['data'];
@@ -366,7 +425,9 @@ class YujuApiClient
             
             return $response;
         } catch (Exception $e) {
-            $this->logger->error('Error getting stores: ' . $e->getMessage());
+            $this->logger->error('Error getting stores: ' . $e->getMessage(), [
+                'exception' => $e->getTraceAsString()
+            ]);
             throw $e;
         }
     }
@@ -467,6 +528,14 @@ class YujuApiClient
     public function setTimeout($timeout)
     {
         $this->timeout = (int) $timeout;
+    }
+
+    /**
+     * Obtiene la URL base de la API.
+     */
+    public function getBaseUrl()
+    {
+        return $this->base_url;
     }
 
     public function setMaxRetries($max_retries)

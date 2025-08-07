@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuAttributeMapping.php';
 
 class AdminYujuAttributeMappingController extends ModuleAdminController
 {
@@ -63,11 +64,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 'align' => 'center',
                 'width' => 100,
             ],
-            'sync_direction' => [
-                'title' => $this->trans('Sync Direction', array(), 'Modules.Prestashopyuju.Admin'),
-                'align' => 'center',
-                'width' => 120,
-            ],
+
             'value_mapping_count' => [
                 'title' => $this->trans('Value Mappings', array(), 'Modules.Prestashopyuju.Admin'),
                 'align' => 'center',
@@ -90,9 +87,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             ],
             'enableMapping' => [
                 'text' => $this->trans('Enable mapping', array(), 'Modules.Prestashopyuju.Admin'),
+                'icon' => 'icon-check'
             ],
             'disableMapping' => [
                 'text' => $this->trans('Disable mapping', array(), 'Modules.Prestashopyuju.Admin'),
+                'icon' => 'icon-remove'
             ],
         ];
 
@@ -115,7 +114,21 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             return;
         }
         
-        $this->context->smarty->assign('current_controller', 'AdminYujuAttributeMapping');
+        // Assign data for the template
+        $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuAttributeMapping',
+            'attribute_mappings' => $this->getAttributeMappings(),
+            'prestashop_attributes' => $this->getPrestashopAttributes(),
+            'prestashop_attribute_groups' => $this->getPrestashopAttributeGroups(),
+            'yuju_attributes' => $this->getYujuAttributes(),
+            'yuju_attribute_groups' => $this->getYujuAttributeGroups(),
+            'attribute_types' => $this->getAttributeTypes(),
+            'field_types' => $this->getFieldTypes(),
+            'transformation_rules' => $this->getTransformationRules(),
+
+            'ajax_url' => $this->context->link->getAdminLink('AdminYujuAttributeMapping'),
+        ]);
+        
         parent::initContent();
         
         $this->setTemplate('attribute_mapping.tpl');
@@ -171,22 +184,17 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             ['id' => 'boolean', 'name' => $this->trans('Boolean', array(), 'Modules.Prestashopyuju.Admin')],
         ];
 
-        // Sync directions
-        $sync_directions = [
-            ['id' => 'ps_to_yuju', 'name' => $this->trans('PrestaShop → Yuju', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'yuju_to_ps', 'name' => $this->trans('Yuju → PrestaShop', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'bidirectional', 'name' => $this->trans('Bidirectional', array(), 'Modules.Prestashopyuju.Admin')],
-        ];
+
 
         $this->fields_form = [
             'legend' => [
-                'title' => $this->trans('Attribute Mapping', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Mapeo de Atributos', array(), 'Modules.Prestashopyuju.Admin'),
                 'icon' => 'icon-list-alt',
             ],
             'input' => [
                 [
                     'type' => 'select',
-                    'label' => $this->trans('PrestaShop Attribute', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Atributo PrestaShop', array(), 'Modules.Prestashopyuju.Admin'),
                     'name' => 'prestashop_attribute_id',
                     'required' => true,
                     'options' => [
@@ -197,7 +205,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 ],
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Yuju Attribute', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Atributo Yuju', array(), 'Modules.Prestashopyuju.Admin'),
                     'name' => 'yuju_attribute_id',
                     'required' => true,
                     'options' => [
@@ -208,7 +216,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 ],
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Attribute Type', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Tipo de Atributo', array(), 'Modules.Prestashopyuju.Admin'),
                     'name' => 'attribute_type',
                     'required' => true,
                     'options' => [
@@ -217,57 +225,47 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                         'name' => 'name',
                     ],
                 ],
-                [
-                    'type' => 'select',
-                    'label' => $this->trans('Sync Direction', array(), 'Modules.Prestashopyuju.Admin'),
-                    'name' => 'sync_direction',
-                    'required' => true,
-                    'options' => [
-                        'query' => $sync_directions,
-                        'id' => 'id',
-                        'name' => 'name',
-                    ],
-                ],
+
                 [
                     'type' => 'switch',
-                    'label' => $this->trans('Auto Create Values', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Crear Valores Automáticamente', array(), 'Modules.Prestashopyuju.Admin'),
                     'name' => 'auto_create_values',
-                    'desc' => $this->trans('Automatically create missing attribute values during sync', array(), 'Modules.Prestashopyuju.Admin'),
+                    'desc' => $this->trans('Crear automáticamente valores de atributos faltantes durante la sincronización', array(), 'Modules.Prestashopyuju.Admin'),
                     'is_bool' => true,
                     'values' => [
                         [
                             'id' => 'auto_create_values_on',
                             'value' => 1,
-                            'label' => $this->trans('Enabled', array(), 'Admin.Global'),
+                            'label' => $this->trans('Habilitado', array(), 'Admin.Global'),
                         ],
                         [
                             'id' => 'auto_create_values_off',
                             'value' => 0,
-                            'label' => $this->trans('Disabled', array(), 'Admin.Global'),
+                            'label' => $this->trans('Deshabilitado', array(), 'Admin.Global'),
                         ],
                     ],
                 ],
                 [
                     'type' => 'switch',
-                    'label' => $this->trans('Active', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Activo', array(), 'Modules.Prestashopyuju.Admin'),
                     'name' => 'is_active',
                     'is_bool' => true,
                     'values' => [
                         [
                             'id' => 'active_on',
                             'value' => 1,
-                            'label' => $this->trans('Enabled', array(), 'Admin.Global'),
+                            'label' => $this->trans('Habilitado', array(), 'Admin.Global'),
                         ],
                         [
                             'id' => 'active_off',
                             'value' => 0,
-                            'label' => $this->trans('Disabled', array(), 'Admin.Global'),
+                            'label' => $this->trans('Deshabilitado', array(), 'Admin.Global'),
                         ],
                     ],
                 ],
             ],
             'submit' => [
-                'title' => $this->trans('Save', array(), 'Admin.Actions'),
+                'title' => $this->trans('Guardar', array(), 'Admin.Actions'),
             ],
         ];
 
@@ -306,7 +304,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             'yuju_attribute_id' => pSQL($yuju_attribute_id),
             'yuju_attribute_name' => pSQL($yuju_attribute_name),
             'attribute_type' => pSQL(Tools::getValue('attribute_type')),
-            'sync_direction' => pSQL(Tools::getValue('sync_direction')),
+            'sync_direction' => 'prestashop_to_yuju',
             'auto_create_values' => (int) Tools::getValue('auto_create_values'),
             'is_active' => (int) Tools::getValue('is_active'),
             'updated_at' => date('Y-m-d H:i:s'),
@@ -502,4 +500,322 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
         $this->content = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/attribute_value_mapping.tpl');
     }
+
+    // AJAX Methods
+    public function ajaxProcessSaveMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id = (int) Tools::getValue('id');
+            $prestashop_attribute_id = (int) Tools::getValue('prestashop_attribute_id');
+            $yuju_attribute_id = Tools::getValue('yuju_attribute_id');
+            $attribute_type = Tools::getValue('attribute_type');
+            $sync_direction = Tools::getValue('sync_direction');
+            $auto_create_values = (int) Tools::getValue('auto_create_values');
+            $is_active = (int) Tools::getValue('is_active');
+
+            // Validation
+            if (!$prestashop_attribute_id || !$yuju_attribute_id || !$attribute_type || !$sync_direction) {
+                throw new Exception($this->trans('All required fields must be filled.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            // Check if mapping already exists
+            $existing = Db::getInstance()->getRow('
+                SELECT id FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
+                WHERE prestashop_attribute_id = ' . (int) $prestashop_attribute_id . '
+                AND id != ' . (int) $id
+            );
+
+            if ($existing) {
+                throw new Exception($this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            // Get Yuju attribute name
+            $yuju_attribute_name = $this->getYujuAttributeName($yuju_attribute_id);
+            if (!$yuju_attribute_name) {
+                throw new Exception($this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            $data = [
+                'prestashop_attribute_id' => $prestashop_attribute_id,
+                'yuju_attribute_id' => pSQL($yuju_attribute_id),
+                'yuju_attribute_name' => pSQL($yuju_attribute_name),
+                'attribute_type' => pSQL($attribute_type),
+                'sync_direction' => pSQL($sync_direction),
+                'auto_create_values' => $auto_create_values,
+                'is_active' => $is_active,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+
+            if ($id) {
+                // Update
+                $result = Db::getInstance()->update(
+                    'yuju_attribute_mapping',
+                    $data,
+                    'id = ' . (int) $id
+                );
+                $message = $this->trans('Attribute mapping updated successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            } else {
+                // Insert
+                $data['created_at'] = date('Y-m-d H:i:s');
+                $result = Db::getInstance()->insert('yuju_attribute_mapping', $data);
+                $message = $this->trans('Attribute mapping created successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            }
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $message;
+                $this->logger->log('Attribute mapping saved: PS Attribute ' . $prestashop_attribute_id . ' -> Yuju Attribute ' . $yuju_attribute_id, 'info');
+            } else {
+                throw new Exception($this->trans('Error saving attribute mapping.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error saving attribute mapping: ' . $e->getMessage(), 'error');
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessGetMapping()
+    {
+        $response = ['success' => false, 'data' => null];
+
+        try {
+            $id = (int) Tools::getValue('id');
+            if (!$id) {
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            $mapping = Db::getInstance()->getRow('
+                SELECT * FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
+                WHERE id = ' . (int) $id
+            );
+
+            if ($mapping) {
+                $response['success'] = true;
+                $response['data'] = $mapping;
+            } else {
+                throw new Exception($this->trans('Mapping not found.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessDeleteMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id = (int) Tools::getValue('id');
+            if (!$id) {
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            $result = Db::getInstance()->delete(
+                'yuju_attribute_mapping',
+                'id = ' . (int) $id
+            );
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $this->trans('Attribute mapping deleted successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->logger->log('Attribute mapping deleted: ID ' . $id, 'info');
+            } else {
+                throw new Exception($this->trans('Error deleting attribute mapping.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error deleting attribute mapping: ' . $e->getMessage(), 'error');
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessToggleMapping()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $id = (int) Tools::getValue('id');
+            $status = (int) Tools::getValue('status');
+
+            if (!$id) {
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+
+            $result = Db::getInstance()->update(
+                'yuju_attribute_mapping',
+                ['is_active' => $status],
+                'id = ' . (int) $id
+            );
+
+            if ($result) {
+                $response['success'] = true;
+                $response['message'] = $status ? 
+                    $this->trans('Attribute mapping enabled.', array(), 'Modules.Prestashopyuju.Admin') :
+                    $this->trans('Attribute mapping disabled.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->logger->log('Attribute mapping status changed: ID ' . $id . ' -> ' . ($status ? 'enabled' : 'disabled'), 'info');
+            } else {
+                throw new Exception($this->trans('Error updating attribute mapping status.', array(), 'Modules.Prestashopyuju.Admin'));
+            }
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessRefreshYujuAttributes()
+    {
+        $response = ['success' => false, 'message' => '', 'data' => []];
+
+        try {
+            $this->syncYujuAttributes();
+            $attributes = $this->getYujuAttributes();
+            
+            $response['success'] = true;
+            $response['message'] = $this->trans('Yuju attributes refreshed successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            $response['data'] = $attributes;
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        die(json_encode($response));
+    }
+
+    // Helper Methods
+    protected function getAttributeMappings()
+    {
+        $mappings = [];
+        
+        $result = Db::getInstance()->executeS('
+            SELECT 
+                am.*,
+                agl.name as prestashop_attribute_name,
+                (
+                    SELECT COUNT(*)
+                    FROM ' . _DB_PREFIX_ . 'yuju_attribute_value_mapping avm
+                    WHERE avm.attribute_mapping_id = am.id
+                ) as value_mapping_count
+            FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping am
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group ag ON (am.prestashop_attribute_id = ag.id_attribute_group)
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON (ag.id_attribute_group = agl.id_attribute_group AND agl.id_lang = ' . (int) $this->context->language->id . ')
+            ORDER BY am.id DESC
+        ');
+        
+        if ($result) {
+            $mappings = $result;
+        }
+        
+        return $mappings;
+    }
+
+    protected function getPrestashopAttributes()
+    {
+        $attributes = [];
+        $attribute_groups = AttributeGroup::getAttributesGroups($this->context->language->id);
+        
+        foreach ($attribute_groups as $group) {
+            $attributes[] = [
+                'id' => $group['id_attribute_group'],
+                'name' => $group['name'],
+            ];
+        }
+        
+        return $attributes;
+    }
+
+    protected function getAttributeTypes()
+    {
+        return [
+            ['id' => 'select', 'name' => $this->trans('Seleccionar', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'number', 'name' => $this->trans('Número', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Prestashopyuju.Admin')],
+        ];
+    }
+
+    protected function getPrestashopAttributeGroups()
+    {
+        $attribute_groups = AttributeGroup::getAttributesGroups($this->context->language->id);
+        $groups = [];
+        
+        foreach ($attribute_groups as $group) {
+            $groups[] = [
+                'id' => $group['id_attribute_group'],
+                'name' => $group['name'],
+            ];
+        }
+        
+        return $groups;
+    }
+
+    protected function getYujuAttributeGroups()
+    {
+        // Since Yuju attributes don't have explicit groups like PrestaShop,
+        // we'll create virtual groups based on attribute types or use a default group
+        $groups = [];
+        
+        $result = Db::getInstance()->executeS('
+            SELECT DISTINCT type
+            FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+            ORDER BY type
+        ');
+        
+        if ($result) {
+            foreach ($result as $row) {
+                $groups[] = [
+                    'id' => $row['type'],
+                    'name' => ucfirst($row['type']) . ' Attributes',
+                ];
+            }
+        }
+        
+        // Add a default "All" group
+        array_unshift($groups, [
+            'id' => 'all',
+            'name' => 'All Attributes',
+        ]);
+        
+        return $groups;
+    }
+
+    protected function getFieldTypes()
+    {
+        return [
+            ['id' => 'string', 'name' => $this->trans('Cadena de texto', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'integer', 'name' => $this->trans('Número entero', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'decimal', 'name' => $this->trans('Número decimal', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'date', 'name' => $this->trans('Fecha', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'datetime', 'name' => $this->trans('Fecha y Hora', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'html', 'name' => $this->trans('HTML', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'json', 'name' => $this->trans('JSON', array(), 'Modules.Prestashopyuju.Admin')],
+        ];
+    }
+
+    protected function getTransformationRules()
+    {
+        return [
+            ['id' => 'none', 'name' => $this->trans('Ninguna', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'uppercase', 'name' => $this->trans('Mayúsculas', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'lowercase', 'name' => $this->trans('Minúsculas', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'capitalize', 'name' => $this->trans('Capitalizar', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'strip_html', 'name' => $this->trans('Eliminar HTML', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'strip_tags', 'name' => $this->trans('Eliminar Etiquetas', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'trim', 'name' => $this->trans('Recortar Espacios', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'number_format', 'name' => $this->trans('Formato de Número', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'date_format', 'name' => $this->trans('Formato de Fecha', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'boolean_convert', 'name' => $this->trans('Convertir a Booleano', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'custom', 'name' => $this->trans('Código PHP Personalizado', array(), 'Modules.Prestashopyuju.Admin')],
+        ];
+    }
+
+
 }

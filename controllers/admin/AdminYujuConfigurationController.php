@@ -125,6 +125,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $this->processOAuthConfiguration();
         } elseif (Tools::isSubmit('submitGeneralConfig')) {
             $this->processGeneralConfiguration();
+        } elseif (Tools::isSubmit('submitConfiguration')) {
+            $this->processMainConfiguration();
         } elseif (Tools::isSubmit('testConnection')) {
             $this->testApiConnection();
         } elseif (Tools::isSubmit('revokeToken')) {
@@ -573,6 +575,65 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 WHERE entity_type = \'orders\' AND DATE(start_time) = CURDATE()';
 
         return (int) Db::getInstance()->getValue($sql);
+    }
+
+    /**
+     * Procesa la configuración principal del módulo.
+     */
+    private function processMainConfiguration()
+    {
+        $configs = [
+            'YUJU_ENVIRONMENT' => Tools::getValue('YUJU_ENVIRONMENT'),
+            'YUJU_CLIENT_ID' => Tools::getValue('YUJU_CLIENT_ID'),
+            'YUJU_CLIENT_SECRET' => Tools::getValue('YUJU_CLIENT_SECRET'),
+            'YUJU_AUTO_SYNC' => (int) Tools::getValue('YUJU_AUTO_SYNC'),
+            'YUJU_SYNC_FREQUENCY' => (int) Tools::getValue('YUJU_SYNC_FREQUENCY'),
+            'YUJU_BATCH_SIZE' => (int) Tools::getValue('YUJU_BATCH_SIZE'),
+            'YUJU_EMAIL_NOTIFICATIONS' => (int) Tools::getValue('YUJU_EMAIL_NOTIFICATIONS'),
+            'YUJU_NOTIFICATION_EMAIL' => Tools::getValue('YUJU_NOTIFICATION_EMAIL'),
+            'YUJU_WEBHOOK_SECRET' => Tools::getValue('YUJU_WEBHOOK_SECRET'),
+            'YUJU_LOG_LEVEL' => Tools::getValue('YUJU_LOG_LEVEL'),
+            'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
+        ];
+
+        // Validaciones básicas
+        if (empty($configs['YUJU_CLIENT_ID']) || empty($configs['YUJU_CLIENT_SECRET'])) {
+            $this->errors[] = $this->trans('Client ID y Client Secret son requeridos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 1000) {
+            $this->errors[] = $this->trans('El tamaño del lote debe estar entre 1 y 1000', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_SYNC_FREQUENCY'] < 60) {
+            $this->errors[] = $this->trans('La frecuencia mínima es de 60 segundos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_EMAIL_NOTIFICATIONS'] && empty($configs['YUJU_NOTIFICATION_EMAIL'])) {
+            $this->errors[] = $this->trans('Email de notificación es requerido si las notificaciones están habilitadas', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        try {
+            foreach ($configs as $key => $value) {
+                Configuration::updateValue($key, $value);
+            }
+
+            $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
+
+            $logger = new YujuLogger();
+            $logger->info('Configuración principal actualizada', [
+                'environment' => $configs['YUJU_ENVIRONMENT'],
+                'client_id' => substr($configs['YUJU_CLIENT_ID'], 0, 8) . '...',
+                'auto_sync' => $configs['YUJU_AUTO_SYNC'],
+                'batch_size' => $configs['YUJU_BATCH_SIZE'],
+            ]);
+        } catch (Exception $e) {
+            $this->errors[] = $this->trans('Error al guardar configuración: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+        }
     }
 
     private function getLastSyncTime()
