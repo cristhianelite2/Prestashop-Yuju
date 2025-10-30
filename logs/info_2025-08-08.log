@@ -1,0 +1,2 @@
+[2025-08-08 01:39:50] INFO: Iniciando petición de token a Yuju | Context: {"url":"https:\/\/api.tp.yuju.io\/auth-generate-token","client_id":"test_client_id","has_secret_key":true,"has_code":true}
+[2025-08-08 01:39:51] INFO: Respuesta recibida de Yuju | Context: {"http_code":404,"response_length":34,"has_curl_error":false}

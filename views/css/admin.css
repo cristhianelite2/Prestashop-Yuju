@@ -30,7 +30,7 @@
 
 .yuju-module .panel-heading {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    color: white ;
     border-radius: 4px 4px 0 0;
 }
 
@@ -62,15 +62,19 @@
 }
 
 .yuju-sidebar .panel-heading {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #f8f9fa;
+    color: #dddedf;
+    border: 1px solid #dee2e6;
+    border-bottom: 1px solid #dee2e6;
     border-radius: 4px 4px 0 0;
     padding: 12px 15px;
     font-weight: 600;
+    font-size: 14px;
 }
 
 .yuju-sidebar .panel-heading i {
     margin-right: 8px;
+    color: #dddedf;
 }
 
 .yuju-sidebar .panel-body {

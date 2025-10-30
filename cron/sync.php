@@ -24,6 +24,7 @@ require_once dirname(__FILE__) . '/../../../init.php';
 // Include required classes
 require_once dirname(__FILE__) . '/../classes/YujuSyncManager.php';
 require_once dirname(__FILE__) . '/../classes/YujuLogger.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
 // Set execution time limit
 set_time_limit(0);
@@ -57,8 +58,8 @@ try {
     }
 
     // Check sync frequency
-    $last_sync = Configuration::get('YUJU_LAST_CRON_SYNC');
-    $sync_frequency = (int) Configuration::get('YUJU_SYNC_FREQUENCY', 3600); // Default 1 hour
+    $last_sync = YujuConfig::get('YUJU_LAST_CRON_SYNC');
+    $sync_frequency = (int) YujuConfig::get('YUJU_SYNC_FREQUENCY', 3600); // Default 1 hour
 
     if (!$force && $last_sync && (time() - strtotime($last_sync)) < $sync_frequency) {
         $logger->log('Sync frequency not reached, skipping cron execution', 'info');
@@ -66,7 +67,7 @@ try {
     }
 
     // Update last sync time
-    Configuration::updateValue('YUJU_LAST_CRON_SYNC', date('Y-m-d H:i:s'));
+    YujuConfig::set('YUJU_LAST_CRON_SYNC', date('Y-m-d H:i:s'));
 
     // Perform sync based on type
     $results = [];
@@ -99,7 +100,7 @@ try {
     // Send notification email if there were errors
     $total_errors = array_sum(array_column($results, 'error_count'));
 
-    if ($total_errors > 0 && Configuration::get('YUJU_ENABLE_EMAIL_NOTIFICATIONS')) {
+    if ($total_errors > 0 && YujuConfig::get('YUJU_ENABLE_EMAIL_NOTIFICATIONS')) {
         sendErrorNotification($results, $total_errors);
     }
 
@@ -109,7 +110,7 @@ try {
 
     // Send error notification
 
-    if (Configuration::get('YUJU_ENABLE_EMAIL_NOTIFICATIONS')) {
+    if (YujuConfig::get('YUJU_ENABLE_EMAIL_NOTIFICATIONS')) {
         sendCriticalErrorNotification($e);
     }
 
@@ -121,7 +122,7 @@ try {
  */
 function sendErrorNotification($results, $total_errors)
 {
-    $notification_email = Configuration::get('YUJU_NOTIFICATION_EMAIL');
+    $notification_email = YujuConfig::get('YUJU_NOTIFICATION_EMAIL');
 
     if (empty($notification_email)) {
         return;
@@ -157,7 +158,7 @@ function sendErrorNotification($results, $total_errors)
  */
 function sendCriticalErrorNotification($exception)
 {
-    $notification_email = Configuration::get('YUJU_NOTIFICATION_EMAIL');
+    $notification_email = YujuConfig::get('YUJU_NOTIFICATION_EMAIL');
 
     if (empty($notification_email)) {
         return;

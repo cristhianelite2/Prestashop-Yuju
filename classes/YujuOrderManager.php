@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOrderManager
 {
@@ -645,7 +646,7 @@ class YujuOrderManager
 
     protected function generateOrderReference($order_data = null)
     {
-        $prefix = Configuration::get('YUJU_ORDER_PREFIX', null) ?: 'YJ';
+        $prefix = YujuConfig::get('YUJU_ORDER_PREFIX', null) ?: 'YJ';
         $timestamp = time();
         $random = mt_rand(1000, 9999);
 

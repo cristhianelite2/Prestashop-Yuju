@@ -302,7 +302,7 @@ function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function() {
         showSuccessMessage('URL copiada al portapapeles');
     }, function(err) {
-        console.error('Could not copy text: ', err);
+
     });
 }
 </script>

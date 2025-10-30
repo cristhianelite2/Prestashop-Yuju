@@ -21,11 +21,15 @@ if (!defined('_PS_VERSION_')) {
 }
 
 require_once dirname(__FILE__) . '/YujuLogger.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
-class YujuOAuth
+
+class YujuOAuth extends ObjectModel
 {
     public const SANDBOX_AUTH_URL = 'https://auth-sandbox.yuju.io';
     public const PRODUCTION_AUTH_URL = 'https://auth.yuju.io';
+    private const TOKEN_ENDPOINT = 'https://api.tp.yuju.io/auth-generate-token';
+    private const TOKEN_EXPIRY_BUFFER = 300; // 5 minutos
 
     private $auth_url;
     private $client_id;
@@ -35,11 +39,11 @@ class YujuOAuth
 
     public function __construct()
     {
-        $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
+        $environment = YujuConfig::get('YUJU_ENVIRONMENT', 'sandbox');
         $this->auth_url = ($environment === 'production') ? self::PRODUCTION_AUTH_URL : self::SANDBOX_AUTH_URL;
-
-        $this->client_id = Configuration::get('YUJU_CLIENT_ID');
-        $this->client_secret = Configuration::get('YUJU_CLIENT_SECRET');
+        
+        $this->client_id = YujuConfig::get('YUJU_CLIENT_ID');
+        $this->client_secret = YujuConfig::get('YUJU_CLIENT_SECRET');
         $this->redirect_uri = $this->getRedirectUri();
         $this->logger = new YujuLogger();
     }
@@ -53,31 +57,25 @@ class YujuOAuth
             throw new Exception('Client ID no configurado');
         }
 
-        // Generar o usar el estado proporcionado
         $oauth_state = $state ?: $this->generateState();
-        
-        // Guardar el estado para validación posterior
-        Configuration::updateValue('YUJU_OAUTH_STATE', $oauth_state);
+        YujuConfig::set('YUJU_OAUTH_STATE', $oauth_state);
 
-        // Según la documentación de Yuju, la autorización se hace directamente
-        // redirigiendo a la URL de autorización con los parámetros necesarios
         $params = [
             'client_id' => $this->client_id,
             'redirect_uri' => $this->redirect_uri,
             'state' => $oauth_state,
         ];
 
-        // URL de autorización según documentación de Yuju
-        return 'https://api.tp.yuju.io/auth-generate-token?' . http_build_query($params);
+        return self::TOKEN_ENDPOINT . '?' . http_build_query($params);
     }
 
     /**
-     * Intercambia el código de autorización por un access token usando la API de Yuju.
+     * Intercambia el código de autorización por un access token.
      */
     public function exchangeCodeForToken($code, $state = null)
     {
-        if (!$this->client_id || !$this->client_secret) {
-            throw new Exception('Credenciales OAuth no configuradas');
+        if (!$this->isConfigured()) {
+            return $this->createErrorResponse('Credenciales OAuth no configuradas');
         }
 
         $data = [
@@ -86,17 +84,26 @@ class YujuOAuth
             'code' => $code,
         ];
 
-        $response = $this->makeYujuTokenRequest($data);
+        try {
+            $response = $this->makeTokenRequest($data);
 
-        if ($response['success']) {
-            $this->saveTokenData($response['data']);
-            $this->logger->log('info', 'OAuth token obtenido exitosamente', ['state' => $state]);
+            if ($response['success']) {
+                $this->saveTokenData($response['data']);
+                $this->logger->log('info', 'OAuth token obtenido exitosamente');
+                
+                return [
+                    'success' => true,
+                    'message' => 'Token obtenido exitosamente',
+                    'data' => $response['data']
+                ];
+            }
 
-            return true;
-        } else {
             $this->logger->log('error', 'Error al obtener OAuth token', $response);
+            return $this->createErrorResponse($response['message'] ?? 'Error desconocido al obtener token');
 
-            throw new Exception('Error al obtener token: ' . $response['message']);
+        } catch (Exception $e) {
+            $this->logger->log('error', 'Excepción al obtener OAuth token', ['error' => $e->getMessage()]);
+            return $this->createErrorResponse('Error al obtener token: ' . $e->getMessage());
         }
     }
 
@@ -118,18 +125,72 @@ class YujuOAuth
             'refresh_token' => $oauth_data['refresh_token'],
         ];
 
-        $response = $this->makeTokenRequest($data);
+        $response = $this->makeLegacyTokenRequest($data);
 
         if ($response['success']) {
             $this->saveTokenData($response['data']);
             $this->logger->log('info', 'OAuth token refrescado exitosamente');
-
             return true;
-        } else {
-            $this->logger->log('error', 'Error al refrescar OAuth token', $response);
-
-            throw new Exception('Error al refrescar token: ' . $response['message']);
         }
+
+        $this->logger->log('error', 'Error al refrescar OAuth token', $response);
+        throw new Exception('Error al refrescar token: ' . $response['message']);
+    }
+
+    /**
+     * Intenta refrescar el token automáticamente cuando expire o falle.
+     * Nota: La API de Yuju no usa refresh tokens tradicionales, por lo que
+     * esta función notifica al administrador que debe reconectar.
+     */
+    public function attemptTokenRefresh()
+    {
+        $this->logger->log('warning', 'Token expirado o inválido. La API de Yuju requiere reconexión manual.');
+        
+        // Marcar el token como expirado
+        $oauth_data = $this->getStoredTokenData();
+        if ($oauth_data) {
+            $table_name = 'yuju_oauth_tokens';
+            Db::getInstance()->update(
+                $table_name,
+                [
+                    'token_expires' => date('Y-m-d H:i:s', time() - 3600),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ],
+                'id = ' . (int) $oauth_data['id']
+            );
+        }
+        
+        // Registrar evento para notificar al administrador
+        $this->logger->log('error', 'Token expirado. Se requiere reconexión en Configuración > Aplicaciones de Yuju');
+        
+        return false;
+    }
+
+    /**
+     * Verifica si el token necesita ser renovado pronto.
+     * @param int $threshold_seconds Segundos antes de expiración para considerar renovación
+     * @return bool
+     */
+    public function needsRenewal($threshold_seconds = 86400)
+    {
+        $oauth_data = $this->getStoredTokenData();
+        
+        if (empty($oauth_data) || !is_array($oauth_data)) {
+            return true;
+        }
+
+        $expires_field = $oauth_data['token_expires'] ?? $oauth_data['expires_at'] ?? null;
+        
+        if (!$expires_field) {
+            return false;
+        }
+
+        $expires_at = strtotime($expires_field);
+        if ($expires_at === false) {
+            return true;
+        }
+
+        return (time() + $threshold_seconds) >= $expires_at;
     }
 
     /**
@@ -137,53 +198,66 @@ class YujuOAuth
      */
     public function getValidAccessToken()
     {
-        $oauth_data = $this->getStoredTokenData();
-
-        if (!$oauth_data || !$oauth_data['access_token']) {
-            return null;
-        }
-
-        // Verificar si el token ha expirado
-        if ($this->isTokenExpired($oauth_data)) {
-            try {
-                $this->refreshToken();
-                $oauth_data = $this->getStoredTokenData();
-            } catch (Exception $e) {
-                $this->logger->log('error', 'No se pudo refrescar el token', ['error' => $e->getMessage()]);
-
+        try {
+            $oauth_data = $this->getStoredTokenData();
+            
+            if (empty($oauth_data) || empty($oauth_data['access_token'])) {
+                $this->logger->log('error', 'No se encontraron datos de OAuth válidos');
                 return null;
             }
-        }
 
-        return $oauth_data['access_token'];
+            if ($this->isTokenExpired($oauth_data)) {
+                $this->logger->log('info', 'Token expirado, intentando refrescar');
+                try {
+                    $this->refreshToken();
+                    $oauth_data = $this->getStoredTokenData();
+                } catch (Exception $e) {
+                    $this->logger->log('error', 'No se pudo refrescar el token', ['error' => $e->getMessage()]);
+                    return null;
+                }
+            }
+
+            return $oauth_data['access_token'];
+            
+        } catch (Exception $e) {
+            $this->logger->log('error', 'Error obteniendo token válido', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 
     /**
      * Verifica si el token ha expirado.
      */
-    private function isTokenExpired($oauth_data)
+    public function isTokenExpired($oauth_data)
     {
-        if (!isset($oauth_data['token_expires'])) {
+        if (empty($oauth_data) || !is_array($oauth_data)) {
             return true;
         }
 
-        $expires_at = strtotime($oauth_data['token_expires']);
-        $now = time();
+        $expires_field = $oauth_data['token_expires'] ?? $oauth_data['expires_at'] ?? null;
+        
+        if (!$expires_field) {
+            return false; // Sin fecha de expiración, asumimos válido
+        }
 
-        // Considerar expirado si faltan menos de 5 minutos
-        return ($expires_at - $now) < 300;
+        $expires_at = strtotime($expires_field);
+        if ($expires_at === false) {
+            return true;
+        }
+
+        return (time() + self::TOKEN_EXPIRY_BUFFER) >= $expires_at;
     }
 
     /**
      * Realiza una petición para obtener token usando el endpoint específico de Yuju.
      */
-    private function makeYujuTokenRequest($data)
+    protected function makeTokenRequest($data)
     {
-        $url = 'https://api.tp.yuju.io/auth-generate-token';
+        $this->logger->log('info', 'Iniciando petición de token a Yuju');
 
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
+            CURLOPT_URL => self::TOKEN_ENDPOINT,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($data),
             CURLOPT_RETURNTRANSFER => true,
@@ -202,45 +276,35 @@ class YujuOAuth
         curl_close($ch);
 
         if ($curl_error) {
-            return [
-                'success' => false,
-                'message' => 'cURL Error: ' . $curl_error,
-            ];
+            return $this->createErrorResponse('cURL Error: ' . $curl_error);
         }
 
         $response_data = json_decode($response_body, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return $this->createErrorResponse('Error al decodificar respuesta JSON');
+        }
 
-        if ($http_code >= 200 && $http_code < 300) {
-            if (isset($response_data['token'])) {
-                return [
-                    'success' => true,
-                    'data' => [
-                        'access_token' => $response_data['token'],
-                        'token_type' => 'Bearer',
-                        'expires_in' => 3600, // Default 1 hour
-                        'scope' => 'read write',
-                    ],
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => 'Token no encontrado en la respuesta',
-                ];
-            }
-        } else {
-            $error_message = isset($response_data['message']) ? $response_data['message'] : 'Error desconocido';
+        if ($http_code >= 200 && $http_code < 300 && isset($response_data['token'])) {
             return [
-                'success' => false,
-                'message' => $error_message,
-                'http_code' => $http_code,
+                'success' => true,
+                'data' => [
+                    'access_token' => $response_data['token'],
+                    'token_type' => 'Bearer',
+                    'expires_in' => 3600,
+                    'scope' => 'read write',
+                ],
             ];
         }
+
+        $error_message = $response_data['message'] ?? 'Error desconocido';
+        return $this->createErrorResponse($error_message, $http_code);
     }
 
     /**
-     * Realiza una petición para obtener o refrescar tokens (método legacy).
+     * Realiza una petición para refrescar tokens (método legacy).
      */
-    private function makeTokenRequest($data)
+    protected function makeLegacyTokenRequest($data)
     {
         $url = $this->auth_url . '/oauth/token';
 
@@ -255,8 +319,6 @@ class YujuOAuth
                 'Content-Type: application/x-www-form-urlencoded',
                 'Accept: application/json',
             ],
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
         ]);
 
         $response_body = curl_exec($ch);
@@ -265,117 +327,122 @@ class YujuOAuth
         curl_close($ch);
 
         if ($curl_error) {
-            return [
-                'success' => false,
-                'error' => 'CURL_ERROR',
-                'message' => $curl_error,
-            ];
+            return $this->createErrorResponse($curl_error);
         }
 
         $decoded_response = json_decode($response_body, true);
-
         if (json_last_error() !== JSON_ERROR_NONE) {
-            return [
-                'success' => false,
-                'error' => 'JSON_DECODE_ERROR',
-                'message' => 'Invalid JSON response',
-            ];
+            return $this->createErrorResponse('Invalid JSON response');
         }
 
         $success = ($http_code >= 200 && $http_code < 300);
-
+        
         return [
             'success' => $success,
-            'http_code' => $http_code,
             'data' => $decoded_response,
-            'error' => $success ? null : (isset($decoded_response['error']) ? $decoded_response['error'] : 'HTTP_' . $http_code),
-            'message' => $success ? null : (isset($decoded_response['error_description']) ? $decoded_response['error_description'] : 'HTTP Error ' . $http_code),
+            'message' => $success ? null : ($decoded_response['error_description'] ?? 'HTTP Error ' . $http_code),
         ];
     }
 
     /**
      * Guarda los datos del token en la base de datos.
      */
-    private function saveTokenData($token_data)
+    protected function saveTokenData($token_data)
     {
-        $expires_at = null;
-
-        if (isset($token_data['expires_in'])) {
-            $expires_at = date('Y-m-d H:i:s', time() + (int) $token_data['expires_in']);
-        }
+        // Configurar fecha de expiración muy lejana (10 años) para que nunca expire
+        // Yuju envía expires_in pero queremos mantener el token activo permanentemente
+        $expires_at = date('Y-m-d H:i:s', time() + (10 * 365 * 24 * 3600)); // 10 años
 
         $oauth_record = $this->getStoredTokenData();
+        $table_name = $this->getOAuthTableName();
 
         $data = [
             'client_id' => $this->client_id,
             'client_secret' => $this->client_secret,
             'access_token' => $token_data['access_token'],
-            'refresh_token' => isset($token_data['refresh_token']) ? $token_data['refresh_token'] : ($oauth_record ? $oauth_record['refresh_token'] : null),
+            'refresh_token' => $token_data['refresh_token'] ?? ($oauth_record['refresh_token'] ?? null),
             'token_expires' => $expires_at,
-            'scope' => isset($token_data['scope']) ? $token_data['scope'] : null,
+            'scope' => $token_data['scope'] ?? null,
             'updated_at' => date('Y-m-d H:i:s'),
         ];
 
         if ($oauth_record) {
-            // Actualizar registro existente
             $result = Db::getInstance()->update(
-                'yuju_oauth_tokens',
+                str_replace(_DB_PREFIX_, '', $table_name),
                 $data,
                 'id = ' . (int) $oauth_record['id']
             );
         } else {
-            // Crear nuevo registro
             $data['created_at'] = date('Y-m-d H:i:s');
-            $result = Db::getInstance()->insert('yuju_oauth_tokens', $data);
+            $result = Db::getInstance()->insert(str_replace(_DB_PREFIX_, '', $table_name), $data);
         }
 
         if (!$result) {
             throw new Exception('Error al guardar datos de OAuth en la base de datos');
         }
+        
+        $this->logger->log('info', 'Token guardado con expiración extendida', [
+            'expires_at' => $expires_at,
+            'note' => 'Token configurado para no expirar (10 años)'
+        ]);
     }
 
     /**
      * Obtiene los datos del token almacenados.
      */
-    private function getStoredTokenData()
+    public function getStoredTokenData()
     {
         try {
-            // Verificar si la tabla existe
-            $tableExists = Db::getInstance()->executeS(
-                "SHOW TABLES LIKE '" . _DB_PREFIX_ . "yuju_oauth_tokens'"
-            );
-            
-            if (empty($tableExists)) {
-                // Si la tabla no existe, retornar null
+            $table_name = $this->getOAuthTableName();
+            if (!$table_name) {
                 return null;
             }
+            $table_name = 'yuju_oauth_tokens';
+            //$sql = "SELECT * FROM {$table_name} ORDER BY id DESC LIMIT 1";
+            $subquery = "SELECT MAX(id) as max_id FROM `" . _DB_PREFIX_ . pSQL($table_name) . "`";
+            $maxIdResult = Db::getInstance()->getRow($subquery);
             
-            $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_oauth_tokens` ORDER BY `id` DESC LIMIT 1';
+            if (!$maxIdResult || !$maxIdResult['max_id']) {
+                $this->logger->log('debug', 'No records found in table', [
+                    'table' => $table_name
+                ]);
+                return false;
+            }
             
-            return Db::getInstance()->getRow($sql);
+            $sql = "SELECT * FROM `" . _DB_PREFIX_ . pSQL($table_name) . "` WHERE id = " . (int)$maxIdResult['max_id'];
+            $this->logger->log('debug', 'Executing SQL query ', [
+                'query' => $sql,
+                'table' => $table_name
+            ]);
+            $result = Db::getInstance()->getRow($sql);
+            $this->logger->log('debug', 'Query result', [
+                'result' => $result ? 'Found record' : 'No records found'
+            ]);
+            return $result;
+            
         } catch (Exception $e) {
-            // Log del error y retornar null
-            PrestaShopLogger::addLog('Error in getStoredTokenData: ' . $e->getMessage(), 3);
+            $this->logger->log('error', 'Error en getStoredTokenData', ['error' => $e->getMessage()]);
             return null;
         }
     }
 
     /**
-     * Genera un estado aleatorio para OAuth.
+     * Obtiene el nombre de la tabla OAuth disponible.
      */
-    private function generateState()
+    private function getOAuthTableName()
     {
-        return bin2hex(random_bytes(16));
-    }
+        $possible_tables = [
+            _DB_PREFIX_ . 'yuju_oauth_tokens',
+        ];
 
-    /**
-     * Obtiene la URI de redirección.
-     */
-    private function getRedirectUri()
-    {
-        $link = new Link();
+        foreach ($possible_tables as $table) {
+            $check_sql = "SHOW TABLES LIKE '{$table}'";
+            if (!empty(Db::getInstance()->executeS($check_sql))) {
+                return $table;
+            }
+        }
 
-        return $link->getModuleLink('prestashopyuju', 'oauth', [], true);
+        return null;
     }
 
     /**
@@ -385,40 +452,29 @@ class YujuOAuth
     {
         $oauth_data = $this->getStoredTokenData();
 
-        if (!$oauth_data || !$oauth_data['access_token']) {
-            return true; // No hay token que revocar
+        if ($oauth_data && $oauth_data['access_token']) {
+            $data = [
+                'token' => $oauth_data['access_token'],
+                'client_id' => $this->client_id,
+                'client_secret' => $this->client_secret,
+            ];
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $this->auth_url . '/oauth/revoke',
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query($data),
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 30,
+            ]);
+
+            curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
         }
 
-        $data = [
-            'token' => $oauth_data['access_token'],
-            'client_id' => $this->client_id,
-            'client_secret' => $this->client_secret,
-        ];
-
-        $url = $this->auth_url . '/oauth/revoke';
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query($data),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/x-www-form-urlencoded',
-            ],
-        ]);
-
-        curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        // Eliminar datos locales independientemente del resultado
         $this->clearStoredTokenData();
-
-        $this->logger->log('info', 'Token OAuth revocado', ['http_code' => $http_code]);
-
-        return $http_code >= 200 && $http_code < 300;
+        return true;
     }
 
     /**
@@ -451,15 +507,16 @@ class YujuOAuth
     public function getOAuthStatus()
     {
         $oauth_data = $this->getStoredTokenData();
+        $has_token = !empty($oauth_data) && !empty($oauth_data['access_token']);
 
         return [
             'configured' => $this->isConfigured(),
-            'has_token' => !empty($oauth_data) && !empty($oauth_data['access_token']),
+            'has_token' => $has_token,
             'token_valid' => $this->hasValidToken(),
             'is_connected' => $this->hasValidToken(),
-            'token_expires' => $oauth_data && isset($oauth_data['token_expires']) ? $oauth_data['token_expires'] : null,
-            'scope' => $oauth_data && isset($oauth_data['scope']) ? $oauth_data['scope'] : null,
-            'last_updated' => $oauth_data && isset($oauth_data['updated_at']) ? $oauth_data['updated_at'] : null,
+            'token_expires' => $oauth_data['token_expires'] ?? null,
+            'scope' => $oauth_data['scope'] ?? null,
+            'last_updated' => $oauth_data['updated_at'] ?? null,
         ];
     }
 
@@ -471,12 +528,10 @@ class YujuOAuth
         $this->client_id = $client_id;
         $this->client_secret = $client_secret;
 
-        Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
-        Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
+        YujuConfig::set('YUJU_CLIENT_ID', $client_id);
+        YujuConfig::set('YUJU_CLIENT_SECRET', $client_secret);
 
-        // Si las credenciales cambian, limpiar tokens existentes
         $this->clearStoredTokenData();
-
         $this->logger->log('info', 'Credenciales OAuth actualizadas');
     }
 
@@ -485,7 +540,11 @@ class YujuOAuth
      */
     public function validateState($received_state, $expected_state)
     {
-        return hash_equals($expected_state, $received_state);
+        return is_string($received_state) && 
+               is_string($expected_state) && 
+               !empty($received_state) && 
+               !empty($expected_state) &&
+               hash_equals($expected_state, $received_state);
     }
 
     /**
@@ -500,5 +559,32 @@ class YujuOAuth
             'orders' => 'Gestión de órdenes',
             'webhooks' => 'Gestión de webhooks',
         ];
+    }
+
+    // Métodos auxiliares privados
+
+    private function generateState()
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function getRedirectUri()
+    {
+        $link = new Link();
+        return $link->getModuleLink('prestashopyuju', 'oauth', [], true);
+    }
+
+    private function createErrorResponse($message, $http_code = null)
+    {
+        $response = [
+            'success' => false,
+            'message' => $message
+        ];
+        
+        if ($http_code) {
+            $response['http_code'] = $http_code;
+        }
+        
+        return $response;
     }
 }

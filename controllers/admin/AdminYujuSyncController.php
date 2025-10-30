@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSyncManager.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/config/config.php';
 
 class AdminYujuSyncController extends ModuleAdminController
 {
@@ -160,8 +161,8 @@ class AdminYujuSyncController extends ModuleAdminController
         $this->context->smarty->assign([
         'sync_stats' => $sync_stats,
         'is_sync_running' => $is_sync_running,
-        'last_sync_date' => Configuration::get('YUJU_LAST_SYNC_DATE'),
-        'auto_sync_enabled' => Configuration::get('YUJU_AUTO_SYNC_ENABLED'),
+        'last_sync_date' => YujuConfig::get('YUJU_LAST_SYNC_DATE'),
+        'auto_sync_enabled' => YujuConfig::get('YUJU_AUTO_SYNC_ENABLED'),
         ]);
 
         $sync_info = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/sync_info.tpl');
@@ -473,7 +474,7 @@ class AdminYujuSyncController extends ModuleAdminController
 
         $response = [
         'is_running' => $is_running,
-        'last_sync' => Configuration::get('YUJU_LAST_SYNC_DATE'),
+        'last_sync' => YujuConfig::get('YUJU_LAST_SYNC_DATE'),
         'stats' => $stats,
         ];
 

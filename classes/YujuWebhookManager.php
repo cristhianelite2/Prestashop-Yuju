@@ -24,6 +24,7 @@ require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuOrderManager.php';
 require_once dirname(__FILE__) . '/YujuProductManager.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuWebhookManager
 {
@@ -39,7 +40,7 @@ class YujuWebhookManager
         $this->logger = new YujuLogger();
         $this->order_manager = new YujuOrderManager();
         $this->product_manager = new YujuProductManager();
-        $this->webhook_secret = Configuration::get('YUJU_WEBHOOK_SECRET');
+        $this->webhook_secret = YujuConfig::get('YUJU_WEBHOOK_SECRET');
     }
 
     /**

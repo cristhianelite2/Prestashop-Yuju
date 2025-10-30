@@ -39,7 +39,11 @@ var YujuAdmin = {
      * Initialize the admin interface
      */
     init: function(config) {
+        // Merge config and ensure access_token is set from ps_yuju_oauth_tokens
         this.config = Object.assign(this.config, config);
+        if (config.oauth_token && config.oauth_token.access_token) {
+            this.config.token = config.oauth_token.access_token;
+        }
         this.bindEvents();
         this.initTooltips();
         this.initCopyButtons();
@@ -64,10 +68,16 @@ var YujuAdmin = {
             self.testConnectivity();
         });
 
-        // OAuth Authorization button
-        $(document).on('click', '#yuju-authorize', function(e) {
+        // Test Products button
+        $(document).on('click', '#yuju-test-products', function(e) {
             e.preventDefault();
-            self.authorizeOAuth();
+            self.testProducts();
+        });
+
+        // OAuth Authorization button
+        $(document).on('click', '#yuju-oauth-authorize', function(e) {
+            e.preventDefault();
+            self.startOAuthAuthorization();
         });
 
         // Sync buttons
@@ -188,16 +198,37 @@ var YujuAdmin = {
     },
 
     /**
-     * Test connectivity and show stores
+     * Test connectivity with webhook-sub endpoint
      */
     testConnectivity: function() {
+        console.log('🔄 Iniciando testConnectivity');
         var self = this;
         var $button = $('#yuju-test-connectivity');
         var $result = $('#connectivity-result');
 
-        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Probando...');
-        $result.hide();
+        console.log('📋 Elementos DOM obtenidos:', {
+            button: $button.length,
+            result: $result.length,
+            ajaxUrl: this.config.ajaxUrl,
+            token: this.config.token ? 'presente' : 'ausente'
+        });
 
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Probando...');
+        
+        // Show initial progress message
+        var progressHtml = '<div class="alert alert-info"><strong>Probando conectividad con webhook-sub endpoint...</strong><br>';
+        progressHtml += '<div id="progress-steps"></div></div>';
+        $result.html(progressHtml).show();
+         
+        var $progressSteps = $('#progress-steps');
+        
+        // Step 1: Obtener token de acceso
+        $progressSteps.append('<div><i class="icon-refresh yuju-spin"></i> Obteniendo token de acceso...</div>');
+        
+        console.log('🌐 Enviando petición AJAX para obtener token');
+        
+        // Primero obtener el token del servidor
+         
         $.ajax({
             url: this.config.ajaxUrl,
             type: 'POST',
@@ -208,123 +239,369 @@ var YujuAdmin = {
             },
             dataType: 'json',
             success: function(response) {
-                var html = '';
+                console.log('✅ Respuesta del servidor recibida:', response);
                 
-                if (response.success) {
-                    html += '<strong>Conexión exitosa!</strong><br>';
+                if (response.success && response.data) {
+                    console.log('🔑 Conectividad probada desde el servidor:', {
+                        endpoint: response.data.endpoint,
+                        httpCode: response.data.http_code,
+                        statusText: response.data.status_text
+                    });
+    
+                    // Update first step as completed
+                    $progressSteps.find('div:first').html('✓ Token de acceso obtenido');
+                    $progressSteps.append('<div>✓ Petición GET completada desde el servidor</div>');
                     
-                    // Show debug info
-                    if (response.data && response.data.debug_info) {
-                        var debug = response.data.debug_info;
-                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
-                        html += '<strong>Información de Debug:</strong><br>';
+                    console.log('📄 Procesando respuesta de la API:', {
+                        status: response.data.http_code,
+                        statusText: response.data.status_text,
+                        responseLength: response.data.response ? response.data.response.length : 0,
+                        responsePreview: response.data.response ? response.data.response.substring(0, 100) + '...' : 'Sin respuesta'
+                    });
+                    
+                    var html = '<div class="alert alert-success"><strong>✓ Conectividad exitosa</strong><br>';
+                    html += '<strong>Endpoint:</strong> ' + response.data.endpoint + '<br>';
+                    html += '<strong>Código HTTP:</strong> ' + response.data.http_code + ' ' + response.data.status_text + '<br>';
+                    
+                    // Mostrar información del token para debug
+                    if (response.data.token_debug) {
+                        html += '<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+                        html += '<strong style="color: #856404;">🔍 DEBUG - Token Info (Conectividad):</strong><br>';
                         html += '<small>';
-                        html += 'URL Base: ' + (debug.base_url || 'N/A') + '<br>';
-                        html += 'Entorno: ' + (debug.environment || 'N/A') + '<br>';
-                        html += 'Conexión exitosa: ' + (debug.connection_test_result && debug.connection_test_result.success ? 'Sí' : 'No') + '<br>';
-                        html += 'Cantidad de tiendas: ' + (debug.stores_count || 0) + '<br>';
-                        html += '</small>';
-                        html += '</div>';
+                        html += 'Token Length: ' + response.data.token_debug.token_length + '<br>';
+                        html += 'Token: ' + response.data.token_debug.token_usado.substring(0, 80) + '...<br>';
+                        html += 'Son Iguales (Token vs DB): ' + (response.data.token_debug.son_iguales ? '✅ SÍ' : '❌ NO') + '<br>';
+                        html += 'Expires: ' + response.data.token_debug.expires_at + '<br>';
+                        html += 'Client ID: ' + response.data.token_debug.client_id + '<br>';
+                        html += '</small></div>';
                     }
                     
-                    if (response.data && response.data.stores && response.data.stores.length > 0) {
-                        html += '<div style="margin-top: 10px;"><strong>Tiendas disponibles:</strong><ul>';
-                        response.data.stores.forEach(function(store) {
-                            html += '<li>' + (store.name || 'Sin nombre') + ' (ID: ' + (store.id || 'N/A') + ')</li>';
-                        });
-                        html += '</ul></div>';
-                    } else {
-                        html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">No se encontraron tiendas disponibles.</div>';
+                    html += '<strong>Respuesta del servidor:</strong><br>';
+                    html += '<pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">';
+                    
+                    try {
+                        var jsonResult = JSON.parse(response.data.response);
+                        html += JSON.stringify(jsonResult, null, 2);
+                    } catch (e) {
+                        html += response.data.response || 'Sin contenido de respuesta';
                     }
                     
-                    $result.removeClass().addClass('alert alert-success').html(html).show();
+                    html += '</pre></div>';
+                    $result.html(html);
+                    
+                    $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
                 } else {
-                    html += '<strong>Error de conexión:</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    console.log('❌ Error en la respuesta del servidor:', {
+                        success: response.success,
+                        hasData: !!response.data,
+                        message: response.message,
+                        fullResponse: response
+                    });
                     
-                    // Show debug info for errors
-                    if (response.debug_info) {
-                        var debug = response.debug_info;
-                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
-                        html += '<strong>Información de Debug:</strong><br>';
-                        html += '<small>';
-                        if (debug.base_url) html += 'URL Base: ' + debug.base_url + '<br>';
-                        if (debug.environment) html += 'Entorno: ' + debug.environment + '<br>';
-                        if (debug.connection_test_result) {
-                            html += 'Resultado de conexión: ' + JSON.stringify(debug.connection_test_result) + '<br>';
-                        }
-                        if (debug.exception) {
-                            html += 'Error: ' + debug.exception.message + '<br>';
-                            html += 'Archivo: ' + debug.exception.file + ':' + debug.exception.line + '<br>';
-                        }
-                        html += '</small>';
-                        html += '</div>';
-                    }
+                    // Error en la conectividad
+                    var html = '<div class="alert alert-danger"><strong>✗ Error en la conectividad</strong><br>';
+                    html += '<strong>Mensaje:</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    html += '</div>';
+                    $result.html(html);
                     
-                    $result.removeClass().addClass('alert alert-danger').html(html).show();
+                    $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
                 }
             },
             error: function(xhr, status, error) {
-                var html = '<strong>Error:</strong> No se pudo conectar con la API de Yuju<br>';
-                html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
-                html += '<strong>Error AJAX:</strong><br>';
-                html += '<small>';
-                html += 'Status: ' + status + '<br>';
-                html += 'Error: ' + error + '<br>';
-                html += 'Response: ' + (xhr.responseText || 'N/A') + '<br>';
-                html += '</small>';
-                html += '</div>';
+                console.log('💥 Error en petición AJAX:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    statusCode: xhr.status,
+                    readyState: xhr.readyState
+                });
                 
-                $result.removeClass().addClass('alert alert-danger').html(html).show();
-            },
-            complete: function() {
+                var html = '<div class="alert alert-danger"><strong>✗ Error de conexión</strong><br>';
+                html += 'No se pudo conectar con el servidor para obtener el token de acceso.';
+                html += '</div>';
+                $result.html(html);
+                
+                self.showAlert('Error de conexión al obtener token', 'error');
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
             }
         });
     },
 
     /**
-     * Authorize OAuth
+     * Start OAuth authorization process
      */
-    authorizeOAuth: function() {
+    startOAuthAuthorization: function() {
         var self = this;
-        
+        var $button = $('#yuju-oauth-authorize');
+        var $status = $('#yuju-oauth-status');
+
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Iniciando autorización...');
+        $status.removeClass().addClass('yuju-status syncing').text('Iniciando...');
+
         $.ajax({
             url: this.config.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'getAuthUrl',
+                action: 'startOAuth',
                 ajax: true,
                 token: this.config.token
             },
             dataType: 'json',
             success: function(response) {
-                if (response.success && response.authUrl) {
-                    // Open authorization window
+                if (response.success && response.data && response.data.auth_url) {
+                    $status.removeClass().addClass('yuju-status syncing').text('Redirigiendo...');
+                    self.showAlert('Redirigiendo a la autorización OAuth...', 'info');
+                    
+                    // Abrir ventana de autorización
                     var authWindow = window.open(
-                        response.authUrl,
+                        response.data.auth_url,
                         'yuju_oauth',
                         'width=600,height=700,scrollbars=yes,resizable=yes'
                     );
                     
-                    // Check for completion
-                    var checkClosed = setInterval(function() {
-                        if (authWindow.closed) {
-                            clearInterval(checkClosed);
-                            // Refresh page to show new auth status
-                            setTimeout(function() {
-                                window.location.reload();
-                            }, 1000);
-                        }
-                    }, 1000);
+                    // Monitorear el estado de la autorización
+                    self.monitorOAuthProcess(authWindow);
                 } else {
-                    self.showAlert('Failed to get authorization URL: ' + (response.message || 'Unknown error'), 'error');
+                    $status.removeClass().addClass('yuju-status error').text('Error');
+                    self.showAlert('Error al iniciar autorización OAuth: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
-                self.showAlert('Failed to initiate OAuth authorization', 'error');
+                $status.removeClass().addClass('yuju-status error').text('Error');
+                self.showAlert('Error de conexión al iniciar OAuth', 'error');
+            },
+            complete: function() {
+                $button.prop('disabled', false).html('<i class="icon-key"></i> Autorizar OAuth');
             }
         });
     },
+
+    /**
+     * Monitor OAuth authorization process
+     */
+    monitorOAuthProcess: function(authWindow) {
+        var self = this;
+        var $status = $('#yuju-oauth-status');
+        var checkInterval;
+        
+        $status.removeClass().addClass('yuju-status syncing').text('Esperando autorización...');
+        
+        checkInterval = setInterval(function() {
+            try {
+                if (authWindow.closed) {
+                    clearInterval(checkInterval);
+                    self.checkOAuthStatus();
+                    return;
+                }
+                
+                // Intentar detectar si la autorización fue completada
+                var currentUrl = authWindow.location.href;
+                if (currentUrl.indexOf('oauth_success') !== -1 || currentUrl.indexOf('code=') !== -1) {
+                    clearInterval(checkInterval);
+                    authWindow.close();
+                    self.checkOAuthStatus();
+                }
+            } catch (e) {
+                // Error de cross-origin, continuar monitoreando
+            }
+        }, 1000);
+        
+        // Timeout después de 5 minutos
+        setTimeout(function() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                if (!authWindow.closed) {
+                    authWindow.close();
+                }
+                $status.removeClass().addClass('yuju-status error').text('Timeout');
+                self.showAlert('Tiempo de espera agotado para la autorización OAuth', 'warning');
+            }
+        }, 300000);
+    },
+
+    /**
+     * Check OAuth authorization status
+     */
+    checkOAuthStatus: function() {
+        var self = this;
+        var $status = $('#yuju-oauth-status');
+        
+        $status.removeClass().addClass('yuju-status syncing').text('Verificando...');
+        
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'checkOAuthStatus',
+                ajax: true,
+                token: this.config.token
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response.success && response.data && response.data.authorized) {
+                    $status.removeClass().addClass('yuju-status connected').text('Autorizado');
+                    self.showAlert('Autorización OAuth completada exitosamente', 'success');
+                    
+                    // Actualizar información del token si está disponible
+                    if (response.data.token_info) {
+                        self.updateTokenInfo(response.data.token_info);
+                    }
+                    
+                    // Refrescar la página para mostrar el nuevo estado
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    $status.removeClass().addClass('yuju-status disconnected').text('No autorizado');
+                    self.showAlert('Autorización OAuth no completada: ' + (response.message || 'Proceso cancelado'), 'warning');
+                }
+            },
+            error: function() {
+                $status.removeClass().addClass('yuju-status error').text('Error');
+                self.showAlert('Error al verificar el estado de OAuth', 'error');
+            }
+        });
+    },
+
+    /**
+     * Update token information display
+     */
+    updateTokenInfo: function(tokenInfo) {
+        if (tokenInfo.expires_at) {
+            $('#yuju-token-expires').text(tokenInfo.expires_at);
+        }
+        if (tokenInfo.scope) {
+            $('#yuju-token-scope').text(tokenInfo.scope);
+        }
+    },
+
+    /**
+     * Test products API - Create sample product
+     */
+    testProducts: function() {
+        console.log('DEBUG: testProducts function called');
+        
+        var self = this;
+        var $button = $('#yuju-test-products');
+        var $result = $('#products-result'); // Corregido: usar el ID correcto del template
+        
+        console.log('DEBUG: Button found:', $button.length > 0);
+        console.log('DEBUG: Result container found:', $result.length > 0);
+        console.log('DEBUG: Config:', this.config);
+
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Creando producto de prueba...');
+        
+        // Show initial progress message
+        var progressHtml = '<div class="alert alert-info"><strong>Creando producto de prueba...</strong><br>';
+        progressHtml += '<div id="products-progress-steps"></div></div>';
+        $result.html(progressHtml).show();
+        
+        var $progressSteps = $('#products-progress-steps');
+        
+        // Step 1: Verificar autenticación
+        $progressSteps.append('<div><i class="icon-refresh yuju-spin"></i> Verificando autenticación...</div>');
+        
+        // Debug: Log AJAX configuration
+        console.log('DEBUG: AJAX URL:', this.config.ajaxUrl);
+        console.log('DEBUG: AJAX Token:', this.config.token);
+        console.log('DEBUG: Starting AJAX call for testProducts');
+        
+        // Construir URL con parámetros GET para PrestaShop
+        var ajaxUrl = this.config.ajaxUrl + '&ajax=1&action=testProducts';
+        console.log('DEBUG: Final AJAX URL:', ajaxUrl);
+        
+        $.ajax({
+            url: ajaxUrl,
+            type: 'POST',
+            data: {
+                ajax: true,
+                token: this.config.token
+            },
+            dataType: 'json',
+            beforeSend: function(xhr) {
+                console.log('DEBUG: AJAX request about to be sent');
+            },
+            success: function(response) {
+                console.log('DEBUG: AJAX success response received:', response);
+                if (response.success) {
+                    // Update authentication step
+                    $progressSteps.find('div:first').html('✓ Autenticación verificada');
+                    
+                    // Step 2: Creating product
+                    $progressSteps.append('<div><i class="icon-refresh yuju-spin"></i> Enviando producto a Yuju...</div>');
+                    
+                    setTimeout(function() {
+                        $progressSteps.find('div:last').html('✓ Producto enviado a Yuju');
+                        
+                        // Show final success message
+                        var html = '<div class="alert alert-success">';
+                        html += '<strong>✓ ' + (response.message || 'Producto de prueba creado exitosamente') + '</strong><br>';
+                        
+                        if (response.product) {
+                            html += '<div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px;">';
+                            if (response.product.id_product) {
+                                html += '<div><strong>ID Yuju:</strong> ' + response.product.id_product + '</div>';
+                            }
+                            if (response.product.name) {
+                                html += '<div><strong>Nombre:</strong> ' + response.product.name + '</div>';
+                            }
+                            if (response.product.sku) {
+                                html += '<div><strong>SKU:</strong> ' + response.product.sku + '</div>';
+                            }
+                            if (response.product.id_shop) {
+                                html += '<div><strong>ID Shop:</strong> ' + response.product.id_shop + '</div>';
+                            }
+                            html += '</div>';
+                        }
+                        
+                        html += '</div>';
+                        $result.html(html);
+                        
+                        self.showAlert('Producto de prueba creado exitosamente', 'success');
+                    }, 1000);
+                    
+                } else {
+                    var html = '<div class="alert alert-danger">';
+                    html += '<strong>❌ Error al crear producto de prueba</strong><br>';
+                    html += '<div style="margin-top: 10px;">' + (response.message || response.error || 'Error desconocido') + '</div>';
+                    
+                    if (response.errors && response.errors.length > 0) {
+                        html += '<div style="margin-top: 10px;"><strong>Errores de Yuju:</strong><br>';
+                        html += '<pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 11px;">';
+                        html += JSON.stringify(response.errors, null, 2);
+                        html += '</pre></div>';
+                    }
+                    
+                    html += '</div>';
+                    $result.html(html);
+                    
+                    self.showAlert('Error al crear producto de prueba: ' + (response.message || 'Error desconocido'), 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.log('DEBUG: AJAX error occurred');
+                console.log('DEBUG: XHR:', xhr);
+                console.log('DEBUG: Status:', status);
+                console.log('DEBUG: Error:', error);
+                console.log('DEBUG: Response Text:', xhr.responseText);
+                
+                var html = '<div class="alert alert-danger"><strong>❌ Error de conexión</strong><br>';
+                html += '<div style="margin-top: 10px;">No se pudo conectar con el servidor para crear el producto de prueba.</div>';
+                html += '<div style="margin-top: 5px;"><strong>Error técnico:</strong> ' + error + '</div>';
+                html += '<div style="margin-top: 5px;"><strong>Status:</strong> ' + status + '</div>';
+                html += '<div style="margin-top: 5px;"><strong>Response:</strong> ' + xhr.responseText + '</div>';
+                html += '</div>';
+                $result.html(html);
+                
+                self.showAlert('Error de conexión al crear producto de prueba', 'error');
+            },
+            complete: function() {
+                $button.prop('disabled', false).html('<i class="icon-check"></i> Probar Productos');
+            }
+        });
+    },
+
+
 
     /**
      * Start synchronization
@@ -605,7 +882,7 @@ var YujuAdmin = {
         var self = this;
         
         if (!text) {
-            console.error('No text provided to copy');
+            
             return;
         }
         
@@ -623,10 +900,10 @@ var YujuAdmin = {
                 // Intentar usar la API moderna primero
                 if (navigator.clipboard && window.isSecureContext) {
                     navigator.clipboard.writeText(text).then(function() {
-                        console.log('✅ Texto copiado usando navigator.clipboard');
+    
                         self.showCopySuccess($button, originalHtml);
                     }).catch(function(err) {
-                        console.warn('❌ navigator.clipboard falló, usando fallback:', err);
+                        
                         self.fallbackCopyToClipboard(text, $button, originalHtml);
                     });
                 } else {
@@ -634,7 +911,7 @@ var YujuAdmin = {
                     self.fallbackCopyToClipboard(text, $button, originalHtml);
                 }
             } catch (err) {
-                console.error('❌ Error general en copyToClipboard:', err);
+                
                 self.showCopyError($button, originalHtml, text);
             }
         }
@@ -674,13 +951,13 @@ var YujuAdmin = {
             document.body.removeChild(textarea);
             
             if (successful) {
-                console.log('✅ Texto copiado usando execCommand');
+
                 self.showCopySuccess($button, originalHtml);
             } else {
                 throw new Error('execCommand falló');
             }
         } catch (err) {
-            console.error('❌ Fallback copy falló:', err);
+            
             self.showCopyError($button, originalHtml, text);
         }
     },
@@ -742,11 +1019,11 @@ var YujuAdmin = {
     initCopyButtons: function() {
         var self = this;
         
-        console.log('🔧 Configurando botones de copiar...');
+
         
         // Usar delegated events para compatibilidad con PrestaShop 8
         $(document).off('click.yuju-copy').on('click.yuju-copy', '.yuju-copy-button', function(e) {
-            console.log('🖱️ DELEGATED: Click detectado en botón de copiar');
+
             
             e.preventDefault();
             e.stopPropagation();
@@ -755,12 +1032,12 @@ var YujuAdmin = {
             var textToCopy = $button.attr('data-copy-text');
             
             if (!textToCopy) {
-                console.log('❌ No se encontró data-copy-text');
+
                 alert('Error: No se encontró URL para copiar');
                 return false;
             }
             
-            console.log('📋 Copiando:', textToCopy);
+
             self.copyToClipboard(textToCopy, $button);
             
             return false;
@@ -768,32 +1045,31 @@ var YujuAdmin = {
         
         // Verificar que los botones existen
         var buttonCount = $('.yuju-copy-button').length;
-        console.log('📊 Botones encontrados:', buttonCount);
+
         
         if (buttonCount > 0) {
-            console.log('✅ Configuración de event delegation completada');
+    
             
             // Listar cada botón para verificar
             $('.yuju-copy-button').each(function(index) {
                 var copyText = $(this).attr('data-copy-text');
-                console.log('🔘 Botón ' + (index + 1) + ':', copyText ? copyText.substring(0, 50) + '...' : 'SIN DATA');
+    
             });
         } else {
-            console.log('⚠️ No se encontraron botones .yuju-copy-button');
         }
         
         // Función de prueba global
         window.testYujuCopy = function(index) {
             var buttons = $('.yuju-copy-button');
             if (buttons.length > (index || 0)) {
-                console.log('🧪 Simulando click en botón ' + ((index || 0) + 1));
+        
                 buttons.eq(index || 0).trigger('click');
             } else {
-                console.log('❌ Botón no encontrado en índice ' + (index || 0));
+    
             }
         };
         
-        console.log('🎯 Configuración completada. Usa testYujuCopy(0) para probar el primer botón');
+
     },
 
     /**
@@ -911,7 +1187,7 @@ var YujuAdmin = {
      * Inicializar pruebas de diagnóstico
      */
     initDiagnosticTests: function() {
-        console.log('🔧 Inicializando pruebas de diagnóstico...');
+
         
         var self = this;
         
@@ -1043,7 +1319,7 @@ var YujuAdmin = {
 
 // Initialize when document is ready - VERSIÓN CORREGIDA
 $(document).ready(function() {
-    console.log('✅ PrestaShop Compatible: Iniciando YujuAdmin...');
+
     
     // Detectar página Yuju de múltiples formas
     var isYujuPage = $('.yuju-module').length > 0 || 
@@ -1066,7 +1342,7 @@ $(document).ready(function() {
         // Inicializar YujuAdmin
         YujuAdmin.init(config);
         
-        console.log('YujuAdmin initialized for Yuju page');
+
     } else {
         // Aún así inicializar los botones de copiar para cualquier página que los tenga
         YujuAdmin.initCopyButtons();

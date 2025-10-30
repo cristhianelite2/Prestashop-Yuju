@@ -1,0 +1,3 @@
+[2025-08-13 16:42:28] INFO: OAuth callback received | Context: {"code_length":64,"state_received":false,"has_code":true,"has_state":false}
+[2025-08-13 16:42:28] INFO: Iniciando petición de token a Yuju | Context: {"url":"https:\/\/api.tp.yuju.io\/auth-generate-token","client_id":"609093b789a85bb88b18c8f8fd519a31","has_secret_key":true,"has_code":true}
+[2025-08-13 16:42:31] INFO: Respuesta recibida de Yuju | Context: {"http_code":403,"response_length":32,"has_curl_error":false}

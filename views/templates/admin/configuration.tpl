@@ -83,7 +83,7 @@
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">URL a la página de términos y condiciones del módulo (úsela si no tiene una propia para el registro de aplicaciones Yuju)</p>
+                            <p class="help-block">URL a la página de términos y condiciones del módulo (Úsela si no tiene una propia para el registro de aplicaciones Yuju)</p>
                         </div>
                     </div>
                     
@@ -145,17 +145,15 @@
                             Dominios Permitidos
                         </label>
                         <div class="col-lg-9">
-                            {foreach from=$yuju_urls.allowed_domains item=domain name=domains}
-                                <div class="input-group" style="margin-bottom: 5px;">
-                                    <input type="text" class="form-control" value="{$domain|escape:'html':'UTF-8'}" readonly id="domain_{$smarty.foreach.domains.index}">
-                                    <span class="input-group-btn">
-                                        <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$domain|escape:'html':'UTF-8'}">
-                                            <i class="icon-copy"></i> Copiar
-                                        </button>
-                                    </span>
-                                </div>
-                            {/foreach}
-                            <p class="help-block">Dominios permitidos para autenticación (configure estos en la configuración de su aplicación Yuju)</p>
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{if isset($yuju_urls.combined_domains)}{$yuju_urls.combined_domains|escape:'html':'UTF-8'}{/if}" readonly id="allowed_domains">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{if isset($yuju_urls.combined_domains)}{$yuju_urls.combined_domains|escape:'html':'UTF-8'}{/if}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">Dominios permitidos para autenticación (configure estos en la configuración de su aplicación Yuju). Incluye el dominio principal y la URI de redirección.</p>
                         </div>
                     </div>
                 </div>
@@ -170,6 +168,40 @@
                     </h3>
                 </div>
                 <div class="panel-body">
+                    
+                    {* CRON Configuration Alert *}
+                    <div class="alert alert-info">
+                        <h4><i class="icon-time"></i> Configuración de Tareas Automáticas (CRON)</h4>
+                        <p><strong>Para que el módulo funcione correctamente, configure el siguiente CRON:</strong></p>
+                        
+                        <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 10px 0;">
+                            <p style="margin: 5px 0;"><strong>Frecuencia:</strong> Cada 5 minutos</p>
+                            <p style="margin: 5px 0;"><strong>Comando CLI:</strong></p>
+                            <code style="display: block; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin: 5px 0;">
+                                */5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php
+                            </code>
+                            
+                            <p style="margin: 15px 0 5px 0;"><strong>O mediante URL:</strong></p>
+                            <div class="input-group" style="margin: 5px 0;">
+                                <input type="text" class="form-control" value="https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php" readonly id="cron_url">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <code style="display: block; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin: 5px 0;">
+                                */5 * * * * curl "https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php"
+                            </code>
+                        </div>
+                        
+                        <p style="margin-top: 15px;"><strong>Tareas automáticas que se ejecutan:</strong></p>
+                        <ul style="margin-left: 20px;">
+                            <li><strong>Verificación de Token:</strong> Cada 12 horas - Verifica que el token de Yuju no haya expirado</li>
+                            <li><em>Más tareas se agregarán en futuras actualizaciones...</em></li>
+                        </ul>
+                    </div>
+                    
                     <div class="form-group">
                         <label class="control-label col-lg-3">
                             Entorno
@@ -229,6 +261,19 @@
                             <div id="connectivity-result" class="alert" style="display: none; margin-top: 10px;"></div>
                         </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Prueba de Productos
+                        </label>
+                        <div class="col-lg-9">
+                            <button type="button" id="yuju-test-products" class="btn btn-success">
+                                <i class="icon-shopping-cart"></i> Probar API de Productos
+                            </button>
+                            <p class="help-block">Probar los endpoints de productos: ofertas, fichas técnicas y actualización masiva</p>
+                            <div id="products-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -243,17 +288,145 @@
                 <div class="panel-body">
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            Habilitar Sincronización Automática
+                            Seleccionar Tienda de PrestaShop
+                        </label>
+                        <div class="col-lg-9">
+                            <select name="YUJU_PRESTASHOP_STORE_ID" class="form-control">
+                                {if isset($prestashop_shops) && $prestashop_shops}
+                                    {foreach from=$prestashop_shops item=shop}
+                                        <option value="{$shop.id|escape:'html':'UTF-8'}" {if $config.YUJU_PRESTASHOP_STORE_ID == $shop.id}selected{/if}>
+                                            {$shop.name|escape:'html':'UTF-8'}
+                                        </option>
+                                    {/foreach}
+                                {else}
+                                    <option value="">No hay tiendas de PrestaShop disponibles</option>
+                                {/if}
+                            </select>
+                            <p class="help-block">Seleccione la tienda de PrestaShop para conectar con Yuju</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Idioma de la Tienda
+                        </label>
+                        <div class="col-lg-9">
+                            <select name="YUJU_STORE_LANGUAGE" class="form-control">
+                                {foreach from=Language::getLanguages(false) item=language}
+                                    <option value="{$language.iso_code|escape:'html':'UTF-8'}" {if $config.YUJU_STORE_LANGUAGE == $language.iso_code}selected{/if}>
+                                        {$language.name|escape:'html':'UTF-8'}
+                                    </option>
+                                {/foreach}
+                            </select>
+                            <p class="help-block">Idioma principal para sincronizar con Yuju</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Habilitar Sincronización
                         </label>
                         <div class="col-lg-9">
                             <span class="switch prestashop-switch fixed-width-lg">
-                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_on" value="1" {if $config.YUJU_AUTO_SYNC || $config.YUJU_AUTO_SYNC === null}checked="checked"{/if}>
-                                <label for="auto_sync_on">Sí</label>
-                                <input type="radio" name="YUJU_AUTO_SYNC" id="auto_sync_off" value="0" {if $config.YUJU_AUTO_SYNC === 0}checked="checked"{/if}>
-                                <label for="auto_sync_off">No</label>
+                                <input type="radio" name="YUJU_SYNC_ENABLED" id="sync_on" value="1" {if $config.YUJU_SYNC_ENABLED !== '0'}checked="checked"{/if}>
+                                <label for="sync_on">Sí</label>
+                                <input type="radio" name="YUJU_SYNC_ENABLED" id="sync_off" value="0" {if $config.YUJU_SYNC_ENABLED === '0'}checked="checked"{/if}>
+                                <label for="sync_off">No</label>
                                 <a class="slide-button btn"></a>
                             </span>
-                            <p class="help-block">Sincronizar datos automáticamente cuando ocurran cambios</p>
+                            <p class="help-block">Habilitar sincronización de productos (Sí por defecto)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group sync-dependent">
+                        <label class="control-label col-lg-3">
+                            Sincronizar Precios
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_SYNC_PRICES" id="sync_prices_on" value="1" {if $config.YUJU_SYNC_PRICES !== '0'}checked="checked"{/if}>
+                                <label for="sync_prices_on">Sí</label>
+                                <input type="radio" name="YUJU_SYNC_PRICES" id="sync_prices_off" value="0" {if $config.YUJU_SYNC_PRICES === '0'}checked="checked"{/if}>
+                                <label for="sync_prices_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Habilitar sincronización de precios</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group sync-dependent">
+                        <label class="control-label col-lg-3">
+                            Sincronizar Stock
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_SYNC_STOCK" id="sync_stock_on" value="1" {if $config.YUJU_SYNC_STOCK !== '0'}checked="checked"{/if}>
+                                <label for="sync_stock_on">Sí</label>
+                                <input type="radio" name="YUJU_SYNC_STOCK" id="sync_stock_off" value="0" {if $config.YUJU_SYNC_STOCK === '0'}checked="checked"{/if}>
+                                <label for="sync_stock_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Habilitar sincronización de inventario</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group sync-dependent">
+                        <label class="control-label col-lg-3">
+                            Sincronizar Imágenes
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_SYNC_IMAGES" id="sync_images_on" value="1" {if $config.YUJU_SYNC_IMAGES !== '0'}checked="checked"{/if}>
+                                <label for="sync_images_on">Sí</label>
+                                <input type="radio" name="YUJU_SYNC_IMAGES" id="sync_images_off" value="0" {if $config.YUJU_SYNC_IMAGES === '0'}checked="checked"{/if}>
+                                <label for="sync_images_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Habilitar sincronización de imágenes de productos</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group sync-dependent">
+                        <label class="control-label col-lg-3">
+                            Sincronizar Órdenes
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_SYNC_ORDERS" id="sync_orders_on" value="1" {if $config.YUJU_SYNC_ORDERS !== '0'}checked="checked"{/if}>
+                                <label for="sync_orders_on">Sí</label>
+                                <input type="radio" name="YUJU_SYNC_ORDERS" id="sync_orders_off" value="0" {if $config.YUJU_SYNC_ORDERS === '0'}checked="checked"{/if}>
+                                <label for="sync_orders_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Habilitar sincronización de órdenes</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Forzar Actualización
+                        </label>
+                        <div class="col-lg-9">
+                            <button type="button" id="yuju-force-update" class="btn btn-warning">
+                                <i class="icon-refresh"></i> Forzar Actualización Masiva
+                            </button>
+                            <p class="help-block">Esta funcionalidad forzará el envío masivo de información del producto ignorando lo ya enviado, por lo cual se recomienda un uso cauteloso.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Limpieza de HTML en Descripción
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_CLEAN_HTML" id="clean_html_on" value="1" {if $config.YUJU_CLEAN_HTML !== '0'}checked="checked"{/if}>
+                                <label for="clean_html_on">Sí</label>
+                                <input type="radio" name="YUJU_CLEAN_HTML" id="clean_html_off" value="0" {if $config.YUJU_CLEAN_HTML === '0'}checked="checked"{/if}>
+                                <label for="clean_html_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Limpiar etiquetas HTML de las descripciones antes de enviarlas a Yuju</p>
                         </div>
                     </div>
                     
@@ -262,8 +435,8 @@
                             Frecuencia de Sincronización (segundos)
                         </label>
                         <div class="col-lg-9">
-                            <input type="number" name="YUJU_SYNC_FREQUENCY" value="{$config.YUJU_SYNC_FREQUENCY|default:300|escape:'html':'UTF-8'}" class="form-control" min="60">
-                            <p class="help-block">Con qué frecuencia ejecutar la sincronización en segundo plano (mínimo 60 segundos)</p>
+                            <input type="number" name="YUJU_SYNC_FREQUENCY" value="{$config.YUJU_SYNC_FREQUENCY|default:3600|escape:'html':'UTF-8'}" class="form-control" min="60">
+                            <p class="help-block">Frecuencia de sincronización automática en segundos (3600 por defecto - 1 hora)</p>
                         </div>
                     </div>
                     
@@ -273,7 +446,41 @@
                         </label>
                         <div class="col-lg-9">
                             <input type="number" name="YUJU_BATCH_SIZE" value="{$config.YUJU_BATCH_SIZE|default:100|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
-                            <p class="help-block">Número de elementos a procesar por lote (1-500)</p>
+                            <p class="help-block"><i class="icon-cubes"></i> Cantidad de productos a procesar por lote (ej: 100 productos por envío)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            <strong>Frecuencia entre Lotes</strong>
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="number" name="YUJU_BATCH_FREQUENCY" value="{$config.YUJU_BATCH_FREQUENCY|default:60|escape:'html':'UTF-8'}" class="form-control" min="30" max="3600">
+                                <span class="input-group-addon">segundos</span>
+                            </div>
+                            <p class="help-block"><i class="icon-clock-o"></i> Tiempo de espera entre cada lote al procesar (ej: 60 segundos entre cada lote de 100)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            <strong>Máximo Descargas Diarias del JSON</strong>
+                        </label>
+                        <div class="col-lg-9">
+                            <select name="YUJU_MAX_DAILY_SYNCS" class="form-control">
+                                <option value="1" {if $config.YUJU_MAX_DAILY_SYNCS == '1'}selected{/if}>1 vez al día</option>
+                                <option value="2" {if $config.YUJU_MAX_DAILY_SYNCS == '2' || !$config.YUJU_MAX_DAILY_SYNCS}selected{/if}>2 veces al día (recomendado)</option>
+                                <option value="3" {if $config.YUJU_MAX_DAILY_SYNCS == '3'}selected{/if}>3 veces al día</option>
+                                <option value="4" {if $config.YUJU_MAX_DAILY_SYNCS == '4'}selected{/if}>4 veces al día</option>
+                                <option value="5" {if $config.YUJU_MAX_DAILY_SYNCS == '5'}selected{/if}>5 veces al día (máximo)</option>
+                            </select>
+                            <p class="help-block">
+                                <i class="icon-info-circle"></i> <strong>Límite de descargas del JSON desde Yuju</strong> (cada 24h ÷ valor = intervalo).<br>
+                                <strong>IMPORTANTE:</strong> El endpoint <code>/products-offer-report</code> devuelve una URL con el JSON que debe descargarse.<br>
+                                Ej: 2 veces/día = descarga cada 12 horas. El JSON se guarda localmente en <code>cache/yuju_products.json</code>.<br>
+                                <strong>Yuju limita</strong> las descargas a máximo cada 3 horas.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -290,6 +497,22 @@
                 <div class="panel-body">
                     <div class="form-group">
                         <label class="control-label col-lg-3">
+                            Habilitar Logs
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_LOGGING_ENABLED" id="logging_on" value="1" {if $config.YUJU_LOGGING_ENABLED !== '0'}checked="checked"{/if}>
+                                <label for="logging_on">Sí</label>
+                                <input type="radio" name="YUJU_LOGGING_ENABLED" id="logging_off" value="0" {if $config.YUJU_LOGGING_ENABLED === '0'}checked="checked"{/if}>
+                                <label for="logging_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Habilitar el registro de actividades (Sí por defecto)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
                             Nivel de Registro
                         </label>
                         <div class="col-lg-9">
@@ -300,13 +523,14 @@
                                 <option value="warning" {if $config.YUJU_LOG_LEVEL == 'warning'}selected{/if}>
                                     Advertencias y superiores
                                 </option>
-                                <option value="info" {if $config.YUJU_LOG_LEVEL == 'info'}selected{/if}>
-                                    Información y superiores
+                                <option value="info" {if $config.YUJU_LOG_LEVEL == 'info' || !$config.YUJU_LOG_LEVEL}selected{/if}>
+                                    Info, errores y advertencias (por defecto)
                                 </option>
                                 <option value="debug" {if $config.YUJU_LOG_LEVEL == 'debug'}selected{/if}>
                                     Debug (todo)
                                 </option>
                             </select>
+                            <p class="help-block">Nivel de detalle para los registros</p>
                         </div>
                     </div>
                     
@@ -316,7 +540,7 @@
                         </label>
                         <div class="col-lg-9">
                             <input type="number" name="YUJU_LOG_RETENTION" value="{$config.YUJU_LOG_RETENTION|default:30|escape:'html':'UTF-8'}" class="form-control" min="1">
-                            <p class="help-block">Número de días para mantener archivos de registro</p>
+                            <p class="help-block">Número de días para mantener archivos de registro (30 por defecto)</p>
                         </div>
                     </div>
                 </div>
@@ -342,23 +566,38 @@
         </form>
     </div>
 </div>
-
-
 {/block}
-
-<!-- ✅ SOLUCIÓN COMPATIBLE CON PRESTASHOP -->
-<!-- Reemplaza TODO el bloque <script> en configuration.tpl con esto: -->
 
 <script type="text/javascript">
 // JavaScript functionality is now handled in admin.js
 // This ensures compatibility with PrestaShop 8 module loading system
-console.log('✅ Configuration template loaded - JavaScript handled by admin.js');
-</script>
 
+
+// Handle sync dependencies
+$(document).ready(function() {
+    function toggleSyncDependentFields() {
+        var syncEnabled = $('input[name="YUJU_SYNC_ENABLED"]:checked').val() === '1';
+        $('.sync-dependent').toggle(syncEnabled);
+        if (!syncEnabled) {
+            $('.sync-dependent input[type="radio"][value="0"]').prop('checked', true);
+        }
+    }
+    
+    $('input[name="YUJU_SYNC_ENABLED"]').change(toggleSyncDependentFields);
+    toggleSyncDependentFields();
+    
+    // Force update confirmation
+    $('#yuju-force-update').click(function() {
+        if (confirm('¿Está seguro de que desea forzar la actualización masiva? Esta acción enviará todos los productos a Yuju ignorando el estado de sincronización anterior.')) {
+            // Add your force update logic here
+            $(this).prop('disabled', true).html('<i class="icon-spin icon-refresh"></i> Procesando...');
+        }
+    });
+});
+</script>
 
 <style>
 /* Copy button styles are now in admin.css */
-
 .input-group {
     margin-bottom: 5px;
 }
@@ -373,5 +612,28 @@ console.log('✅ Configuration template loaded - JavaScript handled by admin.js'
     color: #666;
 }
 
+.sync-dependent {
+    margin-left: 20px;
+    border-left: 3px solid #ddd;
+    padding-left: 15px;
+}
 
+.sync-dependent.hidden {
+    display: none;
+}
 </style>
+
+<script type="text/javascript">
+$(document).ready(function() {
+    // Inicializar YujuAdmin con la configuración necesaria
+    if (typeof YujuAdmin !== 'undefined') {
+        YujuAdmin.init({
+            ajaxUrl: '{$ajax_url|escape:'javascript':'UTF-8'}',
+            token: '{$token|escape:'javascript':'UTF-8'}'
+        });
+        console.log('YujuAdmin initialized successfully');
+    } else {
+        console.error('YujuAdmin object not found. Check if admin.js is loaded.');
+    }
+});
+</script>

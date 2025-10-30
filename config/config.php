@@ -90,6 +90,9 @@ class YujuConfig
             'YUJU_SCOPE' => 'read write',
 
             // Sync Settings
+            'YUJU_BATCH_SIZE' => 100,
+            'YUJU_BATCH_FREQUENCY' => 60, // seconds
+            'YUJU_MAX_DAILY_SYNCS' => 2, // Recomendado: 2 descargas diarias del JSON (cada 12 horas)
             'YUJU_SYNC_BATCH_SIZE' => self::DEFAULT_BATCH_SIZE,
             'YUJU_SYNC_FREQUENCY' => self::DEFAULT_SYNC_FREQUENCY,
             'YUJU_MAX_RETRY_ATTEMPTS' => self::DEFAULT_MAX_RETRY_ATTEMPTS,
@@ -132,26 +135,101 @@ class YujuConfig
 
     /**
      * Get configuration value with fallback to default.
+     * Uses ps_yuju_configuration table instead of PrestaShop's Configuration
      */
     public static function get($key, $default = null)
     {
-        $value = Configuration::get($key);
-
-        if ($value === false || $value === '') {
+        try {
+            $sql = 'SELECT `config_value`, `config_type` 
+                    FROM `' . _DB_PREFIX_ . 'yuju_configuration` 
+                    WHERE `config_key` = \'' . pSQL($key) . '\'';
+            
+            $result = Db::getInstance()->getRow($sql);
+            
+            if (!$result) {
+                // Fallback to defaults
+                $defaults = self::getDefaults();
+                return isset($defaults[$key]) ? $defaults[$key] : $default;
+            }
+            
+            // Convert value based on type
+            $value = $result['config_value'];
+            $type = $result['config_type'];
+            
+            switch ($type) {
+                case 'integer':
+                    return (int)$value;
+                case 'boolean':
+                    return (bool)$value;
+                case 'json':
+                    return json_decode($value, true);
+                default:
+                    return $value;
+            }
+        } catch (Exception $e) {
+            error_log('[YujuConfig] Error getting config key "' . $key . '": ' . $e->getMessage());
             $defaults = self::getDefaults();
-
             return isset($defaults[$key]) ? $defaults[$key] : $default;
         }
-
-        return $value;
     }
 
     /**
      * Set configuration value.
+     * Uses ps_yuju_configuration table instead of PrestaShop's Configuration
      */
-    public static function set($key, $value)
+    public static function set($key, $value, $type = 'string', $description = null)
     {
-        return Configuration::updateValue($key, $value);
+        try {
+            // Convert value to string based on type
+            $stringValue = $value;
+            
+            switch ($type) {
+                case 'integer':
+                    $stringValue = (string)(int)$value;
+                    break;
+                case 'boolean':
+                    $stringValue = $value ? '1' : '0';
+                    break;
+                case 'json':
+                    $stringValue = json_encode($value);
+                    break;
+            }
+            
+            // Check if key exists
+            $exists = Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_configuration` 
+                 WHERE `config_key` = \'' . pSQL($key) . '\''
+            );
+            
+            if ($exists) {
+                // Update existing
+                return Db::getInstance()->update(
+                    'yuju_configuration',
+                    array(
+                        'config_value' => pSQL($stringValue),
+                        'config_type' => pSQL($type),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ),
+                    '`config_key` = \'' . pSQL($key) . '\''
+                );
+            } else {
+                // Insert new
+                return Db::getInstance()->insert(
+                    'yuju_configuration',
+                    array(
+                        'config_key' => pSQL($key),
+                        'config_value' => pSQL($stringValue),
+                        'config_type' => pSQL($type),
+                        'description' => $description ? pSQL($description) : null,
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    )
+                );
+            }
+        } catch (Exception $e) {
+            error_log('[YujuConfig] Error setting config key "' . $key . '": ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -246,7 +324,7 @@ class YujuConfig
         $defaults = self::getDefaults();
 
         foreach ($defaults as $key => $value) {
-            Configuration::updateValue($key, $value);
+            self::set($key, $value, 'string');
         }
 
         return true;
@@ -286,7 +364,7 @@ class YujuConfig
 
         foreach ($config as $key => $value) {
             if (array_key_exists($key, $defaults)) {
-                Configuration::updateValue($key, $value);
+                self::set($key, $value, 'string');
                 ++$imported;
             }
         }

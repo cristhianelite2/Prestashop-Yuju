@@ -6,6 +6,7 @@
     <description><![CDATA[Sincroniza tu tienda PrestaShop con la plataforma Yuju para una gestión perfecta de inventario, productos y pedidos.]]></description>
     <author><![CDATA[Equipo de Integración Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>
+    <logo><![CDATA[logo.png]]></logo>
     <confirmUninstall><![CDATA[¿Está seguro de que desea desinstalar el módulo de Integración Yuju? Esto eliminará todos los datos de sincronización.]]></confirmUninstall>
     <is_configurable>1</is_configurable>
     <need_instance>0</need_instance>

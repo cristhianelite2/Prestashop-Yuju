@@ -164,6 +164,85 @@
         <source>Error de conexión</source>
         <target>Error de conexión</target>
       </trans-unit>
+      <!-- Synchronization specific translations -->
+      <trans-unit id="101" resname="Modules.Prestashopyuju.Admin">
+        <source>Yuju Synchronization</source>
+        <target>Sincronización Yuju</target>
+      </trans-unit>
+      <trans-unit id="102" resname="Modules.Prestashopyuju.Admin">
+        <source>Type</source>
+        <target>Tipo</target>
+      </trans-unit>
+      <trans-unit id="103" resname="Modules.Prestashopyuju.Admin">
+        <source>Direction</source>
+        <target>Dirección</target>
+      </trans-unit>
+      <trans-unit id="104" resname="Modules.Prestashopyuju.Admin">
+        <source>Entity</source>
+        <target>Entidad</target>
+      </trans-unit>
+      <trans-unit id="105" resname="Modules.Prestashopyuju.Admin">
+        <source>Total</source>
+        <target>Total</target>
+      </trans-unit>
+      <trans-unit id="106" resname="Modules.Prestashopyuju.Admin">
+        <source>Success</source>
+        <target>Exitosos</target>
+      </trans-unit>
+      <trans-unit id="107" resname="Modules.Prestashopyuju.Admin">
+        <source>Time (s)</source>
+        <target>Tiempo (s)</target>
+      </trans-unit>
+      <trans-unit id="108" resname="Modules.Prestashopyuju.Admin">
+        <source>Status</source>
+        <target>Estado</target>
+      </trans-unit>
+      <trans-unit id="109" resname="Modules.Prestashopyuju.Admin">
+        <source>Errors</source>
+        <target>Errores</target>
+      </trans-unit>
+      <trans-unit id="110" resname="Modules.Prestashopyuju.Admin">
+        <source>Date</source>
+        <target>Fecha</target>
+      </trans-unit>
+      <trans-unit id="111" resname="Modules.Prestashopyuju.Admin">
+        <source>Delete selected</source>
+        <target>Eliminar seleccionados</target>
+      </trans-unit>
+      <trans-unit id="112" resname="Modules.Prestashopyuju.Admin">
+        <source>Delete selected items?</source>
+        <target>¿Eliminar elementos seleccionados?</target>
+      </trans-unit>
+      <trans-unit id="113" resname="Modules.Prestashopyuju.Admin">
+        <source>Full Sync</source>
+        <target>Sincronización Completa</target>
+      </trans-unit>
+      <trans-unit id="114" resname="Modules.Prestashopyuju.Admin">
+        <source>Incremental Sync</source>
+        <target>Sincronización Incremental</target>
+      </trans-unit>
+      <trans-unit id="115" resname="Modules.Prestashopyuju.Admin">
+        <source>Sync Categories</source>
+        <target>Sincronizar Categorías</target>
+      </trans-unit>
+      <trans-unit id="116" resname="Modules.Prestashopyuju.Admin">
+        <source>Sync Products</source>
+        <target>Sincronizar Productos</target>
+      </trans-unit>
+      <trans-unit id="117" resname="Modules.Prestashopyuju.Admin">
+        <source>Sync Stock</source>
+        <target>Sincronizar Stock</target>
+      </trans-unit>
+      <trans-unit id="118" resname="Modules.Prestashopyuju.Admin">
+        <source>Sync Prices</source>
+        <target>Sincronizar Precios</target>
+      </trans-unit>
+
+      <!-- Configuration specific translations -->
+      <trans-unit id="200" resname="Modules.Prestashopyuju.Admin">
+        <source>Yuju Configuration</source>
+        <target>Configuración Yuju</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -43,7 +43,7 @@ class AdminYujuController extends ModuleAdminController
             'module_dir' => $this->module->getPathUri(),
             'module_name' => $this->module->displayName,
             'module_version' => $this->module->version,
-            'current_controller' => get_class($this),
+            'current_controller' => 'AdminYuju',
             'dashboard_stats' => $stats,
             'recent_syncs' => $recentSyncs,
             'last_sync_date' => $lastSyncDate,

@@ -24,6 +24,7 @@ require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuCategoryManager.php';
 require_once dirname(__FILE__) . '/YujuProductManager.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuSyncManager
 {
@@ -48,17 +49,17 @@ class YujuSyncManager
     protected function loadConfig()
     {
         $this->config = [
-            'batch_size' => (int) (Configuration::get('YUJU_SYNC_BATCH_SIZE', null) ?: 50),
-            'max_execution_time' => (int) (Configuration::get('YUJU_SYNC_MAX_EXECUTION_TIME', null) ?: 300),
-            'auto_sync_enabled' => (bool) (Configuration::get('YUJU_AUTO_SYNC_ENABLED', null) ?: false),
-            'sync_frequency' => Configuration::get('YUJU_SYNC_FREQUENCY', null) ?: 'hourly',
-            'email_notifications' => (bool) (Configuration::get('YUJU_EMAIL_NOTIFICATIONS', null) ?: false),
-            'notification_email' => Configuration::get('YUJU_NOTIFICATION_EMAIL', null) ?: '',
-            'sync_categories' => (bool) (Configuration::get('YUJU_SYNC_CATEGORIES', null) ?: true),
-            'sync_products' => (bool) (Configuration::get('YUJU_SYNC_PRODUCTS', null) ?: true),
-            'sync_stock' => (bool) (Configuration::get('YUJU_SYNC_STOCK', null) ?: true),
-            'sync_prices' => (bool) (Configuration::get('YUJU_SYNC_PRICES', null) ?: true),
-            'sync_images' => (bool) (Configuration::get('YUJU_SYNC_IMAGES', null) ?: false),
+            'batch_size' => (int) (YujuConfig::get('YUJU_SYNC_BATCH_SIZE', null) ?: 50),
+            'max_execution_time' => (int) (YujuConfig::get('YUJU_SYNC_MAX_EXECUTION_TIME', null) ?: 300),
+            'auto_sync_enabled' => (bool) (YujuConfig::get('YUJU_AUTO_SYNC_ENABLED', null) ?: false),
+            'sync_frequency' => YujuConfig::get('YUJU_SYNC_FREQUENCY', null) ?: 'hourly',
+            'email_notifications' => (bool) (YujuConfig::get('YUJU_EMAIL_NOTIFICATIONS', null) ?: false),
+            'notification_email' => YujuConfig::get('YUJU_NOTIFICATION_EMAIL', null) ?: '',
+            'sync_categories' => (bool) (YujuConfig::get('YUJU_SYNC_CATEGORIES', null) ?: true),
+            'sync_products' => (bool) (YujuConfig::get('YUJU_SYNC_PRODUCTS', null) ?: true),
+            'sync_stock' => (bool) (YujuConfig::get('YUJU_SYNC_STOCK', null) ?: true),
+            'sync_prices' => (bool) (YujuConfig::get('YUJU_SYNC_PRICES', null) ?: true),
+            'sync_images' => (bool) (YujuConfig::get('YUJU_SYNC_IMAGES', null) ?: false),
         ];
     }
 
@@ -438,7 +439,7 @@ class YujuSyncManager
      */
     protected function getLastSyncDate()
     {
-        $last_sync = Configuration::get('YUJU_LAST_SYNC_DATE');
+        $last_sync = YujuConfig::get('YUJU_LAST_SYNC_DATE');
 
         return $last_sync ? $last_sync : date('Y-m-d H:i:s', strtotime('-1 hour'));
     }
@@ -448,7 +449,7 @@ class YujuSyncManager
      */
     protected function updateLastSyncDate()
     {
-        Configuration::updateValue('YUJU_LAST_SYNC_DATE', date('Y-m-d H:i:s'));
+        YujuConfig::set('YUJU_LAST_SYNC_DATE', date('Y-m-d H:i:s'));
     }
 
     /**

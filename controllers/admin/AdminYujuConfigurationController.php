@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 require_once dirname(__FILE__) . '/../../classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/../../classes/YujuApiClient.php';
 require_once dirname(__FILE__) . '/../../classes/YujuLogger.php';
+require_once dirname(__FILE__) . '/../../config/config.php';
 
 class AdminYujuConfigurationController extends ModuleAdminController
 {
@@ -45,10 +46,22 @@ class AdminYujuConfigurationController extends ModuleAdminController
     public function initContent()
     {
         parent::initContent();
+        
+        // Log para verificar que el controlador se carga
+        file_put_contents(dirname(__FILE__) . '/../../logs/debug.log', 
+            date('Y-m-d H:i:s') . " - AdminYujuConfigurationController initContent called\n", 
+            FILE_APPEND | LOCK_EX);
 
-        $oauth = new YujuOAuth();
-        $api_client = new YujuApiClient();
-        $logger = new YujuLogger();
+        try {
+            $oauth = new YujuOAuth();
+            $api_client = new YujuApiClient();
+            $logger = new YujuLogger();
+        } catch (Exception $e) {
+            file_put_contents(dirname(__FILE__) . '/../../logs/debug.log', 
+                date('Y-m-d H:i:s') . " - Error creating objects: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            return;
+        }
 
         // Verificar si se está procesando el callback de OAuth
         if (Tools::getValue('code') && Tools::getValue('state')) {
@@ -59,20 +72,36 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $oauth_status = $oauth->getOAuthStatus();
         $api_stats = $api_client->getApiStats();
 
+        // Verificar estado del token y agregar alertas si es necesario
+        $token_alerts = $this->checkTokenStatus($oauth);
+
         // Obtener configuración actual
         $config = [
-            'YUJU_ENVIRONMENT' => Configuration::get('YUJU_ENVIRONMENT', 'sandbox'),
-            'YUJU_CLIENT_ID' => Configuration::get('YUJU_CLIENT_ID'),
-            'YUJU_CLIENT_SECRET' => Configuration::get('YUJU_CLIENT_SECRET'),
-            'YUJU_REDIRECT_URI' => Configuration::get('YUJU_REDIRECT_URI'),
-            'YUJU_AUTO_SYNC' => Configuration::get('YUJU_AUTO_SYNC', 1),
-            'YUJU_SYNC_FREQUENCY' => Configuration::get('YUJU_SYNC_FREQUENCY', 3600),
-            'YUJU_BATCH_SIZE' => Configuration::get('YUJU_BATCH_SIZE', 50),
-            'YUJU_EMAIL_NOTIFICATIONS' => Configuration::get('YUJU_EMAIL_NOTIFICATIONS', 1),
-            'YUJU_NOTIFICATION_EMAIL' => Configuration::get('YUJU_NOTIFICATION_EMAIL'),
-            'YUJU_WEBHOOK_SECRET' => Configuration::get('YUJU_WEBHOOK_SECRET'),
-            'YUJU_LOG_LEVEL' => Configuration::get('YUJU_LOG_LEVEL', 'info'),
-            'YUJU_LOG_RETENTION' => Configuration::get('YUJU_LOG_RETENTION', 30),
+            'YUJU_ENVIRONMENT' => YujuConfig::get('YUJU_ENVIRONMENT', 'sandbox'),
+            'YUJU_CLIENT_ID' => YujuConfig::get('YUJU_CLIENT_ID'),
+            'YUJU_CLIENT_SECRET' => YujuConfig::get('YUJU_CLIENT_SECRET'),
+            'YUJU_REDIRECT_URI' => YujuConfig::get('YUJU_REDIRECT_URI'),
+            'YUJU_AUTO_SYNC' => YujuConfig::get('YUJU_AUTO_SYNC', 1),
+            'YUJU_SYNC_FREQUENCY' => YujuConfig::get('YUJU_SYNC_FREQUENCY', 3600),
+            'YUJU_BATCH_SIZE' => YujuConfig::get('YUJU_BATCH_SIZE', 100),
+            'YUJU_BATCH_FREQUENCY' => YujuConfig::get('YUJU_BATCH_FREQUENCY', 60),
+            'YUJU_MAX_DAILY_SYNCS' => YujuConfig::get('YUJU_MAX_DAILY_SYNCS', 5),
+            'YUJU_EMAIL_NOTIFICATIONS' => YujuConfig::get('YUJU_EMAIL_NOTIFICATIONS', 1),
+            'YUJU_NOTIFICATION_EMAIL' => YujuConfig::get('YUJU_NOTIFICATION_EMAIL'),
+            'YUJU_WEBHOOK_SECRET' => YujuConfig::get('YUJU_WEBHOOK_SECRET'),
+            'YUJU_LOG_LEVEL' => YujuConfig::get('YUJU_LOG_LEVEL', 'info'),
+            'YUJU_LOG_RETENTION' => YujuConfig::get('YUJU_LOG_RETENTION', 30),
+            // Nuevas configuraciones que faltan
+            'YUJU_PRESTASHOP_STORE_ID' => YujuConfig::get('YUJU_PRESTASHOP_STORE_ID', 1),
+            'YUJU_STORE_LANGUAGE' => YujuConfig::get('YUJU_STORE_LANGUAGE', 'es'),
+            'YUJU_SYNC_ENABLED' => YujuConfig::get('YUJU_SYNC_ENABLED', 1),
+            'YUJU_SYNC_PRICES' => YujuConfig::get('YUJU_SYNC_PRICES', 1),
+            'YUJU_SYNC_STOCK' => YujuConfig::get('YUJU_SYNC_STOCK', 1),
+            'YUJU_SYNC_IMAGES' => YujuConfig::get('YUJU_SYNC_IMAGES', 1),
+            'YUJU_SYNC_ORDERS' => YujuConfig::get('YUJU_SYNC_ORDERS', 1),
+            'YUJU_CLEAN_HTML' => YujuConfig::get('YUJU_CLEAN_HTML', 1),
+            'YUJU_LOGGING_ENABLED' => YujuConfig::get('YUJU_LOGGING_ENABLED', 1),
+            'YUJU_FORCE_UPDATE' => YujuConfig::get('YUJU_FORCE_UPDATE', 0),
         ];
 
         // Generar URLs importantes para la configuración
@@ -100,7 +129,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'config' => $config,
             'current_index' => self::$currentIndex,
             'token' => Tools::getAdminTokenLite('AdminYujuConfiguration'),
-            'ajax_url' => self::$currentIndex . '&token=' . Tools::getAdminTokenLite('AdminYujuConfiguration'),
+            'ajax_url' => $this->context->link->getAdminLink('AdminYujuConfiguration'),
+            // Datos adicionales para el template
+            'prestashop_stores' => Shop::getShops(),
+            'available_languages' => Language::getLanguages(false),
             // URLs importantes para mostrar en la configuración
             'yuju_urls' => [
                 'terms_conditions' => $terms_url,
@@ -108,6 +140,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'redirect_uri' => $redirect_uri,
                 'webhook_url' => $webhook_url,
                 'allowed_domains' => $allowed_domains,
+                'combined_domains' => (is_array($allowed_domains) ? implode(', ', $allowed_domains) : $allowed_domains) . (!empty($allowed_domains) ? ', ' : '') . $redirect_uri,
             ],
         ]);
 
@@ -119,8 +152,163 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
     }
 
+    public function displayAjax()
+    {
+        file_put_contents(dirname(__FILE__) . '/../../logs/debug.log', 
+            date('Y-m-d H:i:s') . " - displayAjax called\n", 
+            FILE_APPEND | LOCK_EX);
+    }
+    
+    /**
+     * Procesa las peticiones AJAX para testProducts
+     * 
+     * NOTA: Usa cURL directo en lugar de YujuApiClient porque en el contexto
+     * del controlador admin, YujuApiClient tiene problemas con el token.
+     * Los tests externos (test_raw_curl.php, test_prestashop_context.php) 
+     * funcionan correctamente, pero desde este controlador el token se hashea.
+     * Solución: cURL directo con configuración exacta que funciona en Postman.
+     */
+    public function ajaxProcessTestProducts()
+    {
+        try {
+            // Verificar el token antes de intentar crear producto
+            $oauth = new YujuOAuth();
+            $token = $oauth->getValidAccessToken();
+            
+            if (!$token) {
+                throw new Exception("No hay token válido. Por favor reconecta OAuth.");
+            }
+            
+            // Generar datos ficticios para producto de prueba
+            $timestamp = time();
+            $test_sku = 'TEST-YUJU-' . $timestamp;
+            $test_product_name = 'Producto de Prueba Yuju ' . date('Y-m-d H:i:s');
+            
+            // Crear producto de prueba según la documentación de Yuju
+            $product_data = [
+                'sku_simple' => $test_sku,
+                'sku' => $test_sku,
+                'name' => $test_product_name,
+                'description' => 'Este es un producto de prueba creado automáticamente para verificar la conexión con Yuju API.',
+                'id_category' => 527,
+                'stock' => 50,
+                'price' => round(799.99, 2),
+                'brand' => 'Samsung',
+                'shipping' => 1,
+                'dimensions_unit' => 'cm',
+                'shipping_width' => round(7.31, 2),
+                'shipping_depth' => round(0.79, 2),
+                'shipping_height' => round(15.69, 2),
+                'weight_unit' => 'kg',
+                'weight' => round(0.169, 3),
+                'images' => [],
+                'listing_type' => 'gold_special',
+                'ean' => '1234567890124',
+                'product_weight' => '0.4',
+                'net_content' => '300g',
+                'channel_categories' => [],
+                'channel_fields' => [
+                    '15' => [
+                        'custom' => [
+                            'discount' => 20
+                        ],
+                        'general' => [
+                            'name' => $test_product_name,
+                            'price' => 800,
+                            'stock' => 25
+                        ]
+                    ]
+                ]
+            ];
+            
+            // Preparar JSON con precisión correcta
+            $old_precision = ini_get('serialize_precision');
+            ini_set('serialize_precision', -1);
+            $json_body = json_encode($product_data, JSON_UNESCAPED_SLASHES);
+            ini_set('serialize_precision', $old_precision);
+            
+            // Enviar producto a Yuju usando cURL directo
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => 'https://api.tp.yuju.io/products',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_POSTFIELDS => $json_body,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Accept: application/json',
+                    'Authorization: Bearer ' . $token
+                ],
+            ]);
+            
+            $response_body = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curl_error = curl_error($ch);
+            curl_close($ch);
+            
+            $decoded_response = json_decode($response_body, true);
+            $success = ($http_code >= 200 && $http_code < 300);
+            
+            $result = [
+                'success' => $success,
+                'http_code' => $http_code,
+                'data' => $decoded_response,
+                'error' => $success ? null : 'HTTP_' . $http_code,
+                'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code),
+            ];
+            
+            // Validar respuesta
+            if (!$result['success']) {
+                $this->ajaxDie(json_encode([
+                    'success' => false,
+                    'message' => 'Error al crear producto de prueba',
+                    'error' => $result['message'],
+                    'http_code' => $result['http_code']
+                ]));
+            }
+            
+            // Extraer productos creados
+            $created_products = $result['data']['success'] ?? [];
+            $errors = $result['data']['errors'] ?? [];
+            
+            if (empty($created_products) && !empty($errors)) {
+                $this->ajaxDie(json_encode([
+                    'success' => false,
+                    'message' => 'Yuju reportó errores al crear el producto',
+                    'errors' => $errors
+                ]));
+            }
+            
+            $first_product = reset($created_products);
+            
+            $this->ajaxDie(json_encode([
+                'success' => true,
+                'message' => '✅ Producto creado exitosamente en Yuju',
+                'product' => [
+                    'sku' => $first_product['sku'] ?? $test_sku,
+                    'name' => $first_product['name'] ?? $test_product_name,
+                    'id_product' => $first_product['id_product'] ?? null,
+                    'id_shop' => $first_product['id_shop'] ?? null,
+                ]
+            ]));
+            
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Error al procesar la prueba',
+                'error' => $e->getMessage()
+            ]));
+        }
+    }
+    
     public function postProcess()
     {
+        
         if (Tools::isSubmit('submitOAuthConfig')) {
             $this->processOAuthConfiguration();
         } elseif (Tools::isSubmit('submitGeneralConfig')) {
@@ -166,27 +354,107 @@ class AdminYujuConfigurationController extends ModuleAdminController
     public function ajaxProcessTestConnectivity()
     {
         try {
-            $api_client = new YujuApiClient();
+            $logger = new YujuLogger();
+            $logger->info('Iniciando testConnectivity desde controlador', [
+                'method' => 'ajaxProcessTestConnectivity',
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
             
-            // Test basic connection first
-            $connection_test = $api_client->testConnection();
+            $oauth = new YujuOAuth();
             
-            if (!$connection_test) {
-                throw new Exception('No se pudo establecer conexión con la API de Yuju');
+            // Verificar el estado de OAuth antes de obtener el token
+            $oauth_status = $oauth->getOAuthStatus();
+            $logger->info('Estado de OAuth verificado', [
+                'oauth_status' => $oauth_status
+            ]);
+            
+            // Obtener el access token
+            $access_token = $oauth->getValidAccessToken();
+            
+            $logger->info('Resultado de getValidAccessToken', [
+                'has_access_token' => !empty($access_token),
+                'token_length' => $access_token ? strlen($access_token) : 0,
+                'token_prefix' => $access_token ? substr($access_token, 0, 10) . '...' : 'null'
+            ]);
+            
+            if (!$access_token) {
+                $logger->error('No se pudo obtener token de acceso válido', [
+                    'oauth_configured' => $oauth_status['configured'] ?? false,
+                    'has_token' => $oauth_status['has_token'] ?? false,
+                    'token_valid' => $oauth_status['token_valid'] ?? false
+                ]);
+                throw new Exception('No hay token de acceso válido. Por favor, autoriza la conexión OAuth primero.');
             }
             
-            // Get stores from API
-            $stores = $api_client->getStores();
+            // Hacer la petición desde el servidor para evitar CORS
+            // CAMBIADO TEMPORALMENTE: Probar products-offer-report en lugar de webhook-sub
+            $endpoint = 'https://api.tp.yuju.io/products-offer-report';
+            $logger->info('Realizando petición GET al endpoint', ['endpoint' => $endpoint]);
             
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $endpoint,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: ' . $access_token,
+                    'Accept: application/json',
+                    'Content-Type: application/json'
+                ],
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+            ]);
+            
+            $api_response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curl_error = curl_error($ch);
+            curl_close($ch);
+            
+            if ($curl_error) {
+                throw new Exception('Error cURL: ' . $curl_error);
+            }
+            
+            $logger->info('Respuesta de la API recibida', [
+                'http_code' => $http_code,
+                'response_length' => strlen($api_response),
+                'response_preview' => substr($api_response, 0, 100)
+            ]);
+            
+            // Obtener datos del token para debug
+            $oauth_data = $oauth->getStoredTokenData();
+            
+            // Preparar respuesta exitosa
             $response = [
                 'success' => true,
-                'message' => $this->trans('Connectivity test successful', array(), 'Modules.Prestashopyuju.Admin'),
+                'message' => 'Conectividad probada exitosamente',
                 'data' => [
-                    'connection' => $connection_test,
-                    'stores' => $stores
+                    'endpoint' => $endpoint,
+                    'http_code' => $http_code,
+                    'response' => $api_response,
+                    'status_text' => $this->getHttpStatusText($http_code),
+                    'token_debug' => [
+                        'token_usado' => $access_token,
+                        'token_length' => strlen($access_token),
+                        'token_db' => $oauth_data['access_token'] ?? 'N/A',
+                        'son_iguales' => ($access_token === ($oauth_data['access_token'] ?? '')),
+                        'expires_at' => $oauth_data['token_expires'] ?? 'N/A',
+                        'client_id' => $oauth_data['client_id'] ?? 'N/A'
+                    ]
                 ],
             ];
+            
+            $logger->info('testConnectivity completado exitosamente', [
+                'endpoint' => $endpoint,
+                'http_code' => $http_code
+            ]);
+            
         } catch (Exception $e) {
+            $logger = new YujuLogger();
+            $logger->error('Error en testConnectivity', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             $response = [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -194,6 +462,26 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         exit(json_encode($response));
+    }
+    
+    /**
+     * Get HTTP status text for a given status code
+     */
+    private function getHttpStatusText($code)
+    {
+        $status_codes = [
+            200 => 'OK',
+            201 => 'Created',
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            500 => 'Internal Server Error',
+            502 => 'Bad Gateway',
+            503 => 'Service Unavailable'
+        ];
+        
+        return $status_codes[$code] ?? 'Unknown Status';
     }
 
     /**
@@ -235,9 +523,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
-            Configuration::updateValue('YUJU_API_CLIENT_ID', $client_id);
-            Configuration::updateValue('YUJU_API_CLIENT_SECRET', $client_secret);
-            Configuration::updateValue('YUJU_API_ENVIRONMENT', $environment);
+            YujuConfig::set('YUJU_API_CLIENT_ID', $client_id, 'string');
+            YujuConfig::set('YUJU_API_CLIENT_SECRET', $client_secret, 'string');
+            YujuConfig::set('YUJU_API_ENVIRONMENT', $environment, 'string');
 
             $oauth = new YujuOAuth();
             $oauth->updateCredentials($client_id, $client_secret);
@@ -262,6 +550,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $configs = [
             'YUJU_BATCH_SIZE' => (int) Tools::getValue('batch_size'),
             'YUJU_BATCH_FREQUENCY' => (int) Tools::getValue('batch_frequency'),
+            'YUJU_MAX_DAILY_SYNCS' => (int) Tools::getValue('max_daily_syncs'),
             'YUJU_AUDIT_FREQUENCY' => (int) Tools::getValue('audit_frequency'),
             'YUJU_EMAIL_NOTIFICATIONS' => (int) Tools::getValue('email_notifications'),
             'YUJU_NOTIFICATION_EMAIL' => Tools::getValue('notification_email'),
@@ -269,14 +558,20 @@ class AdminYujuConfigurationController extends ModuleAdminController
         ];
 
         // Validaciones
-        if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 1000) {
-            $this->errors[] = $this->trans('El tamaño del lote debe estar entre 1 y 1000', array(), 'Modules.Prestashopyuju.Admin');
+        if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 500) {
+            $this->errors[] = $this->trans('El tamaño del lote debe estar entre 1 y 500', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
 
-        if ($configs['YUJU_BATCH_FREQUENCY'] < 60) {
-            $this->errors[] = $this->trans('La frecuencia mínima es de 60 segundos', array(), 'Modules.Prestashopyuju.Admin');
+        if ($configs['YUJU_BATCH_FREQUENCY'] < 30 || $configs['YUJU_BATCH_FREQUENCY'] > 3600) {
+            $this->errors[] = $this->trans('La frecuencia debe estar entre 30 y 3600 segundos', array(), 'Modules.Prestashopyuju.Admin');
+
+            return;
+        }
+        
+        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 5) {
+            $this->errors[] = $this->trans('El máximo de actualizaciones diarias debe estar entre 1 y 5', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -289,7 +584,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         try {
             foreach ($configs as $key => $value) {
-                Configuration::updateValue($key, $value);
+                YujuConfig::set($key, $value, 'string');
             }
 
             $this->confirmations[] = $this->trans('Configuración general guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
@@ -437,9 +732,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $helper->submit_action = 'submitOAuthConfig';
 
         $helper->fields_value = [
-            'client_id' => Configuration::get('YUJU_API_CLIENT_ID'),
-            'client_secret' => Configuration::get('YUJU_API_CLIENT_SECRET'),
-            'environment' => Configuration::get('YUJU_API_ENVIRONMENT'),
+            'client_id' => YujuConfig::get('YUJU_API_CLIENT_ID'),
+            'client_secret' => YujuConfig::get('YUJU_API_CLIENT_SECRET'),
+            'environment' => YujuConfig::get('YUJU_API_ENVIRONMENT'),
         ];
 
         return $helper->generateForm([$fields_form]);
@@ -525,12 +820,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $helper->submit_action = 'submitGeneralConfig';
 
         $helper->fields_value = [
-            'batch_size' => Configuration::get('YUJU_BATCH_SIZE'),
-            'batch_frequency' => Configuration::get('YUJU_BATCH_FREQUENCY'),
-            'audit_frequency' => Configuration::get('YUJU_AUDIT_FREQUENCY'),
-            'email_notifications' => Configuration::get('YUJU_EMAIL_NOTIFICATIONS'),
-            'notification_email' => Configuration::get('YUJU_NOTIFICATION_EMAIL'),
-            'error_threshold' => Configuration::get('YUJU_ERROR_THRESHOLD'),
+            'batch_size' => YujuConfig::get('YUJU_BATCH_SIZE'),
+            'batch_frequency' => YujuConfig::get('YUJU_BATCH_FREQUENCY'),
+            'audit_frequency' => YujuConfig::get('YUJU_AUDIT_FREQUENCY'),
+            'email_notifications' => YujuConfig::get('YUJU_EMAIL_NOTIFICATIONS'),
+            'notification_email' => YujuConfig::get('YUJU_NOTIFICATION_EMAIL'),
+            'error_threshold' => YujuConfig::get('YUJU_ERROR_THRESHOLD'),
         ];
 
         return $helper->generateForm([$fields_form]);
@@ -589,6 +884,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_AUTO_SYNC' => (int) Tools::getValue('YUJU_AUTO_SYNC'),
             'YUJU_SYNC_FREQUENCY' => (int) Tools::getValue('YUJU_SYNC_FREQUENCY'),
             'YUJU_BATCH_SIZE' => (int) Tools::getValue('YUJU_BATCH_SIZE'),
+            'YUJU_BATCH_FREQUENCY' => (int) Tools::getValue('YUJU_BATCH_FREQUENCY'),
+            'YUJU_MAX_DAILY_SYNCS' => (int) Tools::getValue('YUJU_MAX_DAILY_SYNCS'),
             'YUJU_EMAIL_NOTIFICATIONS' => (int) Tools::getValue('YUJU_EMAIL_NOTIFICATIONS'),
             'YUJU_NOTIFICATION_EMAIL' => Tools::getValue('YUJU_NOTIFICATION_EMAIL'),
             'YUJU_WEBHOOK_SECRET' => Tools::getValue('YUJU_WEBHOOK_SECRET'),
@@ -602,13 +899,23 @@ class AdminYujuConfigurationController extends ModuleAdminController
             return;
         }
 
-        if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 1000) {
-            $this->errors[] = $this->trans('El tamaño del lote debe estar entre 1 y 1000', array(), 'Modules.Prestashopyuju.Admin');
+        if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 500) {
+            $this->errors[] = $this->trans('El tamaño del lote debe estar entre 1 y 500', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
 
         if ($configs['YUJU_SYNC_FREQUENCY'] < 60) {
             $this->errors[] = $this->trans('La frecuencia mínima es de 60 segundos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+        
+        if ($configs['YUJU_BATCH_FREQUENCY'] < 30 || $configs['YUJU_BATCH_FREQUENCY'] > 3600) {
+            $this->errors[] = $this->trans('La frecuencia entre lotes debe estar entre 30 y 3600 segundos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+        
+        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 5) {
+            $this->errors[] = $this->trans('El máximo de sincronizaciones diarias debe estar entre 1 y 5', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
 
@@ -619,7 +926,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         try {
             foreach ($configs as $key => $value) {
-                Configuration::updateValue($key, $value);
+                YujuConfig::set($key, $value, 'string');
             }
 
             $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
@@ -636,10 +943,92 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
     }
 
+
+
     private function getLastSyncTime()
     {
         $sql = 'SELECT MAX(start_time) FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE entity_type = \'products\'';
 
         return Db::getInstance()->getValue($sql);
+    }
+
+    /**
+     * Verifica el estado del token y genera alertas si es necesario
+     */
+    private function checkTokenStatus($oauth)
+    {
+        $alerts = [];
+        
+        try {
+            $oauth_data = $oauth->getStoredTokenData();
+            
+            if (!$oauth_data || empty($oauth_data['access_token'])) {
+                $this->warnings[] = $this->trans(
+                    'No se ha configurado la conexión con Yuju. Por favor, configure las credenciales OAuth.',
+                    [],
+                    'Modules.Prestashopyuju.Admin'
+                );
+                return $alerts;
+            }
+            
+            // Verificar si el token está expirado
+            if ($oauth->isTokenExpired($oauth_data)) {
+                $this->errors[] = $this->trans(
+                    'El token de acceso a Yuju ha EXPIRADO. Es necesario reconectar inmediatamente desde la sección OAuth.',
+                    [],
+                    'Modules.Prestashopyuju.Admin'
+                );
+                $alerts['expired'] = true;
+            }
+            // Verificar si el token expirará pronto (menos de 24 horas)
+            elseif ($oauth->needsRenewal(86400)) {
+                $expires_at = isset($oauth_data['token_expires']) ? $oauth_data['token_expires'] : null;
+                
+                if ($expires_at) {
+                    $remaining_time = strtotime($expires_at) - time();
+                    $remaining_hours = floor($remaining_time / 3600);
+                    
+                    // Solo mostrar si quedan más de 2 horas
+                    if ($remaining_hours > 2) {
+                        $message = $this->trans(
+                            'El token de acceso a Yuju expirará pronto',
+                            [],
+                            'Modules.Prestashopyuju.Admin'
+                        );
+                        
+                        $message .= ' (' . $this->trans('aproximadamente %d horas restantes', [$remaining_hours], 'Modules.Prestashopyuju.Admin') . ')';
+                        $message .= '. ' . $this->trans('Se recomienda reconectar desde la sección OAuth.', [], 'Modules.Prestashopyuju.Admin');
+                        
+                        $this->warnings[] = $message;
+                        $alerts['expiring_soon'] = true;
+                    }
+                }
+            }
+            // Verificar si el token expirará en los próximos 7 días
+            elseif ($oauth->needsRenewal(604800)) {
+                $expires_at = isset($oauth_data['token_expires']) ? $oauth_data['token_expires'] : null;
+                
+                if ($expires_at) {
+                    $remaining_time = strtotime($expires_at) - time();
+                    $remaining_days = floor($remaining_time / 86400);
+                    
+                    $this->informations[] = $this->trans(
+                        'El token de acceso expirará en %d días. Planifique reconectar pronto.',
+                        [$remaining_days],
+                        'Modules.Prestashopyuju.Admin'
+                    );
+                    $alerts['renewal_reminder'] = true;
+                }
+            }
+            
+        } catch (Exception $e) {
+            $this->errors[] = $this->trans(
+                'Error al verificar el estado del token: %s',
+                [$e->getMessage()],
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+        
+        return $alerts;
     }
 }

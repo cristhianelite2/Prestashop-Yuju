@@ -1,0 +1,2 @@
+[2025-08-13 16:42:31] ERROR: Error HTTP en petición de token | Context: {"http_code":403,"error_message":"auth code expired","response_data":{"message":"auth code expired"}}
+[2025-08-13 16:42:31] ERROR: Error al obtener OAuth token | Context: {"success":false,"message":"auth code expired","http_code":403,"response_data":{"message":"auth code expired"}}

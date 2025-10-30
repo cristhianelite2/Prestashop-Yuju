@@ -96,6 +96,18 @@ class YujuLogger
     }
 
     /**
+     * Log de debugging forzado - siempre escribe sin importar configuración.
+     */
+    public function forceDebug($message, $context = [])
+    {
+        $log_entry = $this->formatLogEntry('DEBUG', $message, $context);
+        $filename = 'oauth_debug_' . date('Y-m-d') . '.log';
+        $filepath = $this->log_directory . $filename;
+        
+        file_put_contents($filepath, $log_entry, FILE_APPEND | LOCK_EX);
+    }
+
+    /**
      * Formatea una entrada de log.
      */
     private function formatLogEntry($level, $message, $context)
@@ -135,7 +147,6 @@ class YujuLogger
     {
         try {
             $data = [
-                'log_type' => 'system',
                 'action' => 'log',
                 'entity_id' => 0,
                 'entity_type' => 'system',
@@ -256,9 +267,7 @@ class YujuLogger
     {
         $where_conditions = ['1=1'];
 
-        if (isset($filters['log_type'])) {
-            $where_conditions[] = 'log_type = \'' . pSQL($filters['log_type']) . '\'';
-        }
+        // log_type column removed to avoid database errors
 
         if (isset($filters['status'])) {
             $where_conditions[] = 'status = \'' . pSQL($filters['status']) . '\'';
@@ -293,9 +302,7 @@ class YujuLogger
     {
         $where_conditions = ['1=1'];
 
-        if (isset($filters['log_type'])) {
-            $where_conditions[] = 'log_type = \'' . pSQL($filters['log_type']) . '\'';
-        }
+        // log_type column removed to avoid database errors
 
         if (isset($filters['status'])) {
             $where_conditions[] = 'status = \'' . pSQL($filters['status']) . '\'';
@@ -424,7 +431,6 @@ class YujuLogger
         foreach ($logs as $log) {
             $row = [
                 $log['id_log'],
-                $log['log_type'],
                 $log['action'],
                 $log['status'],
                 $log['message'],

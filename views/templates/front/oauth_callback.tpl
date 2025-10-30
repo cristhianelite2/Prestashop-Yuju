@@ -63,6 +63,21 @@
                 <strong>Error de autorización</strong><br>
                 {$error|escape:'html':'UTF-8'}
             </div>
+            
+            {if isset($show_debug) && $show_debug}
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px; text-align: left; font-size: 12px;">
+                    <strong>Información de debugging:</strong><br>
+                    <strong>URL:</strong> {$debug_info.request_uri|escape:'html':'UTF-8'}<br>
+                    <strong>Query String:</strong> {$debug_info.query_string|escape:'html':'UTF-8'}<br>
+                    <strong>Parámetro code:</strong> {if $debug_info.code_param}{$debug_info.code_param|escape:'html':'UTF-8'}{else}NO RECIBIDO{/if}<br>
+                    <strong>Parámetro state:</strong> {if $debug_info.state_param}{$debug_info.state_param|escape:'html':'UTF-8'}{else}NO RECIBIDO{/if}<br>
+                    <strong>Parámetro error:</strong> {if $debug_info.error_param}{$debug_info.error_param|escape:'html':'UTF-8'}{else}No{/if}<br>
+                    <strong>Todos los parámetros GET:</strong><br>
+                    {foreach from=$debug_info.get_params key=key item=value}
+                        &nbsp;&nbsp;{$key|escape:'html':'UTF-8'} = {$value|escape:'html':'UTF-8'}<br>
+                    {/foreach}
+                </div>
+            {/if}
         {/if}
         
         <button class="close-btn" onclick="window.close()">

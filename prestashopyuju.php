@@ -20,13 +20,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-// Include required files
+// Include autoloader and config
 require_once dirname(__FILE__) . '/config/config.php';
-require_once dirname(__FILE__) . '/classes/YujuLogger.php';
-require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
-require_once dirname(__FILE__) . '/classes/YujuOAuth.php';
-require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
-require_once dirname(__FILE__) . '/classes/YujuWebhookManager.php';
 
 class Prestashopyuju extends Module
 {
@@ -46,7 +41,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.0';
+        $this->version = '1.0.1';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -404,8 +399,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionProductAdd($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'create');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueProductSync')) {
+                    $this->sync_manager->queueProductSync($params['product']->id, 'create');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error para no romper el guardado del producto
         }
     }
 
@@ -414,8 +419,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionProductUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'update');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueProductSync')) {
+                    $this->sync_manager->queueProductSync($params['product']->id, 'update');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error para no romper el guardado del producto
         }
     }
 
@@ -424,8 +439,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionProductDelete($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'delete');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueProductSync')) {
+                    $this->sync_manager->queueProductSync($params['product']->id, 'delete');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error para no romper el borrado del producto
         }
     }
 
@@ -434,8 +459,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionUpdateQuantity($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_STOCK_SYNC')) {
-            $this->sync_manager->queueStockSync($params['id_product'], $params['id_product_attribute']);
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_STOCK_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueStockSync')) {
+                    $this->sync_manager->queueStockSync($params['id_product'], $params['id_product_attribute']);
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -444,8 +479,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionProductAttributeUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_update');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueProductSync')) {
+                    $this->sync_manager->queueProductSync($params['id_product'], 'attribute_update');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -454,8 +499,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionCategoryAdd($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'create');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueCategorySync')) {
+                    $this->sync_manager->queueCategorySync($params['category']->id, 'create');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -464,8 +519,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionCategoryUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'update');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueCategorySync')) {
+                    $this->sync_manager->queueCategorySync($params['category']->id, 'update');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -474,8 +539,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionCategoryDelete($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'delete');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueCategorySync')) {
+                    $this->sync_manager->queueCategorySync($params['category']->id, 'delete');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -484,8 +559,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionOrderStatusUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['id_order'], 'status_update');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueOrderSync')) {
+                    $this->sync_manager->queueOrderSync($params['id_order'], 'status_update');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -494,8 +579,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionValidateOrder($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['order']->id, 'create');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueOrderSync')) {
+                    $this->sync_manager->queueOrderSync($params['order']->id, 'create');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -504,8 +599,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionOrderReturn($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['order']->id, 'return');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueOrderSync')) {
+                    $this->sync_manager->queueOrderSync($params['order']->id, 'return');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -514,8 +619,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionProductAttributeDelete($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_delete');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueProductSync')) {
+                    $this->sync_manager->queueProductSync($params['id_product'], 'attribute_delete');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -524,8 +639,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionAttributeGroupDelete($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
-            $this->sync_manager->queueAttributeSync($params['object']->id, 'group_delete');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueAttributeSync')) {
+                    $this->sync_manager->queueAttributeSync($params['object']->id, 'group_delete');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -534,8 +659,18 @@ class Prestashopyuju extends Module
      */
     public function hookActionAttributeDelete($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
-            $this->sync_manager->queueAttributeSync($params['object']->id, 'delete');
+        try {
+            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
+                if (!isset($this->sync_manager) || !$this->sync_manager) {
+                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
+                    $this->sync_manager = new YujuSyncManager();
+                }
+                if (method_exists($this->sync_manager, 'queueAttributeSync')) {
+                    $this->sync_manager->queueAttributeSync($params['object']->id, 'delete');
+                }
+            }
+        } catch (Exception $e) {
+            // Silenciar error
         }
     }
 
@@ -605,17 +740,18 @@ class Prestashopyuju extends Module
     public function hookDisplayBackOfficeHeader()
     {
         $controller = Tools::getValue('controller');
+        $version = $this->version . '.' . time(); // Añade timestamp para versionado
         
         // Cargar CSS/JS en página de configuración del módulo
         if ($controller == 'AdminModules' && Tools::getValue('configure') == $this->name) {
-            $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
-            $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+            $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
+            $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
         }
         
         // Cargar CSS/JS en TODOS los controladores del módulo Yuju
         if (strpos($controller, 'AdminYuju') === 0) {
-            $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
-            $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+            $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
+            $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
         }
     }
 
@@ -627,18 +763,19 @@ class Prestashopyuju extends Module
         // Only load on module's configuration page and all Yuju module controllers
         if (isset($this->context->controller)) {
             $controller = get_class($this->context->controller);
+            $version = $this->version . '.' . time(); // Añade timestamp para versionado
             
             // Load on module configuration page
             if ($this->context->controller instanceof AdminModulesController && 
                 Tools::getValue('configure') == $this->name) {
-                $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
-                $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+                $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
+                $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
             }
             
             // Load on all Yuju module controllers
             if (strpos($controller, 'AdminYuju') !== false) {
-                $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
-                $this->context->controller->addJS($this->_path . 'views/js/admin.js');
+                $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
+                $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
             }
         }
     }
@@ -648,19 +785,32 @@ class Prestashopyuju extends Module
      */
     public function hookDisplayAdminProductsExtra($params)
     {
-        $product_id = (int) Tools::getValue('id_product');
+        try {
+            $product_id = (int) Tools::getValue('id_product');
 
-        if ($product_id) {
-            $sync_status = $this->sync_manager->getProductSyncStatus($product_id);
+            if ($product_id) {
+                // Verificar si el producto tiene mapping con Yuju
+                $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_product_status` 
+                        WHERE `prestashop_product_id` = ' . (int)$product_id;
+                $status = Db::getInstance()->getRow($sql);
+                
+                $sync_status = $status ? $status['sync_status'] : 'not_synced';
+                $yuju_product_id = $status ? $status['yuju_product_id'] : null;
 
-            $this->context->smarty->assign([
-            'product_id' => $product_id,
-            'sync_status' => $sync_status,
-            'yuju_product_id' => $this->sync_manager->getYujuProductId($product_id),
-            ]);
+                $this->context->smarty->assign([
+                    'product_id' => $product_id,
+                    'sync_status' => $sync_status,
+                    'yuju_product_id' => $yuju_product_id,
+                ]);
 
-            return $this->display(__FILE__, 'views/templates/admin/product_sync_info.tpl');
+                return $this->display(__FILE__, 'views/templates/admin/product_sync_info.tpl');
+            }
+        } catch (Exception $e) {
+            // Silenciar errores para no romper la página de productos
+            return '';
         }
+        
+        return '';
     }
 
     /**

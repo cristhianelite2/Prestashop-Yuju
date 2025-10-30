@@ -191,16 +191,58 @@
                     </div>
                 </div>
                 
+                <hr>
+                <h3 class="text-primary">
+                    <i class="icon-refresh"></i> Configuración de Sincronización Masiva
+                </h3>
+                <p class="help-block">Configure cómo se procesan las actualizaciones de stock y precio hacia Yuju</p>
+                
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Batch Size' mod='prestashopyuju'}
+                        <strong>{l s='Tamaño de Lote' mod='prestashopyuju'}</strong>
                     </label>
                     <div class="col-lg-9">
-                        <input type="number" name="batch_size" value="{Configuration::get('YUJU_BATCH_SIZE')|default:50|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
-                        <p class="help-block">{l s='Number of items to process in each batch (1-500)' mod='prestashopyuju'}</p>
+                        <input type="number" name="batch_size" value="{Configuration::get('YUJU_BATCH_SIZE')|default:100|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
+                        <p class="help-block">
+                            <i class="icon-cubes"></i> {l s='Cantidad de productos a procesar por lote (ej: 100 productos por envío)' mod='prestashopyuju'}
+                        </p>
                     </div>
                 </div>
                 
+                <div class="form-group">
+                    <label class="control-label col-lg-3">
+                        <strong>{l s='Frecuencia de Sincronización' mod='prestashopyuju'}</strong>
+                    </label>
+                    <div class="col-lg-9">
+                        <div class="input-group">
+                            <input type="number" name="batch_frequency" value="{Configuration::get('YUJU_BATCH_FREQUENCY')|default:60|escape:'html':'UTF-8'}" class="form-control" min="30" max="3600">
+                            <span class="input-group-addon">segundos</span>
+                        </div>
+                        <p class="help-block">
+                            <i class="icon-clock-o"></i> {l s='Tiempo de espera entre cada lote (ej: 60 segundos entre cada lote de 100)' mod='prestashopyuju'}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="control-label col-lg-3">
+                        <strong>{l s='Máximo de Actualizaciones Diarias' mod='prestashopyuju'}</strong>
+                    </label>
+                    <div class="col-lg-9">
+                        <select name="max_daily_syncs" class="form-control">
+                            <option value="1" {if Configuration::get('YUJU_MAX_DAILY_SYNCS') == '1'}selected{/if}>1 vez al día</option>
+                            <option value="2" {if Configuration::get('YUJU_MAX_DAILY_SYNCS') == '2'}selected{/if}>2 veces al día</option>
+                            <option value="3" {if Configuration::get('YUJU_MAX_DAILY_SYNCS') == '3'}selected{/if}>3 veces al día</option>
+                            <option value="4" {if Configuration::get('YUJU_MAX_DAILY_SYNCS') == '4'}selected{/if}>4 veces al día</option>
+                            <option value="5" {if Configuration::get('YUJU_MAX_DAILY_SYNCS') == '5' || !Configuration::get('YUJU_MAX_DAILY_SYNCS')}selected{/if}>5 veces al día (máximo)</option>
+                        </select>
+                        <p class="help-block">
+                            <i class="icon-calendar"></i> {l s='Límite de sincronizaciones completas por día (máximo 5)' mod='prestashopyuju'}
+                        </p>
+                    </div>
+                </div>
+                
+                <hr>
                 <div class="form-group">
                     <label class="control-label col-lg-3">
                         {l s='Log Level' mod='prestashopyuju'}

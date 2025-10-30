@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notificación de Token Yuju</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
+        }
+        .alert {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .alert.error {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+        }
+        .alert.warning {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+        }
+        .alert.info {
+            background-color: #d1ecf1;
+            border-color: #17a2b8;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+        .details {
+            background-color: white;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔔 Notificación Yuju API</h1>
+    </div>
+    
+    <div class="content">
+        <h2>{subject}</h2>
+        
+        <div class="alert">
+            <strong>⚠️ Atención requerida</strong>
+            <p>{message}</p>
+        </div>
+        
+        <div class="details">
+            <h3>Detalles:</h3>
+            <ul>
+                <li><strong>Tienda:</strong> {shop_name}</li>
+                <li><strong>Fecha:</strong> {date}</li>
+                <li><strong>Módulo:</strong> PrestaShop Yuju Integration</li>
+            </ul>
+        </div>
+        
+        <h3>¿Qué debo hacer?</h3>
+        <p>Para reconectar tu cuenta de Yuju y obtener un nuevo token de acceso, sigue estos pasos:</p>
+        <ol>
+            <li>Inicia sesión en tu panel de administración de PrestaShop</li>
+            <li>Ve a <strong>Módulos &gt; Yuju &gt; Configuración</strong></li>
+            <li>En la sección <strong>OAuth Configuration</strong>, haz clic en el botón <strong>"Conectar con Yuju"</strong></li>
+            <li>Autoriza la aplicación en tu cuenta de Yuju</li>
+            <li>Verifica que la conexión se haya establecido correctamente</li>
+        </ol>
+        
+        <center>
+            <a href="{admin_url}" class="button">Ir al Panel de Administración</a>
+        </center>
+        
+        <div class="alert info">
+            <strong>💡 Consejo:</strong>
+            <p>Para evitar interrupciones en el servicio, te recomendamos configurar un recordatorio para renovar tu token antes de que expire. El token de Yuju tiene una duración limitada y debe ser renovado periódicamente.</p>
+        </div>
+        
+        <h3>¿Necesitas ayuda?</h3>
+        <p>Si tienes problemas para reconectar o necesitas asistencia, consulta:</p>
+        <ul>
+            <li><a href="https://api-docs.yuju.io/docs/introduccion">Documentación oficial de Yuju API</a></li>
+            <li><a href="https://api-docs.yuju.io/docs/conexi%C3%B3n-a-la-api">Guía de conexión OAuth</a></li>
+            <li>Logs del módulo en: <code>/modules/prestashopyuju/logs/</code></li>
+        </ul>
+    </div>
+    
+    <div class="footer">
+        <p>Este es un mensaje automático del sistema de integración Yuju para PrestaShop.</p>
+        <p>© {current_year} {shop_name}. Todos los derechos reservados.</p>
+    </div>
+</body>
+</html>

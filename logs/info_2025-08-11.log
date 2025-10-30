@@ -1,0 +1,6 @@
+[2025-08-11 11:38:09] INFO: Configuración principal actualizada | Context: {"environment":"production","client_id":"609093b7...","auto_sync":0,"batch_size":100}
+[2025-08-11 11:45:03] INFO: OAuth callback received | Context: {"code_length":64,"state_received":false,"has_code":true,"has_state":false}
+[2025-08-11 11:45:03] INFO: Iniciando petición de token a Yuju | Context: {"url":"https:\/\/api.tp.yuju.io\/auth-generate-token","client_id":"609093b789a85bb88b18c8f8fd519a31","has_secret_key":true,"has_code":true}
+[2025-08-11 11:45:06] INFO: Respuesta recibida de Yuju | Context: {"http_code":200,"response_length":99,"has_curl_error":false}
+[2025-08-11 11:45:06] INFO: Token obtenido exitosamente de Yuju
+[2025-08-11 11:45:06] INFO: OAuth token obtenido exitosamente | Context: {"state":false}

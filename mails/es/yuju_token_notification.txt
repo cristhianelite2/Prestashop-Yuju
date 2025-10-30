@@ -1,0 +1,52 @@
+========================================
+NOTIFICACIÓN YUJU API
+========================================
+
+{subject}
+
+ATENCIÓN REQUERIDA:
+{message}
+
+========================================
+DETALLES:
+========================================
+
+Tienda: {shop_name}
+Fecha: {date}
+Módulo: PrestaShop Yuju Integration
+
+========================================
+¿QUÉ DEBO HACER?
+========================================
+
+Para reconectar tu cuenta de Yuju y obtener un nuevo token de acceso, sigue estos pasos:
+
+1. Inicia sesión en tu panel de administración de PrestaShop
+2. Ve a Módulos > Yuju > Configuración
+3. En la sección "OAuth Configuration", haz clic en el botón "Conectar con Yuju"
+4. Autoriza la aplicación en tu cuenta de Yuju
+5. Verifica que la conexión se haya establecido correctamente
+
+Accede al panel de administración: {admin_url}
+
+========================================
+CONSEJO:
+========================================
+
+Para evitar interrupciones en el servicio, te recomendamos configurar un recordatorio para renovar tu token antes de que expire. El token de Yuju tiene una duración limitada y debe ser renovado periódicamente.
+
+========================================
+¿NECESITAS AYUDA?
+========================================
+
+Si tienes problemas para reconectar o necesitas asistencia, consulta:
+
+- Documentación oficial de Yuju API: https://api-docs.yuju.io/docs/introduccion
+- Guía de conexión OAuth: https://api-docs.yuju.io/docs/conexión-a-la-api
+- Logs del módulo en: /modules/prestashopyuju/logs/
+
+========================================
+
+Este es un mensaje automático del sistema de integración Yuju para PrestaShop.
+
+© {current_year} {shop_name}. Todos los derechos reservados.
