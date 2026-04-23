@@ -39,6 +39,9 @@ class AdminYujuProductMappingController extends ModuleAdminController
         parent::__construct();
 
         $this->logger = new YujuLogger();
+        
+        // Fix constraint issue automatically
+        $this->fixMappingConstraint();
 
         $this->fields_list = [
         'id_mapping' => [
@@ -110,6 +113,15 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
     public function initContent()
     {
+        // Handle AJAX requests
+        if (Tools::getValue('ajax')) {
+            $this->processAjaxRequests();
+            return;
+        }
+        
+        // Load default mappings if none exist
+        $this->ensureDefaultMappings();
+        
         // Assign data to Smarty
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuProductMapping',
@@ -117,7 +129,6 @@ class AdminYujuProductMappingController extends ModuleAdminController
             'prestashop_fields' => $this->getPrestashopFields(),
             'yuju_fields' => $this->getYujuFields(),
             'field_types' => $this->getFieldTypes(),
-
             'transformation_rules' => $this->getTransformationRules(),
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuProductMapping'),
         ]);
@@ -126,59 +137,218 @@ class AdminYujuProductMappingController extends ModuleAdminController
         
         $this->setTemplate('product_mapping.tpl');
     }
+    
+    /**
+     * Ensure default mappings exist in database
+     */
+    private function ensureDefaultMappings()
+    {
+        // Check if mappings already exist
+        $existingMappings = Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`'
+        );
+        
+        if ($existingMappings > 0) {
+            return; // Mappings already exist
+        }
+        
+        // Default mappings to insert - Incluye todos los campos obligatorios de la API
+        $defaultMappings = [
+            // Campos obligatorios de Yuju
+            ['ps' => 'name', 'yuju' => 'name', 'default' => '', 'required' => 1],
+            ['ps' => 'reference', 'yuju' => 'sku', 'default' => '', 'required' => 1],
+            ['ps' => 'reference', 'yuju' => 'sku_simple', 'default' => '', 'required' => 1],
+            ['ps' => 'description', 'yuju' => 'description', 'default' => 'Descripcion no disponible', 'required' => 1],
+            ['ps' => 'id_category_default', 'yuju' => 'id_category', 'default' => '', 'required' => 1],
+            ['ps' => 'quantity', 'yuju' => 'stock', 'default' => '', 'required' => 1],
+            ['ps' => 'price', 'yuju' => 'price', 'default' => '', 'required' => 1],
+            ['ps' => 'manufacturer_name', 'yuju' => 'brand', 'default' => 'Global-Laptops', 'required' => 1],
+            ['ps' => 'available_for_order', 'yuju' => 'shipping', 'default' => '1', 'required' => 1],
+            ['ps' => 'unit_dimension', 'yuju' => 'dimensions_unit', 'default' => 'cm', 'required' => 1],
+            ['ps' => 'width', 'yuju' => 'shipping_width', 'default' => '8', 'required' => 1],
+            ['ps' => 'depth', 'yuju' => 'shipping_depth', 'default' => '35', 'required' => 1],
+            ['ps' => 'height', 'yuju' => 'shipping_height', 'default' => '44', 'required' => 1],
+            ['ps' => 'unit_weight', 'yuju' => 'weight_unit', 'default' => 'kg', 'required' => 1],
+            ['ps' => 'weight', 'yuju' => 'weight', 'default' => '1', 'required' => 1],
+            ['ps' => 'images', 'yuju' => 'images', 'default' => '', 'required' => 1],
+            // Campos opcionales pero útiles
+            ['ps' => 'condition', 'yuju' => 'condition', 'default' => 'new', 'required' => 0],
+            ['ps' => 'ean13', 'yuju' => 'ean', 'default' => '', 'required' => 0],
+            ['ps' => 'upc', 'yuju' => 'upc', 'default' => '', 'required' => 0],
+        ];
+        
+        // Insert default mappings
+        foreach ($defaultMappings as $mapping) {
+            $data = [
+                'prestashop_field' => pSQL($mapping['ps']),
+                'yuju_field' => pSQL($mapping['yuju']),
+                'default_value' => pSQL($mapping['default']),
+                'field_type' => 'string',
+                'sync_direction' => 'bidirectional',
+                'transformation_rule' => 'none',
+                'is_required' => (int)$mapping['required'],
+                'is_active' => 1,
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            
+            Db::getInstance()->insert('yuju_product_mapping', $data);
+        }
+    }
+    
+    /**
+     * Handle AJAX requests
+     */
+    private function processAjaxRequests()
+    {
+        $action = Tools::getValue('action');
+        
+        switch ($action) {
+            case 'saveMappings':
+                $this->ajaxSaveMappings();
+                break;
+            default:
+                die(json_encode(['success' => false, 'message' => 'Acción no válida']));
+        }
+    }
+    
+    /**
+     * Save mappings via AJAX
+     */
+    private function ajaxSaveMappings()
+    {
+        try {
+            $mappingsJson = Tools::getValue('mappings');
+            
+            if (empty($mappingsJson)) {
+                throw new Exception('No se recibieron datos de mapeo');
+            }
+            
+            $mappings = json_decode($mappingsJson, true);
+            
+            if (!is_array($mappings) || empty($mappings)) {
+                throw new Exception('Datos de mapeo inválidos o vacíos');
+            }
+            
+            // Clear existing mappings
+            Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`');
+            
+            $insertedCount = 0;
+            
+            // Insert new mappings
+            foreach ($mappings as $mapping) {
+                if (empty($mapping['prestashop_field']) || empty($mapping['yuju_field'])) {
+                    continue;
+                }
+                
+                $data = [
+                    'prestashop_field' => pSQL($mapping['prestashop_field']),
+                    'yuju_field' => pSQL($mapping['yuju_field']),
+                    'default_value' => pSQL($mapping['default_value'] ?? ''),
+                    'field_type' => 'string',
+                    'sync_direction' => 'bidirectional',
+                    'transformation_rule' => 'none',
+                    'is_required' => 0,
+                    'is_active' => 1,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ];
+                
+                if (Db::getInstance()->insert('yuju_product_mapping', $data)) {
+                    $insertedCount++;
+                }
+            }
+            
+            header('Content-Type: application/json');
+            die(json_encode([
+                'success' => true, 
+                'message' => 'Mapeos guardados exitosamente',
+                'count' => $insertedCount
+            ]));
+            
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            die(json_encode(['success' => false, 'message' => $e->getMessage()]));
+        }
+    }
 
     public function renderForm()
     {
         // PrestaShop product fields
         $prestashop_fields = [
-        ['id' => 'name', 'name' => $this->l('Product Name')],
-        ['id' => 'description', 'name' => $this->l('Description')],
-        ['id' => 'description_short', 'name' => $this->l('Short Description')],
-        ['id' => 'price', 'name' => $this->l('Price')],
-        ['id' => 'wholesale_price', 'name' => $this->l('Wholesale Price')],
-        ['id' => 'reference', 'name' => $this->l('Reference')],
-        ['id' => 'ean13', 'name' => $this->l('EAN13')],
-        ['id' => 'upc', 'name' => $this->l('UPC')],
-        ['id' => 'weight', 'name' => $this->l('Weight')],
-        ['id' => 'width', 'name' => $this->l('Width')],
-        ['id' => 'height', 'name' => $this->l('Height')],
-        ['id' => 'depth', 'name' => $this->l('Depth')],
-        ['id' => 'quantity', 'name' => $this->l('Quantity')],
-        ['id' => 'minimal_quantity', 'name' => $this->l('Minimal Quantity')],
-        ['id' => 'active', 'name' => $this->l('Active')],
-        ['id' => 'available_for_order', 'name' => $this->l('Available for Order')],
-        ['id' => 'show_price', 'name' => $this->l('Show Price')],
-        ['id' => 'online_only', 'name' => $this->l('Online Only')],
-        ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-        ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-        ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-        ['id' => 'link_rewrite', 'name' => $this->l('Friendly URL')],
-        ['id' => 'available_now', 'name' => $this->l('Available Now Text')],
-        ['id' => 'available_later', 'name' => $this->l('Available Later Text')],
+        ['id' => 'name', 'name' => 'Nombre del Producto'],
+        ['id' => 'description', 'name' => 'Descripción'],
+        ['id' => 'description_short', 'name' => 'Descripción Corta'],
+        ['id' => 'price', 'name' => 'Precio'],
+        ['id' => 'price_final', 'name' => 'Precio Final (con impuestos y descuentos)'],
+        ['id' => 'price_with_tax', 'name' => 'Precio Normal (con impuestos)'],
+        ['id' => 'price_without_tax', 'name' => 'Precio sin Impuestos'],
+        ['id' => 'wholesale_price', 'name' => 'Precio de Mayoreo'],
+        ['id' => 'reference', 'name' => 'Referencia/SKU'],
+        ['id' => 'ean13', 'name' => 'EAN13'],
+        ['id' => 'upc', 'name' => 'UPC'],
+        ['id' => 'isbn', 'name' => 'ISBN'],
+        ['id' => 'mpn', 'name' => 'MPN (Número de Parte)'],
+        ['id' => 'weight', 'name' => 'Peso'],
+        ['id' => 'width', 'name' => 'Ancho'],
+        ['id' => 'height', 'name' => 'Alto'],
+        ['id' => 'depth', 'name' => 'Profundidad'],
+        ['id' => 'quantity', 'name' => 'Cantidad/Stock'],
+        ['id' => 'minimal_quantity', 'name' => 'Cantidad Mínima'],
+        ['id' => 'active', 'name' => 'Activo'],
+        ['id' => 'available_for_order', 'name' => 'Disponible para Pedidos'],
+        ['id' => 'show_price', 'name' => 'Mostrar Precio'],
+        ['id' => 'online_only', 'name' => 'Solo Online'],
+        ['id' => 'condition', 'name' => 'Condición (nuevo/usado/reacondicionado)'],
+        ['id' => 'manufacturer_name', 'name' => 'Marca/Fabricante'],
+        ['id' => 'images', 'name' => 'Imágenes del Producto'],
+        ['id' => 'id_category_default', 'name' => 'Categoría Principal'],
+        ['id' => 'unit_dimension', 'name' => 'Unidad de Dimensión'],
+        ['id' => 'unit_weight', 'name' => 'Unidad de Peso'],
+        ['id' => 'shipping_cost', 'name' => 'Costo de Envío'],
+        ['id' => 'meta_title', 'name' => 'Meta Título'],
+        ['id' => 'meta_description', 'name' => 'Meta Descripción'],
+        ['id' => 'meta_keywords', 'name' => 'Meta Palabras Clave'],
+        ['id' => 'link_rewrite', 'name' => 'URL Amigable'],
+        ['id' => 'available_now', 'name' => 'Texto Disponible Ahora'],
+        ['id' => 'available_later', 'name' => 'Texto Disponible Más Tarde'],
         ];
 
-        // Yuju product fields (these would come from API documentation)
+        // Yuju product fields - Campos según API documentation (✅ = obligatorio)
         $yuju_fields = [
-        ['id' => 'title', 'name' => $this->l('Title')],
-        ['id' => 'description', 'name' => $this->l('Description')],
-        ['id' => 'short_description', 'name' => $this->l('Short Description')],
-        ['id' => 'price', 'name' => $this->l('Price')],
-        ['id' => 'cost_price', 'name' => $this->l('Cost Price')],
-        ['id' => 'sku', 'name' => $this->l('SKU')],
-        ['id' => 'barcode', 'name' => $this->l('Barcode')],
-        ['id' => 'weight', 'name' => $this->l('Weight')],
-        ['id' => 'dimensions', 'name' => $this->l('Dimensions')],
-        ['id' => 'stock_quantity', 'name' => $this->l('Stock Quantity')],
-        ['id' => 'min_order_quantity', 'name' => $this->l('Min Order Quantity')],
-        ['id' => 'status', 'name' => $this->l('Status')],
-        ['id' => 'visibility', 'name' => $this->l('Visibility')],
-        ['id' => 'seo_title', 'name' => $this->l('SEO Title')],
-        ['id' => 'seo_description', 'name' => $this->l('SEO Description')],
-        ['id' => 'seo_keywords', 'name' => $this->l('SEO Keywords')],
-        ['id' => 'slug', 'name' => $this->l('Slug')],
-        ['id' => 'brand', 'name' => $this->l('Brand')],
-        ['id' => 'category_id', 'name' => $this->l('Category ID')],
-        ['id' => 'tags', 'name' => $this->l('Tags')],
+        // Campos obligatorios según API
+        ['id' => 'sku_simple', 'name' => '✅ SKU Simple', 'required' => true],
+        ['id' => 'sku', 'name' => '✅ SKU', 'required' => true],
+        ['id' => 'name', 'name' => '✅ Nombre', 'required' => true],
+        ['id' => 'description', 'name' => '✅ Descripción', 'required' => true],
+        ['id' => 'id_category', 'name' => '✅ ID Categoría', 'required' => true],
+        ['id' => 'stock', 'name' => '✅ Stock', 'required' => true],
+        ['id' => 'price', 'name' => '✅ Precio', 'required' => true],
+        ['id' => 'brand', 'name' => '✅ Marca', 'required' => true],
+        ['id' => 'shipping', 'name' => '✅ Envío (0=Gratis, 1=Marketplace, 2=Por Mi)', 'required' => true],
+        ['id' => 'dimensions_unit', 'name' => '✅ Unidad de Dimensiones', 'required' => true],
+        ['id' => 'shipping_width', 'name' => '✅ Ancho de Envío', 'required' => true],
+        ['id' => 'shipping_depth', 'name' => '✅ Profundidad de Envío', 'required' => true],
+        ['id' => 'shipping_height', 'name' => '✅ Alto de Envío', 'required' => true],
+        ['id' => 'weight_unit', 'name' => '✅ Unidad de Peso', 'required' => true],
+        ['id' => 'weight', 'name' => '✅ Peso del Paquete', 'required' => true],
+        ['id' => 'images', 'name' => '✅ Imágenes (Lista de URLs)', 'required' => true],
+        // Campos opcionales
+        ['id' => 'condition', 'name' => 'Condición (nuevo/usado/reacondicionado)', 'required' => false],
+        ['id' => 'characteristics', 'name' => 'Características', 'required' => false],
+        ['id' => 'warranty', 'name' => 'Garantía', 'required' => false],
+        ['id' => 'video_url', 'name' => 'URL de Video', 'required' => false],
+        ['id' => 'listing_type', 'name' => 'Tipo de Publicación (gold_special/gold_premium)', 'required' => false],
+        ['id' => 'ean', 'name' => 'EAN (European Article Number)', 'required' => false],
+        ['id' => 'upc', 'name' => 'UPC (Universal Product Code)', 'required' => false],
+        ['id' => 'isbn_10', 'name' => 'ISBN-10', 'required' => false],
+        ['id' => 'isbn_13', 'name' => 'ISBN-13', 'required' => false],
+        ['id' => 'mpn', 'name' => 'MPN (Número de Parte del Fabricante)', 'required' => false],
+        ['id' => 'product_weight', 'name' => 'Peso del Producto (no del paquete)', 'required' => false],
+        ['id' => 'net_content', 'name' => 'Contenido Neto', 'required' => false],
+        ['id' => 'variations', 'name' => 'Variaciones', 'required' => false],
+        ['id' => 'channel_fields', 'name' => 'Campos por Canal', 'required' => false],
+        ['id' => 'channel_categories', 'name' => 'Categorías por Canal', 'required' => false],
         ];
 
         $field_types = [
@@ -856,38 +1026,10 @@ class AdminYujuProductMappingController extends ModuleAdminController
     // Helper Methods
     protected function getProductMappings()
     {
-        // Orden específico según requerimientos
-        $order_fields = [
-            'name', 'reference', 'reference', 'description', 'images', 'price', 
-            'quantity', 'manufacturer', 'condition', 'shipping_method', 
-            'shipping_price', 'dimension_unit', 'height', 'width', 'depth', 
-            'weight_unit', 'weight', 'ml_template'
-        ];
-        
+        // Ordenar por ID para mostrar los últimos creados al final
         $mappings = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
-            ORDER BY 
-                CASE prestashop_field
-                    WHEN "name" THEN 1
-                    WHEN "reference" THEN 2
-                    WHEN "description" THEN 4
-                    WHEN "images" THEN 5
-                    WHEN "price" THEN 6
-                    WHEN "quantity" THEN 7
-                    WHEN "manufacturer" THEN 8
-                    WHEN "condition" THEN 9
-                    WHEN "shipping_method" THEN 10
-                    WHEN "shipping_price" THEN 11
-                    WHEN "dimension_unit" THEN 12
-                    WHEN "height" THEN 13
-                    WHEN "width" THEN 14
-                    WHEN "depth" THEN 15
-                    WHEN "weight_unit" THEN 16
-                    WHEN "weight" THEN 17
-                    WHEN "ml_template" THEN 18
-                    ELSE 99
-                END,
-                yuju_field ASC
+            ORDER BY id_mapping ASC
         ');
         
         return $mappings;
@@ -896,65 +1038,82 @@ class AdminYujuProductMappingController extends ModuleAdminController
     protected function getPrestashopFields()
     {
         return [
-            ['id' => 'name', 'name' => $this->l('Product Name')],
-            ['id' => 'description', 'name' => $this->l('Description')],
-            ['id' => 'description_short', 'name' => $this->l('Short Description')],
-            ['id' => 'price', 'name' => $this->l('Price')],
-            ['id' => 'wholesale_price', 'name' => $this->l('Wholesale Price')],
-            ['id' => 'reference', 'name' => $this->l('Reference/SKU')],
-            ['id' => 'ean13', 'name' => $this->l('EAN13')],
-            ['id' => 'upc', 'name' => $this->l('UPC')],
-            ['id' => 'isbn', 'name' => $this->l('ISBN')],
-            ['id' => 'mpn', 'name' => $this->l('MPN')],
-            ['id' => 'quantity', 'name' => $this->l('Quantity')],
-            ['id' => 'minimal_quantity', 'name' => $this->l('Minimal Quantity')],
-            ['id' => 'weight', 'name' => $this->l('Weight')],
-            ['id' => 'width', 'name' => $this->l('Width')],
-            ['id' => 'height', 'name' => $this->l('Height')],
-            ['id' => 'depth', 'name' => $this->l('Depth')],
-            ['id' => 'active', 'name' => $this->l('Active')],
-            ['id' => 'available_for_order', 'name' => $this->l('Available for Order')],
-            ['id' => 'show_price', 'name' => $this->l('Show Price')],
-            ['id' => 'online_only', 'name' => $this->l('Online Only')],
-            ['id' => 'condition', 'name' => $this->l('Condition')],
-            ['id' => 'visibility', 'name' => $this->l('Visibility')],
-            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-            ['id' => 'link_rewrite', 'name' => $this->l('Friendly URL')],
-            ['id' => 'available_now', 'name' => $this->l('Available Now Text')],
-            ['id' => 'available_later', 'name' => $this->l('Available Later Text')],
+            ['id' => 'name', 'name' => 'Nombre del Producto'],
+            ['id' => 'description', 'name' => 'Descripción'],
+            ['id' => 'description_short', 'name' => 'Descripción Corta'],
+            ['id' => 'price', 'name' => 'Precio'],
+            ['id' => 'price_final', 'name' => 'Precio Final (con impuestos y descuentos)'],
+            ['id' => 'price_with_tax', 'name' => 'Precio Normal (con impuestos)'],
+            ['id' => 'price_without_tax', 'name' => 'Precio sin Impuestos'],
+            ['id' => 'wholesale_price', 'name' => 'Precio de Mayoreo'],
+            ['id' => 'reference', 'name' => 'Referencia/SKU'],
+            ['id' => 'ean13', 'name' => 'EAN13'],
+            ['id' => 'upc', 'name' => 'UPC'],
+            ['id' => 'isbn', 'name' => 'ISBN'],
+            ['id' => 'mpn', 'name' => 'MPN (Número de Parte)'],
+            ['id' => 'weight', 'name' => 'Peso'],
+            ['id' => 'width', 'name' => 'Ancho'],
+            ['id' => 'height', 'name' => 'Alto'],
+            ['id' => 'depth', 'name' => 'Profundidad'],
+            ['id' => 'quantity', 'name' => 'Cantidad/Stock'],
+            ['id' => 'minimal_quantity', 'name' => 'Cantidad Mínima'],
+            ['id' => 'active', 'name' => 'Activo'],
+            ['id' => 'available_for_order', 'name' => 'Disponible para Pedidos'],
+            ['id' => 'show_price', 'name' => 'Mostrar Precio'],
+            ['id' => 'online_only', 'name' => 'Solo Online'],
+            ['id' => 'condition', 'name' => 'Condición (nuevo/usado/reacondicionado)'],
+            ['id' => 'manufacturer_name', 'name' => 'Marca/Fabricante'],
+            ['id' => 'images', 'name' => 'Imágenes del Producto'],
+            ['id' => 'id_category_default', 'name' => 'Categoría Principal'],
+            ['id' => 'unit_dimension', 'name' => 'Unidad de Dimensión'],
+            ['id' => 'unit_weight', 'name' => 'Unidad de Peso'],
+            ['id' => 'shipping_cost', 'name' => 'Costo de Envío'],
+            ['id' => 'visibility', 'name' => 'Visibilidad'],
+            ['id' => 'meta_title', 'name' => 'Meta Título'],
+            ['id' => 'meta_description', 'name' => 'Meta Descripción'],
+            ['id' => 'meta_keywords', 'name' => 'Meta Palabras Clave'],
+            ['id' => 'link_rewrite', 'name' => 'URL Amigable'],
+            ['id' => 'available_now', 'name' => 'Texto Disponible Ahora'],
+            ['id' => 'available_later', 'name' => 'Texto Disponible Más Tarde'],
         ];
     }
 
     protected function getYujuFields()
     {
         return [
-            ['id' => 'title', 'name' => $this->l('Title')],
-            ['id' => 'description', 'name' => $this->l('Description')],
-            ['id' => 'short_description', 'name' => $this->l('Short Description')],
-            ['id' => 'price', 'name' => $this->l('Price')],
-            ['id' => 'cost_price', 'name' => $this->l('Cost Price')],
-            ['id' => 'sku', 'name' => $this->l('SKU')],
-            ['id' => 'barcode', 'name' => $this->l('Barcode')],
-            ['id' => 'gtin', 'name' => $this->l('GTIN')],
-            ['id' => 'mpn', 'name' => $this->l('MPN')],
-            ['id' => 'stock_quantity', 'name' => $this->l('Stock Quantity')],
-            ['id' => 'min_stock', 'name' => $this->l('Minimum Stock')],
-            ['id' => 'weight', 'name' => $this->l('Weight')],
-            ['id' => 'width', 'name' => $this->l('Width')],
-            ['id' => 'height', 'name' => $this->l('Height')],
-            ['id' => 'length', 'name' => $this->l('Length')],
-            ['id' => 'status', 'name' => $this->l('Status')],
-            ['id' => 'visibility', 'name' => $this->l('Visibility')],
-            ['id' => 'condition', 'name' => $this->l('Condition')],
-            ['id' => 'brand', 'name' => $this->l('Brand')],
-            ['id' => 'category', 'name' => $this->l('Category')],
-            ['id' => 'tags', 'name' => $this->l('Tags')],
-            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-            ['id' => 'slug', 'name' => $this->l('URL Slug')],
+            // Campos obligatorios según API de Yuju
+            ['id' => 'sku_simple', 'name' => 'SKU Simple', 'required' => true],
+            ['id' => 'sku', 'name' => 'SKU', 'required' => true],
+            ['id' => 'name', 'name' => 'Nombre', 'required' => true],
+            ['id' => 'description', 'name' => 'Descripción', 'required' => true],
+            ['id' => 'id_category', 'name' => 'ID Categoría', 'required' => true],
+            ['id' => 'stock', 'name' => 'Stock', 'required' => true],
+            ['id' => 'price', 'name' => 'Precio', 'required' => true],
+            ['id' => 'brand', 'name' => 'Marca', 'required' => true],
+            ['id' => 'shipping', 'name' => 'Envío (0=Gratis, 1=Marketplace, 2=Por Mi)', 'required' => true],
+            ['id' => 'dimensions_unit', 'name' => 'Unidad de Dimensiones', 'required' => true],
+            ['id' => 'shipping_width', 'name' => 'Ancho de Envío', 'required' => true],
+            ['id' => 'shipping_depth', 'name' => 'Profundidad de Envío', 'required' => true],
+            ['id' => 'shipping_height', 'name' => 'Alto de Envío', 'required' => true],
+            ['id' => 'weight_unit', 'name' => 'Unidad de Peso', 'required' => true],
+            ['id' => 'weight', 'name' => 'Peso del Paquete', 'required' => true],
+            ['id' => 'images', 'name' => 'Imágenes (Lista de URLs)', 'required' => true],
+            // Campos opcionales
+            ['id' => 'condition', 'name' => 'Condición (nuevo/usado/reacondicionado)', 'required' => false],
+            ['id' => 'characteristics', 'name' => 'Características', 'required' => false],
+            ['id' => 'warranty', 'name' => 'Garantía', 'required' => false],
+            ['id' => 'video_url', 'name' => 'URL de Video', 'required' => false],
+            ['id' => 'listing_type', 'name' => 'Tipo de Publicación (gold_special/gold_premium)', 'required' => false],
+            ['id' => 'ean', 'name' => 'EAN (European Article Number)', 'required' => false],
+            ['id' => 'upc', 'name' => 'UPC (Universal Product Code)', 'required' => false],
+            ['id' => 'isbn_10', 'name' => 'ISBN-10', 'required' => false],
+            ['id' => 'isbn_13', 'name' => 'ISBN-13', 'required' => false],
+            ['id' => 'mpn', 'name' => 'MPN (Número de Parte del Fabricante)', 'required' => false],
+            ['id' => 'product_weight', 'name' => 'Peso del Producto (no del paquete)', 'required' => false],
+            ['id' => 'net_content', 'name' => 'Contenido Neto', 'required' => false],
+            ['id' => 'variations', 'name' => 'Variaciones', 'required' => false],
+            ['id' => 'channel_fields', 'name' => 'Campos por Canal', 'required' => false],
+            ['id' => 'channel_categories', 'name' => 'Categorías por Canal', 'required' => false],
         ];
     }
 
@@ -990,5 +1149,35 @@ class AdminYujuProductMappingController extends ModuleAdminController
             ['id' => 'boolean_convert', 'name' => $this->l('Convertir a Booleano')],
             ['id' => 'custom', 'name' => $this->l('Código PHP Personalizado')],
         ];
+    }
+    
+    /**
+     * Fix mapping constraint to allow multiple Yuju fields from same PrestaShop field
+     * This method runs automatically and checks if the constraint needs updating
+     */
+    private function fixMappingConstraint()
+    {
+        try {
+            // Check if old constraint exists
+            $sql = "SHOW INDEXES FROM `" . _DB_PREFIX_ . "yuju_product_mapping` 
+                    WHERE Key_name = 'unique_mapping'";
+            $result = Db::getInstance()->executeS($sql);
+            
+            // If constraint has only one column (prestashop_field), we need to fix it
+            if ($result && count($result) === 1 && isset($result[0]['Column_name']) && $result[0]['Column_name'] === 'prestashop_field') {
+                // Drop old constraint
+                Db::getInstance()->execute("ALTER TABLE `" . _DB_PREFIX_ . "yuju_product_mapping` DROP INDEX `unique_mapping`");
+                
+                // Clear existing data to avoid conflicts
+                Db::getInstance()->execute("TRUNCATE TABLE `" . _DB_PREFIX_ . "yuju_product_mapping`");
+                
+                // Add new combined constraint
+                Db::getInstance()->execute("ALTER TABLE `" . _DB_PREFIX_ . "yuju_product_mapping` 
+                    ADD UNIQUE KEY `unique_mapping` (`prestashop_field`, `yuju_field`)");
+            }
+        } catch (Exception $e) {
+            // Log error but don't break the controller
+            $this->logger->error('Failed to fix mapping constraint: ' . $e->getMessage());
+        }
     }
 }

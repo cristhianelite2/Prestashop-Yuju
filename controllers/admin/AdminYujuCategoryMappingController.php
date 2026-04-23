@@ -312,22 +312,127 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
     protected function getYujuCategories()
     {
-        $categories = [];
-
-        $result = Db::getInstance()->executeS('
-    SELECT yuju_category_id as id, name
-    FROM ' . _DB_PREFIX_ . 'yuju_categories_cache
-    ORDER BY level, name
-    ');
-
-        if ($result) {
-            foreach ($result as $category) {
-                $categories[] = [
-                'id' => $category['id'],
-                'name' => $category['name'],
-                ];
-            }
-        }
+        // Categorías oficiales de Yuju según https://api-docs.yuju.io/docs/colores-y-categorias
+        // IDs reales de Yuju con estructura jerárquica
+        $categories = [
+            ['id' => '510', 'name' => 'Herramientas', 'children' => []],
+            ['id' => '511', 'name' => 'Vehículos y Repuestos', 'children' => []],
+            ['id' => '516', 'name' => 'Instrumentos musicales', 'children' => []],
+            ['id' => '517', 'name' => 'Juguetes y juegos de mesa', 'children' => []],
+            ['id' => '518', 'name' => 'Libros', 'children' => []],
+            ['id' => '519', 'name' => 'Música y Películas', 'children' => []],
+            ['id' => '520', 'name' => 'Oficina y Papelería', 'children' => []],
+            ['id' => '523', 'name' => 'Software', 'children' => []],
+            ['id' => '524', 'name' => 'Alimentos y Bebidas', 'children' => []],
+            ['id' => '525', 'name' => 'Inmuebles', 'children' => []],
+            ['id' => '526', 'name' => 'Arte', 'children' => []],
+            ['id' => '527', 'name' => 'Maletas y Equipaje', 'children' => []],
+            ['id' => '530', 'name' => 'Cupones de regalo', 'children' => []],
+            ['id' => '533', 'name' => 'Accesorios', 'children' => []],
+            [
+                'id' => '534',
+                'name' => 'Electrónica',
+                'children' => [
+                    ['id' => '534', 'name' => 'TV y Audio', 'children' => []],
+                    ['id' => '535', 'name' => 'Cámaras y accesorios', 'children' => []],
+                    ['id' => '536', 'name' => 'Consolas y Videojuegos', 'children' => []],
+                    ['id' => '537', 'name' => 'Celulares y Tablets', 'children' => []],
+                    ['id' => '538', 'name' => 'Computación', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '539',
+                'name' => 'Deportes',
+                'children' => [
+                    ['id' => '539', 'name' => 'Accesorios', 'children' => []],
+                    ['id' => '540', 'name' => 'Vitaminas y Suplementos', 'children' => []],
+                    ['id' => '541', 'name' => 'Calzado', 'children' => []],
+                    ['id' => '542', 'name' => 'Ropa Deportiva', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '543',
+                'name' => 'Hogar',
+                'children' => [
+                    ['id' => '543', 'name' => 'Electrodomésticos', 'children' => []],
+                    ['id' => '544', 'name' => 'Iluminación', 'children' => []],
+                    ['id' => '545', 'name' => 'Muebles', 'children' => []],
+                    ['id' => '546', 'name' => 'Decoración', 'children' => []],
+                    ['id' => '547', 'name' => 'Accesorios', 'children' => []],
+                    ['id' => '548', 'name' => 'Colchones y Almohadas', 'children' => []],
+                    ['id' => '549', 'name' => 'Textiles y Blancos', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '550',
+                'name' => 'Productos Industriales y Científicos',
+                'children' => [
+                    ['id' => '550', 'name' => 'Vidriería', 'children' => []],
+                    ['id' => '551', 'name' => 'Materiales Químicos', 'children' => []],
+                    ['id' => '552', 'name' => 'Materiales de Construcción', 'children' => []],
+                    ['id' => '553', 'name' => 'Accesorios Científicos', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '554',
+                'name' => 'Moda',
+                'children' => [
+                    ['id' => '554', 'name' => 'Accesorios', 'children' => []],
+                    ['id' => '555', 'name' => 'Joyería', 'children' => []],
+                    ['id' => '556', 'name' => 'Lentes', 'children' => []],
+                    ['id' => '557', 'name' => 'Relojes', 'children' => []],
+                    ['id' => '558', 'name' => 'Bolsas y Carteras', 'children' => []],
+                    ['id' => '559', 'name' => 'Calzado', 'children' => []],
+                    ['id' => '560', 'name' => 'Ropa', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '561',
+                'name' => 'Belleza, Salud y Bienestar',
+                'children' => [
+                    ['id' => '561', 'name' => 'Cuidado personal', 'children' => []],
+                    ['id' => '562', 'name' => 'Belleza', 'children' => []],
+                    ['id' => '563', 'name' => 'Bienestar y accesorios', 'children' => []],
+                    ['id' => '564', 'name' => 'Equipos Médicos', 'children' => []],
+                    ['id' => '565', 'name' => 'Medicinas', 'children' => []],
+                    ['id' => '566', 'name' => 'Salud', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '567',
+                'name' => 'Mascotas',
+                'children' => [
+                    ['id' => '567', 'name' => 'Accesorios', 'children' => []],
+                    ['id' => '568', 'name' => 'Medicinas', 'children' => []],
+                    ['id' => '569', 'name' => 'Muebles', 'children' => []],
+                    ['id' => '570', 'name' => 'Ropa', 'children' => []],
+                    ['id' => '571', 'name' => 'Alimentos', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '572',
+                'name' => 'Bebés y niños pequeños',
+                'children' => [
+                    ['id' => '572', 'name' => 'Maternidad', 'children' => []],
+                    ['id' => '573', 'name' => 'Monitores', 'children' => []],
+                    ['id' => '574', 'name' => 'Higiene', 'children' => []],
+                    ['id' => '575', 'name' => 'Alimento', 'children' => []],
+                    ['id' => '576', 'name' => 'Calzado', 'children' => []],
+                    ['id' => '577', 'name' => 'Ropa', 'children' => []],
+                    ['id' => '578', 'name' => 'Muebles', 'children' => []]
+                ]
+            ],
+            [
+                'id' => '579',
+                'name' => 'Jardín y Exteriores',
+                'children' => [
+                    ['id' => '579', 'name' => 'Accesorios', 'children' => []],
+                    ['id' => '580', 'name' => 'Iluminación', 'children' => []],
+                    ['id' => '581', 'name' => 'Muebles', 'children' => []]
+                ]
+            ],
+            ['id' => '582', 'name' => 'Otros', 'children' => []]
+        ];
 
         return $categories;
     }
@@ -379,13 +484,15 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
     // AJAX Methods
     public function ajaxProcessSaveMapping()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'message' => ''];
         
         try {
             $id = (int) Tools::getValue('id');
             $prestashop_category_id = (int) Tools::getValue('prestashop_category_id');
             $yuju_category_id = Tools::getValue('yuju_category_id');
-            $sync_enabled = (int) Tools::getValue('sync_enabled');
+            $yuju_category_name = Tools::getValue('yuju_category_name');
+            $sync_enabled = (int) Tools::getValue('sync_enabled', 1);
             
             // Validate required fields
             if (!$prestashop_category_id || !$yuju_category_id) {
@@ -403,10 +510,12 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 throw new Exception('This PrestaShop category is already mapped.');
             }
             
-            // Get Yuju category name
-            $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
+            // Get Yuju category name if not provided
             if (!$yuju_category_name) {
-                throw new Exception('Invalid Yuju category selected.');
+                $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
+                if (!$yuju_category_name) {
+                    throw new Exception('Invalid Yuju category selected.');
+                }
             }
             
             $data = [
@@ -575,18 +684,34 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
     
     protected function getPrestashopCategories()
     {
-        $categories = Category::getCategories($this->context->language->id, true, false);
-        $category_options = [];
+        $id_lang = $this->context->language->id;
+        $root_category = Category::getRootCategory($id_lang);
+        
+        // Obtener todas las categorías con sus relaciones
+        $categories = Category::getCategories($id_lang, true, false);
+        $tree = $this->buildCategoryTree($categories, $root_category->id);
+        
+        return $tree;
+    }
+    
+    protected function buildCategoryTree($categories, $parent_id = 2)
+    {
+        $tree = [];
         
         foreach ($categories as $category) {
-            if ($category['id_category'] != 1) { // Exclude root category
-                $category_options[] = [
+            if ($category['id_parent'] == $parent_id && $category['id_category'] != 1) {
+                $node = [
                     'id' => $category['id_category'],
-                    'name' => str_repeat('- ', $category['level_depth'] - 1) . $category['name']
+                    'name' => $category['name'],
+                    'id_parent' => $category['id_parent'],
+                    'level_depth' => $category['level_depth'],
+                    'active' => $category['active'],
+                    'children' => $this->buildCategoryTree($categories, $category['id_category'])
                 ];
+                $tree[] = $node;
             }
         }
         
-        return $category_options;
+        return $tree;
     }
 }

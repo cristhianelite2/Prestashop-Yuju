@@ -19,6 +19,99 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
+<!-- Panel de Estadísticas de Cola -->
+{if isset($queue_stats)}
+<div class="panel">
+    <div class="panel-heading">
+        <i class="icon-list"></i> Estado de Cola de Sincronización
+    </div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="alert alert-info">
+                    <i class="icon-info-circle"></i> 
+                    <strong>Sistema de Lotes Activo:</strong> Los cambios en productos (excepto precio/stock) se procesan por lotes cada 5 minutos.
+                </div>
+            </div>
+        </div>
+        <div class="row text-center">
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #ddd;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #666;">
+                            <i class="icon-database"></i> {$queue_stats.total}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Total en Cola</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #f0ad4e;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #f0ad4e;">
+                            <i class="icon-clock-o"></i> {$queue_stats.pending}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Pendientes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #5bc0de;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #5bc0de;">
+                            <i class="icon-refresh icon-spin"></i> {$queue_stats.processing}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Procesando</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #5cb85c;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #5cb85c;">
+                            <i class="icon-check"></i> {$queue_stats.completed}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Completados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #d9534f;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #d9534f;">
+                            <i class="icon-exclamation-triangle"></i> {$queue_stats.failed}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Fallidos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="panel" style="border: 2px solid #5bc0de;">
+                    <div class="panel-body">
+                        <h3 style="margin: 0; color: #5bc0de;">
+                            <i class="icon-list"></i> {$queue_stats.queued_products}
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #999;">Productos en Cola</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {if $queue_stats.pending > 0}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="alert alert-warning">
+                    <i class="icon-info-circle"></i> 
+                    <strong>Próximo procesamiento:</strong> {$queue_stats.pending} productos serán procesados en el próximo ciclo del cron (cada 5 minutos).
+                    <br>
+                    <small>Los cambios de <strong>precio y stock</strong> se sincronizan inmediatamente sin pasar por la cola.</small>
+                </div>
+            </div>
+        </div>
+        {/if}
+    </div>
+</div>
+{/if}
+
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-file-text"></i>

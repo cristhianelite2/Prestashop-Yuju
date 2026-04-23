@@ -39,12 +39,6 @@
                                 Configuración
                             </a>
                         </li>
-                        <li class="{if $current_controller == 'AdminYujuSync'}active{/if}">
-                            <a href="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
-                                <i class="icon-refresh"></i>
-                                Sincronización
-                            </a>
-                        </li>
                         <li class="{if $current_controller == 'AdminYujuProductMapping'}active{/if}">
                             <a href="{$link->getAdminLink('AdminYujuProductMapping')|escape:'html':'UTF-8'}">
                                 <i class="icon-shopping-cart"></i>

@@ -75,11 +75,14 @@ class AdminYujuConfigurationController extends ModuleAdminController
         // Verificar estado del token y agregar alertas si es necesario
         $token_alerts = $this->checkTokenStatus($oauth);
 
+        // Obtener datos de OAuth desde la base de datos
+        $oauth_data = $oauth->getStoredTokenData();
+
         // Obtener configuración actual
         $config = [
-            'YUJU_ENVIRONMENT' => YujuConfig::get('YUJU_ENVIRONMENT', 'sandbox'),
-            'YUJU_CLIENT_ID' => YujuConfig::get('YUJU_CLIENT_ID'),
-            'YUJU_CLIENT_SECRET' => YujuConfig::get('YUJU_CLIENT_SECRET'),
+            'YUJU_ENVIRONMENT' => YujuConfig::get('YUJU_ENVIRONMENT', 'production'),
+            'YUJU_CLIENT_ID' => $oauth_data['client_id'] ?? YujuConfig::get('YUJU_CLIENT_ID'),
+            'YUJU_CLIENT_SECRET' => $oauth_data['client_secret'] ?? YujuConfig::get('YUJU_CLIENT_SECRET'),
             'YUJU_REDIRECT_URI' => YujuConfig::get('YUJU_REDIRECT_URI'),
             'YUJU_AUTO_SYNC' => YujuConfig::get('YUJU_AUTO_SYNC', 1),
             'YUJU_SYNC_FREQUENCY' => YujuConfig::get('YUJU_SYNC_FREQUENCY', 3600),
@@ -110,6 +113,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $webhook_url = $link->getModuleLink('prestashopyuju', 'webhook', [], true);
         $terms_url = $link->getModuleLink('prestashopyuju', 'terms', [], true);
         $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
+        $shop_base_url = rtrim($link->getPageLink('index', true), '/');
+        $shop_name = Configuration::get('PS_SHOP_NAME');
+        $shop_email = Configuration::get('PS_SHOP_EMAIL');
         
         // URLs permitidas para autenticación (dominios donde se puede usar la app)
         $allowed_domains = [
@@ -131,7 +137,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'token' => Tools::getAdminTokenLite('AdminYujuConfiguration'),
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuConfiguration'),
             // Datos adicionales para el template
-            'prestashop_stores' => Shop::getShops(),
+            'prestashop_shops' => Shop::getShops(true),
             'available_languages' => Language::getLanguages(false),
             // URLs importantes para mostrar en la configuración
             'yuju_urls' => [
@@ -141,6 +147,19 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'webhook_url' => $webhook_url,
                 'allowed_domains' => $allowed_domains,
                 'combined_domains' => (is_array($allowed_domains) ? implode(', ', $allowed_domains) : $allowed_domains) . (!empty($allowed_domains) ? ', ' : '') . $redirect_uri,
+            ],
+            'yuju_app_setup' => [
+                'app_name' => 'Integracion Yuju - ' . (!empty($shop_name) ? $shop_name : 'PrestaShop'),
+                'app_type' => 'API vendedor',
+                'site_url' => $shop_base_url,
+                'contact_email' => !empty($shop_email) ? $shop_email : '',
+                'description' => 'Integracion oficial para sincronizar productos, stock, precios y ordenes entre PrestaShop y Yuju.',
+                'icon_hint' => 'Use una imagen PNG cuadrada (recomendado 512x512). Puede reutilizar modules/prestashopyuju/logo.png',
+                'terms_url' => $terms_url,
+                // En esta integracion, la URL de autenticacion/callback coincide con el endpoint OAuth del modulo.
+                'app_auth_url' => $redirect_uri,
+                'allowed_redirection_urls' => (is_array($allowed_domains) ? implode(', ', $allowed_domains) : $allowed_domains) . (!empty($allowed_domains) ? ', ' : '') . $redirect_uri,
+                'webhook_url' => $webhook_url,
             ],
         ]);
 
@@ -386,9 +405,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 throw new Exception('No hay token de acceso válido. Por favor, autoriza la conexión OAuth primero.');
             }
             
-            // Hacer la petición desde el servidor para evitar CORS
-            // CAMBIADO TEMPORALMENTE: Probar products-offer-report en lugar de webhook-sub
-            $endpoint = 'https://api.tp.yuju.io/products-offer-report';
+            // Probar conectividad obteniendo lista de suscripciones activas
+            // Según documentación: GET https://api.tp.yuju.io/webhook-sub
+            $endpoint = 'https://api.tp.yuju.io/webhook-sub';
             $logger->info('Realizando petición GET al endpoint', ['endpoint' => $endpoint]);
             
             $ch = curl_init();
@@ -877,10 +896,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     private function processMainConfiguration()
     {
+        $client_id = Tools::getValue('YUJU_CLIENT_ID');
+        $client_secret = Tools::getValue('YUJU_CLIENT_SECRET');
+        $environment = Tools::getValue('YUJU_ENVIRONMENT', 'production');
+        
         $configs = [
-            'YUJU_ENVIRONMENT' => Tools::getValue('YUJU_ENVIRONMENT'),
-            'YUJU_CLIENT_ID' => Tools::getValue('YUJU_CLIENT_ID'),
-            'YUJU_CLIENT_SECRET' => Tools::getValue('YUJU_CLIENT_SECRET'),
+            'YUJU_ENVIRONMENT' => $environment,
             'YUJU_AUTO_SYNC' => (int) Tools::getValue('YUJU_AUTO_SYNC'),
             'YUJU_SYNC_FREQUENCY' => (int) Tools::getValue('YUJU_SYNC_FREQUENCY'),
             'YUJU_BATCH_SIZE' => (int) Tools::getValue('YUJU_BATCH_SIZE'),
@@ -888,13 +909,21 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_MAX_DAILY_SYNCS' => (int) Tools::getValue('YUJU_MAX_DAILY_SYNCS'),
             'YUJU_EMAIL_NOTIFICATIONS' => (int) Tools::getValue('YUJU_EMAIL_NOTIFICATIONS'),
             'YUJU_NOTIFICATION_EMAIL' => Tools::getValue('YUJU_NOTIFICATION_EMAIL'),
-            'YUJU_WEBHOOK_SECRET' => Tools::getValue('YUJU_WEBHOOK_SECRET'),
             'YUJU_LOG_LEVEL' => Tools::getValue('YUJU_LOG_LEVEL'),
             'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
+            'YUJU_PRESTASHOP_STORE_ID' => (int) Tools::getValue('YUJU_PRESTASHOP_STORE_ID'),
+            'YUJU_STORE_LANGUAGE' => Tools::getValue('YUJU_STORE_LANGUAGE'),
+            'YUJU_SYNC_ENABLED' => (int) Tools::getValue('YUJU_SYNC_ENABLED'),
+            'YUJU_SYNC_PRICES' => (int) Tools::getValue('YUJU_SYNC_PRICES'),
+            'YUJU_SYNC_STOCK' => (int) Tools::getValue('YUJU_SYNC_STOCK'),
+            'YUJU_SYNC_IMAGES' => (int) Tools::getValue('YUJU_SYNC_IMAGES'),
+            'YUJU_SYNC_ORDERS' => (int) Tools::getValue('YUJU_SYNC_ORDERS'),
+            'YUJU_CLEAN_HTML' => (int) Tools::getValue('YUJU_CLEAN_HTML'),
+            'YUJU_LOGGING_ENABLED' => (int) Tools::getValue('YUJU_LOGGING_ENABLED'),
         ];
 
         // Validaciones básicas
-        if (empty($configs['YUJU_CLIENT_ID']) || empty($configs['YUJU_CLIENT_SECRET'])) {
+        if (empty($client_id) || empty($client_secret)) {
             $this->errors[] = $this->trans('Client ID y Client Secret son requeridos', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
@@ -925,8 +954,36 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
+            // Guardar configuraciones en YujuConfig
             foreach ($configs as $key => $value) {
                 YujuConfig::set($key, $value, 'string');
+            }
+            
+            // Guardar/actualizar client_id y client_secret en la tabla yuju_oauth_tokens
+            $table_name = _DB_PREFIX_ . 'yuju_oauth_tokens';
+            
+            // Verificar si existe un registro
+            $oauth_record = Db::getInstance()->getRow(
+                "SELECT id FROM `{$table_name}` ORDER BY id DESC LIMIT 1"
+            );
+            
+            $oauth_data = [
+                'client_id' => pSQL($client_id),
+                'client_secret' => pSQL($client_secret),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            
+            if ($oauth_record) {
+                // Actualizar registro existente
+                Db::getInstance()->update(
+                    'yuju_oauth_tokens',
+                    $oauth_data,
+                    'id = ' . (int) $oauth_record['id']
+                );
+            } else {
+                // Crear nuevo registro
+                $oauth_data['created_at'] = date('Y-m-d H:i:s');
+                Db::getInstance()->insert('yuju_oauth_tokens', $oauth_data);
             }
 
             $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
@@ -934,7 +991,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $logger = new YujuLogger();
             $logger->info('Configuración principal actualizada', [
                 'environment' => $configs['YUJU_ENVIRONMENT'],
-                'client_id' => substr($configs['YUJU_CLIENT_ID'], 0, 8) . '...',
+                'client_id' => substr($client_id, 0, 8) . '...',
                 'auto_sync' => $configs['YUJU_AUTO_SYNC'],
                 'batch_size' => $configs['YUJU_BATCH_SIZE'],
             ]);

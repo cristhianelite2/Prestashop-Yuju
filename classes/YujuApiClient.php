@@ -67,13 +67,35 @@ class YujuApiClient
     {
         return $this->makeRequest('PUT', $endpoint, $data);
     }
+    
+    /**
+     * Realiza una petición PATCH a la API de Yuju (actualización parcial).
+     */
+    public function patch($endpoint, $data = [])
+    {
+        return $this->makeRequest('PATCH', $endpoint, $data);
+    }
 
     /**
      * Realiza una petición DELETE a la API de Yuju.
      */
     public function delete($endpoint)
     {
-        return $this->makeRequest('DELETE', $endpoint);
+        $this->logger->info('DELETE request initiated', [
+            'endpoint' => $endpoint,
+            'full_url' => $this->buildUrl($endpoint, [])
+        ]);
+        
+        $result = $this->makeRequest('DELETE', $endpoint);
+        
+        $this->logger->info('DELETE request completed', [
+            'endpoint' => $endpoint,
+            'success' => $result['success'],
+            'http_code' => $result['http_code'],
+            'response' => json_encode($result['data'])
+        ]);
+        
+        return $result;
     }
 
     /**
@@ -88,14 +110,13 @@ class YujuApiClient
             'method' => $method,
             'endpoint' => $endpoint,
             'url' => $url,
-            'headers' => $headers,
-            'data' => $data,
+            'url_has_v1' => strpos($url, '/v1/') !== false,
+            'is_webhook_endpoint' => strpos($endpoint, 'webhook') !== false,
             'params' => $params
         ]);
 
         $start_time = microtime(true);
         $retry_count = 0;
-        $token_refreshed = false;
 
         do {
             $response = $this->executeRequest($method, $url, $headers, $data);
@@ -103,26 +124,18 @@ class YujuApiClient
             $this->logger->info('API response received', [
                 'method' => $method,
                 'endpoint' => $endpoint,
+                'url' => $url,
                 'retry_count' => $retry_count,
                 'http_code' => $response['http_code'] ?? 'unknown',
-                'success' => $response['success'] ?? false,
-                'response' => $response
+                'success' => $response['success'] ?? false
             ]);
 
-            // Si recibimos un 401 y no hemos intentado refrescar el token aún, intentamos refrescarlo
-            if (!$token_refreshed && isset($response['http_code']) && $response['http_code'] == 401) {
-                $this->logger->warning('Received 401 Unauthorized, attempting to refresh token');
-                
-                try {
-                    if ($this->oauth->attemptTokenRefresh()) {
-                        $this->logger->info('Token refreshed successfully, retrying request');
-                        $token_refreshed = true;
-                        $headers = $this->getHeaders(); // Actualizar headers con nuevo token
-                        continue; // Reintentar sin incrementar contador
-                    }
-                } catch (Exception $e) {
-                    $this->logger->error('Failed to refresh token', ['error' => $e->getMessage()]);
-                }
+            // NO intentar refrescar el token automáticamente en caso de 401
+            // La API de Yuju requiere reconexión manual, no refresh automático
+            if (isset($response['http_code']) && $response['http_code'] == 401) {
+                $this->logger->warning('Received 401 Unauthorized - Token inválido o expirado. Se requiere reconexión manual en la configuración del módulo.');
+                // Devolver el error inmediatamente sin reintentar
+                break;
             }
 
             if ($response['success'] || $retry_count >= $this->max_retries) {
@@ -159,6 +172,27 @@ class YujuApiClient
             ini_set('serialize_precision', -1);
             $json_postfields = json_encode($data, JSON_UNESCAPED_SLASHES);
             ini_set('serialize_precision', $old_precision);
+            
+            // Log del JSON enviado (solo para webhooks)
+            if (strpos($url, 'webhook-sub') !== false) {
+                $this->logger->info('Webhook request JSON', [
+                    'url' => $url,
+                    'method' => $method,
+                    'json_body' => $json_postfields,
+                    'data_array' => $data
+                ]);
+            }
+        }
+        
+        // Log completo para DELETE para debug
+        if ($method === 'DELETE') {
+            $this->logger->info('DELETE request details', [
+                'url' => $url,
+                'method' => $method,
+                'headers' => $headers,
+                'has_data' => !empty($data),
+                'data' => $data
+            ]);
         }
         
         // Configuración base
@@ -176,7 +210,8 @@ class YujuApiClient
             CURLOPT_SSL_VERIFYHOST => 2,
         ]);
         
-        if ($json_postfields) {
+        // Para DELETE, NO enviar body (es la práctica estándar HTTP)
+        if ($json_postfields && $method !== 'DELETE') {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $json_postfields);
         }
 
@@ -185,6 +220,16 @@ class YujuApiClient
         $curl_error = curl_error($ch);
 
         curl_close($ch);
+        
+        // Log de respuesta para webhooks
+        if (strpos($url, 'webhook-sub') !== false) {
+            $this->logger->info('Webhook response received', [
+                'url' => $url,
+                'http_code' => $http_code,
+                'response_body' => $response_body,
+                'curl_error' => $curl_error
+            ]);
+        }
 
         if ($curl_error) {
             return [
@@ -224,7 +269,22 @@ class YujuApiClient
      */
     private function buildUrl($endpoint, $params = [])
     {
-        $url = rtrim($this->base_url, '/') . '/' . self::API_VERSION . '/' . ltrim($endpoint, '/');
+        // Los endpoints de webhooks, orders y products NO usan versionado
+        // Según documentación: 
+        // - https://api.tp.yuju.io/webhook-sub
+        // - https://api.tp.yuju.io/orders/
+        // - https://api.tp.yuju.io/products/{id_product}
+        if (strpos($endpoint, '/webhook-sub') === 0 || 
+            strpos($endpoint, 'webhook-sub') === 0 ||
+            strpos($endpoint, '/orders') === 0 ||
+            strpos($endpoint, 'orders') === 0 ||
+            strpos($endpoint, '/products') === 0 ||
+            strpos($endpoint, 'products') === 0) {
+            $url = rtrim($this->base_url, '/') . '/' . ltrim($endpoint, '/');
+        } else {
+            // Resto de endpoints usan v1
+            $url = rtrim($this->base_url, '/') . '/' . self::API_VERSION . '/' . ltrim($endpoint, '/');
+        }
 
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
@@ -247,8 +307,27 @@ class YujuApiClient
         $access_token = $this->oauth->getValidAccessToken();
 
         if ($access_token) {
+            // IMPORTANTE: Limpiar el token de espacios, saltos de línea, etc.
+            $access_token = trim($access_token);
+            
+            // Log para debug del token (solo primeros y últimos caracteres por seguridad)
+            $token_preview = strlen($access_token) > 20 
+                ? substr($access_token, 0, 10) . '...' . substr($access_token, -10)
+                : 'token_corto';
+                
+            $this->logger->info('Using access token', [
+                'token_length' => strlen($access_token),
+                'token_preview' => $token_preview,
+                'token_starts_with' => substr($access_token, 0, 10),
+                'token_ends_with' => substr($access_token, -10),
+                'has_whitespace' => (preg_match('/\s/', $access_token) ? 'YES' : 'NO'),
+                'is_base64_like' => (bool)preg_match('/^[A-Za-z0-9+\/]+={0,2}$/', $access_token)
+            ]);
+            
             // Usar Bearer según funciona en Postman
             $headers[] = 'Authorization: Bearer ' . $access_token;
+        } else {
+            $this->logger->warning('No access token available for request');
         }
 
         return $headers;
@@ -283,6 +362,23 @@ class YujuApiClient
 
         if (isset($response['error_description'])) {
             return $response['error_description'];
+        }
+        
+        // Manejar errores de validación de Laravel/Django (formato: {'field': ['error']})
+        if (is_array($response)) {
+            $errors = [];
+            foreach ($response as $field => $messages) {
+                if (is_array($messages)) {
+                    foreach ($messages as $message) {
+                        $errors[] = ucfirst($field) . ': ' . $message;
+                    }
+                } elseif (is_string($messages)) {
+                    $errors[] = ucfirst($field) . ': ' . $messages;
+                }
+            }
+            if (!empty($errors)) {
+                return implode('; ', $errors);
+            }
         }
 
         return $this->getHttpStatusMessage($http_code);
@@ -604,13 +700,151 @@ class YujuApiClient
      */
     public function createProduct($product_data)
     {
-        return $this->post('products', $product_data);
+        // Usar cURL directo como en testProducts para evitar problemas de encoding
+        $token = $this->oauth->getValidAccessToken();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'NO_TOKEN',
+                'message' => 'No hay token válido disponible',
+                'http_code' => 0,
+                'data' => null
+            ];
+        }
+        
+        // Preparar JSON con precisión correcta
+        $old_precision = ini_get('serialize_precision');
+        ini_set('serialize_precision', -1);
+        $json_body = json_encode($product_data, JSON_UNESCAPED_SLASHES);
+        ini_set('serialize_precision', $old_precision);
+        
+        // Log de debug
+        $this->logger->info('Creating product with cURL', [
+            'token_length' => strlen($token),
+            'token_preview' => substr($token, 0, 20) . '...',
+            'product_data' => $product_data
+        ]);
+        
+        // Enviar producto a Yuju usando cURL directo
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://api.tp.yuju.io/products',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => $json_body,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: Bearer ' . $token
+            ],
+        ]);
+        
+        $response_body = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($curl_error) {
+            return [
+                'success' => false,
+                'error' => 'CURL_ERROR',
+                'message' => $curl_error,
+                'http_code' => 0,
+                'data' => null
+            ];
+        }
+        
+        $decoded_response = json_decode($response_body, true);
+        $success = ($http_code >= 200 && $http_code < 300);
+        
+        return [
+            'success' => $success,
+            'http_code' => $http_code,
+            'data' => $decoded_response,
+            'error' => $success ? null : 'HTTP_' . $http_code,
+            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code)
+        ];
     }
 
     public function updateProduct($product_id, $product_data)
     {
-        // Usar PATCH en lugar de PUT para actualizaciones parciales
-        return $this->makeRequest('PATCH', 'products/' . $product_id, $product_data);
+        // Usar cURL directo como en testProducts para evitar problemas de encoding
+        $token = $this->oauth->getValidAccessToken();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'NO_TOKEN',
+                'message' => 'No hay token válido disponible',
+                'http_code' => 0,
+                'data' => null
+            ];
+        }
+        
+        // Preparar JSON con precisión correcta
+        $old_precision = ini_get('serialize_precision');
+        ini_set('serialize_precision', -1);
+        $json_body = json_encode($product_data, JSON_UNESCAPED_SLASHES);
+        ini_set('serialize_precision', $old_precision);
+        
+        // Log de debug
+        $this->logger->info('Updating product with cURL', [
+            'product_id' => $product_id,
+            'token_length' => strlen($token),
+            'token_preview' => substr($token, 0, 20) . '...',
+            'product_data' => $product_data
+        ]);
+        
+        // Enviar actualización a Yuju usando cURL directo con PUT (según documentación)
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://api.tp.yuju.io/products/' . $product_id,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'PUT',
+            CURLOPT_POSTFIELDS => $json_body,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: Bearer ' . $token
+            ],
+        ]);
+        
+        $response_body = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($curl_error) {
+            return [
+                'success' => false,
+                'error' => 'CURL_ERROR',
+                'message' => $curl_error,
+                'http_code' => 0,
+                'data' => null
+            ];
+        }
+        
+        $decoded_response = json_decode($response_body, true);
+        $success = ($http_code >= 200 && $http_code < 300);
+        
+        return [
+            'success' => $success,
+            'http_code' => $http_code,
+            'data' => $decoded_response,
+            'error' => $success ? null : 'HTTP_' . $http_code,
+            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code)
+        ];
     }
     
     /**
@@ -855,6 +1089,14 @@ class YujuApiClient
 
     public function deleteProduct($product_id)
     {
+        // Según documentación oficial: DELETE https://api.tp.yuju.io/products/{id_product}
+        $this->logger->info('Deleting product from Yuju', [
+            'product_id' => $product_id,
+            'endpoint' => 'products/' . $product_id,
+            'method' => 'DELETE',
+            'url' => $this->buildUrl('products/' . $product_id, [])
+        ]);
+        
         return $this->delete('products/' . $product_id);
     }
 
@@ -884,9 +1126,23 @@ class YujuApiClient
         return $this->get('orders', $params);
     }
 
-    public function getOrder($order_id)
+    /**
+     * Obtener detalles de una orden específica.
+     * 
+     * @param string|int $order_id ID de la orden (puede ser el resource_id del webhook)
+     * @param string|int|null $channel_id ID del canal (opcional si viene en headers)
+     * @return array Respuesta de la API con los datos completos de la orden
+     */
+    public function getOrder($order_id, $channel_id = null)
     {
-        return $this->get('orders/' . $order_id);
+        // Según documentación: GET /orders/?id_channel={id_channel}&id_order={id_order}
+        $params = ['id_order' => $order_id];
+        
+        if ($channel_id) {
+            $params['id_channel'] = $channel_id;
+        }
+        
+        return $this->get('orders/', $params);
     }
 
     public function updateOrderStatus($order_id, $status_data)
@@ -1126,6 +1382,95 @@ class YujuApiClient
             'max_retries' => $this->max_retries,
             'oauth_configured' => $this->oauth->isConfigured(),
             'token_valid' => $this->oauth->hasValidToken(),
+        ];
+    }
+
+    /**
+     * Obtiene todas las suscripciones de webhooks activas.
+     * 
+     * @return array Respuesta de la API con la lista de suscripciones
+     */
+    public function getWebhookSubscriptions()
+    {
+        return $this->get('webhook-sub');
+    }
+
+    /**
+     * Obtiene una suscripción de webhook específica.
+     * 
+     * @param int $webhook_id ID de la suscripción
+     * @return array Respuesta de la API con los detalles de la suscripción
+     */
+    public function getWebhookSubscription($webhook_id)
+    {
+        return $this->get('webhook-sub/' . (int)$webhook_id);
+    }
+
+    /**
+     * Crea una nueva suscripción de webhook.
+     * 
+     * @param string $url URL donde se enviarán las notificaciones (debe tener SSL)
+     * @param array $topics Lista de topics a los que suscribirse
+     * @param array|null $headers Headers adicionales opcionales (máx. 3)
+     * @return array Respuesta de la API
+     */
+    public function createWebhookSubscription($url, $topics, $headers = null)
+    {
+        $data = [
+            'url' => $url,
+            'topics' => $topics
+        ];
+
+        if ($headers !== null && is_array($headers) && count($headers) > 0) {
+            $data['headers'] = $headers;
+        }
+
+        return $this->post('webhook-sub', $data);
+    }
+
+    /**
+     * Actualiza una suscripción de webhook existente.
+     * 
+     * @param int $webhook_id ID de la suscripción
+     * @param array $data Datos a actualizar (url, topics, headers)
+     * @return array Respuesta de la API
+     */
+    public function updateWebhookSubscription($webhook_id, $data)
+    {
+        return $this->put('webhook-sub/' . (int)$webhook_id, $data);
+    }
+
+    /**
+     * Elimina una suscripción de webhook.
+     * 
+     * @param int $webhook_id ID de la suscripción
+     * @return array Respuesta de la API
+     */
+    public function deleteWebhookSubscription($webhook_id)
+    {
+        return $this->delete('webhook-sub/' . (int)$webhook_id);
+    }
+
+    /**
+     * Obtiene todos los topics disponibles para webhooks.
+     * 
+     * @return array Lista de topics con su descripción
+     */
+    public function getAvailableWebhookTopics()
+    {
+        return [
+            'category-datasheet' => 'Generación de reporte de ficha técnica por categoría finalizada',
+            'products-datasheet' => 'Generación de reporte de ficha técnica por producto finalizada',
+            'products-offer' => 'Actualización masiva de oferta finalizada',
+            'categorizer' => 'Categorizador de productos finalizado',
+            'new-order' => 'Creación de nueva orden (estructura normal)',
+            'updated-order' => 'Actualización de orden existente (estructura normal)',
+            'new-std-order' => 'Creación de nueva orden (estructura estándar)',
+            'updated-std-order' => 'Actualización de orden existente (estructura estándar)',
+            'std-orders-report' => 'Generación de reporte de pedidos finalizada',
+            'products-gral-report' => 'Generación de reporte general de productos finalizada',
+            'product-created' => 'Producto creado en la tienda',
+            'product-deleted' => 'Producto eliminado en la tienda',
         ];
     }
 }

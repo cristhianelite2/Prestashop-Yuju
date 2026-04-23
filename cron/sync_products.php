@@ -84,6 +84,7 @@ try {
          AND NOT EXISTS (
              SELECT 1 FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` s
              WHERE s.sync_direction = "prestashop_to_yuju"
+             AND s.details IS NOT NULL
              AND JSON_EXTRACT(s.details, "$.source_download_id") = d.id
          )'
     );

@@ -1,137 +1,179 @@
-{*
-* 2024 Yuju Integration
-*
-* NOTICE OF LICENSE
-*
-* This source file is subject to the Academic Free License (AFL 3.0)
-* that is bundled with this package in the file LICENSE.txt.
-* It is also available through the world-wide-web at this URL:
-* http://opensource.org/licenses/afl-3.0.php
-* If you did not receive a copy of the license and are unable to
-* obtain it through the world-wide-web, please send an email
-* to license@prestashop.com so we can send you a copy immediately.
-*
-* @author    Yuju Integration Team
-* @copyright 2024 Yuju Integration
-* @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
-*}
-
 {extends file="./layout.tpl"}
 
 {block name="content"}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+/* Estilos del árbol de categorías */
+.category-tree {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+.category-item {
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.category-item:hover {
+    background: #f8f9fa;
+}
+.category-item.selected {
+    background: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+.category-item.mapped {
+    background: #e8f5e9;
+    border-left: 3px solid #4caf50;
+    cursor: not-allowed;
+}
+.category-item.mapped .category-name {
+    color: #4caf50;
+    font-weight: 500;
+}
+.category-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f5f5f5;
+}
+.category-children {
+    margin-left: 24px;
+    border-left: 2px dashed #e0e0e0;
+    padding-left: 8px;
+}
+
+.category-name {
+    flex: 1;
+    font-size: 14px;
+}
+.toggle-children {
+    width: 16px;
+    height: 16px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.toggle-children:hover {
+    background: #bdbdbd;
+}
+.toggle-children.expanded {
+    background: #2196f3;
+    color: white;
+}
+
+/* Estilos específicos para árbol de Yuju */
+.yuju-category-wrapper .category-item {
+    background: white;
+}
+.yuju-category-wrapper .category-item:hover {
+    background: #fff3e0;
+}
+.yuju-category-item.selected {
+    background: #fff3e0 !important;
+    border-left: 3px solid #ff9800 !important;
+}
+
+/* Transición suave para iconos de folder */
+.icon-folder, .icon-folder-open, .icon-file {
+    transition: all 0.2s ease;
+    font-size: 16px;
+}
+
+.yuju-category-selector {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    padding: 15px;
+}
+.mapping-table {
+    margin-top: 20px;
+}
+.mapping-row:hover {
+    background-color: #f8f9fa;
+}
+</style>
+
 <div class="panel">
     <div class="panel-heading">
-        <i class="icon-shopping-cart"></i>
+        <i class="icon-sitemap"></i>
         Mapeo de Categorías
+        <div class="panel-heading-action">
+            <button class="btn btn-success btn-sm" onclick="openMappingModal()">
+                <i class="icon-plus"></i> Nuevo Mapeo de Categoría
+            </button>
+        </div>
     </div>
+    
     <div class="panel-body">
         <div class="alert alert-info">
-            <p><strong>Información:</strong> Mapee las categorías de PrestaShop con las categorías de Yuju para una sincronización correcta.</p>
-            <p><strong>Nota:</strong> Las categorías padre deben estar sincronizadas antes que las categorías hijas.</p>
+            <i class="icon-info-circle"></i>
+            <strong>Información:</strong>
+            Las categorías mapeadas aparecen en la tabla. Las categorías con <i class="icon-exchange" style="color: #4caf50;"></i> ya están mapeadas y no se pueden volver a mapear.
         </div>
         
-        {if isset($sync_blocked) && $sync_blocked}
-            <div class="alert alert-warning">
-                <p><strong>¡Atención!</strong> La sincronización está bloqueada. Algunas categorías padre no están sincronizadas.</p>
-            </div>
-        {/if}
-        
-        <div class="row">
-            <div class="col-lg-12">
-                <button type="button" class="btn btn-primary" id="btn-open-mapping-modal">
-                    <i class="icon-plus"></i> Nuevo Mapeo de Categoría
-                </button>
-                <button type="button" class="btn btn-success" id="btn-sync-categories">
-                    <i class="icon-refresh"></i> Sincronizar Categorías
-                </button>
-                <button type="button" class="btn btn-warning" id="btn-refresh-yuju-categories">
-                    <i class="icon-download"></i> Actualizar Categorías de Yuju
-                </button>
-            </div>
-        </div>
-        
-        <br>
-        
-        <div class="table-responsive">
-            <table class="table table-striped" id="category-mapping-table">
+        <!-- Tabla de mapeos -->
+        <div class="table-responsive mapping-table">
+            <table class="table table-bordered">
                 <thead>
-                    <tr>
-                        <th>ID</th>
+                    <tr style="background: #f8f9fa;">
+                        <th width="50">ID</th>
                         <th>Categoría PrestaShop</th>
-                        <th>Categoría Padre</th>
                         <th>Categoría Yuju</th>
-                        <th>Estado de Sincronización</th>
-                        <th>Última Sincronización</th>
-                        <th>Acciones</th>
+                        <th width="150">Fecha de Creación</th>
+                        <th width="120" class="text-center">Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="mappings-tbody">
                     {if isset($category_mappings) && $category_mappings}
-                        {foreach from=$category_mappings item=mapping}
-                            <tr data-mapping-id="{$mapping.id}">
+                        {foreach $category_mappings as $mapping}
+                            <tr class="mapping-row" data-mapping-id="{$mapping.id}">
                                 <td>{$mapping.id}</td>
                                 <td>
+                                    <i class="icon-folder"></i>
                                     <strong>{$mapping.prestashop_category_name|escape:'html':'UTF-8'}</strong>
-                                    <br><small>ID: {$mapping.prestashop_category_id}</small>
+                                    <br>
+                                    <small class="text-muted">ID: {$mapping.prestashop_category_id}</small>
                                 </td>
                                 <td>
-                                    {if $mapping.parent_category_name}
-                                        {$mapping.parent_category_name|escape:'html':'UTF-8'}
-                                        {if !$mapping.parent_synced}
-                                            <span class="label label-warning">Padre no sincronizado</span>
-                                        {/if}
+                                    <i class="icon-cloud"></i>
+                                    <strong>{$mapping.yuju_category_name|escape:'html':'UTF-8'}</strong>
+                                    <br>
+                                    <small class="text-muted">ID: {$mapping.yuju_category_id}</small>
+                                </td>
+                                <td>
+                                    {if $mapping.created_at}
+                                        {$mapping.created_at|date_format:'%d/%m/%Y %H:%M'}
                                     {else}
-                                        <span class="text-muted">Categoría raíz</span>
+                                        <span class="text-muted">-</span>
                                     {/if}
                                 </td>
-                                <td>
-                                    {if $mapping.yuju_category_name}
-                                        <strong>{$mapping.yuju_category_name|escape:'html':'UTF-8'}</strong>
-                                        <br><small>ID: {$mapping.yuju_category_id}</small>
-                                    {else}
-                                        <span class="text-muted">No mapeada</span>
-                                    {/if}
-                                </td>
-                                <td>
-                                    {if $mapping.sync_status == 'synced'}
-                                        <span class="label label-success">Sincronizada</span>
-                                    {elseif $mapping.sync_status == 'pending'}
-                                        <span class="label label-warning">Pendiente</span>
-                                    {elseif $mapping.sync_status == 'error'}
-                                        <span class="label label-danger">Error</span>
-                                    {else}
-                                        <span class="label label-default">No sincronizada</span>
-                                    {/if}
-                                </td>
-                                <td>
-                                    {if $mapping.last_sync_date}
-                                        {$mapping.last_sync_date|date_format:'%d/%m/%Y %H:%M'}
-                                    {else}
-                                        <span class="text-muted">Nunca</span>
-                                    {/if}
-                                </td>
-                                <td>
-                                    <div class="btn-group">
-                                        <button type="button" class="btn btn-default btn-sm btn-edit-mapping" data-mapping-id="{$mapping.id}">
-                                            <i class="icon-edit"></i> Editar
-                                        </button>
-                                        <button type="button" class="btn btn-danger btn-sm btn-delete-mapping" data-mapping-id="{$mapping.id}">
-                                            <i class="icon-trash"></i> Eliminar
-                                        </button>
-                                        {if $mapping.sync_status != 'synced'}
-                                            <button type="button" class="btn btn-success btn-sm btn-sync-single" data-mapping-id="{$mapping.id}">
-                                                <i class="icon-refresh"></i> Sincronizar
-                                            </button>
-                                        {/if}
-                                    </div>
+                                <td class="text-center">
+                                    <button class="btn btn-danger btn-sm" onclick="deleteMapping({$mapping.id})">
+                                        <i class="icon-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                         {/foreach}
                     {else}
                         <tr>
-                            <td colspan="7" class="text-center">
-                                <p class="text-muted">No hay mapeos de categorías configurados.</p>
-                                <button type="button" class="btn btn-primary" id="btn-create-first-mapping">
+                            <td colspan="5" class="text-center text-muted">
+                                <p style="padding: 30px 0;">No hay mapeos de categorías configurados.</p>
+                                <button class="btn btn-success" onclick="openMappingModal()">
                                     <i class="icon-plus"></i> Crear Primer Mapeo
                                 </button>
                             </td>
@@ -143,303 +185,390 @@
     </div>
 </div>
 
-{* Modal para mapeo de categorías *}
-<div class="modal fade" id="category-mapping-modal" tabindex="-1" role="dialog">
+<!-- Modal para crear mapeo -->
+<div class="modal fade" id="categoryMappingModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <h4 class="modal-title">Mapeo de Categoría</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title"><i class="icon-sitemap"></i> Mapeo de Categoría</h4>
             </div>
             <div class="modal-body">
-                <form id="category-mapping-form">
-                    <input type="hidden" id="mapping-id" name="mapping_id" value="">
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="panel panel-default">
-                                <div class="panel-heading">
-                                    <h4 class="panel-title">Categoría PrestaShop</h4>
-                                </div>
-                                <div class="panel-body">
-                                    <div class="form-group">
-                                        <label for="prestashop-category">Seleccionar Categoría:</label>
-                                        <select id="prestashop-category" name="prestashop_category_id" class="form-control" required>
-                                            <option value="">Seleccionar categoría...</option>
-                                            {if isset($prestashop_categories)}
-                                                {foreach from=$prestashop_categories item=category}
-                                                    <option value="{$category.id}">
-                                                        {$category.name|escape:'html':'UTF-8'}
-                                                    </option>
-                                                {/foreach}
+                <div class="alert alert-warning">
+                    <i class="icon-info-circle"></i>
+                    <strong>Instrucciones:</strong>
+                    <ol style="margin: 10px 0 0 20px;">
+                        <li>Selecciona una categoría de PrestaShop del árbol (izquierda)</li>
+                        <li>Selecciona la categoría correspondiente de Yuju (derecha)</li>
+                        <li>Las categorías con <i class="icon-exchange" style="color: #4caf50;"></i> ya están mapeadas</li>
+                        <li>No se pueden mapear categorías ya mapeadas ni sus hijas</li>
+                    </ol>
+                </div>
+                
+                <div class="row">
+                    <!-- Árbol de Categorías PrestaShop -->
+                    <div class="col-md-6">
+                        <h5><i class="icon-folder-open"></i> Selecciona una categoría de tu Prestashop</h5>
+                        <div class="category-tree" id="prestashop-tree" style="max-height: 450px;">
+                            {if isset($prestashop_categories) && $prestashop_categories}
+                                {function name=renderTree categories=$prestashop_categories mappings=$category_mappings}
+                                    {foreach $categories as $category}
+                                        {assign var="is_mapped" value=false}
+                                        {assign var="mapped_to" value=""}
+                                        {foreach $mappings as $mapping}
+                                            {if $mapping.prestashop_category_id == $category.id}
+                                                {assign var="is_mapped" value=true}
+                                                {assign var="mapped_to" value=$mapping.yuju_category_name}
+                                                {break}
                                             {/if}
-                                        </select>
-                                    </div>
-                                    <div id="prestashop-category-info" class="well" style="display: none;">
-                                        <h5>Información de la Categoría:</h5>
-                                        <p><strong>Nombre:</strong> <span id="ps-category-name"></span></p>
-                                        <p><strong>Descripción:</strong> <span id="ps-category-description"></span></p>
-                                        <p><strong>Categoría Padre:</strong> <span id="ps-category-parent"></span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="panel panel-default">
-                                <div class="panel-heading">
-                                    <h4 class="panel-title">Categoría Yuju</h4>
-                                </div>
-                                <div class="panel-body">
-                                    <div class="form-group">
-                                        <label for="yuju-category">Seleccionar Categoría:</label>
-                                        <select id="yuju-category" name="yuju_category_id" class="form-control" required>
-                                            <option value="">Seleccionar categoría...</option>
-                                            {if isset($yuju_categories)}
-                                                {foreach from=$yuju_categories item=category}
-                                                    <option value="{$category.id}" data-parent="{$category.parent_id}">
-                                                        {if $category.level > 0}
-                                                            {for $i=1 to $category.level}--{/for}
-                                                        {/if}
-                                                        {$category.name|escape:'html':'UTF-8'}
-                                                    </option>
-                                                {/foreach}
+                                        {/foreach}
+                                        
+                                        <div class="category-wrapper" data-category-id="{$category.id}">
+                                            <div class="category-item {if $is_mapped}mapped{/if}" 
+                                                 data-id="{$category.id}" 
+                                                 data-name="{$category.name|escape:'html':'UTF-8'}"
+                                                 data-mapped="{if $is_mapped}1{else}0{/if}"
+                                                 data-has-children="{if $category.children}1{else}0{/if}"
+                                                 style="cursor: {if $is_mapped}not-allowed{else}pointer{/if};">
+                                                
+                                                {if !$is_mapped}
+                                                    <input type="radio" name="ps_category" value="{$category.id}" 
+                                                           data-name="{$category.name|escape:'html':'UTF-8'}"
+                                                           onclick="event.stopPropagation(); selectPsCategory(this);"
+                                                           style="margin-right: 8px;">
+                                                {else}
+                                                    <i class="icon-exchange category-icon mapped-icon" style="margin-right: 8px;"></i>
+                                                {/if}
+                                                
+                                                {if $is_mapped}
+                                                    <i class="icon-exchange" style="color: #4caf50; margin-right: 5px;"></i>
+                                                {else if $category.children}
+                                                    <i class="icon-folder" onclick="event.stopPropagation(); togglePsChildren(this)" style="cursor: pointer; color: #2196f3; margin-right: 5px;"></i>
+                                                {else}
+                                                    <i class="icon-file" style="color: #757575; margin-right: 5px;"></i>
+                                                {/if}
+                                                
+                                                <span class="category-name" {if $category.children}onclick="event.stopPropagation(); togglePsChildrenByName(this)" style="cursor: pointer;"{/if}>{$category.name|escape:'html':'UTF-8'}</span>
+                                                
+                                                {if $is_mapped}
+                                                    <small style="color: #4caf50;">✓</small>
+                                                {/if}
+                                            </div>
+                                            
+                                            {if $category.children}
+                                                <div class="category-children" style="display: none;">
+                                                    {call name=renderTree categories=$category.children mappings=$mappings}
+                                                </div>
                                             {/if}
-                                        </select>
-                                    </div>
-                                    <div id="yuju-category-info" class="well" style="display: none;">
-                                        <h5>Información de la Categoría:</h5>
-                                        <p><strong>Nombre:</strong> <span id="yuju-category-name"></span></p>
-                                        <p><strong>Descripción:</strong> <span id="yuju-category-description"></span></p>
-                                        <p><strong>Categoría Padre:</strong> <span id="yuju-category-parent"></span></p>
-                                    </div>
-                                </div>
-                            </div>
+                                        </div>
+                                    {/foreach}
+                                {/function}
+                                
+                                {call name=renderTree categories=$prestashop_categories mappings=$category_mappings}
+                            {else}
+                                <p class="text-muted text-center">No hay categorías disponibles</p>
+                            {/if}
                         </div>
                     </div>
                     
-                    <div class="alert alert-warning" id="parent-sync-warning" style="display: none;">
-                        <strong>¡Atención!</strong> La categoría padre seleccionada no está sincronizada. Debe sincronizar la categoría padre primero.
+                    <!-- Selector de Categoría Yuju -->
+                    <div class="col-md-6">
+                        <h5><i class="icon-cloud"></i> Selecciona una categoría de yuju</h5>
+                        <div class="yuju-category-selector">
+                            <div class="category-tree" id="yuju-tree" style="max-height: 450px;">
+                                {if isset($yuju_categories)}
+                                    {function name=renderYujuTree categories=$yuju_categories}
+                                        {foreach $categories as $category}
+                                            <div class="category-wrapper yuju-category-wrapper" data-category-id="{$category.id}">
+                                                <div class="category-item yuju-category-item" 
+                                                     data-id="{$category.id}" 
+                                                     data-name="{$category.name|escape:'html':'UTF-8'}"
+                                                     data-has-children="{if $category.children && count($category.children) > 0}1{else}0{/if}"
+                                                     style="cursor: pointer;">
+                                                    
+                                                    {if !($category.children && count($category.children) > 0)}
+                                                        <input type="radio" name="yuju_category" value="{$category.id}" 
+                                                               data-name="{$category.name|escape:'html':'UTF-8'}"
+                                                               onclick="event.stopPropagation(); selectYujuCategory(this);"
+                                                               style="margin: 0 8px 0 0;">
+                                                    {else}
+                                                        <span style="display: inline-block; width: 16px; margin-right: 8px;"></span>
+                                                    {/if}
+                                                    
+                                                    {if $category.children && count($category.children) > 0}
+                                                        <i class="icon-folder" onclick="event.stopPropagation(); toggleYujuChildren(this)" style="cursor: pointer; color: #ff9800; margin-right: 5px; font-size: 16px;"></i>
+                                                    {else}
+                                                        <i class="icon-file" style="color: #757575; margin-right: 5px; font-size: 16px;"></i>
+                                                    {/if}
+                                                    
+                                                    <span class="category-name" {if $category.children && count($category.children) > 0}onclick="event.stopPropagation(); toggleYujuChildrenByName(this)" style="cursor: pointer;"{/if}>{$category.name|escape:'html':'UTF-8'}</span>
+                                                </div>
+                                                
+                                                {if $category.children && count($category.children) > 0}
+                                                    <div class="category-children" style="display: none;">
+                                                        {call name=renderYujuTree categories=$category.children}
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                        {/foreach}
+                                    {/function}
+                                    
+                                    {call name=renderYujuTree categories=$yuju_categories}
+                                {else}
+                                    <p class="text-muted text-center">No hay categorías disponibles</p>
+                                {/if}
+                            </div>
+                        </div>
                     </div>
-                </form>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btn-save-mapping">Guardar Mapeo</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="btn-save-mapping" disabled>
+                    <i class="icon-save"></i> Guardar Mapeo
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<script type="text/javascript">
-$(document).ready(function() {
-    // Abrir modal para nuevo mapeo
-    $('#btn-open-mapping-modal, #btn-create-first-mapping').click(function() {
-        $('#category-mapping-modal').modal('show');
-        $('#category-mapping-form')[0].reset();
-        $('#mapping-id').val('');
-        $('#prestashop-category-info, #yuju-category-info').hide();
-    });
+<script>
+{literal}
+var selectedPsCategory = null;
+var selectedYujuCategory = null;
+var mappedCategories = {/literal}{$category_mappings|json_encode}{literal};
+
+function openMappingModal() {
+    $('#categoryMappingModal').modal('show');
+}
+
+// Función para seleccionar categoría de PrestaShop
+function selectPsCategory(radio) {
+    selectedPsCategory = {
+        id: $(radio).val(),
+        name: $(radio).data('name')
+    };
     
-    // Mostrar información de categoría PrestaShop
-    $('#prestashop-category').change(function() {
-        var categoryId = $(this).val();
-        if (categoryId) {
-            // Aquí se haría una llamada AJAX para obtener información de la categoría
-            $('#prestashop-category-info').show();
-            checkParentSyncStatus();
-        } else {
-            $('#prestashop-category-info').hide();
-        }
-    });
+    // Limpiar selección de Yuju
+    $('input[name="yuju_category"]').prop('checked', false);
+    selectedYujuCategory = null;
+    $('#btn-save-mapping').prop('disabled', true);
+}
+
+// Función para seleccionar categoría de Yuju
+function selectYujuCategory(radio) {
+    selectedYujuCategory = {
+        id: $(radio).val(),
+        name: $(radio).data('name')
+    };
     
-    // Mostrar información de categoría Yuju
-    $('#yuju-category').change(function() {
-        var categoryId = $(this).val();
-        if (categoryId) {
-            // Aquí se haría una llamada AJAX para obtener información de la categoría
-            $('#yuju-category-info').show();
-        } else {
-            $('#yuju-category-info').hide();
-        }
-    });
-    
-    // Verificar estado de sincronización de categoría padre
-    function checkParentSyncStatus() {
-        var prestashopCategoryId = $('#prestashop-category').val();
-        if (prestashopCategoryId) {
-            // Llamada AJAX para verificar si la categoría padre está sincronizada
-            $.ajax({
-                url: '{$ajax_url}',
-                type: 'POST',
-                data: {
-                    action: 'checkParentSyncStatus',
-                    category_id: prestashopCategoryId
-                },
-                success: function(response) {
-                    if (response.parent_not_synced) {
-                        $('#parent-sync-warning').show();
-                    } else {
-                        $('#parent-sync-warning').hide();
-                    }
-                }
-            });
-        }
+    // Habilitar botón de guardar si ambas categorías están seleccionadas
+    if (selectedPsCategory && selectedYujuCategory) {
+        $('#btn-save-mapping').prop('disabled', false);
     }
+}
+
+// Función para expandir/contraer hijos de PrestaShop
+function togglePsChildren(iconElement) {
+    var $wrapper = $(iconElement).closest('.category-wrapper');
+    var $children = $wrapper.find('> .category-children');
+    var $icon = $(iconElement);
     
+    if ($children.is(':visible')) {
+        $children.slideUp(200);
+        $icon.removeClass('icon-folder-open').addClass('icon-folder');
+    } else {
+        $children.slideDown(200);
+        $icon.removeClass('icon-folder').addClass('icon-folder-open');
+    }
+}
+
+// Función para expandir/contraer desde el nombre de PrestaShop
+function togglePsChildrenByName(nameElement) {
+    var $wrapper = $(nameElement).closest('.category-wrapper');
+    var $icon = $wrapper.find('> .category-item > .icon-folder, > .category-item > .icon-folder-open').first();
+    
+    if ($icon.length) {
+        togglePsChildren($icon[0]);
+    }
+}
+
+// Función para expandir/contraer hijos de Yuju
+function toggleYujuChildren(iconElement) {
+    var $wrapper = $(iconElement).closest('.category-wrapper');
+    var $children = $wrapper.find('> .category-children');
+    var $icon = $(iconElement);
+    
+    if ($children.is(':visible')) {
+        $children.slideUp(200);
+        $icon.removeClass('icon-folder-open').addClass('icon-folder');
+    } else {
+        $children.slideDown(200);
+        $icon.removeClass('icon-folder').addClass('icon-folder-open');
+    }
+}
+
+// Función para expandir/contraer desde el nombre de Yuju
+function toggleYujuChildrenByName(nameElement) {
+    var $wrapper = $(nameElement).closest('.category-wrapper');
+    var $icon = $wrapper.find('> .category-item > .icon-folder, > .category-item > .icon-folder-open').first();
+    
+    if ($icon.length) {
+        toggleYujuChildren($icon[0]);
+    }
+}
+
+$(document).ready(function() {
     // Guardar mapeo
     $('#btn-save-mapping').click(function() {
-        var formData = $('#category-mapping-form').serialize();
-        
-        $.ajax({
-            url: '{$ajax_url}',
-            type: 'POST',
-            data: formData + '&action=saveMapping',
-            success: function(response) {
-                if (response.success) {
-                    $('#category-mapping-modal').modal('hide');
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.message);
-                }
-            },
-            error: function() {
-                alert('Error al guardar el mapeo');
-            }
-        });
-    });
-    
-    // Editar mapeo
-    $('.btn-edit-mapping').click(function() {
-        var mappingId = $(this).data('mapping-id');
-        
-        $.ajax({
-            url: '{$ajax_url}',
-            type: 'POST',
-            data: {
-                action: 'getMapping',
-                mapping_id: mappingId
-            },
-            success: function(response) {
-                if (response.success) {
-                    $('#mapping-id').val(response.mapping.id);
-                    $('#prestashop-category').val(response.mapping.prestashop_category_id);
-                    $('#yuju-category').val(response.mapping.yuju_category_id);
-                    $('#category-mapping-modal').modal('show');
-                }
-            }
-        });
-    });
-    
-    // Eliminar mapeo
-    $('.btn-delete-mapping').click(function() {
-        if (confirm('¿Está seguro de que desea eliminar este mapeo?')) {
-            var mappingId = $(this).data('mapping-id');
-            
-            $.ajax({
-                url: '{$ajax_url}',
-                type: 'POST',
-                data: {
-                    action: 'deleteMapping',
-                    mapping_id: mappingId
-                },
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    } else {
-                        alert('Error: ' + response.message);
-                    }
-                }
-            });
+        if (!selectedPsCategory || !selectedYujuCategory) {
+            showToast('Debes seleccionar ambas categorías', 'error');
+            return;
         }
-    });
-    
-    // Sincronizar categoría individual
-    $('.btn-sync-single').click(function() {
-        var mappingId = $(this).data('mapping-id');
-        var button = $(this);
-        
-        button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Sincronizando...');
         
         $.ajax({
-            url: '{$ajax_url}',
-            type: 'POST',
+            url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+            method: 'POST',
+            dataType: 'json',
             data: {
-                action: 'syncSingleCategory',
-                mapping_id: mappingId
+                ajax: true,
+                action: 'saveMapping',
+                prestashop_category_id: selectedPsCategory.id,
+                yuju_category_id: selectedYujuCategory.id,
+                yuju_category_name: selectedYujuCategory.name
+            },
+            beforeSend: function() {
+                $('#btn-save-mapping').prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Guardando...');
             },
             success: function(response) {
+                $('#btn-save-mapping').prop('disabled', false).html('<i class="icon-save"></i> Guardar Mapeo');
+                
                 if (response.success) {
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.message);
-                    button.prop('disabled', false).html('<i class="icon-refresh"></i> Sincronizar');
-                }
-            },
-            error: function() {
-                alert('Error al sincronizar la categoría');
-                button.prop('disabled', false).html('<i class="icon-refresh"></i> Sincronizar');
-            }
-        });
-    });
-    
-    // Sincronizar todas las categorías
-    $('#btn-sync-categories').click(function() {
-        if (confirm('¿Está seguro de que desea sincronizar todas las categorías mapeadas?')) {
-            var button = $(this);
-            button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Sincronizando...');
-            
-            $.ajax({
-                url: '{$ajax_url}',
-                type: 'POST',
-                data: {
-                    action: 'syncAllCategories'
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alert('Sincronización completada: ' + response.message);
+                    showToast('Mapeo guardado exitosamente', 'success');
+                    setTimeout(function() {
                         location.reload();
-                    } else {
-                        alert('Error: ' + response.message);
-                        button.prop('disabled', false).html('<i class="icon-refresh"></i> Sincronizar Categorías');
-                    }
-                },
-                error: function() {
-                    alert('Error al sincronizar las categorías');
-                    button.prop('disabled', false).html('<i class="icon-refresh"></i> Sincronizar Categorías');
-                }
-            });
-        }
-    });
-    
-    // Actualizar categorías de Yuju
-    $('#btn-refresh-yuju-categories').click(function() {
-        var button = $(this);
-        button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Actualizando...');
-        
-        $.ajax({
-            url: '{$ajax_url}',
-            type: 'POST',
-            data: {
-                action: 'refreshYujuCategories'
-            },
-            success: function(response) {
-                if (response.success) {
-                    alert('Categorías de Yuju actualizadas correctamente');
-                    location.reload();
+                    }, 1000);
                 } else {
-                    alert('Error: ' + response.message);
-                    button.prop('disabled', false).html('<i class="icon-download"></i> Actualizar Categorías de Yuju');
+                    showToast('Error: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
-                alert('Error al actualizar las categorías de Yuju');
-                button.prop('disabled', false).html('<i class="icon-download"></i> Actualizar Categorías de Yuju');
+                $('#btn-save-mapping').prop('disabled', false).html('<i class="icon-save"></i> Guardar Mapeo');
+                showToast('Error al guardar el mapeo', 'error');
             }
         });
     });
 });
+
+function deleteMapping(mappingId) {
+    if (!confirm('¿Estás seguro de eliminar este mapeo?')) {
+        return;
+    }
+    
+    $.ajax({
+        url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            ajax: true,
+            action: 'deleteMapping',
+            id: mappingId
+        },
+        success: function(response) {
+            if (response.success) {
+                showToast('Mapeo eliminado exitosamente', 'success');
+                setTimeout(function() {
+                    location.reload();
+                }, 1000);
+            } else {
+                showToast('Error: ' + (response.message || 'Error desconocido'), 'error');
+            }
+        },
+        error: function() {
+            showToast('Error al eliminar el mapeo', 'error');
+        }
+    });
+}
+
+function showToast(message, type) {
+    type = type || 'success';
+    var icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'exclamation-circle' : (type === 'warning' ? 'exclamation-triangle' : 'info-circle'));
+    var bgColor = type === 'success' ? '#28a745' : (type === 'error' ? '#dc3545' : (type === 'warning' ? '#ffc107' : '#17a2b8'));
+    
+    var toast = $('<div class="toast-notification">')
+        .css({
+            'position': 'fixed',
+            'top': '80px',
+            'right': '20px',
+            'z-index': '99999',
+            'min-width': '320px',
+            'max-width': '450px',
+            'background': '#ffffff',
+            'border-radius': '8px',
+            'box-shadow': '0 4px 20px rgba(0,0,0,0.2)',
+            'display': 'flex',
+            'align-items': 'center',
+            'padding': '0',
+            'overflow': 'hidden'
+        });
+    
+    var sidebar = $('<div>')
+        .css({
+            'width': '6px',
+            'background': bgColor,
+            'align-self': 'stretch'
+        });
+    
+    var content = $('<div>')
+        .css({
+            'padding': '15px',
+            'flex': '1',
+            'display': 'flex',
+            'align-items': 'center',
+            'gap': '12px'
+        });
+    
+    var iconEl = $('<i>').addClass('icon-' + icon)
+        .css({
+            'font-size': '24px',
+            'color': bgColor
+        });
+    
+    var messageEl = $('<span>')
+        .text(message)
+        .css({
+            'flex': '1',
+            'color': '#333',
+            'font-size': '14px'
+        });
+    
+    var closeBtn = $('<button>')
+        .html('&times;')
+        .css({
+            'background': 'none',
+            'border': 'none',
+            'font-size': '24px',
+            'color': '#999',
+            'cursor': 'pointer',
+            'padding': '0',
+            'width': '30px',
+            'height': '30px'
+        })
+        .click(function() {
+            toast.remove();
+        });
+    
+    content.append(iconEl, messageEl, closeBtn);
+    toast.append(sidebar, content);
+    $('body').append(toast);
+    
+    setTimeout(function() {
+        toast.fadeOut(300, function() {
+            $(this).remove();
+        });
+    }, 4000);
+}
+{/literal}
 </script>
+
 {/block}

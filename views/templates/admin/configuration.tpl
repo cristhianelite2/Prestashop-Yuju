@@ -56,18 +56,120 @@
         
         <form id="configuration_form" class="defaultForm form-horizontal" action="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" method="post" enctype="multipart/form-data">
             
-            {* URLs Importantes Section *}
+            {* Configuracion para Crear App Yuju *}
             <div class="panel panel-default">
                 <div class="panel-heading">
                     <h3 class="panel-title">
                         <i class="icon-link"></i>
-                        URLs Importantes
+                        Datos para Crear Aplicacion en Yuju
                     </h3>
                 </div>
                 <div class="panel-body">
                     <div class="alert alert-info">
                         <i class="icon-info-circle"></i>
-                        Estas URLs son requeridas para configurar su aplicación Yuju. Haga clic para copiarlas fácilmente.
+                        Complete el formulario "Crear aplicacion" de Yuju con estos valores sugeridos. Todos los campos se pueden copiar con un clic.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Nombre de la app
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.app_name|escape:'html':'UTF-8'}" readonly id="app_name">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.app_name|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">Nombre sugerido para identificar esta integracion en Yuju.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Tipo de aplicacion
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.app_type|escape:'html':'UTF-8'}" readonly id="app_type">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.app_type|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">En Yuju seleccione este tipo para integraciones de tienda.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            URL del sitio
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.site_url|escape:'html':'UTF-8'}" readonly id="site_url">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.site_url|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">URL principal de su tienda PrestaShop.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Email de contacto
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.contact_email|escape:'html':'UTF-8'}" readonly id="contact_email">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.contact_email|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">Correo de contacto tecnico para la aplicacion.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Descripcion
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.description|escape:'html':'UTF-8'}" readonly id="app_description">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.description|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">Texto sugerido para describir la integracion.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Icono (referencia)
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.icon_hint|escape:'html':'UTF-8'}" readonly id="icon_hint">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.icon_hint|escape:'html':'UTF-8'}">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">El campo icono en Yuju es de carga manual. Recomendado: PNG cuadrado.</p>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -90,7 +192,7 @@
                     {if $yuju_urls.auth_url}
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            URL de Autenticación
+                            URL de Autorizacion OAuth (informativa)
                         </label>
                         <div class="col-lg-9">
                             <div class="input-group">
@@ -101,25 +203,25 @@
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">URL para autenticación OAuth con Yuju</p>
+                            <p class="help-block">URL generada por el modulo para iniciar OAuth. No siempre se usa como campo directo al crear la app.</p>
                         </div>
                     </div>
                     {/if}
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            URI de Redirección
+                            URL de autenticacion / URI de redireccion
                         </label>
                         <div class="col-lg-9">
                             <div class="input-group">
-                                <input type="text" class="form-control" value="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}" readonly id="redirect_uri">
+                                <input type="text" class="form-control" value="{$yuju_app_setup.app_auth_url|escape:'html':'UTF-8'}" readonly id="redirect_uri">
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.app_auth_url|escape:'html':'UTF-8'}">
                                         <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">URL de callback para autenticación OAuth (configure esto en su aplicación Yuju)</p>
+                            <p class="help-block">Use este valor en "URL de autenticacion" y tambien en "URI/URL de redireccion" cuando Yuju lo solicite.</p>
                         </div>
                     </div>
                     
@@ -142,18 +244,18 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            Dominios Permitidos
+                            URLs permitidas para autenticacion
                         </label>
                         <div class="col-lg-9">
                             <div class="input-group">
-                                <input type="text" class="form-control" value="{if isset($yuju_urls.combined_domains)}{$yuju_urls.combined_domains|escape:'html':'UTF-8'}{/if}" readonly id="allowed_domains">
+                                <input type="text" class="form-control" value="{if isset($yuju_app_setup.allowed_redirection_urls)}{$yuju_app_setup.allowed_redirection_urls|escape:'html':'UTF-8'}{/if}" readonly id="allowed_domains">
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{if isset($yuju_urls.combined_domains)}{$yuju_urls.combined_domains|escape:'html':'UTF-8'}{/if}">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{if isset($yuju_app_setup.allowed_redirection_urls)}{$yuju_app_setup.allowed_redirection_urls|escape:'html':'UTF-8'}{/if}">
                                         <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">Dominios permitidos para autenticación (configure estos en la configuración de su aplicación Yuju). Incluye el dominio principal y la URI de redirección.</p>
+                            <p class="help-block">Pegue esta lista en el campo "URLs permitidas para autenticacion". Incluye dominio y callback.</p>
                         </div>
                     </div>
                 </div>
@@ -169,53 +271,23 @@
                 </div>
                 <div class="panel-body">
                     
-                    {* CRON Configuration Alert *}
-                    <div class="alert alert-info">
-                        <h4><i class="icon-time"></i> Configuración de Tareas Automáticas (CRON)</h4>
-                        <p><strong>Para que el módulo funcione correctamente, configure el siguiente CRON:</strong></p>
-                        
-                        <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 10px 0;">
-                            <p style="margin: 5px 0;"><strong>Frecuencia:</strong> Cada 5 minutos</p>
-                            <p style="margin: 5px 0;"><strong>Comando CLI:</strong></p>
-                            <code style="display: block; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin: 5px 0;">
-                                */5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php
-                            </code>
-                            
-                            <p style="margin: 15px 0 5px 0;"><strong>O mediante URL:</strong></p>
-                            <div class="input-group" style="margin: 5px 0;">
-                                <input type="text" class="form-control" value="https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php" readonly id="cron_url">
+                    {* Campo de entorno oculto, siempre en producción *}
+                    <input type="hidden" name="YUJU_ENVIRONMENT" value="production">
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Configuración CRON
+                        </label>
+                        <div class="col-lg-9">
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php" readonly>
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php">
                                         <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
-                            <code style="display: block; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin: 5px 0;">
-                                */5 * * * * curl "https://{$smarty.server.HTTP_HOST}/modules/prestashopyuju/cron/cron.php"
-                            </code>
-                        </div>
-                        
-                        <p style="margin-top: 15px;"><strong>Tareas automáticas que se ejecutan:</strong></p>
-                        <ul style="margin-left: 20px;">
-                            <li><strong>Verificación de Token:</strong> Cada 12 horas - Verifica que el token de Yuju no haya expirado</li>
-                            <li><em>Más tareas se agregarán en futuras actualizaciones...</em></li>
-                        </ul>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Entorno
-                        </label>
-                        <div class="col-lg-9">
-                            <select name="YUJU_ENVIRONMENT" class="form-control">
-                                <option value="sandbox" {if $config.YUJU_ENVIRONMENT == 'sandbox'}selected{/if}>
-                                    Sandbox (Pruebas)
-                                </option>
-                                <option value="production" {if $config.YUJU_ENVIRONMENT == 'production' || !$config.YUJU_ENVIRONMENT}selected{/if}>
-                                    Producción
-                                </option>
-                            </select>
-                            <p class="help-block">Seleccione el entorno de Yuju al que conectarse</p>
+                            <p class="help-block">Configure este comando para ejecutarse cada 5 minutos en su servidor</p>
                         </div>
                     </div>
                     
@@ -224,7 +296,7 @@
                             ID de Cliente
                         </label>
                         <div class="col-lg-9">
-                            <input type="text" name="YUJU_CLIENT_ID" value="{$config.YUJU_CLIENT_ID|escape:'html':'UTF-8'}" class="form-control" required>
+                            <input type="text" name="YUJU_CLIENT_ID" value="{$config.YUJU_CLIENT_ID|escape:'html':'UTF-8'}" class="form-control" required autocomplete="off">
                             <p class="help-block">Su ID de Cliente de la aplicación Yuju</p>
                         </div>
                     </div>
@@ -234,21 +306,12 @@
                             Secreto de Cliente
                         </label>
                         <div class="col-lg-9">
-                            <input type="password" name="YUJU_CLIENT_SECRET" value="{$config.YUJU_CLIENT_SECRET|escape:'html':'UTF-8'}" class="form-control" required>
+                            <input type="text" name="YUJU_CLIENT_SECRET" value="{$config.YUJU_CLIENT_SECRET|escape:'html':'UTF-8'}" class="form-control" required autocomplete="off">
                             <p class="help-block">Su Secreto de Cliente de la aplicación Yuju</p>
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Secreto de Webhook
-                        </label>
-                        <div class="col-lg-9">
-                            <input type="text" name="YUJU_WEBHOOK_SECRET" value="{$config.YUJU_WEBHOOK_SECRET|escape:'html':'UTF-8'}" class="form-control">
-                            <p class="help-block">Clave secreta para verificación de firma de webhook</p>
-                        </div>
-                    </div>
-                    
+
                     <div class="form-group">
                         <label class="control-label col-lg-3">
                             Conectividad
@@ -292,9 +355,9 @@
                         </label>
                         <div class="col-lg-9">
                             <select name="YUJU_PRESTASHOP_STORE_ID" class="form-control">
-                                {if isset($prestashop_shops) && $prestashop_shops}
+                                {if isset($prestashop_shops) && $prestashop_shops && is_array($prestashop_shops) && count($prestashop_shops) > 0}
                                     {foreach from=$prestashop_shops item=shop}
-                                        <option value="{$shop.id|escape:'html':'UTF-8'}" {if $config.YUJU_PRESTASHOP_STORE_ID == $shop.id}selected{/if}>
+                                        <option value="{$shop.id_shop|escape:'html':'UTF-8'}" {if $config.YUJU_PRESTASHOP_STORE_ID == $shop.id_shop}selected{/if}>
                                             {$shop.name|escape:'html':'UTF-8'}
                                         </option>
                                     {/foreach}

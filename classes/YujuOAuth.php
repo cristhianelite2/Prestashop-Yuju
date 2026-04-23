@@ -206,18 +206,29 @@ class YujuOAuth extends ObjectModel
                 return null;
             }
 
+            $token = $oauth_data['access_token'];
+            
+            // Log detallado del token para debugging
+            $this->logger->log('info', 'Token recuperado de BD', [
+                'token_length' => strlen($token),
+                'token_preview' => strlen($token) > 20 
+                    ? substr($token, 0, 10) . '...' . substr($token, -10)
+                    : $token,
+                'is_base64_pattern' => (bool)preg_match('/^[A-Za-z0-9+\/]+={0,2}$/', $token),
+                'has_special_chars' => (bool)preg_match('/[^A-Za-z0-9+\/=]/', $token),
+                'token_expires' => $oauth_data['token_expires'] ?? 'N/A'
+            ]);
+
+            // NO intentar refrescar automáticamente - usar el token actual siempre
+            // La API de Yuju no soporta refresh automático, requiere reconexión manual
             if ($this->isTokenExpired($oauth_data)) {
-                $this->logger->log('info', 'Token expirado, intentando refrescar');
-                try {
-                    $this->refreshToken();
-                    $oauth_data = $this->getStoredTokenData();
-                } catch (Exception $e) {
-                    $this->logger->log('error', 'No se pudo refrescar el token', ['error' => $e->getMessage()]);
-                    return null;
-                }
+                $this->logger->log('warning', 'Token expirado - se requiere reconexión manual en la configuración');
+                // Aún así, devolver el token para que se intente usar
+                // Si falla, el usuario tendrá que reconectar manualmente
             }
 
-            return $oauth_data['access_token'];
+            // Siempre devolver el access_token almacenado sin modificarlo
+            return $token;
             
         } catch (Exception $e) {
             $this->logger->log('error', 'Error obteniendo token válido', ['error' => $e->getMessage()]);

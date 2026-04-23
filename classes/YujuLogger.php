@@ -115,6 +115,11 @@ class YujuLogger
         $timestamp = date($this->date_format);
         $level_upper = strtoupper($level);
 
+        // Convertir mensaje a string si es array
+        if (is_array($message)) {
+            $message = json_encode($message, JSON_UNESCAPED_UNICODE);
+        }
+
         $log_entry = "[{$timestamp}] {$level_upper}: {$message}";
 
         if (!empty($context)) {

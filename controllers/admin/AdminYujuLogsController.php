@@ -41,9 +41,11 @@ class AdminYujuLogsController extends ModuleAdminController
         parent::initContent();
 
         $logs = $this->getLogs();
+        $queue_stats = $this->getQueueStats();
 
         $this->context->smarty->assign([
             'logs' => $logs,
+            'queue_stats' => $queue_stats,
             'module_dir' => $this->module->getPathUri(),
         ]);
 
@@ -70,6 +72,63 @@ class AdminYujuLogsController extends ModuleAdminController
         }
 
         return $logs;
+    }
+
+    protected function getQueueStats()
+    {
+        try {
+            // Verificar si la tabla existe
+            $table_exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . _DB_PREFIX_ . 'yuju_sync_queue"');
+            
+            if (!$table_exists) {
+                // Tabla no existe, retornar estadísticas en cero
+                return [
+                    'total' => 0,
+                    'pending' => 0,
+                    'processing' => 0,
+                    'completed' => 0,
+                    'failed' => 0,
+                    'queued_products' => 0,
+                ];
+            }
+            
+            // Estadísticas de la cola de sincronización
+            $queue_stats = Db::getInstance()->getRow('
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = "processing" THEN 1 ELSE 0 END) as processing,
+                    SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed
+                FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+            ');
+            
+            // Productos con estado queued
+            $queued_products = (int)Db::getInstance()->getValue('
+                SELECT COUNT(*) 
+                FROM ' . _DB_PREFIX_ . 'yuju_product_status 
+                WHERE sync_status = "queued"
+            ');
+            
+            return [
+                'total' => (int)($queue_stats['total'] ?? 0),
+                'pending' => (int)($queue_stats['pending'] ?? 0),
+                'processing' => (int)($queue_stats['processing'] ?? 0),
+                'completed' => (int)($queue_stats['completed'] ?? 0),
+                'failed' => (int)($queue_stats['failed'] ?? 0),
+                'queued_products' => $queued_products,
+            ];
+        } catch (Exception $e) {
+            // En caso de error, retornar estadísticas en cero
+            return [
+                'total' => 0,
+                'pending' => 0,
+                'processing' => 0,
+                'completed' => 0,
+                'failed' => 0,
+                'queued_products' => 0,
+            ];
+        }
     }
 
     public function setMedia($isNewTheme = false)

@@ -1,494 +1,656 @@
 {*
-* 2024 Yuju Integration
-*
-* NOTICE OF LICENSE
-*
-* This source file is subject to the Academic Free License (AFL 3.0)
-* that is bundled with this package in the file LICENSE.txt.
-* It is also available through the world-wide-web at this URL:
-* http://opensource.org/licenses/afl-3.0.php
-* If you did not receive a copy of the license and are unable to
-* obtain it through the world-wide-web, please send an email
-* to license@prestashop.com so we can send you a copy immediately.
-*
-* @author    Yuju Integration Team
-* @copyright 2024 Yuju Integration
-* @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+* 2024 Yuju Integration - Mapeo de Campos de Productos
 *}
 
 {extends file="./layout.tpl"}
 
 {block name="content"}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<div class="alert alert-info">
+    <i class="icon-info-circle"></i>
+    <strong>Información:</strong>
+    Los campos con fondo amarillo son obligatorios según la API de Yuju y no se pueden eliminar. Son necesarios para sincronizar productos con los marketplaces.
+</div>
+
+<style>
+.mapping-row {
+    background: white;
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 3px;
+    border: 1px solid #e5e5e5;
+    transition: all 0.2s;
+}
+.mapping-row:hover {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.mapping-header {
+    background: #f8f9fa;
+    padding: 8px 10px;
+    border-radius: 3px 3px 0 0;
+    border: 1px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    font-size: 13px;
+}
+.select2-container {
+    width: 100% !important;
+}
+.select2-container--default .select2-selection--single {
+    height: 32px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 30px;
+    padding-left: 8px;
+    font-size: 13px;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 30px;
+}
+/* Ocultar el select original cuando Select2 está activo */
+.select2-hidden-accessible {
+    display: none !important;
+}
+.btn-remove-mapping {
+    background: white;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+.btn-remove-mapping:hover {
+    background: #dc3545;
+    color: white;
+}
+.default-value-input {
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    padding: 6px 8px;
+    width: 100%;
+    font-size: 12px;
+    height: 28px;
+}
+.tooltip-info {
+    color: #6c757d;
+    cursor: help;
+    margin-left: 5px;
+}
+.required-mapping {
+    border-left: 3px solid #ff9800;
+}
+.required-mapping .yuju-field:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
+.btn-remove-mapping.disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+.btn-group .btn {
+    white-space: nowrap;
+}
+.dropdown-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.dropdown-toggle i {
+    margin-right: 3px;
+}
+</style>
+
 <div class="panel">
     <div class="panel-heading">
-        <i class="icon-shopping-cart"></i>
-        Mapeo de campos
+        <i class="icon-exchange"></i>
+        Campos Mapeados
         <span class="panel-heading-action">
-            <a class="list-toolbar-btn" href="#" onclick="addProductMapping(); return false;">
-                <span title="Agregar nuevo mapeo" data-toggle="tooltip">
-                    <i class="process-icon-new"></i>
-                </span>
-            </a>
-            <a class="list-toolbar-btn" href="#" onclick="refreshYujuFields(); return false;">
-                <span title="Actualizar campos de Yuju" data-toggle="tooltip">
-                    <i class="process-icon-refresh"></i>
-                </span>
-            </a>
+            <button class="btn btn-success btn-sm" onclick="addNewMapping(); return false;">
+                <i class="icon-plus"></i> Nuevo Mapeo de Campo
+            </button>
         </span>
     </div>
-    <div class="panel-body">
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="table-responsive">
-                    <table class="table table-striped" id="product-mappings-table">
-                        <thead>
-                            <tr>
-                                <th>Campo PrestaShop</th>
-                                <th>Campo Yuju</th>
-                                <th>Tipo</th>
-                                <th>Transformación</th>
-                                <th>Requerido</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {if $product_mappings && count($product_mappings) > 0}
-                                {foreach from=$product_mappings item=mapping}
-                                    <tr data-mapping-id="{$mapping.id_mapping}">
-                                        <td>
-                                            {if $mapping.prestashop_field == 'name'}Nombre
-                                            {elseif $mapping.prestashop_field == 'reference'}Referencia
-                                            {elseif $mapping.prestashop_field == 'description'}Descripción
-                                            {elseif $mapping.prestashop_field == 'description_short'}Descripción Corta
-                                            {elseif $mapping.prestashop_field == 'price'}Precio Final
-                                            {elseif $mapping.prestashop_field == 'quantity'}Cantidad
-                                            {elseif $mapping.prestashop_field == 'weight'}Peso del paquete
-                                            {elseif $mapping.prestashop_field == 'width'}Ancho del paquete
-                                            {elseif $mapping.prestashop_field == 'height'}Alto del paquete
-                                            {elseif $mapping.prestashop_field == 'depth'}Profundidad del paquete
-                                            {elseif $mapping.prestashop_field == 'manufacturer'}Fabricante
-                                            {elseif $mapping.prestashop_field == 'condition'}Condición
-                                            {elseif $mapping.prestashop_field == 'ean13'}EAN13
-                                            {elseif $mapping.prestashop_field == 'wholesale_price'}Precio Mayorista
-                                            {else}{$mapping.prestashop_field}{/if}
-                                        </td>
-                                        <td>
-                                            {if $mapping.yuju_field == 'name'}Nombre (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'sku'}SKU (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'sku_simple'}SKU Simple (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'description'}Descripción (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'images'}Imágenes (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'price'}Precio (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'stock_quantity'}Stock (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'brand'}Marca (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'condition'}Condición (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'shipping_method'}Método de envío (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'shipping_price'}Precio de envío (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'dimension_unit'}Unidad de dimensión (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'height'}Altura (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'width'}Ancho (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'depth'}Profundidad (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'weight_unit'}Unidad de peso (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'weight'}Peso (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'mercadolibre_template'}Plantilla de MercadoLibre (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'short_description'}Descripción Corta (Yuju)
-                                            {elseif $mapping.yuju_field == 'barcode'}Código de barras (Yuju)
-                                            {elseif $mapping.yuju_field == 'status'}Estado (Yuju)
-                                            {elseif $mapping.yuju_field == 'cost_price'}Precio de costo (Yuju)
-                                            {else}{$mapping.yuju_field}{/if}
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-info">
-                                                {if $mapping.field_type == 'string'}Cadena de texto
-                                                {elseif $mapping.field_type == 'integer'}Número entero
-                                                {elseif $mapping.field_type == 'decimal'}Número decimal
-                                                {elseif $mapping.field_type == 'boolean'}Verdadero/Falso
-                                                {elseif $mapping.field_type == 'date'}Fecha
-                                                {elseif $mapping.field_type == 'datetime'}Fecha y Hora
-                                                {elseif $mapping.field_type == 'array'}Lista
-                                                {elseif $mapping.field_type == 'object'}Objeto
-                                                {else}{$mapping.field_type}{/if}
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            {if $mapping.transformation_rule == 'none'}Ninguna
-                                            {elseif $mapping.transformation_rule == 'uppercase'}Mayúsculas
-                                            {elseif $mapping.transformation_rule == 'lowercase'}Minúsculas
-                                            {elseif $mapping.transformation_rule == 'capitalize'}Capitalizar
-                                            {elseif $mapping.transformation_rule == 'strip_html'}Eliminar HTML
-                                            {elseif $mapping.transformation_rule == 'strip_tags'}Eliminar Etiquetas
-                                            {elseif $mapping.transformation_rule == 'trim'}Recortar Espacios
-                                            {elseif $mapping.transformation_rule == 'number_format'}Formato de Número
-                                            {elseif $mapping.transformation_rule == 'date_format'}Formato de Fecha
-                                            {elseif $mapping.transformation_rule == 'boolean_convert'}Convertir a Booleano
-                                            {elseif $mapping.transformation_rule == 'currency_convert'}Convertir Moneda
-                                            {elseif $mapping.transformation_rule == 'custom'}Código PHP Personalizado
-                                            {else}{$mapping.transformation_rule}{/if}
-                                        </td>
-                                        <td>
-                                            {if $mapping.is_required}
-                                                <span class="badge badge-success">Sí</span>
-                                            {else}
-                                                <span class="badge badge-light">No</span>
-                                            {/if}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-default btn-xs" onclick="editProductMapping({$mapping.id_mapping})" title="Editar">
-                                                    <i class="icon-edit"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-default btn-xs" onclick="deleteProductMapping({$mapping.id_mapping})" title="Eliminar">
-                                                    <i class="icon-trash"></i>
-                                                </button>
-                                                {if $mapping.is_active}
-                                                    <button type="button" class="btn btn-warning btn-xs" onclick="toggleMappingStatus({$mapping.id_mapping}, 0)" title="Desactivar">
-                                                        <i class="icon-remove"></i>
-                                                    </button>
-                                                {else}
-                                                    <button type="button" class="btn btn-success btn-xs" onclick="toggleMappingStatus({$mapping.id_mapping}, 1)" title="Activar">
-                                                        <i class="icon-check"></i>
-                                                    </button>
-                                                {/if}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {/foreach}
-                            {else}
-                                <tr>
-                                    <td colspan="9" class="text-center">
-                                        <p>No hay mapeos de productos configurados.</p>
-                                        <button type="button" class="btn btn-primary" onclick="addProductMapping()">
-                                            <i class="icon-plus"></i> Agregar primer mapeo
-                                        </button>
-                                    </td>
-                                </tr>
-                            {/if}
-                        </tbody>
-                    </table>
-                </div>
+    
+    <div class="panel-body" style="padding: 10px;">
+        <div id="mappings-container">
+            <!-- Header row -->
+            <div class="row mapping-header">
+                <div class="col-md-3">Campo en Prestashop</div>
+                <div class="col-md-3">Campo en Madkting</div>
+                <div class="col-md-3">Valor por Defecto</div>
+                <div class="col-md-3">Acciones</div>
+            </div>
+            
+            <!-- Mappings will be loaded here -->
+            <div id="mappings-list"></div>
+        </div>
+        
+        <div class="row" style="margin-top: 10px;">
+            <div class="col-md-12 text-right">
+                <button class="btn btn-primary btn-sm" onclick="saveMappings()">
+                    <i class="icon-save"></i> Guardar Mapeos
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal para agregar/editar mapeo -->
-<div class="modal fade" id="productMappingModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
+<!-- Modal for adding new mapping -->
+<div class="modal fade" id="addMappingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">Mapeo de campos</h4>
+                <h4 class="modal-title"><i class="icon-plus"></i> Mapeo de Campos</h4>
             </div>
             <div class="modal-body">
-                <form id="productMappingForm">
-                    <input type="hidden" id="mapping_id" name="id" value="">
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="prestashop_field">Campo PrestaShop *</label>
-                                <select class="form-control" id="prestashop_field" name="prestashop_field" required>
-                                    <option value="">Seleccionar campo...</option>
-                                    {if $prestashop_fields}
-                                        {foreach from=$prestashop_fields item=field}
-                                            <option value="{$field.id}">{$field.name}</option>
-                                        {/foreach}
-                                    {/if}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="yuju_field">Campo Yuju *</label>
-                                <select class="form-control" id="yuju_field" name="yuju_field" required>
-                                    <option value="">Seleccionar campo...</option>
-                                    {if $yuju_fields}
-                                        {foreach from=$yuju_fields item=field}
-                                            <option value="{$field.id}">{$field.name}</option>
-                                        {/foreach}
-                                    {/if}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="field_type">Tipo de Campo *</label>
-                                <select class="form-control" id="field_type" name="field_type" required>
-                                    <option value="string">Cadena de texto</option>
-                                    <option value="integer">Número entero</option>
-                                    <option value="decimal">Número decimal</option>
-                                    <option value="boolean">Verdadero/Falso</option>
-                                    <option value="date">Fecha</option>
-                                    <option value="array">Lista</option>
-                                    <option value="object">Objeto</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="transformation_rule">Regla de Transformación *</label>
-                                <select class="form-control" id="transformation_rule" name="transformation_rule" required>
-                                    <option value="none">Ninguna</option>
-                                    <option value="uppercase">Mayúsculas</option>
-                                    <option value="lowercase">Minúsculas</option>
-                                    <option value="capitalize">Capitalizar</option>
-                                    <option value="trim">Recortar espacios</option>
-                                    <option value="custom">Personalizada</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row" id="custom_transformation_row" style="display: none;">
-                        <div class="col-md-12">
-                            <div class="form-group">
-                                <label for="custom_transformation">Transformación Personalizada</label>
-                                <textarea class="form-control" id="custom_transformation" name="custom_transformation" rows="3" placeholder="Código PHP para transformación personalizada..."></textarea>
-                                <small class="help-block">Ejemplo: return strtoupper($value);</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="default_value">Valor por Defecto</label>
-                                <input type="text" class="form-control" id="default_value" name="default_value" placeholder="Valor por defecto si está vacío...">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>&nbsp;</label>
-                                <div>
-                                    <label class="checkbox-inline">
-                                        <input type="checkbox" id="is_required" name="is_required" value="1"> Campo requerido
-                                    </label>
-                                    <label class="checkbox-inline">
-                                        <input type="checkbox" id="is_active" name="is_active" value="1" checked> Activo
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </form>
+                <div class="form-group">
+                    <label>Selecciona un campo de prestashop</label>
+                    <select id="modal-prestashop-field" class="form-control">
+                        <option value="">Seleccionar campo</option>
+                        {foreach $prestashop_fields as $field}
+                            <option value="{$field.id|escape:'html':'UTF-8'}">{$field.name|escape:'html':'UTF-8'}</option>
+                        {/foreach}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Selecciona un campo de yuju</label>
+                    <select id="modal-yuju-field" class="form-control">
+                        <option value="">Seleccionar campo</option>
+                        {foreach $yuju_fields as $field}
+                            <option value="{$field.id|escape:'html':'UTF-8'}">{$field.name|escape:'html':'UTF-8'}</option>
+                        {/foreach}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn btn-default btn-block" onclick="addAnotherMapping()">
+                        <i class="icon-plus"></i> Agregar Mapeo
+                    </button>
+                </div>
+                <div id="modal-mappings-preview"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="saveProductMapping()">Guardar</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="saveModalMappings()">
+                    <i class="icon-save"></i> Guardar Mapeos
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<script type="text/javascript">
-function addProductMapping() {
-    $('#productMappingForm')[0].reset();
-    $('#mapping_id').val('');
-    $('#is_active').prop('checked', true);
-    $('#productMappingModal .modal-title').text('Agregar Mapeo de Producto');
-    $('#productMappingModal').modal('show');
-}
-
-function editProductMapping(id) {
-    $.ajax({
-        url: '{$ajax_url}',
-        type: 'POST',
-        data: {
-            ajax: true,
-            action: 'GetMapping',
-            id_mapping: id,
-            token: '{$token}'
-        },
-        dataType: 'json',
-        success: function(response) {
-            if (response.success) {
-                var mapping = response.data;
-                $('#mapping_id').val(mapping.id_mapping);
-                $('#prestashop_field').val(mapping.prestashop_field);
-                $('#yuju_field').val(mapping.yuju_field);
-                $('#field_type').val(mapping.field_type);
-
-                $('#transformation_rule').val(mapping.transformation_rule);
-                $('#custom_transformation').val(mapping.custom_transformation);
-                $('#default_value').val(mapping.default_value);
-                $('#is_required').prop('checked', mapping.is_required == 1);
-                $('#is_active').prop('checked', mapping.is_active == 1);
-                
-                if (mapping.transformation_rule === 'custom') {
-                    $('#custom_transformation_row').show();
-                }
-                
-                $('#productMappingModal .modal-title').text('Editar Mapeo de campos');
-                $('#productMappingModal').modal('show');
-            } else {
-                showNotification('error', response.message || 'Error al cargar el mapeo');
-            }
-        },
-        error: function() {
-            showNotification('error', 'Error de conexión');
-        }
-    });
-}
-
-function saveProductMapping() {
-    var formData = {
-        ajax: true,
-        action: 'SaveMapping',
-        token: '{$token}',
-        id_mapping: $('#mapping_id').val(),
-        prestashop_field: $('#prestashop_field').val(),
-        yuju_field: $('#yuju_field').val(),
-        field_type: $('#field_type').val(),
-        sync_direction: 'prestashop_to_yuju',
-        transformation_rule: $('#transformation_rule').val(),
-        custom_transformation: $('#custom_transformation').val(),
-        default_value: $('#default_value').val(),
-        is_required: $('#is_required').is(':checked') ? 1 : 0,
-        is_active: $('#is_active').is(':checked') ? 1 : 0
-    };
+<script>
+{literal}
+function showToast(message, type) {
+    type = type || 'success';
+    var icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'exclamation-circle' : 'info-circle');
+    var bgColor = type === 'success' ? '#28a745' : (type === 'error' ? '#dc3545' : '#17a2b8');
+    var iconColor = '#ffffff';
     
-    $.ajax({
-        url: '{$ajax_url}',
-        type: 'POST',
-        data: formData,
-        dataType: 'json',
-        success: function(response) {
-            if (response.success) {
-                showNotification('success', response.message);
-                $('#productMappingModal').modal('hide');
-                location.reload();
+    var toast = $('<div class="toast-notification">')
+        .css({
+            'position': 'fixed',
+            'top': '80px',
+            'right': '20px',
+            'z-index': '99999',
+            'min-width': '320px',
+            'max-width': '450px',
+            'background': '#ffffff',
+            'border-radius': '8px',
+            'box-shadow': '0 4px 20px rgba(0,0,0,0.2)',
+            'display': 'flex',
+            'align-items': 'center',
+            'padding': '0',
+            'overflow': 'hidden',
+            'animation': 'slideInRight 0.3s ease-out'
+        });
+    
+    var iconContainer = $('<div class="toast-icon">')
+        .css({
+            'background-color': bgColor,
+            'padding': '16px',
+            'display': 'flex',
+            'align-items': 'center',
+            'justify-content': 'center',
+            'min-width': '50px'
+        })
+        .append($('<i class="icon-' + icon + '">').css({
+            'color': iconColor,
+            'font-size': '24px'
+        }));
+    
+    var contentContainer = $('<div class="toast-content">')
+        .css({
+            'flex': '1',
+            'padding': '16px 20px',
+            'color': '#333',
+            'font-size': '14px',
+            'line-height': '1.4'
+        })
+        .text(message);
+    
+    var closeBtn = $('<button type="button" class="toast-close">')
+        .css({
+            'background': 'none',
+            'border': 'none',
+            'color': '#999',
+            'font-size': '20px',
+            'padding': '0 16px',
+            'cursor': 'pointer',
+            'line-height': '1'
+        })
+        .html('&times;')
+        .on('click', function() {
+            toast.fadeOut(300, function() { $(this).remove(); });
+        });
+    
+    toast.append(iconContainer).append(contentContainer).append(closeBtn);
+    $('body').append(toast);
+    
+    setTimeout(function() {
+        toast.fadeOut(400, function() {
+            $(this).remove();
+        });
+    }, 4000);
+}
+
+var prestashopFields = {/literal}{$prestashop_fields|json_encode}{literal};
+var yujuFields = {/literal}{$yuju_fields|json_encode}{literal};
+var currentMappings = {/literal}{$product_mappings|json_encode}{literal};
+var mappingsCounter = 0;
+var modalMappings = [];
+
+// Campos obligatorios de Yuju según API (no se pueden eliminar)
+var requiredYujuFields = [
+    'sku_simple', 'sku', 'name', 'description', 'id_category', 'stock', 'price',
+    'brand', 'shipping', 'dimensions_unit', 'shipping_width', 'shipping_depth',
+    'shipping_height', 'weight_unit', 'weight', 'images'
+];
+
+// Default mappings basados en campos obligatorios de la API de Yuju
+var defaultMappings = [
+    // Campos obligatorios
+    { ps: 'name', yuju: 'name', default: '' },
+    { ps: 'reference', yuju: 'sku', default: '' },
+    { ps: 'reference', yuju: 'sku_simple', default: '' },
+    { ps: 'description', yuju: 'description', default: 'Descripcion no disponible' },
+    { ps: 'id_category_default', yuju: 'id_category', default: '' },
+    { ps: 'quantity', yuju: 'stock', default: '' },
+    { ps: 'price', yuju: 'price', default: '' },
+    { ps: 'manufacturer_name', yuju: 'brand', default: 'Global-Laptops' },
+    { ps: 'available_for_order', yuju: 'shipping', default: '1' },
+    { ps: 'unit_dimension', yuju: 'dimensions_unit', default: 'cm' },
+    { ps: 'width', yuju: 'shipping_width', default: '8' },
+    { ps: 'depth', yuju: 'shipping_depth', default: '35' },
+    { ps: 'height', yuju: 'shipping_height', default: '44' },
+    { ps: 'unit_weight', yuju: 'weight_unit', default: 'kg' },
+    { ps: 'weight', yuju: 'weight', default: '1' },
+    { ps: 'images', yuju: 'images', default: '' },
+    // Campos opcionales
+    { ps: 'condition', yuju: 'condition', default: 'new' },
+    { ps: 'ean13', yuju: 'ean', default: '' },
+    { ps: 'upc', yuju: 'upc', default: '' }
+];
+
+function validateYujuDuplicates() {
+    var yujuFieldsUsed = {};
+    var hasDuplicates = false;
+    
+    // Resetear todos los bordes
+    $('.mapping-row').each(function() {
+        $(this).css('border', '');
+        $(this).find('.yuju-field').css('border-color', '');
+    });
+    
+    // Verificar duplicados
+    $('.mapping-row').each(function() {
+        var $row = $(this);
+        var yujuField = $row.find('.yuju-field').val();
+        
+        if (yujuField) {
+            if (yujuFieldsUsed[yujuField]) {
+                // Marcar ambas filas como duplicadas
+                $row.css('border', '2px solid #dc3545');
+                $row.find('.yuju-field').css('border-color', '#dc3545');
+                yujuFieldsUsed[yujuField].css('border', '2px solid #dc3545');
+                yujuFieldsUsed[yujuField].find('.yuju-field').css('border-color', '#dc3545');
+                hasDuplicates = true;
             } else {
-                showNotification('error', response.message);
+                yujuFieldsUsed[yujuField] = $row;
             }
-        },
-        error: function() {
-            showNotification('error', 'Error de conexión');
         }
+    });
+    
+    return !hasDuplicates;
+}
+
+$(document).ready(function() {
+    initializeSelect2();
+    loadMappings();
+    
+    // Validar duplicados en tiempo real
+    $(document).on('change', '.yuju-field', function() {
+        validateYujuDuplicates();
+    });
+    
+    // Reinicializar Select2 cada vez que se abre el modal
+    $('#addMappingModal').on('shown.bs.modal', function() {
+        // Destruir Select2 si existe
+        if ($('#modal-prestashop-field').data('select2')) {
+            $('#modal-prestashop-field').select2('destroy');
+        }
+        if ($('#modal-yuju-field').data('select2')) {
+            $('#modal-yuju-field').select2('destroy');
+        }
+        
+        // Inicializar Select2 con las opciones del DOM
+        $('#modal-prestashop-field').select2({
+            placeholder: 'Seleccionar campo',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#addMappingModal')
+        });
+        
+        $('#modal-yuju-field').select2({
+            placeholder: 'Seleccionar campo',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#addMappingModal')
+        });
+    });
+    
+    // Limpiar el modal cuando se cierra
+    $('#addMappingModal').on('hidden.bs.modal', function() {
+        // Reset data
+        modalMappings = [];
+        $('#modal-mappings-preview').html('');
+        
+        // Resetear valores
+        $('#modal-prestashop-field').val('');
+        $('#modal-yuju-field').val('');
+    });
+});
+
+function initializeSelect2() {
+    $('.select2').select2({
+        placeholder: 'Seleccionar campo',
+        allowClear: true,
+        width: '100%'
     });
 }
 
-function deleteProductMapping(id) {
-    if (confirm('¿Está seguro de que desea eliminar este mapeo?')) {
-        $.ajax({
-            url: '{$ajax_url}',
-            type: 'POST',
-            data: {
-                ajax: true,
-                action: 'DeleteMapping',
-                id_mapping: id,
-                token: '{$token}'
-            },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    showNotification('success', response.message);
-                    $('tr[data-mapping-id="' + id + '"]').fadeOut(function() {
-                        $(this).remove();
-                    });
-                } else {
-                    showNotification('error', response.message);
-                }
-            },
-            error: function() {
-                showNotification('error', 'Error de conexión');
-            }
+function loadMappings() {
+    var html = '';
+    if (currentMappings && currentMappings.length > 0) {
+        currentMappings.forEach(function(mapping, index) {
+            html += renderMappingRow(mapping, index);
+        });
+    }
+    $('#mappings-list').html(html);
+    initializeSelect2();
+}
+
+function renderMappingRow(mapping, index) {
+    var psFieldName = getFieldName(mapping.prestashop_field, prestashopFields);
+    var yujuFieldName = getFieldName(mapping.yuju_field, yujuFields);
+    var defaultValue = mapping.default_value || '';
+    var isRequired = requiredYujuFields.includes(mapping.yuju_field);
+    var showDefaultValue = defaultValue !== '';
+    
+    var rowClass = 'row mapping-row' + (isRequired ? ' required-mapping' : '');
+    var html = '<div class="' + rowClass + '" data-index="' + index + '" data-required="' + isRequired + '">';
+    
+    // Columna 1: Campo PrestaShop
+    html += '<div class="col-md-3">';
+    html += '<select class="form-control select2 ps-field" name="mappings[' + index + '][ps_field]" data-index="' + index + '">';
+    html += renderFieldOptions(prestashopFields, mapping.prestashop_field);
+    html += '</select></div>';
+    
+    // Columna 2: Campo Yuju
+    html += '<div class="col-md-3">';
+    html += '<select class="form-control select2 yuju-field" name="mappings[' + index + '][yuju_field]" data-index="' + index + '"';
+    if (isRequired) {
+        html += ' disabled title="Campo obligatorio - No se puede cambiar"';
+    }
+    html += '>';
+    html += renderFieldOptions(yujuFields, mapping.yuju_field);
+    html += '</select></div>';
+    
+    // Columna 3: Valor por Defecto (colapsable)
+    html += '<div class="col-md-3">';
+    html += '<div id="default-value-container-' + index + '" style="display: ' + (showDefaultValue ? 'block' : 'none') + '; max-width: 250px;">';
+    html += '<input type="text" class="form-control input-sm default-value-input" name="mappings[' + index + '][default_value]" ';
+    html += 'value="' + defaultValue + '" placeholder="Valor si está vacío" style="font-size: 12px; height: 28px; padding: 4px 8px;">';
+    html += '</div></div>';
+    
+    // Columna 4: Acciones (Dropdown)
+    html += '<div class="col-md-3">';
+    html += '<div class="btn-group">';
+    html += '<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" style="display: inline-flex; align-items: center; white-space: nowrap;">';
+    html += '<i class="icon-cog" style="margin-right: 5px;"></i> Acciones <span class="caret" style="margin-left: 5px;"></span></button>';
+    html += '<ul class="dropdown-menu" role="menu">';
+    
+    // Opción: Agregar/Quitar valor por defecto
+    html += '<li><a href="#" onclick="toggleDefaultValueField(' + index + '); return false;">';
+    html += '<i class="icon-edit"></i> <span id="default-toggle-text-' + index + '">';
+    html += (showDefaultValue ? 'Quitar' : 'Agregar') + ' Valor por Defecto</span></a></li>';
+    
+    // Opción: Eliminar (solo si no es obligatorio)
+    if (!isRequired) {
+        html += '<li class="divider"></li>';
+        html += '<li><a href="#" onclick="removeMapping(' + index + '); return false;">';
+        html += '<i class="icon-times"></i> Eliminar Mapeo</a></li>';
+    } else {
+        html += '<li class="divider"></li>';
+        html += '<li class="disabled"><a href="#"><i class="icon-lock"></i> Campo Obligatorio</a></li>';
+    }
+    
+    html += '</ul></div></div>';
+    html += '</div>';
+    
+    return html;
+}
+
+function renderFieldOptions(fields, selectedValue) {
+    var html = '<option value="">Selecciona un campo</option>';
+    fields.forEach(function(field) {
+        var selected = field.id == selectedValue ? 'selected' : '';
+        html += '<option value="' + field.id + '" ' + selected + '>' + field.name + '</option>';
+    });
+    return html;
+}
+
+function getFieldName(fieldId, fieldsArray) {
+    var field = fieldsArray.find(f => f.id == fieldId);
+    return field ? field.name : fieldId;
+}
+
+function toggleDefaultValueField(index) {
+    var container = $('#default-value-container-' + index);
+    var text = $('#default-toggle-text-' + index);
+    
+    if (container.is(':visible')) {
+        container.slideUp(200);
+        // Limpiar el valor cuando se oculta
+        container.find('input').val('');
+        text.text('Agregar Valor por Defecto');
+    } else {
+        container.slideDown(200);
+        text.text('Quitar Valor por Defecto');
+        // Enfocar el input
+        setTimeout(function() {
+            container.find('input').focus();
+        }, 250);
+    }
+}
+
+function addNewMapping() {
+    // Just show the modal, initialization is handled by the event listener
+    $('#addMappingModal').modal('show');
+}
+
+function addAnotherMapping() {
+    var psField = $('#modal-prestashop-field').val();
+    var yujuField = $('#modal-yuju-field').val();
+    
+    if (!psField || !yujuField) {
+        showToast('Debe seleccionar ambos campos', 'error');
+        return;
+    }
+    
+    modalMappings.push({
+        prestashop_field: psField,
+        yuju_field: yujuField,
+        default_value: ''
+    });
+    
+    updateModalPreview();
+    
+    // Reset selects
+    $('#modal-prestashop-field').val('').trigger('change');
+    $('#modal-yuju-field').val('').trigger('change');
+}
+
+function updateModalPreview() {
+    var html = '<div class="alert alert-info"><strong>Mapeos agregados:</strong><ul>';
+    modalMappings.forEach(function(mapping) {
+        var psName = getFieldName(mapping.prestashop_field, prestashopFields);
+        var yujuName = getFieldName(mapping.yuju_field, yujuFields);
+        html += '<li>' + psName + ' → ' + yujuName + '</li>';
+    });
+    html += '</ul></div>';
+    $('#modal-mappings-preview').html(html);
+}
+
+function saveModalMappings() {
+    // Si hay campos seleccionados y no se agregaron a modalMappings, agregarlos automáticamente
+    var psField = $('#modal-prestashop-field').val();
+    var yujuField = $('#modal-yuju-field').val();
+    
+    if (psField && yujuField) {
+        // Verificar si ya existe en modalMappings
+        var exists = modalMappings.some(function(m) {
+            return m.prestashop_field === psField && m.yuju_field === yujuField;
+        });
+        
+        if (!exists) {
+            modalMappings.push({
+                prestashop_field: psField,
+                yuju_field: yujuField,
+                default_value: ''
+            });
+        }
+    }
+    
+    if (modalMappings.length === 0) {
+        showToast('Debe seleccionar al menos un mapeo', 'error');
+        return;
+    }
+    
+    // Agregar los mapeos visualmente
+    var html = '';
+    modalMappings.forEach(function(mapping) {
+        html += renderMappingRow(mapping, mappingsCounter++);
+    });
+    
+    $('#mappings-list').append(html);
+    initializeSelect2();
+    
+    // Cerrar el modal
+    $('#addMappingModal').modal('hide');
+    
+    // Guardar automáticamente en la base de datos
+    saveMappings();
+}
+
+function removeMapping(index) {
+    if (confirm('¿Está seguro de eliminar este mapeo?')) {
+        $('[data-index="' + index + '"]').fadeOut(300, function() {
+            $(this).remove();
+            showToast('Mapeo eliminado', 'success');
         });
     }
 }
 
-function toggleMappingStatus(id, status) {
+function saveMappings() {
+    var mappings = [];
+    var yujuFieldsUsed = [];
+    var hasDuplicates = false;
+    
+    $('.mapping-row').each(function() {
+        var $row = $(this);
+        var psField = $row.find('.ps-field').val();
+        var yujuField = $row.find('.yuju-field').val();
+        var defaultValue = $row.find('.default-value-input').val() || '';
+        
+        if (psField && yujuField) {
+            // Verificar si el campo de Yuju ya fue usado
+            if (yujuFieldsUsed.indexOf(yujuField) !== -1) {
+                hasDuplicates = true;
+                $row.css('border', '2px solid #dc3545');
+                $row.find('.yuju-field').css('border-color', '#dc3545');
+            } else {
+                yujuFieldsUsed.push(yujuField);
+                $row.css('border', '');
+                $row.find('.yuju-field').css('border-color', '');
+            }
+            
+            mappings.push({
+                prestashop_field: psField,
+                yuju_field: yujuField,
+                default_value: defaultValue
+            });
+        }
+    });
+    
+    if (hasDuplicates) {
+        showToast('Error: Hay campos de Yuju duplicados. Cada campo de Yuju solo puede mapearse una vez.', 'error');
+        return;
+    }
+    
+    if (mappings.length === 0) {
+        showToast('No hay mapeos para guardar', 'error');
+        return;
+    }
+    
+    console.log('Guardando mapeos:', mappings);
+    
     $.ajax({
-        url: '{$ajax_url}',
-        type: 'POST',
+        url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+        method: 'POST',
+        dataType: 'json',
         data: {
             ajax: true,
-            action: 'ToggleStatus',
-            id: id,
-            status: status,
-            token: '{$token}'
+            action: 'saveMappings',
+            mappings: JSON.stringify(mappings)
         },
-        dataType: 'json',
+        beforeSend: function() {
+            $('.btn-primary').prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Guardando...');
+        },
         success: function(response) {
+            console.log('Respuesta del servidor:', response);
+            $('.btn-primary').prop('disabled', false).html('<i class="icon-save"></i> Guardar Mapeos');
+            
             if (response.success) {
-                showNotification('success', response.message);
-                location.reload();
+                showToast('Mapeos guardados exitosamente', 'success');
             } else {
-                showNotification('error', response.message);
+                showToast('Error al guardar: ' + (response.message || 'Error desconocido'), 'error');
             }
         },
-        error: function() {
-            showNotification('error', 'Error de conexión');
+        error: function(xhr, status, error) {
+            console.error('Error AJAX:', xhr.responseText);
+            $('.btn-primary').prop('disabled', false).html('<i class="icon-save"></i> Guardar Mapeos');
+            showToast('Error de conexión: ' + error, 'error');
         }
     });
 }
-
-function refreshYujuFields() {
-    $.ajax({
-        url: '{$ajax_url}',
-        type: 'POST',
-        data: {
-            ajax: true,
-            action: 'RefreshYujuFields',
-            token: '{$token}'
-        },
-        dataType: 'json',
-        success: function(response) {
-            if (response.success) {
-                showNotification('success', response.message);
-                // Actualizar el select de campos Yuju
-                var yujuSelect = $('#yuju_field');
-                yujuSelect.empty().append('<option value="">Seleccionar campo...</option>');
-                if (response.fields) {
-                    $.each(response.fields, function(index, field) {
-                        yujuSelect.append('<option value="' + field.name + '" data-type="' + field.type + '">' + field.label + ' (' + field.name + ')</option>');
-                    });
-                }
-            } else {
-                showNotification('error', response.message);
-            }
-        },
-        error: function() {
-            showNotification('error', 'Error de conexión');
-        }
-    });
-}
-
-function showNotification(type, message) {
-    var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
-    var notification = '<div class="alert ' + alertClass + ' alert-dismissible" role="alert">' +
-        '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
-        message + '</div>';
-    
-    $('.panel-body').prepend(notification);
-    
-    setTimeout(function() {
-        $('.alert').fadeOut();
-    }, 5000);
-}
-
-$(document).ready(function() {
-    // Mostrar/ocultar transformación personalizada
-    $('#transformation_rule').change(function() {
-        if ($(this).val() === 'custom') {
-            $('#custom_transformation_row').show();
-        } else {
-            $('#custom_transformation_row').hide();
-        }
-    });
-    
-    // Auto-detectar tipo de campo basado en el campo Yuju seleccionado
-    $('#yuju_field').change(function() {
-        var selectedOption = $(this).find('option:selected');
-        var fieldType = selectedOption.data('type');
-        if (fieldType) {
-            $('#field_type').val(fieldType);
-        }
-    });
-});
+{/literal}
 </script>
 {/block}

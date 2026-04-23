@@ -178,13 +178,6 @@ class Prestashopyuju extends Module
         'active' => 1,
         ],
         [
-        'class_name' => 'AdminYujuSync',
-        'name' => $this->trans('Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
-        'parent_class_name' => 'AdminYuju',
-        'module' => $this->name,
-        'active' => 1,
-        ],
-        [
         'class_name' => 'AdminYujuProductMapping',
         'name' => $this->trans('Product Mapping', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
@@ -256,7 +249,6 @@ class Prestashopyuju extends Module
         'AdminYujuProductStatus',
         'AdminYujuAttributeMapping',
         'AdminYujuProductMapping',
-        'AdminYujuSync',
         'AdminYujuConfiguration',
         'AdminYuju',
         ];
@@ -415,26 +407,6 @@ class Prestashopyuju extends Module
     }
 
     /**
-     * Product update hook.
-     */
-    public function hookActionProductUpdate($params)
-    {
-        try {
-            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-                if (!isset($this->sync_manager) || !$this->sync_manager) {
-                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
-                    $this->sync_manager = new YujuSyncManager();
-                }
-                if (method_exists($this->sync_manager, 'queueProductSync')) {
-                    $this->sync_manager->queueProductSync($params['product']->id, 'update');
-                }
-            }
-        } catch (Exception $e) {
-            // Silenciar error para no romper el guardado del producto
-        }
-    }
-
-    /**
      * Product delete hook.
      */
     public function hookActionProductDelete($params)
@@ -459,18 +431,144 @@ class Prestashopyuju extends Module
      */
     public function hookActionUpdateQuantity($params)
     {
+        require_once dirname(__FILE__) . '/classes/YujuLogger.php';
+        require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
+        
+        $logger = new YujuLogger();
+        
+        $logger->info('=== hookActionUpdateQuantity TRIGGERED ===', [
+            'id_product' => $params['id_product'] ?? 'N/A',
+            'quantity' => $params['quantity'] ?? 'N/A',
+            'params' => $params,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
+        
+        // Verificar configuración directamente desde Configuration de PrestaShop
+        $client_id = Configuration::get('YUJU_CLIENT_ID');
+        $client_secret = Configuration::get('YUJU_CLIENT_SECRET');
+        $auto_sync = Configuration::get('YUJU_ENABLE_AUTO_SYNC');
+        
+        // Verificar que el módulo esté configurado
+        if (empty($client_id) || empty($client_secret)) {
+            $logger->warning('hookActionUpdateQuantity: Módulo NO configurado - DETENIDO');
+            return;
+        }
+        
+        $logger->info('hookActionUpdateQuantity: Módulo configurado OK');
+        
+        // Verificar que la sincronización automática esté habilitada
+        if (!$auto_sync) {
+            $logger->warning('hookActionUpdateQuantity: Auto-sync DESHABILITADO - DETENIDO', [
+                'YUJU_ENABLE_AUTO_SYNC' => $auto_sync
+            ]);
+            return;
+        }
+        
+        $logger->info('hookActionUpdateQuantity: Auto-sync habilitado OK');
+        
+        $product_id = (int)$params['id_product'];
+        
         try {
-            if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_STOCK_SYNC')) {
-                if (!isset($this->sync_manager) || !$this->sync_manager) {
-                    require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
-                    $this->sync_manager = new YujuSyncManager();
-                }
-                if (method_exists($this->sync_manager, 'queueStockSync')) {
-                    $this->sync_manager->queueStockSync($params['id_product'], $params['id_product_attribute']);
-                }
+            // Verificar si el producto está sincronizado con Yuju
+            $status = Db::getInstance()->getRow('
+                SELECT yuju_product_id, sync_status 
+                FROM ' . _DB_PREFIX_ . 'yuju_product_status 
+                WHERE prestashop_product_id = ' . $product_id
+            );
+            
+            // Solo sincronizar si ya existe en Yuju
+            if (!$status || empty($status['yuju_product_id'])) {
+                return;
             }
+            
+            $yuju_product_id = $status['yuju_product_id'];
+            
+            // Obtener el stock ACTUAL del parámetro quantity (es el stock después del cambio)
+            // El parámetro 'quantity' en actionUpdateQuantity contiene el nuevo valor
+            $new_stock = isset($params['quantity']) ? (int)$params['quantity'] : 0;
+            
+            // Si no viene en params, obtener de la BD como fallback
+            if ($new_stock === 0) {
+                $new_stock = StockAvailable::getQuantityAvailableByProduct($product_id);
+            }
+            
+            // Calcular el valor anterior usando el delta
+            // delta_quantity es negativo si se resta, positivo si se suma
+            $delta = isset($params['delta_quantity']) ? (int)$params['delta_quantity'] : 0;
+            $old_stock = $new_stock - $delta;
+            
+            $logger->info('Auto-sync (Stock): Valores detectados', [
+                'product_id' => $product_id,
+                'quantity_param' => $params['quantity'] ?? 'N/A',
+                'delta_quantity' => $delta,
+                'old_stock' => $old_stock,
+                'new_stock' => $new_stock,
+                'stock_to_send' => $new_stock
+            ]);
+            
+            // Preparar datos para actualizar solo el stock
+            $yuju_data = [
+                'stock' => $new_stock
+            ];
+            
+            $logger->info('Auto-sync (Stock): Actualizando cantidad en Yuju', [
+                'product_id' => $product_id,
+                'yuju_product_id' => $yuju_product_id,
+                'new_stock' => $new_stock,
+                'hook' => 'actionUpdateQuantity'
+            ]);
+            
+            $start_time = microtime(true);
+            $api_client = new YujuApiClient();
+            $result = $api_client->updateProduct($yuju_product_id, $yuju_data);
+            $sync_duration = microtime(true) - $start_time;
+            
+            // Guardar en historial
+            $this->saveProductUpdateHistory(
+                $product_id,
+                $yuju_product_id,
+                [
+                    'changed_fields' => ['quantity'],
+                    'priority' => 'high', // Stock siempre es prioridad alta
+                    'old_values' => ['quantity' => $old_stock],
+                    'new_values' => ['quantity' => $new_stock]
+                ],
+                $yuju_data,
+                $result,
+                $sync_duration
+            );
+            
+            // Actualizar estado si hubo error
+            if (!$result['success']) {
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'sync_status' => pSQL('synced_with_errors'),
+                        'last_error' => pSQL($result['message'] ?? 'Error en actualización de stock'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ],
+                    'prestashop_product_id = ' . $product_id
+                );
+            } else {
+                // Actualizar estado a synced y timestamp de última sincronización
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'sync_status' => pSQL('synced'),
+                        'last_sync_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ],
+                    'prestashop_product_id = ' . $product_id
+                );
+            }
+            
         } catch (Exception $e) {
-            // Silenciar error
+            $logger = new YujuLogger();
+            $logger->error('Error en auto-sync de stock', [
+                'product_id' => $product_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 
@@ -826,15 +924,317 @@ class Prestashopyuju extends Module
 
         return $instance;
     }
+    
+    /**
+     * Hook: Detecta cambios en productos y sincroniza con Yuju
+     * Se ejecuta después de actualizar un producto
+     */
+    public function hookActionProductUpdate($params)
+    {
+        // Prevenir ejecuciones múltiples - usar variable global en lugar de estática
+        global $yuju_processing_products;
+        if (!isset($yuju_processing_products)) {
+            $yuju_processing_products = [];
+        }
+        
+        require_once dirname(__FILE__) . '/classes/YujuLogger.php';
+        require_once dirname(__FILE__) . '/classes/YujuProductChangeDetector.php';
+        require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
+        require_once dirname(__FILE__) . '/classes/YujuSyncQueue.php';
+        
+        $logger = new YujuLogger();
+        
+        if (!isset($params['product'])) {
+            return;
+        }
+        
+        $product = $params['product'];
+        $product_id = (int)$product->id;
+        
+        // Evitar procesamiento duplicado con marca de tiempo
+        $current_time = microtime(true);
+        if (isset($yuju_processing_products[$product_id])) {
+            $time_diff = $current_time - $yuju_processing_products[$product_id];
+            if ($time_diff < 2) { // Ignorar si se ejecutó hace menos de 2 segundos
+                $logger->info('hookActionProductUpdate: Ejecutado recientemente, saltando', [
+                    'product_id' => $product_id,
+                    'time_diff' => $time_diff
+                ]);
+                return;
+            }
+        }
+        
+        $yuju_processing_products[$product_id] = $current_time;
+        
+        try {
+            // Log inicial para debug
+            $logger->info('=== hookActionProductUpdate TRIGGERED ===', [
+                'product_id' => $product_id,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+        
+            // Verificar configuración directamente desde Configuration de PrestaShop
+            $client_id = Configuration::get('YUJU_CLIENT_ID');
+            $client_secret = Configuration::get('YUJU_CLIENT_SECRET');
+            $auto_sync = Configuration::get('YUJU_ENABLE_AUTO_SYNC');
+            
+            $logger->info('hookActionProductUpdate: Configuración cargada', [
+                'has_client_id' => !empty($client_id),
+                'has_client_secret' => !empty($client_secret),
+                'auto_sync' => $auto_sync,
+                'client_id_length' => strlen($client_id)
+            ]);
+            
+            // Verificar que el módulo esté configurado
+            if (empty($client_id) || empty($client_secret)) {
+                $logger->warning('hookActionProductUpdate: Módulo NO configurado - DETENIDO', [
+                    'client_id' => $client_id,
+                    'client_secret_set' => !empty($client_secret)
+                ]);
+                return;
+            }
+            
+            $logger->info('hookActionProductUpdate: Módulo configurado OK');
+            
+            // Verificar que la sincronización automática esté habilitada
+            if (!$auto_sync) {
+                $logger->warning('hookActionProductUpdate: Auto-sync DESHABILITADO - DETENIDO', [
+                    'YUJU_ENABLE_AUTO_SYNC' => $auto_sync
+                ]);
+                return;
+            }
+            
+            $logger->info('hookActionProductUpdate: Auto-sync habilitado OK');
+            
+            $logger->info('hookActionProductUpdate: Procesando producto', [
+                'product_id' => $product_id,
+                'product_name' => isset($product->name) ? $product->name : 'N/A',
+                'product_reference' => $product->reference
+            ]);
+            
+            // Verificar si el producto está sincronizado con Yuju
+            $status = Db::getInstance()->getRow('
+                SELECT yuju_product_id, sync_status 
+                FROM ' . _DB_PREFIX_ . 'yuju_product_status 
+                WHERE prestashop_product_id = ' . $product_id
+            );
+            
+            $logger->info('hookActionProductUpdate: Consulta BD ejecutada', [
+                'product_id' => $product_id,
+                'status_found' => !empty($status),
+                'yuju_product_id' => !empty($status) ? $status['yuju_product_id'] : 'N/A',
+                'sync_status' => !empty($status) ? $status['sync_status'] : 'N/A'
+            ]);
+            
+            // Solo sincronizar si ya existe en Yuju
+            if (!$status || empty($status['yuju_product_id'])) {
+                $logger->warning('hookActionProductUpdate: Producto NO existe en Yuju - DETENIDO', [
+                    'product_id' => $product_id,
+                    'reason' => empty($status) ? 'No hay registro en BD' : 'yuju_product_id está vacío'
+                ]);
+                return;
+            }
+            
+            $yuju_product_id = $status['yuju_product_id'];
+            
+            $logger->info('hookActionProductUpdate: Producto encontrado en Yuju OK', [
+                'product_id' => $product_id,
+                'yuju_product_id' => $yuju_product_id
+            ]);
+            
+            // Detectar cambios
+            $logger->info('hookActionProductUpdate: Iniciando detector de cambios...');
+            $detector = new YujuProductChangeDetector();
+            $logger->info('hookActionProductUpdate: Detector instanciado');
+            
+            $changes_info = $detector->detectChanges($product);
+            $logger->info('hookActionProductUpdate: detectChanges() ejecutado');
+            
+            $logger->info('hookActionProductUpdate: Detector ejecutado', [
+                'changed_fields' => $changes_info['changed_fields'],
+                'priority' => $changes_info['priority'],
+                'has_changes' => !empty($changes_info['changed_fields']),
+                'old_values' => $changes_info['old_values'],
+                'new_values' => $changes_info['new_values']
+            ]);            // Si no hay cambios, salir
+            if (empty($changes_info['changed_fields'])) {
+                $logger->warning('hookActionProductUpdate: NO hay cambios detectados - DETENIDO', [
+                    'product_id' => $product_id,
+                    'note' => 'El detector no encontró diferencias con la última sincronización'
+                ]);
+                return;
+            }
+            
+            // Preparar datos para Yuju (solo campos modificados)
+            $yuju_data = $detector->prepareYujuUpdateData($product, $changes_info['changed_fields']);
+            
+            $logger->info('hookActionProductUpdate: Datos preparados para Yuju', [
+                'yuju_data' => $yuju_data,
+                'data_size' => count($yuju_data)
+            ]);
+            
+            if (empty($yuju_data)) {
+                $logger->warning('hookActionProductUpdate: Datos preparados están VACÍOS - DETENIDO', [
+                    'changed_fields' => $changes_info['changed_fields']
+                ]);
+                return;
+            }
+            
+            // Determinar si es prioridad alta (precio/stock) o usar cola
+            $priority = $changes_info['priority'];
+            $sync_queue = new YujuSyncQueue();
+            
+            if ($priority === 'high') {
+                // PRECIO/STOCK: Sincronizar inmediatamente
+                $logger->info('hookActionProductUpdate: PRIORIDAD ALTA - Sincronizando inmediatamente', [
+                    'product_id' => $product_id,
+                    'changed_fields' => $changes_info['changed_fields']
+                ]);
+                
+                $start_time = microtime(true);
+                $api_client = new YujuApiClient();
+                $result = $api_client->updateProduct($yuju_product_id, $yuju_data);
+                $sync_duration = microtime(true) - $start_time;
+            } else {
+                // OTROS CAMPOS: Agregar a cola para procesamiento por lotes
+                $logger->info('hookActionProductUpdate: PRIORIDAD NORMAL - Agregando a cola', [
+                    'product_id' => $product_id,
+                    'changed_fields' => $changes_info['changed_fields']
+                ]);
+                
+                $queued = $sync_queue->addToQueue($product_id, 'update', 'normal', $yuju_data);
+                
+                if ($queued) {
+                    // Actualizar estado a queued
+                    Db::getInstance()->update(
+                        'yuju_product_status',
+                        [
+                            'sync_status' => pSQL('queued'),
+                            'updated_at' => date('Y-m-d H:i:s')
+                        ],
+                        'prestashop_product_id = ' . $product_id
+                    );
+                    
+                    $logger->info('hookActionProductUpdate: Producto agregado a cola - COMPLETADO', [
+                        'product_id' => $product_id,
+                        'status' => 'queued'
+                    ]);
+                }
+                
+                // Salir sin guardar historial (se guardará al procesar la cola)
+                return;
+            }
+            
+            // Solo llega aquí si fue prioridad alta (sincronización inmediata)
+            $start_time = $start_time ?? microtime(true);
+            $sync_duration = $sync_duration ?? 0;
+            
+            // Guardar en historial
+            $this->saveProductUpdateHistory(
+                $product_id,
+                $yuju_product_id,
+                $changes_info,
+                $yuju_data,
+                $result,
+                $sync_duration
+            );
+            
+            // Actualizar estado si hubo error
+            if (!$result['success']) {
+                $logger->error('hookActionProductUpdate: ERROR en Yuju - Actualizando estado', [
+                    'product_id' => $product_id,
+                    'error' => $result['message'] ?? 'Error desconocido'
+                ]);
+                
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'sync_status' => pSQL('synced_with_errors'),
+                        'last_error' => pSQL($result['message'] ?? 'Error en actualización automática'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ],
+                    'prestashop_product_id = ' . $product_id
+                );
+            } else {
+                $logger->info('hookActionProductUpdate: SUCCESS - Actualizando estado a synced', [
+                    'product_id' => $product_id,
+                    'yuju_product_id' => $yuju_product_id
+                ]);
+                
+                // Guardar los datos sincronizados para futuras comparaciones
+                $last_sync_data = json_encode($yuju_data);
+                
+                // Actualizar estado a synced y timestamp de última sincronización
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'sync_status' => pSQL('synced'),
+                        'last_sync_at' => date('Y-m-d H:i:s'),
+                        'last_sync_data' => pSQL($last_sync_data),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ],
+                    'prestashop_product_id = ' . $product_id
+                );
+            }
+            
+            $logger->info('=== hookActionProductUpdate COMPLETADO ===');
+            
+        } catch (Exception $e) {
+            $logger->error('=== hookActionProductUpdate EXCEPTION ===', [
+                'product_id' => $product_id ?? 'N/A',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+        }
+    }
+    
+    /**
+     * Guarda el historial de actualización automática
+     */
+    private function saveProductUpdateHistory($product_id, $yuju_product_id, $changes_info, $yuju_data, $result, $sync_duration)
+    {
+        $request_data = [
+            'method' => 'PUT',
+            'url' => 'https://api.tp.yuju.io/products/' . $yuju_product_id,
+            'changed_fields' => $changes_info['changed_fields'],
+            'priority' => $changes_info['priority'],
+            'old_values' => $changes_info['old_values'],
+            'new_values' => $changes_info['new_values'],
+            'body' => $yuju_data
+        ];
+        
+        Db::getInstance()->insert('yuju_product_sync_history', [
+            'prestashop_product_id' => (int)$product_id,
+            'yuju_product_id' => pSQL($yuju_product_id),
+            'action' => pSQL('update'),
+            'status' => pSQL($result['success'] ? 'success' : 'error'),
+            'http_status_code' => isset($result['http_code']) ? (int)$result['http_code'] : 0,
+            'request_data' => pSQL(json_encode($request_data)),
+            'response_data' => pSQL(json_encode($result)),
+            'error_message' => $result['success'] ? null : pSQL($result['message'] ?? 'Error desconocido'),
+            'sync_duration' => $sync_duration,
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
+    }
 
     /**
      * Check if module is properly configured.
      */
     public function isConfigured()
     {
-        return !empty(YujuConfig::get('YUJU_CLIENT_ID'))
-        && !empty(YujuConfig::get('YUJU_CLIENT_SECRET'))
-        && $this->oauth->hasValidToken();
+        // Verificar configuración básica
+        $has_client_id = !empty(YujuConfig::get('YUJU_CLIENT_ID'));
+        $has_client_secret = !empty(YujuConfig::get('YUJU_CLIENT_SECRET'));
+        
+        // Si no hay OAuth inicializado, solo verificar credenciales
+        if (!isset($this->oauth) || !$this->oauth) {
+            return $has_client_id && $has_client_secret;
+        }
+        
+        // Si está inicializado, verificar también el token
+        return $has_client_id && $has_client_secret && $this->oauth->hasValidToken();
     }
 
     /**

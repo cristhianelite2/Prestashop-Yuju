@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_mapping` (
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id_mapping`),
-    UNIQUE KEY `unique_mapping` (`prestashop_field`),
+    UNIQUE KEY `unique_mapping` (`prestashop_field`, `yuju_field`),
     KEY `idx_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -70,9 +70,10 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) NOT NULL,
     `yuju_product_id` varchar(255),
-    `sync_status` enum('pending', 'syncing', 'synced', 'error', 'disabled') DEFAULT 'pending',
+    `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued') DEFAULT 'pending',
     `sync_direction` enum('prestashop_to_yuju', 'yuju_to_prestashop', 'bidirectional') DEFAULT 'bidirectional',
     `last_sync_at` datetime,
+    `last_sync_data` text,
     `last_error` text,
     `error_count` int(11) DEFAULT 0,
     `sync_enabled` tinyint(1) DEFAULT 1,
@@ -83,6 +84,26 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `prestashop_product_id` int(11) NOT NULL,
+    `action` enum('create','update') NOT NULL,
+    `priority` enum('high','normal') NOT NULL DEFAULT 'normal',
+    `status` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
+    `data` TEXT NOT NULL COMMENT 'JSON con los datos a sincronizar',
+    `attempts` int(11) NOT NULL DEFAULT 0,
+    `max_attempts` int(11) NOT NULL DEFAULT 3,
+    `error_message` TEXT DEFAULT NULL,
+    `created_at` datetime NOT NULL,
+    `last_attempt_at` datetime DEFAULT NULL,
+    `processed_at` datetime DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `prestashop_product_id` (`prestashop_product_id`),
+    KEY `status` (`status`),
+    KEY `priority` (`priority`),
+    KEY `created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_logs` (
@@ -249,114 +270,8 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_value_mapping` (
 
 -- Los datos por defecto ya se insertan arriba después de la creación de la tabla
 
--- Product status tracking table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_product_status` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_product_id` int(11) NOT NULL,
-    `yuju_product_id` varchar(255),
-    `sync_status` enum('pending', 'synced', 'error', 'disabled') DEFAULT 'pending',
-    `sync_enabled` tinyint(1) DEFAULT 1,
-    `last_sync_at` datetime,
-    `error_count` int(11) DEFAULT 0,
-    `error_message` text,
-    `created_at` datetime NOT NULL,
-    `updated_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_product` (`prestashop_product_id`),
-    KEY `idx_yuju_product` (`yuju_product_id`),
-    KEY `idx_sync_status` (`sync_status`),
-    KEY `idx_sync_enabled` (`sync_enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Synchronization logs table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_sync_logs` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `log_type` enum('sync', 'webhook', 'api', 'error') NOT NULL,
-    `entity_type` varchar(50),
-    `entity_id` varchar(255),
-    `status` enum('started', 'completed', 'failed', 'warning') NOT NULL,
-    `message` text,
-    `details` longtext,
-    `start_time` datetime NOT NULL,
-    `end_time` datetime,
-    `duration` decimal(10,3),
-    `created_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    KEY `idx_log_type` (`log_type`),
-    KEY `idx_entity_type` (`entity_type`),
-    KEY `idx_status` (`status`),
-    KEY `idx_start_time` (`start_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Webhook logs table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_webhook_logs` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `event_type` varchar(100) NOT NULL,
-    `entity_id` varchar(255),
-    `payload` longtext,
-    `headers` text,
-    `status` enum('received', 'processing', 'completed', 'failed') DEFAULT 'received',
-    `response` text,
-    `error_message` text,
-    `processing_time` decimal(10,3),
-    `received_at` datetime NOT NULL,
-    `processed_at` datetime,
-    PRIMARY KEY (`id`),
-    KEY `idx_event_type` (`event_type`),
-    KEY `idx_entity_id` (`entity_id`),
-    KEY `idx_status` (`status`),
-    KEY `idx_received_at` (`received_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Webhook registrations table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_webhook_registrations` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `event_type` varchar(100) NOT NULL,
-    `yuju_webhook_id` varchar(255) NOT NULL,
-    `webhook_url` varchar(500) NOT NULL,
-    `is_active` tinyint(1) DEFAULT 1,
-    `created_at` datetime NOT NULL,
-    `updated_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_webhook` (`event_type`, `yuju_webhook_id`),
-    KEY `idx_event_type` (`event_type`),
-    KEY `idx_yuju_webhook` (`yuju_webhook_id`),
-    KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Order status mapping table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_order_status_mapping` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_status_id` int(11) NOT NULL,
-    `yuju_status_name` varchar(100) NOT NULL,
-    `is_active` tinyint(1) DEFAULT 1,
-    `created_at` datetime NOT NULL,
-    `updated_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_status_mapping` (`prestashop_status_id`, `yuju_status_name`),
-    KEY `idx_prestashop_status` (`prestashop_status_id`),
-    KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Order mapping table
-CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_order_mapping` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_order_id` int(11) NOT NULL,
-    `yuju_order_id` varchar(255) NOT NULL,
-    `sync_status` enum('pending', 'synced', 'error') DEFAULT 'pending',
-    `last_sync_at` datetime,
-    `error_message` text,
-    `created_at` datetime NOT NULL,
-    `updated_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_order_mapping` (`prestashop_order_id`, `yuju_order_id`),
-    KEY `idx_prestashop_order` (`prestashop_order_id`),
-    KEY `idx_yuju_order` (`yuju_order_id`),
-    KEY `idx_sync_status` (`sync_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- Insert default product field mappings (ignore if already exist)
-INSERT IGNORE INTO `' . _DB_PREFIX_ . 'yuju_product_mapping` (`prestashop_field`, `yuju_field`, `field_type`, `sync_direction`, `transformation_rule`, `is_required`, `is_active`, `created_at`, `updated_at`) VALUES
+INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_field`, `field_type`, `sync_direction`, `transformation_rule`, `is_required`, `is_active`, `created_at`, `updated_at`) VALUES
 ('name', 'name', 'string', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('description', 'description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('description_short', 'short_description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),

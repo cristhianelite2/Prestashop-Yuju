@@ -38,6 +38,9 @@ class AdminYujuController extends ModuleAdminController
         $stats = $this->getDashboardStats();
         $recentSyncs = $this->getRecentSyncItems();
         $lastSyncDate = $this->getLastSyncDate();
+        $oauthStatus = $this->getOAuthStatus();
+        $productStats = $this->getProductStats();
+        $webhookStats = $this->getWebhookStats();
 
         $this->context->smarty->assign([
             'module_dir' => $this->module->getPathUri(),
@@ -47,6 +50,9 @@ class AdminYujuController extends ModuleAdminController
             'dashboard_stats' => $stats,
             'recent_syncs' => $recentSyncs,
             'last_sync_date' => $lastSyncDate,
+            'oauth_status' => $oauthStatus,
+            'product_stats' => $productStats,
+            'webhook_stats' => $webhookStats,
         ]);
 
         $this->setTemplate('dashboard.tpl');
@@ -117,6 +123,111 @@ class AdminYujuController extends ModuleAdminController
         $result = Db::getInstance()->getRow($sql);
         
         return $result['last_sync'] ?? null;
+    }
+
+    /**
+     * Get OAuth connection status
+     */
+    private function getOAuthStatus()
+    {
+        require_once dirname(__FILE__) . '/../../classes/YujuOAuth.php';
+        
+        try {
+            $oauth = new YujuOAuth();
+            $status = $oauth->getOAuthStatus();
+            $tokenData = $oauth->getStoredTokenData();
+            
+            return [
+                'is_connected' => $status['is_connected'] ?? false,
+                'has_token' => !empty($tokenData['access_token']),
+                'client_id' => $tokenData['client_id'] ?? null,
+                'token_expires' => $tokenData['token_expires'] ?? null,
+            ];
+        } catch (Exception $e) {
+            return [
+                'is_connected' => false,
+                'has_token' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Get product synchronization statistics
+     */
+    private function getProductStats()
+    {
+        // Total productos en PrestaShop
+        $totalProducts = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'product` WHERE active = 1'
+        );
+        
+        // Productos sincronizados según yuju_product_status
+        $syncedProducts = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_status` 
+            WHERE sync_status = "synced"'
+        );
+        
+        // Productos pendientes de sincronización
+        $pendingProducts = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_status` 
+            WHERE sync_status = "pending"'
+        );
+        
+        // Si no hay registros en product_status, considerar todos como pendientes
+        if ($syncedProducts == 0 && $pendingProducts == 0) {
+            $pendingProducts = $totalProducts;
+        }
+        
+        // Productos con errores
+        $errorProducts = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_status` 
+            WHERE sync_status = "error"'
+        );
+        
+        return [
+            'total' => $totalProducts,
+            'synced' => $syncedProducts,
+            'pending' => $pendingProducts,
+            'errors' => $errorProducts,
+        ];
+    }
+
+    /**
+     * Get webhook statistics
+     */
+    private function getWebhookStats()
+    {
+        // Webhooks recibidos en las últimas 24 horas
+        $recentWebhooks = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs` 
+            WHERE received_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+        );
+        
+        // Órdenes recibidas vía webhook
+        $webhookOrders = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs` 
+            WHERE event_type = "order" AND received_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+        );
+        
+        // Webhooks procesados exitosamente
+        $successWebhooks = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs` 
+            WHERE status = "processed" AND received_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+        );
+        
+        // Webhooks con error
+        $errorWebhooks = (int)Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs` 
+            WHERE status = "error" AND received_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+        );
+        
+        return [
+            'recent_24h' => $recentWebhooks,
+            'orders_7d' => $webhookOrders,
+            'success_7d' => $successWebhooks,
+            'errors_7d' => $errorWebhooks,
+        ];
     }
 
     public function setMedia($isNewTheme = false)
