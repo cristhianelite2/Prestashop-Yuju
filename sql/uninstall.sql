@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS `PREFIX_yuju_attributes_cache`;
 DROP TABLE IF EXISTS `PREFIX_yuju_attribute_values_cache`;
 DROP TABLE IF EXISTS `PREFIX_yuju_categories_cache`;
 DROP TABLE IF EXISTS `PREFIX_yuju_sync_queue`;
+DROP TABLE IF EXISTS `PREFIX_yuju_product_sync_history`;
 
 -- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;

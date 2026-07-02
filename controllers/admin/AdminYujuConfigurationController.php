@@ -39,6 +39,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         parent::__construct();
 
+        if ($this->module && method_exists($this->module, 'ensureYujuCategoryBulkTab')) {
+            $this->module->ensureYujuCategoryBulkTab();
+        }
+
         $this->meta_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
         $this->toolbar_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
     }
@@ -117,21 +121,54 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $shop_name = Configuration::get('PS_SHOP_NAME');
         $shop_email = Configuration::get('PS_SHOP_EMAIL');
         
+        // Forzar protocolo HTTPS en todas las URLs mostradas en el panel de configuración
+        $redirect_uri = preg_replace('#^http://#i', 'https://', $redirect_uri);
+        $webhook_url = preg_replace('#^http://#i', 'https://', $webhook_url);
+        $terms_url = preg_replace('#^http://#i', 'https://', $terms_url);
+        $shop_base_url = preg_replace('#^http://#i', 'https://', $shop_base_url);
+        if (!empty($auth_url)) {
+            $auth_url = preg_replace('#^http://#i', 'https://', $auth_url);
+        }
+        
         // URLs permitidas para autenticación (dominios donde se puede usar la app)
         $allowed_domains = [
-            Tools::getHttpHost(true),
-            str_replace(['http://', 'https://'], '', Tools::getShopDomainSsl(true)),
+            preg_replace('#^http://#i', 'https://', Tools::getHttpHost(true)),
+            'https://' . ltrim(str_replace(['http://', 'https://'], '', Tools::getShopDomainSsl(true)), '/'),
         ];
         $allowed_domains = array_unique(array_filter($allowed_domains));
+
+        $yuju_hooks_status = $this->getYujuHooksStatus();
+        $yuju_hooks_all_active = true;
+        foreach ($yuju_hooks_status as $h) {
+            if (empty($h['registered'])) {
+                $yuju_hooks_all_active = false;
+                break;
+            }
+        }
+
+        $yuju_tables_status = $this->getYujuTablesStatus();
+        $yuju_tables_all_present = true;
+        foreach ($yuju_tables_status as $t) {
+            if (empty($t['exists'])) {
+                $yuju_tables_all_present = false;
+                break;
+            }
+        }
 
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
             'api_stats' => $api_stats,
+            'yuju_hooks_status' => $yuju_hooks_status,
+            'yuju_hooks_all_active' => $yuju_hooks_all_active,
+            'yuju_tables_status' => $yuju_tables_status,
+            'yuju_tables_all_present' => $yuju_tables_all_present,
             'oauth_url' => $auth_url,
             'oauth_auth_url' => $auth_url,
             'module_path' => $this->module->getPathUri(),
             'current_tab' => 'configuration',
-            'current_controller' => get_class($this),
+            // Use controller_name (AdminYujuConfiguration) instead of class name
+            // (AdminYujuConfigurationController) for sidebar active states.
+            'current_controller' => !empty($this->controller_name) ? $this->controller_name : get_class($this),
             'config' => $config,
             'current_index' => self::$currentIndex,
             'token' => Tools::getAdminTokenLite('AdminYujuConfiguration'),
@@ -150,11 +187,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ],
             'yuju_app_setup' => [
                 'app_name' => 'Integracion Yuju - ' . (!empty($shop_name) ? $shop_name : 'PrestaShop'),
-                'app_type' => 'API vendedor',
                 'site_url' => $shop_base_url,
                 'contact_email' => !empty($shop_email) ? $shop_email : '',
                 'description' => 'Integracion oficial para sincronizar productos, stock, precios y ordenes entre PrestaShop y Yuju.',
-                'icon_hint' => 'Use una imagen PNG cuadrada (recomendado 512x512). Puede reutilizar modules/prestashopyuju/logo.png',
                 'terms_url' => $terms_url,
                 // En esta integracion, la URL de autenticacion/callback coincide con el endpoint OAuth del modulo.
                 'app_auth_url' => $redirect_uri,
@@ -380,6 +415,43 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]);
             
             $oauth = new YujuOAuth();
+
+            // Validar credenciales antes de intentar token/API para devolver
+            // un mensaje claro al usuario en el debug de conectividad.
+            $raw_client_id = trim((string) Tools::getValue('YUJU_CLIENT_ID', ''));
+            $raw_client_secret = trim((string) Tools::getValue('YUJU_CLIENT_SECRET', ''));
+            $has_form_client_id = !empty($raw_client_id);
+            $has_form_client_secret = !empty($raw_client_secret);
+            $credentials_ready = $has_form_client_id && $has_form_client_secret;
+
+            if (!$credentials_ready) {
+                $oauth_data_debug = $oauth->getStoredTokenData();
+
+                $debug = [
+                    'credentials' => [
+                        'has_client_id' => $has_form_client_id,
+                        'has_client_secret' => $has_form_client_secret,
+                        'client_id_length' => strlen($raw_client_id),
+                        'client_secret_length' => strlen($raw_client_secret),
+                    ],
+                    'db_oauth_snapshot' => [
+                        'has_client_id' => !empty($oauth_data_debug['client_id']),
+                        'has_client_secret' => !empty($oauth_data_debug['client_secret']),
+                        'client_id_length' => !empty($oauth_data_debug['client_id']) ? strlen($oauth_data_debug['client_id']) : 0,
+                        'client_secret_length' => !empty($oauth_data_debug['client_secret']) ? strlen($oauth_data_debug['client_secret']) : 0,
+                    ],
+                    'hint' => 'Guarda ID de Cliente y Secreto de Cliente antes de probar conectividad.',
+                ];
+
+                $response = [
+                    'success' => false,
+                    'message' => 'Faltan credenciales OAuth: completa ID de Cliente y Secreto de Cliente.',
+                    'debug' => $debug,
+                ];
+
+                $logger->warning('testConnectivity sin credenciales completas', $debug);
+                exit(json_encode($response));
+            }
             
             // Verificar el estado de OAuth antes de obtener el token
             $oauth_status = $oauth->getOAuthStatus();
@@ -524,6 +596,157 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         exit(json_encode($response));
+    }
+
+    /**
+     * AJAX: listado de scripts cron y última ejecución registrada.
+     */
+    public function ajaxProcessGetCronManagerData()
+    {
+        $scripts = $this->getCronScriptsCatalog();
+        $runs = $this->readCronRunsRegistry();
+
+        $rows = [];
+        foreach ($scripts as $script) {
+            $key = $script['file'];
+            $last = isset($runs[$key]) && is_array($runs[$key]) ? $runs[$key] : null;
+            $rows[] = [
+                'file' => $script['file'],
+                'label' => $script['label'],
+                'description' => $script['description'],
+                'required_mode' => isset($script['required_mode']) ? $script['required_mode'] : 'manual',
+                'last_run_at' => $last && !empty($last['ran_at']) ? $last['ran_at'] : null,
+                'last_status' => $last && !empty($last['status']) ? $last['status'] : null,
+                'last_duration_ms' => $last && isset($last['duration_ms']) ? (int) $last['duration_ms'] : null,
+            ];
+        }
+
+        $this->ajaxDie(json_encode([
+            'success' => true,
+            'crons' => $rows,
+        ]));
+    }
+
+    /**
+     * AJAX: ejecuta un cron seleccionado y devuelve salida.
+     */
+    public function ajaxProcessRunCronScript()
+    {
+        $script = trim((string) Tools::getValue('script', ''));
+        $catalog = $this->getCronScriptsCatalog();
+        $allowed = [];
+        foreach ($catalog as $c) {
+            $allowed[$c['file']] = $c;
+        }
+
+        if ($script === '' || !isset($allowed[$script])) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Cron no válido.',
+            ]));
+        }
+
+        $path = dirname(__FILE__) . '/../../cron/' . $script;
+        if (!is_file($path)) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Archivo de cron no encontrado.',
+            ]));
+        }
+
+        $phpBin = $this->resolvePhpCliBinary();
+        if (!$phpBin) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se encontró un binario PHP CLI válido para ejecutar crons.',
+            ]));
+        }
+
+        $command = escapeshellarg($phpBin)
+            . ' -d date.timezone=America/Bogota '
+            . escapeshellarg($path)
+            . ' 2>&1';
+        $outputLines = [];
+        $exitCode = 0;
+        $start = microtime(true);
+        @exec($command, $outputLines, $exitCode);
+        $durationMs = (int) round((microtime(true) - $start) * 1000);
+        $output = trim(implode("\n", $outputLines));
+        if ($output === '') {
+            $output = '(sin salida)';
+        }
+
+        $status = $exitCode === 0 ? 'success' : 'error';
+        $this->registerCronRun($script, $status, $durationMs, $output);
+
+        $this->ajaxDie(json_encode([
+            'success' => ($exitCode === 0),
+            'status' => $status,
+            'script' => $script,
+            'exit_code' => $exitCode,
+            'duration_ms' => $durationMs,
+            'output' => $output,
+            'ran_at' => date('Y-m-d H:i:s'),
+            'message' => $exitCode === 0 ? 'Cron ejecutado correctamente.' : 'El cron terminó con error (exit code ' . (int) $exitCode . ').',
+        ]));
+    }
+
+    /**
+     * Obtiene un ejecutable PHP CLI válido (evita php-fpm).
+     *
+     * @return string|null
+     */
+    private function resolvePhpCliBinary()
+    {
+        $candidates = [];
+
+        if (defined('PHP_BINARY') && PHP_BINARY) {
+            $candidates[] = PHP_BINARY;
+        }
+
+        $candidates = array_merge($candidates, [
+            'php',
+            'php8.3',
+            'php8.2',
+            '/usr/bin/php',
+            '/usr/local/bin/php',
+        ]);
+
+        $checked = [];
+        foreach ($candidates as $bin) {
+            $bin = trim((string) $bin);
+            if ($bin === '' || isset($checked[$bin])) {
+                continue;
+            }
+            $checked[$bin] = true;
+
+            $sapi = $this->detectPhpSapi($bin);
+            if ($sapi === 'cli') {
+                return $bin;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detecta el SAPI de un binario PHP.
+     *
+     * @param string $bin
+     *
+     * @return string
+     */
+    private function detectPhpSapi($bin)
+    {
+        $out = [];
+        $code = 1;
+        $cmd = escapeshellarg($bin) . " -n -r 'echo PHP_SAPI;' 2>&1";
+        @exec($cmd, $out, $code);
+        if ($code !== 0) {
+            return '';
+        }
+
+        return strtolower(trim(implode("\n", $out)));
     }
 
     /**
@@ -954,6 +1177,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
+            // Guardar credenciales OAuth tambien en YujuConfig.
+            // YujuOAuth::__construct() lee YUJU_CLIENT_ID/YUJU_CLIENT_SECRET desde YujuConfig.
+            YujuConfig::set('YUJU_CLIENT_ID', $client_id, 'string');
+            YujuConfig::set('YUJU_CLIENT_SECRET', $client_secret, 'string');
+
             // Guardar configuraciones en YujuConfig
             foreach ($configs as $key => $value) {
                 YujuConfig::set($key, $value, 'string');
@@ -964,7 +1192,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             
             // Verificar si existe un registro
             $oauth_record = Db::getInstance()->getRow(
-                "SELECT id FROM `{$table_name}` ORDER BY id DESC LIMIT 1"
+                "SELECT id FROM `{$table_name}` ORDER BY id DESC"
             );
             
             $oauth_data = [
@@ -1007,6 +1235,207 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $sql = 'SELECT MAX(start_time) FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE entity_type = \'products\'';
 
         return Db::getInstance()->getValue($sql);
+    }
+
+    /**
+     * @return array<int, array{file:string,label:string,description:string}>
+     */
+    private function getCronScriptsCatalog()
+    {
+        $cronDir = dirname(__FILE__) . '/../../cron';
+        $files = glob($cronDir . '/*.php');
+        if (!is_array($files)) {
+            return [];
+        }
+
+        $meta = [
+            'cron.php' => [
+                'label' => 'cron.php',
+                'description' => 'Cron principal del módulo: procesa cola, tareas automáticas y sincronización programada.',
+                'required_mode' => 'programar',
+            ],
+            'check_token.php' => [
+                'label' => 'check_token.php',
+                'description' => 'Verifica y renueva token OAuth. Normalmente lo invoca cron.php automáticamente.',
+                'required_mode' => 'interno',
+            ],
+            'sync.php' => [
+                'label' => 'sync.php',
+                'description' => 'Sincronización legacy/incremental. Útil para pruebas manuales, no recomendado en crontab si ya usas cron.php.',
+                'required_mode' => 'manual',
+            ],
+            'sync_products.php' => [
+                'label' => 'sync_products.php',
+                'description' => 'Sincronización avanzada de productos con cache JSON. Operación manual/diagnóstico.',
+                'required_mode' => 'manual',
+            ],
+            'sync_to_yuju.php' => [
+                'label' => 'sync_to_yuju.php',
+                'description' => 'Sincroniza una descarga específica hacia Yuju por download_id. Herramienta puntual.',
+                'required_mode' => 'manual',
+            ],
+            'check_sync_status.php' => [
+                'label' => 'check_sync_status.php',
+                'description' => 'Consulta estado de una sincronización puntual (diagnóstico).',
+                'required_mode' => 'manual',
+            ],
+            'retry_download.php' => [
+                'label' => 'retry_download.php',
+                'description' => 'Reintenta una descarga fallida desde logs. Uso manual en incidentes.',
+                'required_mode' => 'manual',
+            ],
+            'reset_sync.php' => [
+                'label' => 'reset_sync.php',
+                'description' => 'Resetea contadores/estado de sincronización. Solo mantenimiento.',
+                'required_mode' => 'manual',
+            ],
+            'migrate_config.php' => [
+                'label' => 'migrate_config.php',
+                'description' => 'Migración de configuración histórica. Ejecutar una sola vez en actualizaciones.',
+                'required_mode' => 'one_time',
+            ],
+            'webhook_manager.php' => [
+                'label' => 'webhook_manager.php',
+                'description' => 'API auxiliar para gestión de webhooks desde panel. No es cron recurrente.',
+                'required_mode' => 'interno',
+            ],
+            'check_webhook_orders.php' => [
+                'label' => 'check_webhook_orders.php',
+                'description' => 'Auditoría de órdenes recibidas por webhook. Diagnóstico/manual.',
+                'required_mode' => 'manual',
+            ],
+            'create_order_from_webhook.php' => [
+                'label' => 'create_order_from_webhook.php',
+                'description' => 'Crea orden PS desde un webhook específico. Herramienta operativa manual.',
+                'required_mode' => 'manual',
+            ],
+            'delete_order.php' => [
+                'label' => 'delete_order.php',
+                'description' => 'Elimina orden de PrestaShop vía endpoint técnico. Uso manual.',
+                'required_mode' => 'manual',
+            ],
+            'fetch_order_details.php' => [
+                'label' => 'fetch_order_details.php',
+                'description' => 'Trae detalles completos de orden desde API Yuju para depuración.',
+                'required_mode' => 'manual',
+            ],
+            'fix_orders_shop.php' => [
+                'label' => 'fix_orders_shop.php',
+                'description' => 'Corrige órdenes con id_shop inválido. Script de mantenimiento puntual.',
+                'required_mode' => 'manual',
+            ],
+            'get_sync_details.php' => [
+                'label' => 'get_sync_details.php',
+                'description' => 'Obtiene detalle de una sincronización específica (consulta).',
+                'required_mode' => 'interno',
+            ],
+            'inspect_yuju_json.php' => [
+                'label' => 'inspect_yuju_json.php',
+                'description' => 'Inspector CLI de JSON de Yuju/CloudFront. Solo diagnóstico.',
+                'required_mode' => 'manual',
+            ],
+            'inspect_yuju_json_web.php' => [
+                'label' => 'inspect_yuju_json_web.php',
+                'description' => 'Inspector web de JSON Yuju. Solo diagnóstico.',
+                'required_mode' => 'manual',
+            ],
+            'manage_webhook_orders.php' => [
+                'label' => 'manage_webhook_orders.php',
+                'description' => 'UI técnica para administrar órdenes de webhook. Herramienta manual.',
+                'required_mode' => 'manual',
+            ],
+            'check_order_23.php' => [
+                'label' => 'check_order_23.php',
+                'description' => 'Script de diagnóstico específico para una orden puntual.',
+                'required_mode' => 'manual',
+            ],
+        ];
+
+        $rows = [];
+        foreach ($files as $full) {
+            $file = basename($full);
+            if ($file === 'index.php') {
+                continue;
+            }
+
+            $m = isset($meta[$file]) ? $meta[$file] : [
+                'label' => $file,
+                'description' => 'Script técnico del módulo.',
+                'required_mode' => 'manual',
+            ];
+
+            $rows[] = [
+                'file' => $file,
+                'label' => $m['label'],
+                'description' => $m['description'],
+                'required_mode' => $m['required_mode'],
+            ];
+        }
+
+        usort($rows, function ($a, $b) {
+            return strcmp((string) $a['file'], (string) $b['file']);
+        });
+
+        return $rows;
+    }
+
+    /**
+     * @return string
+     */
+    private function getCronRunsRegistryPath()
+    {
+        return dirname(__FILE__) . '/../../cache/yuju_cron_runs.json';
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function readCronRunsRegistry()
+    {
+        $path = $this->getCronRunsRegistryPath();
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $data
+     *
+     * @return void
+     */
+    private function writeCronRunsRegistry(array $data)
+    {
+        $path = $this->getCronRunsRegistryPath();
+        @file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * @param string $script
+     * @param string $status
+     * @param int $durationMs
+     * @param string $output
+     *
+     * @return void
+     */
+    private function registerCronRun($script, $status, $durationMs, $output)
+    {
+        $all = $this->readCronRunsRegistry();
+        $all[(string) $script] = [
+            'ran_at' => date('Y-m-d H:i:s'),
+            'status' => (string) $status,
+            'duration_ms' => (int) $durationMs,
+            'output_excerpt' => mb_substr((string) $output, 0, 8000),
+        ];
+        $this->writeCronRunsRegistry($all);
     }
 
     /**
@@ -1087,5 +1516,545 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
         
         return $alerts;
+    }
+
+    /**
+     * Devuelve la lista de hooks que el módulo Yuju necesita tener registrados,
+     * con su estado actual (registrado o no) e información para la UI.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getYujuHooksStatus()
+    {
+        $required = [
+            'actionProductAdd' => [
+                'label' => 'Producto creado',
+                'description' => 'Detecta cuando se crea un producto en PrestaShop.',
+                'critical' => true,
+            ],
+            'actionProductUpdate' => [
+                'label' => 'Producto actualizado',
+                'description' => 'Detecta cambios generales del producto (precio, datos básicos, etc.).',
+                'critical' => true,
+            ],
+            'actionProductDelete' => [
+                'label' => 'Producto eliminado',
+                'description' => 'Detecta eliminación de productos para retirarlos de Yuju.',
+                'critical' => true,
+            ],
+            'actionUpdateQuantity' => [
+                'label' => 'Stock actualizado',
+                'description' => 'Detecta cambios de stock para enviarlos a Yuju.',
+                'critical' => true,
+            ],
+            'actionProductAttributeUpdate' => [
+                'label' => 'Combinación actualizada',
+                'description' => 'Detecta cambios en combinaciones / atributos de producto.',
+                'critical' => true,
+            ],
+            'actionProductAttributeDelete' => [
+                'label' => 'Combinación eliminada',
+                'description' => 'Detecta eliminación de combinaciones.',
+                'critical' => false,
+            ],
+            'actionCategoryAdd' => [
+                'label' => 'Categoría creada',
+                'description' => 'Detecta creación de categorías.',
+                'critical' => false,
+            ],
+            'actionCategoryUpdate' => [
+                'label' => 'Categoría actualizada',
+                'description' => 'Detecta actualización de categorías.',
+                'critical' => false,
+            ],
+            'actionCategoryDelete' => [
+                'label' => 'Categoría eliminada',
+                'description' => 'Detecta eliminación de categorías.',
+                'critical' => false,
+            ],
+            'actionValidateOrder' => [
+                'label' => 'Pedido validado',
+                'description' => 'Detecta nuevos pedidos validados.',
+                'critical' => true,
+            ],
+            'actionOrderStatusUpdate' => [
+                'label' => 'Estado del pedido',
+                'description' => 'Detecta cambios en el estado de los pedidos.',
+                'critical' => true,
+            ],
+            'actionOrderReturn' => [
+                'label' => 'Devolución de pedido',
+                'description' => 'Detecta devoluciones de pedidos.',
+                'critical' => false,
+            ],
+            'actionAdminControllerSetMedia' => [
+                'label' => 'Recursos del back office',
+                'description' => 'Carga JS/CSS necesarios del módulo en el back office.',
+                'critical' => false,
+            ],
+            'displayBackOfficeHeader' => [
+                'label' => 'Cabecera back office',
+                'description' => 'Inyecta el header del back office para asegurar la inicialización del módulo.',
+                'critical' => false,
+            ],
+            'displayAdminProductsExtra' => [
+                'label' => 'Pestaña en ficha de producto',
+                'description' => 'Muestra la pestaña Yuju en la ficha de producto del back office.',
+                'critical' => false,
+            ],
+        ];
+
+        $module_id = 0;
+        if (isset($this->module) && $this->module && !empty($this->module->id)) {
+            $module_id = (int) $this->module->id;
+        } else {
+            $row = Db::getInstance()->getRow(
+                'SELECT `id_module` FROM `' . _DB_PREFIX_ . 'module` WHERE `name` = "prestashopyuju"'
+            );
+            $module_id = !empty($row['id_module']) ? (int) $row['id_module'] : 0;
+        }
+
+        $rows = [];
+        foreach ($required as $hook_name => $info) {
+            $hook_id = 0;
+            try {
+                $hook_id = (int) Hook::getIdByName($hook_name);
+            } catch (Exception $e) {
+                $hook_id = 0;
+            }
+
+            $registered = false;
+            if ($hook_id > 0 && $module_id > 0) {
+                $reg_row = Db::getInstance()->getRow(
+                    'SELECT `id_module` FROM `' . _DB_PREFIX_ . 'hook_module`'
+                    . ' WHERE `id_hook` = ' . $hook_id
+                    . ' AND `id_module` = ' . $module_id
+                );
+                $registered = !empty($reg_row);
+            }
+
+            $rows[] = [
+                'name' => $hook_name,
+                'label' => $info['label'],
+                'description' => $info['description'],
+                'critical' => !empty($info['critical']),
+                'registered' => $registered,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * AJAX: devuelve el estado de los hooks requeridos por Yuju.
+     */
+    public function ajaxProcessGetYujuHooksStatus()
+    {
+        try {
+            $hooks = $this->getYujuHooksStatus();
+            $all_ok = true;
+            foreach ($hooks as $h) {
+                if (empty($h['registered'])) {
+                    $all_ok = false;
+                    break;
+                }
+            }
+            $this->ajaxDie(json_encode([
+                'success' => true,
+                'hooks' => $hooks,
+                'all_active' => $all_ok,
+            ]));
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: registra (activa) un hook específico para el módulo Yuju.
+     */
+    public function ajaxProcessRegisterYujuHook()
+    {
+        $hook_name = trim((string) Tools::getValue('hook', ''));
+        $allowed_hooks = array_column($this->getYujuHooksStatus(), 'name');
+
+        if ($hook_name === '' || !in_array($hook_name, $allowed_hooks, true)) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Hook no válido o no permitido.',
+            ]));
+        }
+
+        if (!isset($this->module) || !$this->module) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo cargar la instancia del módulo Yuju.',
+            ]));
+        }
+
+        try {
+            $registered_now = (bool) $this->module->registerHook($hook_name);
+
+            // Verificar de nuevo con consulta directa por si el método devolvió true
+            // pero la inserción no se reflejó (o ya estaba registrado previamente).
+            $status_after = null;
+            foreach ($this->getYujuHooksStatus() as $h) {
+                if ($h['name'] === $hook_name) {
+                    $status_after = $h;
+                    break;
+                }
+            }
+
+            $this->ajaxDie(json_encode([
+                'success' => !empty($status_after['registered']),
+                'message' => !empty($status_after['registered'])
+                    ? 'Hook activado correctamente.'
+                    : 'No se pudo activar el hook. Revise permisos o vuelva a intentar.',
+                'hook' => $hook_name,
+                'registered_now' => $registered_now,
+                'status' => $status_after,
+            ]));
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Excepción al registrar el hook: ' . $e->getMessage(),
+                'hook' => $hook_name,
+            ]));
+        }
+    }
+
+    /**
+     * Devuelve la lista de tablas requeridas por el módulo Yuju con
+     * indicación de existencia en la base de datos.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getYujuTablesStatus()
+    {
+        $tables = [
+            'yuju_oauth_tokens' => [
+                'label' => 'Tokens OAuth',
+                'description' => 'Almacena los tokens OAuth para conectar con Yuju.',
+                'critical' => true,
+            ],
+            'yuju_product_status' => [
+                'label' => 'Estado de productos',
+                'description' => 'Estado de sincronización por producto (Yuju ID, errores, fechas).',
+                'critical' => true,
+            ],
+            'yuju_product_sync_history' => [
+                'label' => 'Historial de sincronización',
+                'description' => 'Historial detallado de envíos a Yuju por producto.',
+                'critical' => true,
+            ],
+            'yuju_sync_queue' => [
+                'label' => 'Cola de sincronización',
+                'description' => 'Cola de productos pendientes de enviar a Yuju.',
+                'critical' => true,
+            ],
+            'yuju_sync_logs' => [
+                'label' => 'Logs de sincronización',
+                'description' => 'Registro de eventos de la cola/sincronización.',
+                'critical' => false,
+            ],
+            'yuju_logs' => [
+                'label' => 'Logs del módulo',
+                'description' => 'Logs generales del módulo Yuju.',
+                'critical' => false,
+            ],
+            'yuju_category_mapping' => [
+                'label' => 'Mapeo de categorías',
+                'description' => 'Asociación entre categorías de PrestaShop y Yuju.',
+                'critical' => true,
+            ],
+            'yuju_product_mapping' => [
+                'label' => 'Mapeo de productos',
+                'description' => 'Asociación entre productos PrestaShop y Yuju (datos transformados).',
+                'critical' => false,
+            ],
+            'yuju_attribute_mapping' => [
+                'label' => 'Mapeo de atributos',
+                'description' => 'Mapeo de atributos/combinaciones.',
+                'critical' => false,
+            ],
+            'yuju_attribute_value_mapping' => [
+                'label' => 'Mapeo de valores de atributos',
+                'description' => 'Mapeo de valores de atributos PrestaShop ↔ Yuju.',
+                'critical' => false,
+            ],
+            'yuju_categories_cache' => [
+                'label' => 'Caché de categorías Yuju',
+                'description' => 'Caché de categorías traídas desde Yuju.',
+                'critical' => false,
+            ],
+            'yuju_attributes_cache' => [
+                'label' => 'Caché de atributos Yuju',
+                'description' => 'Caché de atributos traídos desde Yuju.',
+                'critical' => false,
+            ],
+            'yuju_attribute_values_cache' => [
+                'label' => 'Caché de valores de atributos',
+                'description' => 'Caché de valores de atributos de Yuju.',
+                'critical' => false,
+            ],
+            'yuju_configuration' => [
+                'label' => 'Configuración propia',
+                'description' => 'Configuración interna del módulo.',
+                'critical' => false,
+            ],
+            'yuju_webhook_logs' => [
+                'label' => 'Logs de webhooks',
+                'description' => 'Webhooks recibidos desde Yuju.',
+                'critical' => true,
+            ],
+            'yuju_webhook_registrations' => [
+                'label' => 'Webhooks registrados',
+                'description' => 'Lista de webhooks registrados en Yuju.',
+                'critical' => false,
+            ],
+            'yuju_order_mapping' => [
+                'label' => 'Mapeo de pedidos',
+                'description' => 'Mapeo de pedidos PrestaShop ↔ Yuju.',
+                'critical' => false,
+            ],
+            'yuju_order_status_mapping' => [
+                'label' => 'Mapeo de estados de pedido',
+                'description' => 'Mapeo de estados de pedido entre PrestaShop y Yuju.',
+                'critical' => false,
+            ],
+        ];
+
+        $rows = [];
+        foreach ($tables as $name => $info) {
+            $full = _DB_PREFIX_ . $name;
+            $exists = false;
+            try {
+                $check = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($full) . '"');
+                $exists = !empty($check);
+            } catch (Exception $e) {
+                $exists = false;
+            }
+            $rows[] = [
+                'name' => $name,
+                'full_name' => $full,
+                'label' => $info['label'],
+                'description' => $info['description'],
+                'critical' => !empty($info['critical']),
+                'exists' => $exists,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * AJAX: devuelve el estado de las tablas requeridas por Yuju.
+     */
+    public function ajaxProcessGetYujuTablesStatus()
+    {
+        try {
+            $tables = $this->getYujuTablesStatus();
+            $all_present = true;
+            foreach ($tables as $t) {
+                if (empty($t['exists'])) {
+                    $all_present = false;
+                    break;
+                }
+            }
+            $this->ajaxDie(json_encode([
+                'success' => true,
+                'tables' => $tables,
+                'all_present' => $all_present,
+            ]));
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: crea una tabla específica de Yuju desde sql/install.sql.
+     */
+    public function ajaxProcessCreateYujuTable()
+    {
+        $table = trim((string) Tools::getValue('table', ''));
+        $allowed = array_column($this->getYujuTablesStatus(), 'name');
+
+        if ($table === '' || !in_array($table, $allowed, true)) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Tabla no válida o no permitida.',
+            ]));
+        }
+
+        $sql_file = _PS_MODULE_DIR_ . 'prestashopyuju/sql/install.sql';
+        if (!is_readable($sql_file)) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo leer sql/install.sql en el módulo.',
+            ]));
+        }
+
+        $sql = (string) file_get_contents($sql_file);
+        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
+
+        $statement = $this->extractCreateTableStatement($sql, _DB_PREFIX_ . $table);
+        if ($statement === null) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se encontró la definición de la tabla en install.sql.',
+            ]));
+        }
+
+        $ok = false;
+        $err = '';
+        try {
+            $ok = (bool) Db::getInstance()->execute($statement);
+            if (!$ok) {
+                $err = Db::getInstance()->getMsgError();
+            }
+        } catch (Exception $e) {
+            $ok = false;
+            $err = $e->getMessage();
+        }
+
+        // Verificación posterior real (existe / no existe).
+        $exists_now = false;
+        try {
+            $check = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL(_DB_PREFIX_ . $table) . '"');
+            $exists_now = !empty($check);
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        $this->ajaxDie(json_encode([
+            'success' => $exists_now,
+            'message' => $exists_now
+                ? 'Tabla creada correctamente.'
+                : 'No se pudo crear la tabla. ' . ($err !== '' ? $err : 'Revise permisos MySQL.'),
+            'table' => $table,
+            'exists' => $exists_now,
+        ]));
+    }
+
+    /**
+     * AJAX: crea todas las tablas faltantes ejecutando sql/install.sql íntegro
+     * (usa CREATE TABLE IF NOT EXISTS, es idempotente).
+     */
+    public function ajaxProcessCreateAllYujuTables()
+    {
+        if (!isset($this->module) || !$this->module || !method_exists($this->module, 'ensureAllYujuTables')) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo cargar el módulo Yuju.',
+            ]));
+        }
+
+        $result = $this->module->ensureAllYujuTables();
+
+        $after = $this->getYujuTablesStatus();
+        $all_present = true;
+        foreach ($after as $t) {
+            if (empty($t['exists'])) {
+                $all_present = false;
+                break;
+            }
+        }
+
+        $this->ajaxDie(json_encode([
+            'success' => $all_present,
+            'message' => $all_present
+                ? 'Todas las tablas requeridas están presentes.'
+                : 'Algunas tablas siguen sin crearse. Revise los detalles.',
+            'tables' => $after,
+            'all_present' => $all_present,
+            'executed' => isset($result['executed']) ? (int) $result['executed'] : 0,
+            'errors' => isset($result['errors']) ? $result['errors'] : [],
+        ]));
+    }
+
+    /**
+     * Extrae la sentencia CREATE TABLE IF NOT EXISTS para una tabla concreta
+     * dentro del SQL combinado de install.sql (ya sustituido el prefijo).
+     *
+     * @param string $sql
+     * @param string $fullTableName
+     *
+     * @return string|null
+     */
+    private function extractCreateTableStatement($sql, $fullTableName)
+    {
+        $needle = 'CREATE TABLE IF NOT EXISTS `' . $fullTableName . '`';
+        $pos = strpos($sql, $needle);
+        if ($pos === false) {
+            // Buscar variantes con o sin backticks/IF NOT EXISTS
+            $needle_alt = 'CREATE TABLE `' . $fullTableName . '`';
+            $pos = strpos($sql, $needle_alt);
+            if ($pos === false) {
+                return null;
+            }
+        }
+
+        // Avanzar hasta el primer `;` que cierra la sentencia.
+        $semicolon_pos = strpos($sql, ';', $pos);
+        if ($semicolon_pos === false) {
+            return null;
+        }
+
+        $statement = trim(substr($sql, $pos, $semicolon_pos - $pos));
+        if ($statement === '') {
+            return null;
+        }
+
+        return $statement;
+    }
+
+    /**
+     * AJAX: registra todos los hooks faltantes del módulo Yuju.
+     */
+    public function ajaxProcessRegisterAllYujuHooks()
+    {
+        if (!isset($this->module) || !$this->module) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo cargar la instancia del módulo Yuju.',
+            ]));
+        }
+
+        $before = $this->getYujuHooksStatus();
+        $attempted = [];
+        foreach ($before as $h) {
+            if (empty($h['registered'])) {
+                try {
+                    $this->module->registerHook($h['name']);
+                } catch (Exception $e) {
+                    // continuar con el siguiente
+                }
+                $attempted[] = $h['name'];
+            }
+        }
+
+        $after = $this->getYujuHooksStatus();
+        $all_ok = true;
+        foreach ($after as $h) {
+            if (empty($h['registered'])) {
+                $all_ok = false;
+                break;
+            }
+        }
+
+        $this->ajaxDie(json_encode([
+            'success' => true,
+            'attempted' => $attempted,
+            'hooks' => $after,
+            'all_active' => $all_ok,
+            'message' => $all_ok
+                ? 'Todos los hooks requeridos están activos.'
+                : 'Algunos hooks siguen sin activarse. Revise los logs.',
+        ]));
     }
 }

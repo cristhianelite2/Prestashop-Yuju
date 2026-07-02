@@ -515,6 +515,203 @@
     color: white;
 }
 
+/* Dashboard redesign */
+.yuju-dashboard {
+    display: block;
+}
+
+.yuju-dashboard-hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    color: #fff;
+}
+
+.yuju-hero-title {
+    margin: 0 0 6px 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.yuju-hero-title i {
+    margin-right: 8px;
+}
+
+.yuju-hero-subtitle {
+    margin: 0;
+    opacity: 0.95;
+    font-size: 13px;
+}
+
+.yuju-hero-actions .btn {
+    margin-left: 6px;
+    margin-top: 4px;
+}
+
+.yuju-connection-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+}
+
+.yuju-connection-banner.is-connected {
+    background: #eefaf0;
+    border-color: #bfe5c5;
+}
+
+.yuju-connection-banner.is-disconnected {
+    background: #fff8e8;
+    border-color: #f2ddad;
+}
+
+.yuju-connection-icon {
+    font-size: 24px;
+}
+
+.yuju-connection-banner.is-connected .yuju-connection-icon {
+    color: #2f8f46;
+}
+
+.yuju-connection-banner.is-disconnected .yuju-connection-icon {
+    color: #b78718;
+}
+
+.yuju-connection-content h4 {
+    margin: 0 0 4px 0;
+    font-weight: 700;
+}
+
+.yuju-connection-content p {
+    margin: 0;
+}
+
+.yuju-connection-content small,
+.yuju-connection-content a {
+    display: inline-block;
+    margin-top: 4px;
+}
+
+.yuju-kpi-row {
+    margin-bottom: 20px;
+}
+
+.yuju-kpi-card {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fff;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    min-height: 86px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.yuju-kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    font-size: 16px;
+    color: #fff;
+}
+
+.yuju-kpi-data {
+    display: flex;
+    flex-direction: column;
+}
+
+.yuju-kpi-value {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 700;
+    color: #2e2e2e;
+}
+
+.yuju-kpi-label {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.yuju-kpi-card.kpi-info .yuju-kpi-icon {
+    background: #36a2eb;
+}
+
+.yuju-kpi-card.kpi-success .yuju-kpi-icon {
+    background: #4caf50;
+}
+
+.yuju-kpi-card.kpi-warning .yuju-kpi-icon {
+    background: #f0ad4e;
+}
+
+.yuju-kpi-card.kpi-danger .yuju-kpi-icon {
+    background: #d9534f;
+}
+
+.yuju-dashboard-panel {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+}
+
+.yuju-dashboard-panel .panel-heading {
+    font-weight: 600;
+}
+
+.yuju-dashboard-panel .panel-heading i {
+    margin-right: 7px;
+}
+
+.yuju-mini-stats h3 {
+    margin-top: 4px;
+    margin-bottom: 4px;
+    font-weight: 700;
+}
+
+.yuju-mini-stats p {
+    margin: 0;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.yuju-health-list .yuju-health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f3f5;
+    font-size: 13px;
+}
+
+.yuju-health-list .yuju-health-item:last-child {
+    border-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .yuju-hero-actions {
+        text-align: left !important;
+        margin-top: 12px;
+    }
+
+    .yuju-hero-actions .btn {
+        margin-left: 0;
+        margin-right: 6px;
+    }
+}
+
 /* JSON Viewer */
 .yuju-json-viewer {
     background: #f7fafc;
@@ -548,4 +745,1203 @@
 .yuju-json-null {
     color: #a0aec0;
     font-style: italic;
+}
+
+/* Mapeo de atributos — modal en dos columnas */
+.yuju-attr-modal .modal-body {
+    padding-top: 12px;
+}
+
+.yuju-attr-cache-empty {
+    margin-bottom: 15px;
+}
+
+.yuju-attr-mapper .yuju-attr-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 14px 10px;
+    background: #fbfdff;
+    height: 100%;
+    margin-bottom: 12px;
+}
+
+.yuju-attr-mapper .yuju-attr-card-yuju {
+    background: #f8f5ff;
+    border-color: #e9deff;
+}
+
+.yuju-attr-card-head {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #edf2f7;
+    color: #2d3748;
+}
+
+.yuju-attr-card-head i {
+    margin-right: 6px;
+    color: #667eea;
+}
+
+.yuju-attr-card-yuju .yuju-attr-card-head i {
+    color: #764ba2;
+}
+
+/* Estado de productos Yuju — barra compacta de filtros y acciones masivas */
+.yuju-ps-toolbar {
+    margin-bottom: 14px;
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.yuju-ps-toolbar .panel-body {
+    padding: 12px 14px;
+}
+
+.yuju-ps-toolbar__filters {
+    padding-bottom: 10px !important;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.yuju-ps-filters-accordion {
+    margin: 0;
+}
+
+.yuju-ps-filters-accordion__toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    text-align: left;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    background: #f6f8fa;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #57606a;
+    cursor: pointer;
+    line-height: 1.3;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.yuju-ps-filters-accordion__toggle:hover {
+    background: #eaeef2;
+    border-color: #d0d7de;
+    color: #24292f;
+}
+
+.yuju-ps-filters-accordion__toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.35);
+}
+
+.yuju-ps-filters-accordion__chev {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.yuju-ps-filters-accordion__toggle.collapsed .yuju-ps-filters-accordion__chev {
+    transform: rotate(-90deg);
+}
+
+.yuju-ps-filters-accordion__label i {
+    margin-right: 6px;
+    opacity: 0.85;
+}
+
+.yuju-ps-filters-accordion__inner {
+    padding-top: 12px;
+}
+
+.yuju-ps-toolbar__section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #57606a;
+    margin: 0 0 10px;
+}
+
+.yuju-ps-toolbar__section-title i {
+    margin-right: 6px;
+    opacity: 0.85;
+}
+
+.yuju-ps-filters-grid .form-group {
+    margin-bottom: 8px;
+}
+
+.yuju-ps-mini-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #656d76;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.yuju-ps-mini-label--block {
+    text-transform: none;
+    font-weight: 500;
+    font-size: 12px;
+    margin-bottom: 0;
+}
+
+.yuju-ps-mini-label--invisible {
+    visibility: hidden;
+    margin-bottom: 3px;
+    height: 14px;
+}
+
+.yuju-ps-checkbox-row {
+    padding-top: 22px;
+}
+
+@media (max-width: 1199px) {
+    .yuju-ps-checkbox-row {
+        padding-top: 0;
+    }
+}
+
+.yuju-ps-help-inline {
+    margin-left: 6px;
+    color: #8b949e;
+    cursor: help;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.yuju-ps-search-input {
+    max-width: 100%;
+}
+
+@media (min-width: 1200px) {
+    .yuju-ps-toolbar-row2-actions {
+        padding-top: 22px;
+    }
+}
+
+.yuju-ps-filter-btn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    vertical-align: middle;
+}
+
+.yuju-ps-filter-btn-group .yuju-ps-filter-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 3px 10px;
+    font-size: 11px;
+    line-height: 1.35;
+    min-height: 28px;
+    box-sizing: border-box;
+    border-radius: 3px;
+}
+
+.yuju-ps-filter-btn-group .yuju-ps-filter-btn i {
+    font-size: 12px;
+    margin-right: 3px;
+    vertical-align: -1px;
+}
+
+.yuju-ps-toolbar__bulk {
+    padding-top: 10px !important;
+    background: #f8f9fb;
+}
+
+.yuju-ps-bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px 16px;
+}
+
+.yuju-ps-bulk-bar__left {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(100%, 420px);
+}
+
+.yuju-ps-bulk-bar__title {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #57606a;
+    margin-bottom: 6px;
+}
+
+.yuju-ps-bulk-bar__title i {
+    margin-right: 6px;
+    opacity: 0.85;
+}
+
+.yuju-ps-active-filters-wrap {
+    line-height: 1.6;
+}
+
+.yuju-ps-active-filters-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #656d76;
+    margin-right: 4px;
+}
+
+.yuju-ps-filter-chip {
+    margin: 0 6px 4px 0;
+    display: inline-block;
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    font-weight: normal;
+    border-radius: 3px;
+    vertical-align: middle;
+}
+
+.yuju-ps-filter-chip strong {
+    font-weight: 600;
+}
+
+.yuju-ps-filter-chip-remove {
+    color: #cf222e;
+    margin-left: 4px;
+    text-decoration: none !important;
+    opacity: 0.85;
+}
+
+.yuju-ref-dup-badge {
+    margin-top: 6px;
+    display: inline-block;
+    font-size: 10px !important;
+    font-weight: 600;
+    white-space: normal;
+    max-width: 100%;
+    line-height: 1.3;
+}
+
+#products-tbody td.yuju-ps-click-toggle {
+    cursor: pointer;
+}
+
+.yuju-ps-filter-chip-remove:hover {
+    opacity: 1;
+    color: #a40e26;
+}
+
+.yuju-ps-bulk-bar__right {
+    flex: 1 1 240px;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: stretch;
+}
+
+/* Panel masivo compacto (icono + etiqueta corta); ancho completo de la barra */
+.yuju-ps-bulk-panel {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    background: #fff;
+    border: 1px solid #d8dee4;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.06);
+    overflow: hidden;
+}
+
+.yuju-ps-bulk-panel__main {
+    padding: 5px 6px;
+}
+
+.yuju-ps-mode-grid--compact {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+}
+
+@media (max-width: 700px) {
+    .yuju-ps-mode-grid--compact {
+        grid-template-columns: 1fr;
+    }
+}
+
+.yuju-ps-mode-card {
+    position: relative;
+    margin: 0;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.yuju-ps-mode-card input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.yuju-ps-mode-card__body {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 8px;
+    min-height: 0;
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+    background: #fafbfc;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.yuju-ps-mode-card:hover .yuju-ps-mode-card__body {
+    border-color: #c9d1d9;
+    background: #f6f8fa;
+}
+
+.yuju-ps-mode-card input:focus + .yuju-ps-mode-card__body {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.35);
+}
+
+.yuju-ps-mode-card__icon-wrap {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.yuju-ps-mode-card__icon-wrap i {
+    display: block;
+}
+
+.yuju-ps-mode-card--create .yuju-ps-mode-card__icon-wrap {
+    background: rgba(26, 127, 55, 0.14);
+    color: #116329;
+}
+
+.yuju-ps-mode-card--update .yuju-ps-mode-card__icon-wrap {
+    background: rgba(9, 105, 218, 0.12);
+    color: #0550ae;
+}
+
+.yuju-ps-mode-card--delete .yuju-ps-mode-card__icon-wrap {
+    background: rgba(207, 34, 46, 0.12);
+    color: #a40e26;
+}
+
+.yuju-ps-mode-card input:checked + .yuju-ps-mode-card__body {
+    background: #fff;
+}
+
+.yuju-ps-mode-card--create input:checked + .yuju-ps-mode-card__body {
+    border-color: #1a7f37;
+    box-shadow: 0 0 0 1px #1a7f37;
+}
+
+.yuju-ps-mode-card--create input:checked + .yuju-ps-mode-card__body .yuju-ps-mode-card__icon-wrap {
+    background: #1a7f37;
+    color: #fff;
+}
+
+.yuju-ps-mode-card--update input:checked + .yuju-ps-mode-card__body {
+    border-color: #0969da;
+    box-shadow: 0 0 0 1px #0969da;
+}
+
+.yuju-ps-mode-card--update input:checked + .yuju-ps-mode-card__body .yuju-ps-mode-card__icon-wrap {
+    background: #0969da;
+    color: #fff;
+}
+
+.yuju-ps-mode-card--delete input:checked + .yuju-ps-mode-card__body {
+    border-color: #cf222e;
+    box-shadow: 0 0 0 1px #cf222e;
+}
+
+.yuju-ps-mode-card--delete input:checked + .yuju-ps-mode-card__body .yuju-ps-mode-card__icon-wrap {
+    background: #cf222e;
+    color: #fff;
+}
+
+.yuju-ps-mode-card__title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #24292f;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.yuju-ps-mode-card--delete .yuju-ps-mode-card__title {
+    color: #82071e;
+}
+
+.yuju-ps-bulk-panel__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 8px 10px;
+    background: #f6f8fa;
+    border-top: 1px solid #e1e4e8;
+}
+
+.yuju-ps-bulk-panel__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.yuju-ps-bulk-run {
+    font-weight: 600;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.yuju-ps-selection-meta {
+    font-size: 11px;
+    font-weight: 700;
+    color: #24292f;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid #d8dee4;
+    white-space: nowrap;
+}
+
+.yuju-ps-selection-meta--empty {
+    color: #656d76;
+    font-weight: 600;
+    background: transparent;
+    border-color: transparent;
+    padding: 5px 0;
+}
+
+/* Modal eliminar: sin alert Bootstrap ni icon-font duplicado */
+.yuju-delete-modal__dialog {
+    width: 100%;
+    max-width: 460px;
+}
+
+.yuju-delete-modal {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #d8dee4;
+    box-shadow: 0 12px 28px rgba(31, 35, 40, 0.18);
+}
+
+.yuju-delete-modal__header {
+    border-bottom: 1px solid #eaeef2;
+    padding-bottom: 14px;
+}
+
+.yuju-delete-modal__title {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #24292f;
+}
+
+.yuju-delete-modal__subtitle {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #57606a;
+    font-weight: normal;
+}
+
+.yuju-delete-modal__body {
+    padding-top: 18px;
+}
+
+.yuju-delete-modal__risk {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, #fff8f8 0%, #fff 100%);
+    border: 1px solid #f0b8bd;
+    border-radius: 10px;
+}
+
+.yuju-delete-modal__risk-badge {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #cf222e;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 40px;
+    text-align: center;
+    font-family: inherit;
+}
+
+.yuju-delete-modal__risk-textwrap {
+    min-width: 0;
+}
+
+.yuju-delete-modal__risk-heading {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #82071e;
+}
+
+.yuju-delete-modal__risk-copy {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #424a53;
+}
+
+.yuju-delete-modal__summary {
+    padding: 14px 16px;
+    background: #f6f8fa;
+    border-radius: 8px;
+    border: 1px solid #d8dee4;
+}
+
+.yuju-delete-modal__summary-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #656d76;
+    margin-bottom: 6px;
+}
+
+.yuju-delete-modal__summary-count {
+    font-size: 28px;
+    font-weight: 800;
+    color: #24292f;
+    line-height: 1;
+}
+
+.yuju-delete-modal__summary-note {
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #57606a;
+}
+
+.yuju-delete-modal__footer {
+    border-top: 1px solid #eaeef2;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.yuju-delete-modal__btn-cancel {
+    min-width: 100px;
+}
+
+.yuju-delete-modal__btn-confirm {
+    min-width: 160px;
+    font-weight: 700;
+}
+
+/* Modal validación lote "Crear" en Yuju (v2) */
+.yuju-validate-v2__header {
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 8px;
+}
+
+.yuju-validate-v2__header .modal-title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-right: 28px;
+}
+
+.yuju-validate-v2__subtitle {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.yuju-validate-v2 .modal-body {
+    padding-top: 12px;
+    padding-bottom: 10px;
+}
+
+.yuju-validate-v2__close-x {
+    opacity: 0.55;
+}
+
+.yuju-validate-v2__close-x:hover {
+    opacity: 1;
+}
+
+.yuju-validate-v2__chips {
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.yuju-validate-v2__chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    white-space: normal;
+    text-align: left;
+    max-width: 100%;
+}
+
+.yuju-validate-v2__error-box {
+    margin: 0 0 8px 0;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.yuju-validate-v2__accordion {
+    margin-bottom: 6px;
+}
+
+.yuju-validate-v2__accordion .panel {
+    margin-bottom: 0;
+    border-color: #e3e6ea;
+}
+
+.yuju-validate-v2__accordion-head {
+    padding: 0;
+    background: transparent;
+    border: 0;
+}
+
+.yuju-validate-v2__accordion-head .panel-title {
+    margin: 0;
+}
+
+.yuju-validate-v2__accordion-toggle {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 1px 6px;
+    border: 1px solid #e3e6ea;
+    border-radius: 4px;
+    background: #fff;
+    color: #555;
+}
+
+.yuju-validate-v2__accordion-toggle:hover,
+.yuju-validate-v2__accordion-toggle:focus {
+    text-decoration: none;
+    background: #f6f8fa;
+    color: #222;
+}
+
+.yuju-validate-v2__accordion-head .panel-title i {
+    margin-right: 6px;
+}
+
+.yuju-validate-v2__accordion-body {
+    padding: 6px 0 0 0;
+}
+
+/* Override tema BO (panel-heading) para que sea realmente mini */
+#content.bootstrap .panel-heading.yuju-validate-v2__accordion-head {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+}
+
+#content.bootstrap .panel-heading.yuju-validate-v2__accordion-head h5.panel-title {
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 1.1 !important;
+}
+
+.yuju-validate-v2__phases {
+    margin: 0 0 10px 0;
+    padding: 0;
+}
+
+.yuju-validate-v2__phase {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    background: #fafbfc;
+    border-left: 4px solid #bdbdbd;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.yuju-validate-v2__phase--hidden {
+    display: none;
+}
+
+.yuju-validate-v2__phase--pending {
+    border-left-color: #9e9e9e;
+}
+
+.yuju-validate-v2__phase--running {
+    border-left-color: #1e88e5;
+    background: #e3f2fd;
+}
+
+.yuju-validate-v2__phase--ok {
+    border-left-color: #2e7d32;
+    background: #e8f5e9;
+}
+
+.yuju-validate-v2__phase--warn {
+    border-left-color: #f57c00;
+    background: #fff3e0;
+}
+
+.yuju-validate-v2__phase--err {
+    border-left-color: #c62828;
+    background: #ffebee;
+}
+
+.yuju-validate-v2__phase-badge {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #555;
+}
+
+.yuju-validate-v2__phase-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.yuju-validate-v2__phase-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.yuju-validate-v2__phase-title {
+    font-size: 13px;
+}
+
+.yuju-validate-v2__phase-status {
+    font-size: 11px;
+    padding: 4px 8px;
+}
+
+.yuju-validate-v2__phase-desc {
+    margin: 0;
+    line-height: 1.3;
+    font-size: 11px;
+}
+
+.yuju-validate-v2__micro-progress {
+    margin-bottom: 10px;
+}
+
+.yuju-validate-v2__progress-bar-wrap {
+    height: 18px;
+    margin-bottom: 4px;
+}
+
+.yuju-validate-v2__micro-line {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.yuju-validate-v2__stats {
+    margin-bottom: 10px;
+}
+
+.yuju-validate-v2__stat {
+    text-align: center;
+    padding: 6px 4px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.yuju-validate-v2__stat-num {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.yuju-validate-v2__stat-label {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.yuju-validate-v2__log-heading {
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+}
+
+.yuju-validate-v2__log {
+    max-height: 130px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: #fff;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.yuju-validate-v2__logline {
+    padding: 3px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.yuju-validate-v2__logline:last-child {
+    border-bottom: 0;
+}
+
+.yuju-validate-v2__logline--ok {
+    color: #1b5e20;
+}
+
+.yuju-validate-v2__logline--err {
+    color: #b71c1c;
+}
+
+.yuju-validate-v2__logline--warn {
+    color: #8a6d3b;
+}
+
+.yuju-validate-v2__not-sent-list {
+    margin: 6px 0 0 18px;
+    padding: 0;
+}
+
+.yuju-validate-v2__not-sent-list li {
+    margin-bottom: 8px;
+}
+
+.yuju-validate-v2__footer {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.yuju-validate-v2__footer-hint {
+    margin: 0 0 6px 0 !important;
+    width: 100%;
+}
+
+/* Acciones masivas por categoría (AdminYujuCategoryBulk) */
+.yuju-cat-bulk__intro-card {
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border: 1px solid #e4e9f0;
+    border-radius: 8px;
+    background: #f8fbff;
+}
+
+.yuju-cat-bulk__intro-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #2a3f5f;
+    margin-bottom: 6px;
+}
+
+.yuju-cat-bulk__intro-text {
+    line-height: 1.55;
+    color: #4a5568;
+}
+
+.yuju-cat-bulk__intro-actions {
+    margin-top: 10px;
+}
+
+.yuju-cat-bulk__toolbar {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.yuju-cat-bulk__toolbar-help {
+    font-size: 12px;
+}
+
+.yuju-cat-bulk__context {
+    display: flex;
+    gap: 14px;
+    align-items: stretch;
+    margin-bottom: 12px;
+}
+
+.yuju-cat-bulk__context-main {
+    flex: 1 1 auto;
+    border: 1px solid #e8edf3;
+    border-radius: 8px;
+    background: #fff;
+    padding: 14px 16px;
+    min-height: 122px;
+}
+
+.yuju-cat-bulk__context-side {
+    flex: 0 0 34%;
+    min-width: 280px;
+}
+
+.yuju-cat-bulk__context-kicker {
+    font-size: 11px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: #68758a;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.yuju-cat-bulk__title {
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.yuju-cat-bulk__context-help {
+    margin: 0;
+    color: #566176;
+    line-height: 1.45;
+}
+
+.yuju-cat-bulk__map-card {
+    border-radius: 8px;
+    padding: 14px 16px;
+    min-height: 122px;
+    border: 1px solid #d9e4f1;
+}
+
+.yuju-cat-bulk__map-card--ok {
+    background: #f3f9ff;
+}
+
+.yuju-cat-bulk__map-card--warn {
+    background: #fff8ee;
+    border-color: #f1d2a8;
+}
+
+.yuju-cat-bulk__map-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.yuju-cat-bulk__map-text {
+    color: #4b5566;
+    line-height: 1.45;
+    margin-bottom: 8px;
+}
+
+.yuju-cat-bulk__map-tags .label {
+    margin-right: 6px;
+    margin-bottom: 4px;
+    display: inline-block;
+}
+
+@media (max-width: 991px) {
+    .yuju-cat-bulk__context {
+        display: block;
+    }
+
+    .yuju-cat-bulk__context-side {
+        min-width: 0;
+        margin-top: 10px;
+    }
+}
+
+.yuju-cat-bulk__kpis {
+    margin-bottom: 8px;
+}
+
+.yuju-kpi {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border: 1px solid #e5e7eb;
+    background: #fafbfc;
+    min-height: 92px;
+}
+
+.yuju-kpi__value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.yuju-kpi__label {
+    font-size: 12px;
+    color: #555;
+    margin-top: 4px;
+}
+
+.yuju-kpi__hint {
+    font-size: 11px;
+    color: #888;
+    margin-top: 4px;
+}
+
+.yuju-kpi--ok .yuju-kpi__value { color: #1b5e20; }
+.yuju-kpi--pending .yuju-kpi__value { color: #b45309; }
+.yuju-kpi--err .yuju-kpi__value { color: #b71c1c; }
+.yuju-kpi--total .yuju-kpi__value { color: #1e3a5f; }
+
+.yuju-cat-bulk__bar-wrap {
+    margin: 20px 0 16px;
+}
+
+.yuju-cat-bulk__bar-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.yuju-cat-bulk__bar {
+    display: flex;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: #eee;
+}
+
+.yuju-cat-bulk__seg {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+}
+
+.yuju-cat-bulk__seg--ok { background: linear-gradient(90deg, #43a047, #66bb6a); }
+.yuju-cat-bulk__seg--pending { background: linear-gradient(90deg, #fb8c00, #ffb74d); }
+.yuju-cat-bulk__seg--err { background: linear-gradient(90deg, #c62828, #e57373); }
+.yuju-cat-bulk__seg--prog { background: linear-gradient(90deg, #1565c0, #64b5f6); }
+.yuju-cat-bulk__seg--inv { background: linear-gradient(90deg, #6a1b9a, #ba68c8); }
+.yuju-cat-bulk__seg--empty { background: #ddd; }
+
+.yuju-cat-bulk__legend {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #666;
+}
+
+.yuju-cat-bulk__legend span {
+    margin-right: 14px;
+}
+
+.yuju-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.yuju-dot--ok { background: #43a047; }
+.yuju-dot--pending { background: #fb8c00; }
+.yuju-dot--err { background: #c62828; }
+.yuju-dot--prog { background: #1565c0; }
+.yuju-dot--inv { background: #6a1b9a; }
+
+.yuju-cat-bulk__segments {
+    margin: 16px 0 12px;
+}
+
+.yuju-cat-bulk__segments-label {
+    display: inline-block;
+    margin-right: 8px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.yuju-cat-bulk__segments .btn-group {
+    vertical-align: middle;
+    flex-wrap: wrap;
+}
+
+.yuju-cat-bulk__bulk-bar {
+    margin-bottom: 16px;
+}
+
+.yuju-cat-bulk__overview th {
+    white-space: nowrap;
+}
+
+.yuju-cat-bulk__search {
+    margin-bottom: 16px;
+}
+
+/**
+ * Salida del gestor de crons (AdminYujuConfiguration): PrestaShop 8 SMB reskin aplica
+ * :is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea:hover { background: var(--edition-white) }
+ * con !important. Se replica el prefijo + ID para ganar en especificidad y mantener estilo consola.
+ */
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control,
+textarea#yuju-cron-manager-output.form-control {
+    white-space: pre-wrap;
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border: 1px solid #1f2a44 !important;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:hover,
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:focus,
+textarea#yuju-cron-manager-output.form-control:hover,
+textarea#yuju-cron-manager-output.form-control:focus,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:hover,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:focus {
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border-color: #334155 !important;
+    box-shadow: none !important;
 }

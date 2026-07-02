@@ -34,6 +34,7 @@ var YujuAdmin = {
         syncInterval: null,
         logInterval: null
     },
+    cronManagerData: [],
 
     /**
      * Initialize the admin interface
@@ -72,6 +73,26 @@ var YujuAdmin = {
         $(document).on('click', '#yuju-test-products', function(e) {
             e.preventDefault();
             self.testProducts();
+        });
+
+        // Cron manager
+        $(document).on('click', '#yuju-open-cron-manager', function(e) {
+            e.preventDefault();
+            self.openCronManager();
+        });
+        $(document).on('click', '#yuju-cron-manager-refresh', function(e) {
+            e.preventDefault();
+            self.loadCronManagerData();
+        });
+        $(document).on('change', '#yuju-cron-filter-recommended, #yuju-cron-filter-hide-diagnostic', function() {
+            self.renderCronManagerRows();
+        });
+        $(document).on('click', '.yuju-run-cron-btn', function(e) {
+            e.preventDefault();
+            var script = $(this).data('script') || '';
+            if (script) {
+                self.runCronScript(script, $(this));
+            }
         });
 
         // OAuth Authorization button
@@ -301,6 +322,25 @@ var YujuAdmin = {
                     // Error en la conectividad
                     var html = '<div class="alert alert-danger"><strong>✗ Error en la conectividad</strong><br>';
                     html += '<strong>Mensaje:</strong> ' + (response.message || 'Error desconocido') + '<br>';
+
+                    if (response.debug && response.debug.credentials) {
+                        html += '<div style="margin-top: 12px; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">';
+                        html += '<strong>🔍 Debug de conexión (credenciales)</strong><br>';
+                        html += '<small>';
+                        html += 'has_client_id: ' + (response.debug.credentials.has_client_id ? '✅' : '❌') + '<br>';
+                        html += 'has_client_secret: ' + (response.debug.credentials.has_client_secret ? '✅' : '❌') + '<br>';
+                        html += 'client_id_length: ' + response.debug.credentials.client_id_length + '<br>';
+                        html += 'client_secret_length: ' + response.debug.credentials.client_secret_length + '<br>';
+                        if (response.debug.db_oauth_snapshot) {
+                            html += 'db_has_client_id: ' + (response.debug.db_oauth_snapshot.has_client_id ? '✅' : '❌') + '<br>';
+                            html += 'db_has_client_secret: ' + (response.debug.db_oauth_snapshot.has_client_secret ? '✅' : '❌') + '<br>';
+                        }
+                        if (response.debug.hint) {
+                            html += 'hint: ' + response.debug.hint + '<br>';
+                        }
+                        html += '</small></div>';
+                    }
+
                     html += '</div>';
                     $result.html(html);
                     
@@ -597,6 +637,236 @@ var YujuAdmin = {
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-check"></i> Probar Productos');
+            }
+        });
+    },
+
+    /**
+     * Abre modal de administración de crons.
+     */
+    openCronManager: function() {
+        var $modal = this.getCronManagerModal();
+        $modal.find('#yuju-cron-manager-output').val('');
+        $modal.find('#yuju-cron-manager-alert').hide().removeClass('alert-success alert-danger alert-info').text('');
+        $modal.modal('show');
+        this.loadCronManagerData();
+    },
+
+    getCronManagerModal: function() {
+        var $visible = $('.yuju-cron-manager-modal:visible').first();
+        if ($visible.length) {
+            return $visible;
+        }
+        return $('.yuju-cron-manager-modal').first();
+    },
+
+    /**
+     * Carga listado de crons y última ejecución.
+     */
+    loadCronManagerData: function() {
+        var self = this;
+        var $modal = this.getCronManagerModal();
+        var $tbody = $modal.find('#yuju-cron-manager-tbody');
+        $tbody.html('<tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>');
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'getCronManagerData',
+                token: this.config.token
+            },
+            success: function(response) {
+                if (!response || !response.success || !Array.isArray(response.crons)) {
+                    self.cronManagerData = [];
+                    $tbody.html('<tr><td colspan="7" class="text-center text-danger">No se pudo cargar el listado.</td></tr>');
+                    return;
+                }
+                self.cronManagerData = response.crons;
+                self.renderCronManagerRows();
+            },
+            error: function() {
+                self.cronManagerData = [];
+                $tbody.html('<tr><td colspan="7" class="text-center text-danger">Error de red al cargar crons.</td></tr>');
+            }
+        });
+    },
+
+    renderCronManagerRows: function() {
+        var self = this;
+        var $modal = this.getCronManagerModal();
+        var $tbody = $modal.find('#yuju-cron-manager-tbody');
+        var rows = Array.isArray(this.cronManagerData) ? this.cronManagerData.slice() : [];
+        var onlyRecommended = $modal.find('#yuju-cron-filter-recommended').is(':checked');
+        var hideDiagnostic = $modal.find('#yuju-cron-filter-hide-diagnostic').is(':checked');
+
+        if (!rows.length) {
+            $tbody.html('<tr><td colspan="7" class="text-center text-muted">No se encontraron scripts cron.</td></tr>');
+            return;
+        }
+
+        rows = rows.filter(function(item) {
+            var requiredMode = item.required_mode || 'manual';
+            var description = String(item.description || '').toLowerCase();
+            var isDiagnostic = (description.indexOf('diagnóstico') !== -1) || (description.indexOf('depuración') !== -1);
+
+            if (onlyRecommended && requiredMode !== 'programar') {
+                return false;
+            }
+            if (hideDiagnostic && isDiagnostic) {
+                return false;
+            }
+            return true;
+        });
+
+        if (!rows.length) {
+            $tbody.html('<tr><td colspan="7" class="text-center text-muted">No hay crons para los filtros seleccionados.</td></tr>');
+            return;
+        }
+
+        var html = '';
+        rows.forEach(function(item) {
+            var requiredMode = item.required_mode || 'manual';
+            var requiredBadge = '<span class="label label-default">Manual</span>';
+            if (requiredMode === 'programar') {
+                requiredBadge = '<span class="label label-success">Sí, programar</span>';
+            } else if (requiredMode === 'interno') {
+                requiredBadge = '<span class="label label-info">Interno</span>';
+            } else if (requiredMode === 'one_time') {
+                requiredBadge = '<span class="label label-warning">Una sola vez</span>';
+            }
+
+            var status = item.last_status || '';
+            var statusBadge = '<span class="label label-default">Sin registro</span>';
+            if (status === 'success') {
+                statusBadge = '<span class="label label-success">OK</span>';
+            } else if (status === 'error') {
+                statusBadge = '<span class="label label-danger">Error</span>';
+            }
+            var duration = (item.last_duration_ms !== null && item.last_duration_ms !== undefined)
+                ? (String(item.last_duration_ms) + ' ms')
+                : '—';
+            var lastRun = item.last_run_at || '—';
+            var file = item.file || '';
+            var description = item.description || 'Sin descripción';
+
+            html += '<tr>' +
+                '<td><code>' + self.escapeHtml(file) + '</code></td>' +
+                '<td style="min-width:260px;">' + self.escapeHtml(description) + '</td>' +
+                '<td>' + requiredBadge + '</td>' +
+                '<td>' + self.escapeHtml(lastRun) + '</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td>' + self.escapeHtml(duration) + '</td>' +
+                '<td class="text-center">' +
+                    '<button type="button" class="btn btn-xs btn-primary yuju-run-cron-btn" data-script="' + self.escapeHtml(file) + '">' +
+                        '<i class="icon-play"></i> Ejecutar' +
+                    '</button>' +
+                '</td>' +
+            '</tr>';
+        });
+        $tbody.html(html);
+    },
+
+    /**
+     * Ejecuta un cron y muestra su salida.
+     */
+    runCronScript: function(script, $btn) {
+        var self = this;
+        var originalHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i>');
+
+        var $modal = self.getCronManagerModal();
+        var $out = $modal.find('#yuju-cron-manager-output');
+        var $alert = $modal.find('#yuju-cron-manager-alert');
+
+        // Indicador en vivo de progreso dentro del textarea.
+        // Se actualiza cada segundo mientras la petición AJAX sigue abierta.
+        var spinnerFrames = ['|', '/', '-', '\\'];
+        var spinnerIdx = 0;
+        var startedAt = Date.now();
+        var scriptName = String(script || '');
+        var paintRunning = function() {
+            var elapsedMs = Date.now() - startedAt;
+            var elapsedS = Math.floor(elapsedMs / 1000);
+            var mm = Math.floor(elapsedS / 60);
+            var ss = elapsedS % 60;
+            var human = (mm > 0 ? (mm + 'm ') : '') + ss + 's';
+            var frame = spinnerFrames[spinnerIdx % spinnerFrames.length];
+            spinnerIdx++;
+            var lines = [
+                '[' + frame + '] Se está ejecutando ' + scriptName + '…',
+                '    Tiempo transcurrido: ' + human + ' (' + elapsedS + ' s)',
+                '    Inicio: ' + new Date(startedAt).toLocaleTimeString(),
+                '',
+                '(La pantalla se actualizará automáticamente cuando termine el cron.)'
+            ];
+            $out.val(lines.join('\n'));
+        };
+
+        // Alerta inicial informando que el cron está activo.
+        $alert
+            .removeClass('alert-success alert-danger alert-info')
+            .addClass('alert alert-info')
+            .html('<i class="icon-refresh yuju-spin"></i> Ejecutando <code>' + self.escapeHtml(scriptName) + '</code>… espere a que termine.')
+            .show();
+
+        paintRunning();
+        var runningTimer = setInterval(paintRunning, 1000);
+        var stopRunningTimer = function() {
+            if (runningTimer) {
+                clearInterval(runningTimer);
+                runningTimer = null;
+            }
+        };
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'runCronScript',
+                script: script,
+                token: this.config.token
+            },
+            success: function(response) {
+                stopRunningTimer();
+                var ok = !!(response && response.success);
+                var alertClass = ok ? 'alert-success' : 'alert-danger';
+                var msg = response && response.message ? response.message : 'Sin respuesta del servidor';
+                var meta = [];
+                if (response && typeof response.exit_code !== 'undefined') {
+                    meta.push('exit_code=' + response.exit_code);
+                }
+                if (response && typeof response.duration_ms !== 'undefined') {
+                    meta.push('duración=' + response.duration_ms + ' ms');
+                }
+
+                $alert
+                    .removeClass('alert-success alert-danger alert-info')
+                    .addClass('alert ' + alertClass)
+                    .html(self.escapeHtml(msg) + (meta.length ? ('<br><small>' + self.escapeHtml(meta.join(' · ')) + '</small>') : ''))
+                    .show();
+
+                var out = response && typeof response.output === 'string' ? response.output : '';
+                $out.val(out || '(sin salida)');
+                self.loadCronManagerData();
+            },
+            error: function(xhr) {
+                stopRunningTimer();
+                var txt = xhr && xhr.responseText ? xhr.responseText : 'Error de red';
+                $alert
+                    .removeClass('alert-success alert-danger alert-info')
+                    .addClass('alert alert-danger')
+                    .text('No se pudo ejecutar el cron.')
+                    .show();
+                $out.val(txt);
+            },
+            complete: function() {
+                stopRunningTimer();
+                $btn.prop('disabled', false).html(originalHtml);
             }
         });
     },
@@ -1164,6 +1434,18 @@ var YujuAdmin = {
                 $(this).remove();
             });
         }, duration);
+    },
+
+    /**
+     * Escapa texto para HTML.
+     */
+    escapeHtml: function(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     /**

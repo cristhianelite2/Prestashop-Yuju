@@ -3,6 +3,35 @@
  * 2024 Yuju Integration - Webhook Receiver
  */
 
+// Respuesta ultrarrápida para health-checks de URL (evita timeout de validación en webhook-sub).
+// Yuju puede verificar la URL antes de crear la suscripción.
+if (!isset($_SERVER['REQUEST_METHOD'])) {
+    http_response_code(200);
+    header('Content-Type: application/json; charset=utf-8');
+    echo '{"success":true}';
+    exit;
+}
+
+$method = strtoupper((string) $_SERVER['REQUEST_METHOD']);
+if ($method === 'GET' || $method === 'HEAD' || $method === 'OPTIONS') {
+    http_response_code(204);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit;
+}
+
+// Fast-path para validaciones de conectividad de Yuju durante alta de suscripción.
+// Si no vienen cabeceras mínimas del webhook real, respondemos de inmediato para evitar
+// timeouts agresivos del validador remoto (ej. read timeout=0.5s).
+if ($method === 'POST') {
+    $has_topic = isset($_SERVER['HTTP_X_YUJU_TOPIC']) && trim((string) $_SERVER['HTTP_X_YUJU_TOPIC']) !== '';
+    $has_id = isset($_SERVER['HTTP_X_YUJU_ID']) && trim((string) $_SERVER['HTTP_X_YUJU_ID']) !== '';
+    if (!$has_topic || !$has_id) {
+        http_response_code(204);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit;
+    }
+}
+
 // Limpiar cualquier output previo
 if (ob_get_level()) {
     ob_end_clean();

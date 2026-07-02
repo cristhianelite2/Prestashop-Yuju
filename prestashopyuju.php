@@ -76,6 +76,7 @@ class Prestashopyuju extends Module
 
         return parent::install()
         && $this->installDb()
+        && $this->ensureProductStatusIntermediateWebhookStates()
         && $this->installTabs()
         && $this->registerHooks()
         && $this->installConfiguration()
@@ -128,7 +129,139 @@ class Prestashopyuju extends Module
         return true;
     }
 
+    /**
+     * Re-ejecuta sql/install.sql (todas las sentencias usan IF NOT EXISTS),
+     * útil para "reparar" tablas faltantes sin reinstalar el módulo.
+     *
+     * @return array{success: bool, executed: int, errors: array<int, string>}
+     */
+    public function ensureAllYujuTables()
+    {
+        $sql_file = dirname(__FILE__) . '/sql/install.sql';
+        $result = ['success' => false, 'executed' => 0, 'errors' => []];
 
+        if (!file_exists($sql_file)) {
+            $result['errors'][] = 'install.sql no encontrado en: ' . $sql_file;
+            return $result;
+        }
+
+        $sql = file_get_contents($sql_file);
+        if ($sql === false) {
+            $result['errors'][] = 'No se pudo leer el contenido de install.sql.';
+            return $result;
+        }
+
+        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
+        $queries = preg_split("/;\s*$/m", $sql);
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query === '') {
+                continue;
+            }
+            try {
+                if (Db::getInstance()->execute($query)) {
+                    $result['executed']++;
+                } else {
+                    $msg = Db::getInstance()->getMsgError();
+                    if ($msg !== '') {
+                        $result['errors'][] = $msg;
+                    }
+                }
+            } catch (Exception $e) {
+                $result['errors'][] = $e->getMessage();
+            }
+        }
+
+        // También aplicar parches incrementales conocidos.
+        try {
+            $this->ensureSyncHistoryTable();
+            $this->ensureSyncQueueActionIncludesDelete();
+            $this->ensureProductStatusIntermediateWebhookStates();
+        } catch (Exception $e) {
+            $result['errors'][] = $e->getMessage();
+        }
+
+        $result['success'] = empty($result['errors']) || $result['executed'] > 0;
+        return $result;
+    }
+
+    /**
+     * Crea la tabla de historial de envíos a Yuju si no existe (instalaciones antiguas / sql omitido).
+     */
+    public function ensureSyncHistoryTable()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $path = dirname(__FILE__) . '/sql/add_sync_history.sql';
+        if (!is_readable($path)) {
+            return false;
+        }
+
+        $sql = file_get_contents($path);
+        $sql = str_replace('PREFIX_', _DB_PREFIX_, $sql);
+        $queries = preg_split("/;\s*$/m", $sql);
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query !== '') {
+                Db::getInstance()->execute($query);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Amplía el ENUM de la cola para permitir acciones delete (instalaciones ya existentes).
+     */
+    public function ensureSyncQueueActionIncludesDelete()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        try {
+            Db::getInstance()->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_sync_queue` MODIFY COLUMN `action` ENUM(\'create\',\'update\',\'delete\') NOT NULL'
+            );
+        } catch (Exception $e) {
+            // Ya alterada o permisos; el siguiente INSERT fallará si hace falta
+        }
+
+        return true;
+    }
+
+    /**
+     * Añade estados intermedios mientras se espera confirmación por webhook de Yuju.
+     */
+    public function ensureProductStatusIntermediateWebhookStates()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        try {
+            Db::getInstance()->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_product_status` MODIFY COLUMN `sync_status` ENUM(
+                    \'pending\',\'syncing\',\'synced\',\'synced_with_warnings\',\'synced_with_errors\',\'error\',\'disabled\',\'queued\',
+                    \'creating_in_yuju\',\'updating_in_yuju\',\'deleting_in_yuju\'
+                ) DEFAULT \'pending\''
+            );
+        } catch (Exception $e) {
+            // Ya aplicado o sin permisos ALTER
+        }
+
+        return true;
+    }
 
     /**
      * Uninstall database tables.
@@ -199,6 +332,13 @@ class Prestashopyuju extends Module
         'active' => 1,
         ],
         [
+        'class_name' => 'AdminYujuCategoryBulk',
+        'name' => $this->trans('Acciones por categoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
         'class_name' => 'AdminYujuWebhook',
         'name' => $this->trans('Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
@@ -239,6 +379,58 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Crea la pestaña "Acciones por categoría" si falta (instalaciones anteriores al añadir el menú).
+     *
+     * @return bool
+     */
+    public function ensureYujuCategoryBulkTab()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $existing = Tab::getInstanceFromClassName('AdminYujuCategoryBulk');
+        if (Validate::isLoadedObject($existing) && (int) $existing->id > 0) {
+            return true;
+        }
+
+        $parentTab = Tab::getInstanceFromClassName('AdminYuju');
+        if (!Validate::isLoadedObject($parentTab) || !(int) $parentTab->id) {
+            $root = Tab::getInstanceFromClassName('CONFIGURE');
+            if (!Validate::isLoadedObject($root) || !(int) $root->id) {
+                return false;
+            }
+
+            $parentTab = new Tab();
+            $parentTab->class_name = 'AdminYuju';
+            $parentTab->module = $this->name;
+            $parentTab->active = true;
+            $parentTab->id_parent = (int) $root->id;
+            $parentName = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
+            foreach (Language::getLanguages(false) as $language) {
+                $parentTab->name[$language['id_lang']] = $parentName;
+            }
+            if (!$parentTab->save()) {
+                return false;
+            }
+        }
+
+        $tab = new Tab();
+        $tab->class_name = 'AdminYujuCategoryBulk';
+        $tab->module = $this->name;
+        $tab->active = true;
+        $tab->id_parent = (int) $parentTab->id;
+        $name = $this->trans('Acciones por categoría', array(), 'Modules.Prestashopyuju.Admin');
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[$language['id_lang']] = $name;
+        }
+
+        return (bool) $tab->save();
+    }
+
+    /**
      * Uninstall admin tabs.
      */
     protected function uninstallTabs()
@@ -246,6 +438,7 @@ class Prestashopyuju extends Module
         $tab_classes = [
         'AdminYujuLogs',
         'AdminYujuWebhook',
+        'AdminYujuCategoryBulk',
         'AdminYujuProductStatus',
         'AdminYujuAttributeMapping',
         'AdminYujuProductMapping',
@@ -517,7 +710,19 @@ class Prestashopyuju extends Module
                 'new_stock' => $new_stock,
                 'hook' => 'actionUpdateQuantity'
             ]);
-            
+
+            // Marcar como "actualizando" en la tabla de estado ANTES de hacer la llamada
+            // a Yuju, así otra pestaña/usuario verá el estado intermedio "Actualizando…".
+            Db::getInstance()->update(
+                'yuju_product_status',
+                [
+                    'sync_status' => pSQL('updating_in_yuju'),
+                    'last_error' => null,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ],
+                'prestashop_product_id = ' . (int) $product_id
+            );
+
             $start_time = microtime(true);
             $api_client = new YujuApiClient();
             $result = $api_client->updateProduct($yuju_product_id, $yuju_data);
@@ -839,6 +1044,7 @@ class Prestashopyuju extends Module
     {
         $controller = Tools::getValue('controller');
         $version = $this->version . '.' . time(); // Añade timestamp para versionado
+        $this->ensureYujuCategoryBulkTab();
         
         // Cargar CSS/JS en página de configuración del módulo
         if ($controller == 'AdminModules' && Tools::getValue('configure') == $this->name) {
@@ -860,6 +1066,7 @@ class Prestashopyuju extends Module
     {
         // Only load on module's configuration page and all Yuju module controllers
         if (isset($this->context->controller)) {
+            $this->ensureYujuCategoryBulkTab();
             $controller = get_class($this->context->controller);
             $version = $this->version . '.' . time(); // Añade timestamp para versionado
             
@@ -1090,7 +1297,19 @@ class Prestashopyuju extends Module
                     'product_id' => $product_id,
                     'changed_fields' => $changes_info['changed_fields']
                 ]);
-                
+
+                // Marcar como "actualizando" antes de la llamada a Yuju para que
+                // la UI muestre el estado intermedio mientras esperamos la respuesta.
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'sync_status' => pSQL('updating_in_yuju'),
+                        'last_error' => null,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ],
+                    'prestashop_product_id = ' . (int) $product_id
+                );
+
                 $start_time = microtime(true);
                 $api_client = new YujuApiClient();
                 $result = $api_client->updateProduct($yuju_product_id, $yuju_data);

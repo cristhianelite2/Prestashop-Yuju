@@ -340,22 +340,57 @@ class YujuWebhookManager
 
     /**
      * Process product webhook.
+     *
+     * Yuju envía topics con guión (p. ej. product-created) y datos en cabeceras; ver documentación.
+     *
+     * @see https://api-docs.yuju.io/docs/funcionamiento-general
      */
     protected function processProductWebhook($webhook_data, $topic = null)
     {
-        $event_type = $webhook_data['event'];
-        $product_data = $webhook_data['data'];
+        if (!$topic) {
+            $topic = isset($webhook_data['topic']) ? (string) $webhook_data['topic'] : '';
+        }
 
-        switch ($event_type) {
-            case 'product.created':
-            case 'product.updated':
+        $topic = str_replace('_', '-', strtolower(trim((string) $topic)));
+
+        $resource_id = isset($webhook_data['resource_id']) ? (string) $webhook_data['resource_id'] : (string) ($webhook_data['id'] ?? '');
+        $sku = isset($webhook_data['sku']) ? (string) $webhook_data['sku'] : '';
+        $sku_simple = isset($webhook_data['sku_simple']) ? (string) $webhook_data['sku_simple'] : '';
+        $parent_id = isset($webhook_data['parent_id']) ? (string) $webhook_data['parent_id'] : '';
+
+        // Cuerpo JSON legacy (suscripciones antiguas)
+        if ($topic === '' && !empty($webhook_data['event'])) {
+            $legacy = (string) $webhook_data['event'];
+            if ($legacy === 'product.created' || $legacy === 'product.updated') {
+                $product_data = $webhook_data['data'] ?? [];
+
                 return $this->product_manager->syncSingleProductFromYuju($product_data, true);
+            }
+            if ($legacy === 'product.deleted') {
+                return $this->handleProductDeletion($webhook_data['data'] ?? []);
+            }
+        }
 
-            case 'product.deleted':
-                return $this->handleProductDeletion($product_data);
+        switch ($topic) {
+            case 'product-created':
+                $confirm = $this->product_manager->confirmProductCreatedFromWebhook($resource_id, $sku, $sku_simple, $parent_id);
+
+                return array_merge(['topic' => $topic], $confirm);
+
+            case 'product-deleted':
+                $confirm = $this->product_manager->confirmProductDeletedFromWebhook($resource_id, $sku, $parent_id);
+
+                return array_merge(['topic' => $topic], $confirm);
 
             default:
-                throw new Exception('Unknown product webhook event: ' . $event_type);
+                $this->logger->log('Topic de producto no manejado: ' . $topic, 'warning');
+
+                return [
+                    'success' => true,
+                    'message' => 'Topic de producto almacenado sin procesamiento específico',
+                    'topic' => $topic,
+                    'stored' => true,
+                ];
         }
     }
 
@@ -455,25 +490,9 @@ class YujuWebhookManager
      */
     protected function handleProductDeletion($product_data)
     {
-        $product_id = $this->findProductByYujuId($product_data['id']);
+        $yuju_id = isset($product_data['id']) ? (string) $product_data['id'] : '';
 
-        if (!$product_id) {
-            return [
-                'success' => true,
-                'message' => 'Product not found in PrestaShop',
-            ];
-        }
-
-        // Update product status instead of deleting
-        $this->product_manager->updateProductStatus($product_id, 'disabled', 'Product deleted in Yuju');
-
-        $this->logger->log('Disabled product due to Yuju deletion: ' . $product_id, 'info');
-
-        return [
-            'success' => true,
-            'product_id' => $product_id,
-            'action' => 'disabled',
-        ];
+        return $this->product_manager->confirmProductDeletedFromWebhook($yuju_id, '', null);
     }
 
     /**
@@ -586,9 +605,18 @@ class YujuWebhookManager
             $event_type = $webhook_data['event'];
         }
         
+        $entity_id = '';
+        if (isset($webhook_data['resource_id']) && $webhook_data['resource_id'] !== '') {
+            $entity_id = (string) $webhook_data['resource_id'];
+        } elseif (isset($webhook_data['data']['id'])) {
+            $entity_id = (string) $webhook_data['data']['id'];
+        } elseif (isset($webhook_data['id_order'])) {
+            $entity_id = (string) $webhook_data['id_order'];
+        }
+
         $log_data = [
             'event_type' => pSQL($event_type),
-            'entity_id' => isset($webhook_data['data']['id']) ? pSQL($webhook_data['data']['id']) : (isset($webhook_data['id_order']) ? pSQL($webhook_data['id_order']) : ''),
+            'entity_id' => pSQL($entity_id),
             'payload' => pSQL(json_encode($webhook_data)),
             'headers' => pSQL(json_encode($headers)),
             'status' => 'processing',
@@ -625,55 +653,215 @@ class YujuWebhookManager
     {
         $webhook_url = $this->getWebhookUrl();
 
-        $webhooks_to_register = [
-            'order.created',
-            'order.updated',
-            'order.status_changed',
-            'order.cancelled',
-            'product.created',
-            'product.updated',
-            'product.deleted',
-            'stock.updated',
-            'price.updated',
-            'category.created',
-            'category.updated',
-            'category.deleted',
+        // Topics según API Yuju (webhook-sub): guiones, no "product.created"
+        $topics = [
+            'new-order',
+            'updated-order',
+            'new-std-order',
+            'updated-std-order',
+            'product-created',
+            'product-deleted',
         ];
 
         $registered_webhooks = [];
 
-        foreach ($webhooks_to_register as $event_type) {
-            try {
-                $webhook_data = [
-                    'url' => $webhook_url,
-                    'event' => $event_type,
-                    'active' => true,
-                ];
+        try {
+            $response = $this->api_client->createWebhookSubscription($webhook_url, $topics);
+            $sub_id = $this->extractWebhookSubscriptionId($response);
+            $resp_message = $this->extractResponseMessage($response);
 
-                $response = $this->api_client->registerWebhook($webhook_data);
-
-                if ($response && isset($response['id'])) {
-                    $registered_webhooks[] = [
-                        'event_type' => $event_type,
-                        'webhook_id' => $response['id'],
-                        'status' => 'registered',
-                    ];
-
-                    // Store webhook registration
-                    $this->storeWebhookRegistration($event_type, $response['id']);
-                }
-            } catch (Exception $e) {
-                $this->logger->log('Failed to register webhook for ' . $event_type . ': ' . $e->getMessage(), 'error');
+            if ($sub_id) {
+                Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_webhook_registrations`');
+                $this->storeWebhookRegistration('yuju_subscription', (string) $sub_id);
 
                 $registered_webhooks[] = [
-                    'event_type' => $event_type,
+                    'event_type' => implode(',', $topics),
+                    'webhook_id' => $sub_id,
+                    'status' => 'registered',
+                ];
+            } else {
+                // Si se alcanzó el máximo de 3 configuraciones activas, reutilizar una existente.
+                if ($this->isMaxWebhookConfigError($resp_message)) {
+                    $fallback = $this->reuseExistingSubscriptionForRequiredTopics($webhook_url, $topics);
+                    if (!empty($fallback['success'])) {
+                        Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_webhook_registrations`');
+                        $this->storeWebhookRegistration('yuju_subscription', (string) $fallback['subscription_id']);
+
+                        $registered_webhooks[] = [
+                            'event_type' => implode(',', $topics),
+                            'webhook_id' => (string) $fallback['subscription_id'],
+                            'status' => 'registered',
+                            'note' => 'Suscripción existente reutilizada por límite de configuraciones activas',
+                        ];
+
+                        return $registered_webhooks;
+                    }
+                }
+
+                $err = '';
+                if (is_array($response)) {
+                    if (!empty($response['message'])) {
+                        $err = (string) $response['message'];
+                    } elseif (!empty($response['error'])) {
+                        $err = is_string($response['error']) ? $response['error'] : json_encode($response['error']);
+                    }
+                }
+                $registered_webhooks[] = [
+                    'event_type' => 'bundle',
                     'status' => 'failed',
-                    'error' => $e->getMessage(),
+                    'error' => 'Respuesta sin id de suscripción' . ($err !== '' ? ': ' . $err : '') . ' | payload: ' . json_encode($response),
                 ];
             }
+        } catch (Exception $e) {
+            $this->logger->log('Failed to register webhook subscription: ' . $e->getMessage(), 'error');
+            $registered_webhooks[] = [
+                'event_type' => 'bundle',
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ];
         }
 
         return $registered_webhooks;
+    }
+
+    /**
+     * @param mixed $response
+     * @return string
+     */
+    protected function extractResponseMessage($response)
+    {
+        if (!is_array($response)) {
+            return '';
+        }
+        if (!empty($response['message'])) {
+            return (string) $response['message'];
+        }
+        if (isset($response['data']) && is_array($response['data']) && !empty($response['data']['message'])) {
+            return (string) $response['data']['message'];
+        }
+
+        return '';
+    }
+
+    /**
+     * @param string $message
+     * @return bool
+     */
+    protected function isMaxWebhookConfigError($message)
+    {
+        $m = strtolower(trim((string) $message));
+        if ($m === '') {
+            return false;
+        }
+
+        return (strpos($m, 'limite maximo de configuraciones activas') !== false)
+            || (strpos($m, 'límite máximo de configuraciones activas') !== false)
+            || (strpos($m, 'maximo de configuraciones activas') !== false)
+            || (strpos($m, 'maximum active configurations') !== false);
+    }
+
+    /**
+     * Reutiliza una suscripción activa existente para aplicar URL y topics requeridos.
+     *
+     * @param string $webhook_url
+     * @param array<int,string> $topics
+     * @return array{success:bool,subscription_id?:string,error?:string}
+     */
+    protected function reuseExistingSubscriptionForRequiredTopics($webhook_url, array $topics)
+    {
+        try {
+            $list_response = $this->api_client->getWebhookSubscriptions();
+            $subscriptions = $this->normalizeWebhookSubscriptionsResponse($list_response);
+            if (empty($subscriptions)) {
+                return ['success' => false, 'error' => 'No hay suscripciones activas para reutilizar'];
+            }
+
+            $target = null;
+            $normalized_target_url = rtrim(strtolower(trim((string) $webhook_url)), '/');
+            foreach ($subscriptions as $sub) {
+                $sub_url = isset($sub['url']) ? rtrim(strtolower(trim((string) $sub['url'])), '/') : '';
+                if ($sub_url !== '' && $sub_url === $normalized_target_url) {
+                    $target = $sub;
+                    break;
+                }
+            }
+            if ($target === null) {
+                $target = $subscriptions[0];
+            }
+
+            $target_id = $this->extractWebhookSubscriptionId($target);
+            if (!$target_id) {
+                return ['success' => false, 'error' => 'Suscripción objetivo sin ID'];
+            }
+
+            $update_payload = [
+                'url' => $webhook_url,
+                'topics' => array_values(array_unique($topics)),
+            ];
+            $up_response = $this->api_client->updateWebhookSubscription((int) $target_id, $update_payload);
+            $updated_id = $this->extractWebhookSubscriptionId($up_response);
+            if (!$updated_id) {
+                // Algunos endpoints de update no devuelven id, usamos el objetivo si HTTP fue exitoso.
+                $up_ok = is_array($up_response) && !empty($up_response['success']);
+                if ($up_ok) {
+                    $updated_id = (string) $target_id;
+                }
+            }
+
+            if (!$updated_id) {
+                return [
+                    'success' => false,
+                    'error' => 'No se pudo actualizar suscripción existente: ' . json_encode($up_response),
+                ];
+            }
+
+            return ['success' => true, 'subscription_id' => (string) $updated_id];
+        } catch (Exception $e) {
+            $this->logger->log('Error reusing existing subscription: ' . $e->getMessage(), 'error');
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Extrae el id de suscripción de distintas formas de respuesta de webhook-sub.
+     *
+     * @param mixed $response
+     *
+     * @return string|null
+     */
+    protected function extractWebhookSubscriptionId($response)
+    {
+        if (!is_array($response)) {
+            return null;
+        }
+
+        $candidates = [];
+        $candidates[] = $response['id'] ?? null;
+        $candidates[] = $response['subscription_id'] ?? null;
+        $candidates[] = $response['id_third_party_app_webhook'] ?? null;
+        if (isset($response['data']) && is_array($response['data'])) {
+            $candidates[] = $response['data']['id'] ?? null;
+            $candidates[] = $response['data']['subscription_id'] ?? null;
+            $candidates[] = $response['data']['id_third_party_app_webhook'] ?? null;
+            if (isset($response['data'][0]) && is_array($response['data'][0])) {
+                $candidates[] = $response['data'][0]['id'] ?? null;
+                $candidates[] = $response['data'][0]['subscription_id'] ?? null;
+                $candidates[] = $response['data'][0]['id_third_party_app_webhook'] ?? null;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === null) {
+                continue;
+            }
+            $id = trim((string) $candidate);
+            if ($id !== '') {
+                return $id;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -686,9 +874,8 @@ class YujuWebhookManager
 
         foreach ($registered_webhooks as $webhook) {
             try {
-                $this->api_client->unregisterWebhook($webhook['yuju_webhook_id']);
+                $this->api_client->deleteWebhookSubscription((int) $webhook['yuju_webhook_id']);
 
-                // Remove from database
                 Db::getInstance()->delete(
                     'yuju_webhook_registrations',
                     'id = ' . (int) $webhook['id']
@@ -721,12 +908,15 @@ class YujuWebhookManager
      */
     protected function storeWebhookRegistration($event_type, $webhook_id)
     {
+        $now = date('Y-m-d H:i:s');
+
         return Db::getInstance()->insert('yuju_webhook_registrations', [
             'event_type' => pSQL($event_type),
             'yuju_webhook_id' => pSQL($webhook_id),
             'webhook_url' => pSQL($this->getWebhookUrl()),
             'is_active' => 1,
-            'created_at' => date('Y-m-d H:i:s'),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
     }
 
@@ -800,6 +990,309 @@ class YujuWebhookManager
         $stats['registered_webhooks'] = $this->getRegisteredWebhooks();
 
         return $stats;
+    }
+
+    /**
+     * Valida si existe una suscripción activa con todos los topics requeridos.
+     * Basado en webhook-sub (topics con guión) según documentación Yuju.
+     *
+     * @see https://api-docs.yuju.io/docs/funcionamiento-general
+     *
+     * @return array{
+     *   has_required_subscription: bool,
+     *   required_topics: array<int, string>,
+     *   missing_topics: array<int, string>,
+     *   matched_subscription: array<string,mixed>|null,
+     *   subscriptions: array<int, array<string,mixed>>,
+     *   error: string|null
+     * }
+     */
+    public function getRequiredWebhookSubscriptionStatus()
+    {
+        $required_topics = [
+            'new-order',
+            'updated-order',
+            'new-std-order',
+            'updated-std-order',
+            'product-created',
+            'product-deleted',
+        ];
+
+        $result = [
+            'has_required_subscription' => false,
+            'required_topics' => $required_topics,
+            'missing_topics' => $required_topics,
+            'matched_subscription' => null,
+            'subscriptions' => [],
+            'error' => null,
+        ];
+
+        try {
+            $api_response = $this->api_client->getWebhookSubscriptions();
+            $subscriptions = $this->normalizeWebhookSubscriptionsResponse($api_response);
+            $result['subscriptions'] = $subscriptions;
+
+            foreach ($subscriptions as $subscription) {
+                $sub_topics = $this->normalizeSubscriptionTopics($subscription);
+                $missing = array_values(array_diff($required_topics, $sub_topics));
+                if (empty($missing)) {
+                    $result['has_required_subscription'] = true;
+                    $result['missing_topics'] = [];
+                    $result['matched_subscription'] = $subscription;
+
+                    return $result;
+                }
+            }
+        } catch (Exception $e) {
+            $result['error'] = $e->getMessage();
+            $this->logger->log('Error checking webhook subscriptions: ' . $e->getMessage(), 'error');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Lista suscripciones webhook-sub con metadatos normalizados para UI.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    public function getWebhookSubscriptionsDetailed()
+    {
+        $out = [];
+        $api_response = $this->api_client->getWebhookSubscriptions();
+        $subscriptions = $this->normalizeWebhookSubscriptionsResponse($api_response);
+        foreach ($subscriptions as $subscription) {
+            $id = $this->extractWebhookSubscriptionId($subscription);
+            $topics = $this->normalizeSubscriptionTopics($subscription);
+            $is_active = true;
+            if (array_key_exists('is_active', $subscription)) {
+                $is_active = (bool) $subscription['is_active'];
+            } elseif (array_key_exists('active', $subscription)) {
+                $is_active = (bool) $subscription['active'];
+            }
+
+            $out[] = [
+                'id' => $id ? (string) $id : '',
+                'url' => isset($subscription['url']) ? (string) $subscription['url'] : '',
+                'topics' => $topics,
+                'is_active' => $is_active,
+                'raw' => $subscription,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Habilita o deshabilita una configuración completa de suscripción.
+     *
+     * @param string|int $subscription_id
+     * @param bool $enabled
+     * @return array{success:bool,message:string}
+     */
+    public function toggleWebhookConfiguration($subscription_id, $enabled)
+    {
+        $sub = $this->findWebhookSubscriptionById($subscription_id);
+        if (!$sub) {
+            return ['success' => false, 'message' => 'No se encontró la configuración indicada'];
+        }
+
+        $payload = [
+            'url' => (string) ($sub['url'] ?? $this->getWebhookUrl()),
+            'topics' => $this->normalizeSubscriptionTopics($sub),
+            'is_active' => (bool) $enabled,
+        ];
+        $response = $this->api_client->updateWebhookSubscription((int) $subscription_id, $payload);
+        $ok = is_array($response) && !empty($response['success']);
+        if (!$ok) {
+            $msg = $this->extractResponseMessage($response);
+            if ($msg === '') {
+                $msg = 'No se pudo actualizar el estado de la configuración';
+            }
+
+            return ['success' => false, 'message' => $msg];
+        }
+
+        return [
+            'success' => true,
+            'message' => $enabled ? 'Configuración habilitada' : 'Configuración deshabilitada',
+        ];
+    }
+
+    /**
+     * Elimina por completo una suscripción/configuración de webhook en Yuju.
+     *
+     * Distinto a `toggleWebhookConfiguration(... false)`: aquí se BORRA el registro
+     * en Yuju (DELETE /webhook-sub/{id}) y deja de existir, no solo se desactiva.
+     *
+     * @param string|int $subscription_id
+     * @return array{success:bool,message:string}
+     */
+    public function deleteWebhookConfiguration($subscription_id)
+    {
+        $sid = (int) $subscription_id;
+        if ($sid <= 0) {
+            return ['success' => false, 'message' => 'ID de configuración inválido'];
+        }
+
+        $sub = $this->findWebhookSubscriptionById($subscription_id);
+        if (!$sub) {
+            return ['success' => false, 'message' => 'No se encontró la configuración indicada'];
+        }
+
+        $response = $this->api_client->deleteWebhookSubscription($sid);
+        $ok = is_array($response) && !empty($response['success']);
+        if (!$ok) {
+            $msg = $this->extractResponseMessage($response);
+            if ($msg === '') {
+                $msg = 'No se pudo eliminar la configuración';
+            }
+
+            return ['success' => false, 'message' => $msg];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Configuración eliminada de Yuju',
+        ];
+    }
+
+    /**
+     * Habilita o deshabilita un topic dentro de una suscripción.
+     *
+     * @param string|int $subscription_id
+     * @param string $topic
+     * @param bool $enabled
+     * @return array{success:bool,message:string}
+     */
+    public function toggleWebhookTopic($subscription_id, $topic, $enabled)
+    {
+        $sub = $this->findWebhookSubscriptionById($subscription_id);
+        if (!$sub) {
+            return ['success' => false, 'message' => 'No se encontró la configuración indicada'];
+        }
+
+        $topic = str_replace('_', '-', strtolower(trim((string) $topic)));
+        if ($topic === '') {
+            return ['success' => false, 'message' => 'Topic inválido'];
+        }
+
+        $topics = $this->normalizeSubscriptionTopics($sub);
+        if ($enabled) {
+            if (!in_array($topic, $topics, true)) {
+                $topics[] = $topic;
+            }
+        } else {
+            $topics = array_values(array_filter($topics, static function ($t) use ($topic) {
+                return $t !== $topic;
+            }));
+        }
+
+        $payload = [
+            'url' => (string) ($sub['url'] ?? $this->getWebhookUrl()),
+            'topics' => array_values(array_unique($topics)),
+            'is_active' => array_key_exists('is_active', $sub) ? (bool) $sub['is_active'] : true,
+        ];
+
+        $response = $this->api_client->updateWebhookSubscription((int) $subscription_id, $payload);
+        $ok = is_array($response) && !empty($response['success']);
+        if (!$ok) {
+            $msg = $this->extractResponseMessage($response);
+            if ($msg === '') {
+                $msg = 'No se pudo actualizar el topic';
+            }
+
+            return ['success' => false, 'message' => $msg];
+        }
+
+        return [
+            'success' => true,
+            'message' => $enabled ? 'Webhook habilitado' : 'Webhook deshabilitado',
+        ];
+    }
+
+    /**
+     * @param string|int $subscription_id
+     * @return array<string,mixed>|null
+     */
+    protected function findWebhookSubscriptionById($subscription_id)
+    {
+        $target = trim((string) $subscription_id);
+        if ($target === '') {
+            return null;
+        }
+        $all = $this->getWebhookSubscriptionsDetailed();
+        foreach ($all as $sub) {
+            if ((string) ($sub['id'] ?? '') === $target) {
+                return isset($sub['raw']) && is_array($sub['raw']) ? $sub['raw'] : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param mixed $api_response
+     * @return array<int, array<string,mixed>>
+     */
+    protected function normalizeWebhookSubscriptionsResponse($api_response)
+    {
+        if (!is_array($api_response)) {
+            return [];
+        }
+
+        // Formato típico: ['data' => [ ...subs... ]]
+        if (isset($api_response['data']) && is_array($api_response['data'])) {
+            $data = $api_response['data'];
+            if (isset($data[0]) && is_array($data[0])) {
+                return $data;
+            }
+            // Caso: data es una sola suscripción
+            if (isset($data['id']) || isset($data['topics']) || isset($data['url'])) {
+                return [$data];
+            }
+        }
+
+        // Caso: array de suscripciones directo
+        if (isset($api_response[0]) && is_array($api_response[0])) {
+            return $api_response;
+        }
+
+        // Caso: una sola suscripción
+        if (isset($api_response['id']) || isset($api_response['topics']) || isset($api_response['url'])) {
+            return [$api_response];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $subscription
+     * @return array<int, string>
+     */
+    protected function normalizeSubscriptionTopics(array $subscription)
+    {
+        $topics = [];
+
+        if (isset($subscription['topics']) && is_array($subscription['topics'])) {
+            $topics = $subscription['topics'];
+        } elseif (isset($subscription['topic']) && is_string($subscription['topic'])) {
+            $topics = [$subscription['topic']];
+        }
+
+        $normalized = [];
+        foreach ($topics as $topic) {
+            if (!is_string($topic)) {
+                continue;
+            }
+            $t = strtolower(trim($topic));
+            if ($t === '') {
+                continue;
+            }
+            $normalized[] = str_replace('_', '-', $t);
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     /**

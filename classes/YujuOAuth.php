@@ -41,11 +41,60 @@ class YujuOAuth extends ObjectModel
     {
         $environment = YujuConfig::get('YUJU_ENVIRONMENT', 'sandbox');
         $this->auth_url = ($environment === 'production') ? self::PRODUCTION_AUTH_URL : self::SANDBOX_AUTH_URL;
+        $this->logger = new YujuLogger();
         
         $this->client_id = YujuConfig::get('YUJU_CLIENT_ID');
         $this->client_secret = YujuConfig::get('YUJU_CLIENT_SECRET');
         $this->redirect_uri = $this->getRedirectUri();
-        $this->logger = new YujuLogger();
+
+        // Compatibilidad con configuraciones legacy: algunas pantallas guardan
+        // en llaves YUJU_API_* o en Configuration de PrestaShop.
+        if (empty($this->client_id) || empty($this->client_secret)) {
+            $legacy_client_id = YujuConfig::get('YUJU_API_CLIENT_ID');
+            $legacy_client_secret = YujuConfig::get('YUJU_API_CLIENT_SECRET');
+
+            if (!empty($legacy_client_id) && !empty($legacy_client_secret)) {
+                $this->client_id = $legacy_client_id;
+                $this->client_secret = $legacy_client_secret;
+            }
+        }
+
+        if ((empty($this->client_id) || empty($this->client_secret)) && class_exists('Configuration')) {
+            $config_client_id = Configuration::get('YUJU_CLIENT_ID');
+            $config_client_secret = Configuration::get('YUJU_CLIENT_SECRET');
+
+            if (!empty($config_client_id) && !empty($config_client_secret)) {
+                $this->client_id = $config_client_id;
+                $this->client_secret = $config_client_secret;
+            }
+        }
+
+        // Fallback: si YujuConfig no tiene credenciales, intentar recuperarlas desde la tabla OAuth.
+        if (empty($this->client_id) || empty($this->client_secret)) {
+            try {
+                $row = Db::getInstance()->getRow(
+                    'SELECT client_id, client_secret
+                     FROM `' . _DB_PREFIX_ . 'yuju_oauth_tokens`
+                     ORDER BY id DESC'
+                );
+
+                if (!empty($row['client_id']) && !empty($row['client_secret'])) {
+                    $this->client_id = $row['client_id'];
+                    $this->client_secret = $row['client_secret'];
+
+                    // Persistir en múltiples llaves para evitar fallos futuros en OAuth.
+                    $this->persistCredentials($this->client_id, $this->client_secret);
+                }
+            } catch (Exception $e) {
+                $this->logger->log('error', 'No se pudieron recuperar credenciales OAuth desde BD', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (!empty($this->client_id) && !empty($this->client_secret)) {
+            $this->persistCredentials($this->client_id, $this->client_secret);
+        }
     }
 
     /**
@@ -59,6 +108,8 @@ class YujuOAuth extends ObjectModel
 
         $oauth_state = $state ?: $this->generateState();
         YujuConfig::set('YUJU_OAUTH_STATE', $oauth_state);
+        YujuConfig::set('YUJU_OAUTH_PENDING_CLIENT_ID', $this->client_id);
+        YujuConfig::set('YUJU_OAUTH_PENDING_CLIENT_SECRET', $this->client_secret);
 
         $params = [
             'client_id' => $this->client_id,
@@ -74,8 +125,14 @@ class YujuOAuth extends ObjectModel
      */
     public function exchangeCodeForToken($code, $state = null)
     {
+        $this->hydrateCredentialsFromStorage();
+
         if (!$this->isConfigured()) {
-            return $this->createErrorResponse('Credenciales OAuth no configuradas');
+            $diagnostics = $this->buildCredentialDiagnostics();
+            $this->logger->log('error', 'Credenciales OAuth no configuradas durante callback', $diagnostics);
+            return $this->createErrorResponse('Credenciales OAuth no configuradas', null, [
+                'credential_diagnostics' => $diagnostics,
+            ]);
         }
 
         $data = [
@@ -585,7 +642,7 @@ class YujuOAuth extends ObjectModel
         return $link->getModuleLink('prestashopyuju', 'oauth', [], true);
     }
 
-    private function createErrorResponse($message, $http_code = null)
+    private function createErrorResponse($message, $http_code = null, $debug = null)
     {
         $response = [
             'success' => false,
@@ -595,7 +652,183 @@ class YujuOAuth extends ObjectModel
         if ($http_code) {
             $response['http_code'] = $http_code;
         }
+
+        if (is_array($debug) && !empty($debug)) {
+            $response['debug'] = $debug;
+        }
         
         return $response;
+    }
+
+    private function buildCredentialDiagnostics()
+    {
+        $source_config = [
+            'yuju_client_id' => YujuConfig::get('YUJU_CLIENT_ID'),
+            'yuju_client_secret' => YujuConfig::get('YUJU_CLIENT_SECRET'),
+            'yuju_api_client_id' => YujuConfig::get('YUJU_API_CLIENT_ID'),
+            'yuju_api_client_secret' => YujuConfig::get('YUJU_API_CLIENT_SECRET'),
+            'yuju_oauth_pending_client_id' => YujuConfig::get('YUJU_OAUTH_PENDING_CLIENT_ID'),
+            'yuju_oauth_pending_client_secret' => YujuConfig::get('YUJU_OAUTH_PENDING_CLIENT_SECRET'),
+        ];
+
+        $source_ps = [
+            'yuju_client_id' => class_exists('Configuration') ? Configuration::get('YUJU_CLIENT_ID') : null,
+            'yuju_client_secret' => class_exists('Configuration') ? Configuration::get('YUJU_CLIENT_SECRET') : null,
+        ];
+
+        $source_custom_table = [
+            'yuju_client_id' => null,
+            'yuju_client_secret' => null,
+            'yuju_api_client_id' => null,
+            'yuju_api_client_secret' => null,
+        ];
+
+        $source_oauth_table = [
+            'client_id' => null,
+            'client_secret' => null,
+        ];
+
+        try {
+            $source_custom_table['yuju_client_id'] = Db::getInstance()->getValue(
+                'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` = \'YUJU_CLIENT_ID\''
+            );
+            $source_custom_table['yuju_client_secret'] = Db::getInstance()->getValue(
+                'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` = \'YUJU_CLIENT_SECRET\''
+            );
+            $source_custom_table['yuju_api_client_id'] = Db::getInstance()->getValue(
+                'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` = \'YUJU_API_CLIENT_ID\''
+            );
+            $source_custom_table['yuju_api_client_secret'] = Db::getInstance()->getValue(
+                'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` = \'YUJU_API_CLIENT_SECRET\''
+            );
+        } catch (Exception $e) {
+            $source_custom_table['error'] = $e->getMessage();
+        }
+
+        try {
+            $oauth_row = Db::getInstance()->getRow(
+                'SELECT client_id, client_secret FROM `' . _DB_PREFIX_ . 'yuju_oauth_tokens` ORDER BY id DESC'
+            );
+            if (is_array($oauth_row)) {
+                $source_oauth_table['client_id'] = $oauth_row['client_id'] ?? null;
+                $source_oauth_table['client_secret'] = $oauth_row['client_secret'] ?? null;
+            }
+        } catch (Exception $e) {
+            $source_oauth_table['error'] = $e->getMessage();
+        }
+
+        return [
+            'runtime' => [
+                'is_configured' => $this->isConfigured(),
+                'client_id_current' => $this->maskValue($this->client_id),
+                'client_secret_current' => $this->maskValue($this->client_secret),
+                'client_id_length' => is_string($this->client_id) ? strlen($this->client_id) : 0,
+                'client_secret_length' => is_string($this->client_secret) ? strlen($this->client_secret) : 0,
+            ],
+            'sources' => [
+                'yuju_config' => $this->summarizeSource($source_config),
+                'prestashop_configuration' => $this->summarizeSource($source_ps),
+                'yuju_configuration_table' => $this->summarizeSource($source_custom_table),
+                'yuju_oauth_tokens_table' => $this->summarizeSource($source_oauth_table),
+            ],
+        ];
+    }
+
+    private function summarizeSource($values)
+    {
+        $summary = [];
+
+        foreach ($values as $key => $value) {
+            if ($key === 'error') {
+                $summary[$key] = $value;
+                continue;
+            }
+
+            $summary[$key] = [
+                'exists' => !empty($value),
+                'length' => is_string($value) ? strlen($value) : 0,
+                'masked' => $this->maskValue($value),
+            ];
+        }
+
+        return $summary;
+    }
+
+    private function maskValue($value)
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        $len = strlen($value);
+        if ($len <= 6) {
+            return str_repeat('*', $len);
+        }
+
+        return substr($value, 0, 3) . str_repeat('*', $len - 6) . substr($value, -3);
+    }
+
+    private function persistCredentials($client_id, $client_secret)
+    {
+        YujuConfig::set('YUJU_CLIENT_ID', $client_id);
+        YujuConfig::set('YUJU_CLIENT_SECRET', $client_secret);
+        YujuConfig::set('YUJU_API_CLIENT_ID', $client_id);
+        YujuConfig::set('YUJU_API_CLIENT_SECRET', $client_secret);
+
+        if (class_exists('Configuration')) {
+            Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
+            Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
+        }
+    }
+
+    private function hydrateCredentialsFromStorage()
+    {
+        if (!empty($this->client_id) && !empty($this->client_secret)) {
+            return;
+        }
+
+        try {
+            // Fallback robusto sin depender del contexto de tienda.
+            $id_from_ps = Db::getInstance()->getValue(
+                'SELECT `value` FROM `' . _DB_PREFIX_ . 'configuration` WHERE `name` = \'YUJU_CLIENT_ID\' ORDER BY `id_configuration` DESC'
+            );
+            $secret_from_ps = Db::getInstance()->getValue(
+                'SELECT `value` FROM `' . _DB_PREFIX_ . 'configuration` WHERE `name` = \'YUJU_CLIENT_SECRET\' ORDER BY `id_configuration` DESC'
+            );
+
+            if (empty($id_from_ps) || empty($secret_from_ps)) {
+                $id_from_custom = Db::getInstance()->getValue(
+                    'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` IN (\'YUJU_CLIENT_ID\', \'YUJU_API_CLIENT_ID\') ORDER BY `updated_at` DESC'
+                );
+                $secret_from_custom = Db::getInstance()->getValue(
+                    'SELECT `config_value` FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE `config_key` IN (\'YUJU_CLIENT_SECRET\', \'YUJU_API_CLIENT_SECRET\') ORDER BY `updated_at` DESC'
+                );
+
+                if (!empty($id_from_custom) && !empty($secret_from_custom)) {
+                    $id_from_ps = $id_from_custom;
+                    $secret_from_ps = $secret_from_custom;
+                }
+            }
+
+            if (empty($id_from_ps) || empty($secret_from_ps)) {
+                $pending_id = YujuConfig::get('YUJU_OAUTH_PENDING_CLIENT_ID');
+                $pending_secret = YujuConfig::get('YUJU_OAUTH_PENDING_CLIENT_SECRET');
+
+                if (!empty($pending_id) && !empty($pending_secret)) {
+                    $id_from_ps = $pending_id;
+                    $secret_from_ps = $pending_secret;
+                }
+            }
+
+            if (!empty($id_from_ps) && !empty($secret_from_ps)) {
+                $this->client_id = $id_from_ps;
+                $this->client_secret = $secret_from_ps;
+                $this->persistCredentials($this->client_id, $this->client_secret);
+            }
+        } catch (Exception $e) {
+            $this->logger->log('warning', 'No se pudo hidratar credenciales OAuth desde storage', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

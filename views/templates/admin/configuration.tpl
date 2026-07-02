@@ -38,6 +38,30 @@
                 <i class="icon-warning"></i>
                 No conectado a la API de Yuju. Por favor configure sus credenciales y autorice la conexión.
             </div>
+
+            <div class="panel panel-default" style="margin-bottom: 20px;">
+                <div class="panel-heading" role="tab" id="yujuConnectionGuideHeading">
+                    <h4 class="panel-title" style="margin: 0;">
+                        <a role="button" data-toggle="collapse" href="#yujuConnectionGuide" aria-expanded="false" aria-controls="yujuConnectionGuide" style="display: block; text-decoration: none;">
+                            <i class="icon-book"></i> Ver tutorial de conexión Yuju + PrestaShop
+                        </a>
+                    </h4>
+                </div>
+                <div id="yujuConnectionGuide" class="panel-collapse collapse" role="tabpanel" aria-labelledby="yujuConnectionGuideHeading">
+                    <div class="panel-body">
+                        <p style="margin-bottom: 12px;"><strong>Paso a paso para conectar correctamente:</strong></p>
+                        <ol style="padding-left: 18px; margin-bottom: 0;">
+                            <li style="margin-bottom: 8px;"><strong>En Yuju:</strong> Ingrese al panel de desarrollador y cree una aplicación nueva.</li>
+                            <li style="margin-bottom: 8px;"><strong>En Yuju:</strong> Complete los campos de la app usando los valores sugeridos en esta pantalla (Nombre, URL del sitio, URL de términos, URL de redirección y webhook).</li>
+                            <li style="margin-bottom: 8px;"><strong>En Yuju:</strong> Guarde la app y copie el <strong>Client ID</strong> y el <strong>Client Secret</strong>.</li>
+                            <li style="margin-bottom: 8px;"><strong>En PrestaShop (este módulo):</strong> Pegue el <strong>ID de Cliente</strong> y el <strong>Secreto de Cliente</strong>.</li>
+                            <li style="margin-bottom: 8px;"><strong>En PrestaShop:</strong> Pulse <strong>Guardar</strong> para persistir credenciales en la base de datos.</li>
+                            <li style="margin-bottom: 8px;"><strong>Conexión OAuth:</strong> Después de guardar, pulse el botón de autorización OAuth y acepte permisos en Yuju.</li>
+                            <li style="margin-bottom: 8px;"><strong>Verificación:</strong> Al finalizar, el módulo mostrará estado conectado y habilitará las secciones de pruebas de conectividad/productos.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
         {/if}
         
         {if isset($api_test_result)}
@@ -84,23 +108,6 @@
                                 </span>
                             </div>
                             <p class="help-block">Nombre sugerido para identificar esta integracion en Yuju.</p>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Tipo de aplicacion
-                        </label>
-                        <div class="col-lg-9">
-                            <div class="input-group">
-                                <input type="text" class="form-control" value="{$yuju_app_setup.app_type|escape:'html':'UTF-8'}" readonly id="app_type">
-                                <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.app_type|escape:'html':'UTF-8'}">
-                                        <i class="icon-copy"></i> Copiar
-                                    </button>
-                                </span>
-                            </div>
-                            <p class="help-block">En Yuju seleccione este tipo para integraciones de tienda.</p>
                         </div>
                     </div>
 
@@ -155,23 +162,6 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Icono (referencia)
-                        </label>
-                        <div class="col-lg-9">
-                            <div class="input-group">
-                                <input type="text" class="form-control" value="{$yuju_app_setup.icon_hint|escape:'html':'UTF-8'}" readonly id="icon_hint">
-                                <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_app_setup.icon_hint|escape:'html':'UTF-8'}">
-                                        <i class="icon-copy"></i> Copiar
-                                    </button>
-                                </span>
-                            </div>
-                            <p class="help-block">El campo icono en Yuju es de carga manual. Recomendado: PNG cuadrado.</p>
-                        </div>
-                    </div>
-                    
                     <div class="form-group">
                         <label class="control-label col-lg-3">
                             URL de Términos y Condiciones
@@ -288,6 +278,11 @@
                                 </span>
                             </div>
                             <p class="help-block">Configure este comando para ejecutarse cada 5 minutos en su servidor</p>
+                            {if isset($oauth_status) && $oauth_status.configured && $oauth_status.has_token && $oauth_status.is_connected && isset($config.YUJU_CLIENT_ID) && $config.YUJU_CLIENT_ID|trim != '' && isset($config.YUJU_CLIENT_SECRET) && $config.YUJU_CLIENT_SECRET|trim != ''}
+                                <button type="button" id="yuju-open-cron-manager" class="btn btn-info btn-sm" style="margin-top:8px;" onclick="return openCronManagerModal();">
+                                    <i class="icon-time"></i> Administrar crons
+                                </button>
+                            {/if}
                         </div>
                     </div>
                     
@@ -312,31 +307,269 @@
                     </div>
                     
 
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Conectividad
-                        </label>
-                        <div class="col-lg-9">
-                            <button type="button" id="yuju-test-connectivity" class="btn btn-info">
-                                <i class="icon-plug"></i> Probar Conectividad
-                            </button>
-                            <p class="help-block">Probar la conexión con la API de Yuju y mostrar las tiendas disponibles</p>
-                            <div id="connectivity-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                    {if (isset($yuju_hooks_status) && is_array($yuju_hooks_status) && count($yuju_hooks_status) > 0) || (isset($yuju_tables_status) && is_array($yuju_tables_status) && count($yuju_tables_status) > 0)}
+                        <div class="form-group">
+                            <label class="control-label col-lg-3">
+                                Diagnóstico del módulo
+                            </label>
+                            <div class="col-lg-9">
+                                <style>
+                                    .yuju-diag { border: 1px solid #e1e5ea; border-radius: 6px; overflow: hidden; background: #fff; }
+                                    .yuju-diag-item { border-bottom: 1px solid #eef0f3; }
+                                    .yuju-diag-item:last-child { border-bottom: 0; }
+                                    .yuju-diag-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; user-select: none; line-height: 1.4; background: #fff; transition: background-color 0.15s ease; }
+                                    .yuju-diag-head:hover { background: #f7f9fc; }
+                                    .yuju-diag-head .yuju-diag-left { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #2c3e50; font-size: 13px; }
+                                    .yuju-diag-head .yuju-diag-left i.icon-main { color: #7b8a9a; font-size: 14px; }
+                                    .yuju-diag-head .yuju-diag-right { display: inline-flex; align-items: center; gap: 8px; }
+                                    .yuju-diag-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; line-height: 1.4; }
+                                    .yuju-diag-pill.ok { background: #e8f5e9; color: #2e7d32; }
+                                    .yuju-diag-pill.warn { background: #fff3cd; color: #8a6d3b; }
+                                    .yuju-diag-pill i { font-size: 10px; }
+                                    .yuju-diag-caret { color: #9aa5b1; font-size: 11px; transition: transform 0.2s ease; }
+                                    .yuju-diag-head[aria-expanded="true"] .yuju-diag-caret { transform: rotate(180deg); }
+                                    .yuju-diag-body { padding: 10px 12px 12px; background: #fafbfc; border-top: 1px solid #eef0f3; }
+                                    #yuju-hooks-panel .yuju-hooks-toolbar,
+                                    #yuju-tables-panel .yuju-tables-toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+                                    #yuju-hooks-panel .yuju-hooks-summary,
+                                    #yuju-tables-panel .yuju-tables-summary { display: none; }
+                                    #yuju-hooks-panel .yuju-hooks-table,
+                                    #yuju-tables-panel .yuju-tables-table { margin-bottom: 6px; font-size: 12px; }
+                                    #yuju-hooks-panel .yuju-hooks-table > thead > tr > th,
+                                    #yuju-hooks-panel .yuju-hooks-table > tbody > tr > td,
+                                    #yuju-tables-panel .yuju-tables-table > thead > tr > th,
+                                    #yuju-tables-panel .yuju-tables-table > tbody > tr > td { padding: 5px 8px; vertical-align: middle; }
+                                    #yuju-hooks-panel .yuju-hooks-table tbody tr.warning,
+                                    #yuju-tables-panel .yuju-tables-table tbody tr.warning { background-color: #fcf8e3; }
+                                    #yuju-hooks-panel .yuju-hooks-table code,
+                                    #yuju-tables-panel .yuju-tables-table code { background: transparent; padding: 0; }
+                                    #yuju-hooks-panel .table-responsive,
+                                    #yuju-tables-panel .table-responsive { margin-top: 0 !important; }
+                                    .yuju-diag-body .help-block { margin: 4px 0 0; font-size: 11px; }
+                                </style>
+
+                                <div class="yuju-diag" id="yuju-system-accordion" role="tablist">
+
+                                    {if isset($yuju_hooks_status) && is_array($yuju_hooks_status) && count($yuju_hooks_status) > 0}
+                                        <div class="yuju-diag-item">
+                                            <div class="yuju-diag-head" role="tab" id="yuju-acc-hooks-heading"
+                                                 data-toggle="collapse" data-target="#yuju-acc-hooks-body"
+                                                 aria-expanded="{if !$yuju_hooks_all_active}true{else}false{/if}" aria-controls="yuju-acc-hooks-body">
+                                                <span class="yuju-diag-left">
+                                                    <i class="icon-cogs icon-main"></i>
+                                                    Hooks de PrestaShop
+                                                </span>
+                                                <span class="yuju-diag-right yuju-acc-status">
+                                                    {if $yuju_hooks_all_active}
+                                                        <span class="yuju-diag-pill ok"><i class="icon-check"></i> Todos activos</span>
+                                                    {else}
+                                                        <span class="yuju-diag-pill warn"><i class="icon-warning"></i> Hay inactivos</span>
+                                                    {/if}
+                                                    <i class="icon-chevron-down yuju-diag-caret"></i>
+                                                </span>
+                                            </div>
+                                            <div id="yuju-acc-hooks-body" class="collapse {if !$yuju_hooks_all_active}in{/if}" role="tabpanel" aria-labelledby="yuju-acc-hooks-heading">
+                                                <div class="yuju-diag-body">
+                                                    <div id="yuju-hooks-panel" class="yuju-hooks-panel"
+                                                         data-ajax-url="{$ajax_url|escape:'html':'UTF-8'}"
+                                                         data-token="{$token|escape:'html':'UTF-8'}">
+                                                        <div class="yuju-hooks-toolbar">
+                                                            <span class="yuju-hooks-summary">
+                                                                {if $yuju_hooks_all_active}
+                                                                    <span class="label label-success"><i class="icon-check"></i> Todos los hooks activos</span>
+                                                                {else}
+                                                                    <span class="label label-warning"><i class="icon-warning"></i> Hay hooks inactivos</span>
+                                                                {/if}
+                                                            </span>
+                                                            <span class="yuju-hooks-actions">
+                                                                <button type="button" class="btn btn-default btn-sm" id="yuju-hooks-refresh">
+                                                                    <i class="icon-refresh"></i> Recargar estado
+                                                                </button>
+                                                                <button type="button" class="btn btn-primary btn-sm" id="yuju-hooks-activate-all" {if $yuju_hooks_all_active}style="display:none;"{/if}>
+                                                                    <i class="icon-bolt"></i> Activar todos los inactivos
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div class="table-responsive" style="margin-top:10px;">
+                                                            <table class="table table-striped table-condensed yuju-hooks-table" id="yuju-hooks-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th style="width: 35%;">Hook</th>
+                                                                        <th>Descripción</th>
+                                                                        <th class="text-center" style="width: 110px;">Estado</th>
+                                                                        <th class="text-center" style="width: 140px;">Acción</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {foreach from=$yuju_hooks_status item=hook_row}
+                                                                        <tr data-hook-name="{$hook_row.name|escape:'html':'UTF-8'}" class="{if !$hook_row.registered}warning{/if}">
+                                                                            <td>
+                                                                                <strong>{$hook_row.label|escape:'html':'UTF-8'}</strong>
+                                                                                {if $hook_row.critical}
+                                                                                    <span class="label label-danger" style="margin-left:6px;" title="Hook crítico para la integración">Crítico</span>
+                                                                                {/if}
+                                                                                <br>
+                                                                                <code class="text-muted" style="font-size:11px;">{$hook_row.name|escape:'html':'UTF-8'}</code>
+                                                                            </td>
+                                                                            <td class="text-muted">
+                                                                                {$hook_row.description|escape:'html':'UTF-8'}
+                                                                            </td>
+                                                                            <td class="text-center yuju-hook-status-cell">
+                                                                                {if $hook_row.registered}
+                                                                                    <span class="label label-success"><i class="icon-check"></i> Activo</span>
+                                                                                {else}
+                                                                                    <span class="label label-default"><i class="icon-remove"></i> Inactivo</span>
+                                                                                {/if}
+                                                                            </td>
+                                                                            <td class="text-center yuju-hook-action-cell">
+                                                                                {if !$hook_row.registered}
+                                                                                    <button type="button" class="btn btn-success btn-xs yuju-hook-activate-btn" data-hook="{$hook_row.name|escape:'html':'UTF-8'}">
+                                                                                        <i class="icon-power-off"></i> Activar
+                                                                                    </button>
+                                                                                {else}
+                                                                                    <span class="text-muted small">—</span>
+                                                                                {/if}
+                                                                            </td>
+                                                                        </tr>
+                                                                    {/foreach}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                        <p class="help-block" style="margin-top:8px;">
+                                                            Estos hooks permiten que PrestaShop notifique al módulo Yuju cuando cambian productos, stock, pedidos o categorías. Si alguno está inactivo, los cambios no se enviarán automáticamente a Yuju.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {/if}
+
+                                    {if isset($yuju_tables_status) && is_array($yuju_tables_status) && count($yuju_tables_status) > 0}
+                                        <div class="yuju-diag-item">
+                                            <div class="yuju-diag-head" role="tab" id="yuju-acc-tables-heading"
+                                                 data-toggle="collapse" data-target="#yuju-acc-tables-body"
+                                                 aria-expanded="{if !$yuju_tables_all_present}true{else}false{/if}" aria-controls="yuju-acc-tables-body">
+                                                <span class="yuju-diag-left">
+                                                    <i class="icon-database icon-main"></i>
+                                                    Tablas del módulo
+                                                </span>
+                                                <span class="yuju-diag-right yuju-acc-status">
+                                                    {if $yuju_tables_all_present}
+                                                        <span class="yuju-diag-pill ok"><i class="icon-check"></i> Todas presentes</span>
+                                                    {else}
+                                                        <span class="yuju-diag-pill warn"><i class="icon-warning"></i> Faltan tablas</span>
+                                                    {/if}
+                                                    <i class="icon-chevron-down yuju-diag-caret"></i>
+                                                </span>
+                                            </div>
+                                            <div id="yuju-acc-tables-body" class="collapse {if !$yuju_tables_all_present}in{/if}" role="tabpanel" aria-labelledby="yuju-acc-tables-heading">
+                                                <div class="yuju-diag-body">
+                                                    <div id="yuju-tables-panel" class="yuju-tables-panel"
+                                                         data-ajax-url="{$ajax_url|escape:'html':'UTF-8'}"
+                                                         data-token="{$token|escape:'html':'UTF-8'}">
+                                                        <div class="yuju-tables-toolbar">
+                                                            <span class="yuju-tables-summary">
+                                                                {if $yuju_tables_all_present}
+                                                                    <span class="label label-success"><i class="icon-check"></i> Todas las tablas presentes</span>
+                                                                {else}
+                                                                    <span class="label label-warning"><i class="icon-warning"></i> Faltan tablas requeridas</span>
+                                                                {/if}
+                                                            </span>
+                                                            <span class="yuju-tables-actions">
+                                                                <button type="button" class="btn btn-default btn-sm" id="yuju-tables-refresh">
+                                                                    <i class="icon-refresh"></i> Recargar estado
+                                                                </button>
+                                                                <button type="button" class="btn btn-primary btn-sm" id="yuju-tables-create-all" {if $yuju_tables_all_present}style="display:none;"{/if}>
+                                                                    <i class="icon-magic"></i> Crear tablas faltantes
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div class="table-responsive" style="margin-top:10px;">
+                                                            <table class="table table-striped table-condensed yuju-tables-table" id="yuju-tables-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th style="width: 35%;">Tabla</th>
+                                                                        <th>Descripción</th>
+                                                                        <th class="text-center" style="width: 110px;">Estado</th>
+                                                                        <th class="text-center" style="width: 140px;">Acción</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {foreach from=$yuju_tables_status item=table_row}
+                                                                        <tr data-table-name="{$table_row.name|escape:'html':'UTF-8'}" class="{if !$table_row.exists}warning{/if}">
+                                                                            <td>
+                                                                                <strong>{$table_row.label|escape:'html':'UTF-8'}</strong>
+                                                                                {if $table_row.critical}
+                                                                                    <span class="label label-danger" style="margin-left:6px;" title="Tabla crítica para la integración">Crítica</span>
+                                                                                {/if}
+                                                                                <br>
+                                                                                <code class="text-muted" style="font-size:11px;">{$table_row.full_name|escape:'html':'UTF-8'}</code>
+                                                                            </td>
+                                                                            <td class="text-muted">
+                                                                                {$table_row.description|escape:'html':'UTF-8'}
+                                                                            </td>
+                                                                            <td class="text-center yuju-table-status-cell">
+                                                                                {if $table_row.exists}
+                                                                                    <span class="label label-success"><i class="icon-check"></i> Existe</span>
+                                                                                {else}
+                                                                                    <span class="label label-default"><i class="icon-remove"></i> No existe</span>
+                                                                                {/if}
+                                                                            </td>
+                                                                            <td class="text-center yuju-table-action-cell">
+                                                                                {if !$table_row.exists}
+                                                                                    <button type="button" class="btn btn-success btn-xs yuju-table-create-btn" data-table="{$table_row.name|escape:'html':'UTF-8'}">
+                                                                                        <i class="icon-plus"></i> Crear
+                                                                                    </button>
+                                                                                {else}
+                                                                                    <span class="text-muted small">—</span>
+                                                                                {/if}
+                                                                            </td>
+                                                                        </tr>
+                                                                    {/foreach}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                        <p class="help-block" style="margin-top:8px;">
+                                                            Estas tablas son creadas durante la instalación del módulo. Si alguna falta (por instalación parcial, restore de BD u otro motivo), use el botón <strong>Crear</strong> de la fila correspondiente o <strong>Crear tablas faltantes</strong> para crearlas todas a la vez.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {/if}
+
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            Prueba de Productos
-                        </label>
-                        <div class="col-lg-9">
-                            <button type="button" id="yuju-test-products" class="btn btn-success">
-                                <i class="icon-shopping-cart"></i> Probar API de Productos
-                            </button>
-                            <p class="help-block">Probar los endpoints de productos: ofertas, fichas técnicas y actualización masiva</p>
-                            <div id="products-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                    {/if}
+
+                    {if isset($oauth_status) && $oauth_status.configured && $oauth_status.has_token && $oauth_status.is_connected}
+                        <div class="form-group">
+                            <label class="control-label col-lg-3">
+                                Conectividad
+                            </label>
+                            <div class="col-lg-9">
+                                <button type="button" id="yuju-test-connectivity" class="btn btn-info">
+                                    <i class="icon-plug"></i> Probar Conectividad
+                                </button>
+                                <p class="help-block">Probar la conexión con la API de Yuju y mostrar las tiendas disponibles</p>
+                                <div id="connectivity-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                            </div>
                         </div>
-                    </div>
+                        
+                        <div class="form-group">
+                            <label class="control-label col-lg-3">
+                                Prueba de Productos
+                            </label>
+                            <div class="col-lg-9">
+                                <button type="button" id="yuju-test-products" class="btn btn-success">
+                                    <i class="icon-shopping-cart"></i> Probar API de Productos
+                                </button>
+                                <p class="help-block">Probar los endpoints de productos: ofertas, fichas técnicas y actualización masiva</p>
+                                <div id="products-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                            </div>
+                        </div>
+                    {/if}
                 </div>
             </div>
             
@@ -613,27 +846,79 @@
                 <button type="submit" value="1" id="configuration_form_submit_btn" name="submitConfiguration" class="btn btn-default pull-right">
                     <i class="process-icon-save"></i> Guardar
                 </button>
-                
-                {if isset($oauth_status) && !$oauth_status.is_connected && $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
-                    <a href="{$oauth_auth_url|escape:'html':'UTF-8'}" class="btn btn-primary">
-                        <i class="icon-key"></i> Autorizar con Yuju
-                    </a>
-                {/if}
-                
-                {if $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
-                    <button type="submit" name="testConnection" class="btn btn-info">
-                        <i class="icon-check"></i> Probar Conexión API
-                    </button>
-                {/if}
             </div>
         </form>
     </div>
 </div>
-{/block}
-
 <script type="text/javascript">
 // JavaScript functionality is now handled in admin.js
 // This ensures compatibility with PrestaShop 8 module loading system
+
+function openCronManagerModal() {
+    var $modal = jQuery('#yuju-cron-manager-modal');
+    if (!$modal.length) {
+        var modalHtml = '' +
+            '<div class="modal fade yuju-cron-manager-modal" id="yuju-cron-manager-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-cron-manager-title">' +
+                '<div class="modal-dialog modal-lg" role="document">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header">' +
+                            '<button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>' +
+                            '<h4 class="modal-title" id="yuju-cron-manager-title"><i class="icon-time"></i> Administrar crons</h4>' +
+                        '</div>' +
+                        '<div class="modal-body">' +
+                            '<div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> normalmente solo debes programar <code>cron.php</code> en crontab. Los demás scripts son utilitarios, internos o de diagnóstico.</div>' +
+                            '<div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>' +
+                            '<div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">' +
+                                '<label style="margin:0; font-weight:600; cursor:pointer;">' +
+                                    '<input type="checkbox" id="yuju-cron-filter-recommended" style="margin-right:6px; vertical-align:middle;"> Mostrar solo recomendados' +
+                                '</label>' +
+                                '<label style="margin:0; font-weight:600; cursor:pointer;">' +
+                                    '<input type="checkbox" id="yuju-cron-filter-hide-diagnostic" style="margin-right:6px; vertical-align:middle;"> Ocultar scripts de diagnóstico' +
+                                '</label>' +
+                            '</div>' +
+                            '<div class="table-responsive">' +
+                                '<table class="table table-bordered table-striped">' +
+                                    '<thead>' +
+                                        '<tr>' +
+                                            '<th>Cron</th>' +
+                                            '<th>Uso</th>' +
+                                            '<th>Necesidad</th>' +
+                                            '<th>Última ejecución</th>' +
+                                            '<th>Estado</th>' +
+                                            '<th>Duración</th>' +
+                                            '<th width="120">Acción</th>' +
+                                        '</tr>' +
+                                    '</thead>' +
+                                    '<tbody id="yuju-cron-manager-tbody">' +
+                                        '<tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>' +
+                                    '</tbody>' +
+                                '</table>' +
+                            '</div>' +
+                            '<div class="form-group" style="margin-bottom:0;">' +
+                                '<label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>' +
+                                '<textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly style="font-family: Consolas, monospace;"></textarea>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="modal-footer">' +
+                            '<button type="button" id="yuju-cron-manager-refresh" class="btn btn-default"><i class="icon-refresh"></i> Actualizar listado</button>' +
+                            '<button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        jQuery('body').append(modalHtml);
+        $modal = jQuery('#yuju-cron-manager-modal');
+    }
+    $modal.modal('show');
+    try {
+        if (typeof YujuAdmin !== 'undefined' && typeof YujuAdmin.loadCronManagerData === 'function') {
+            YujuAdmin.loadCronManagerData();
+        }
+    } catch (e) {
+        // ignore
+    }
+    return false;
+}
 
 
 // Handle sync dependencies
@@ -656,8 +941,348 @@ $(document).ready(function() {
             $(this).prop('disabled', true).html('<i class="icon-spin icon-refresh"></i> Procesando...');
         }
     });
+
+    // ============================================================
+    // Detección y activación de hooks Yuju
+    // ============================================================
+    (function() {
+        var $panel = $('#yuju-hooks-panel');
+        if (!$panel.length) {
+            return;
+        }
+
+        var ajaxUrl = $panel.data('ajax-url') || '';
+        var token = $panel.data('token') || '';
+
+        function renderRows(hooks, allActive) {
+            var $tbody = $('#yuju-hooks-table tbody');
+            if (!$tbody.length || !hooks || !hooks.length) {
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < hooks.length; i++) {
+                var h = hooks[i];
+                var statusHtml = h.registered
+                    ? '<span class="label label-success"><i class="icon-check"></i> Activo</span>'
+                    : '<span class="label label-default"><i class="icon-remove"></i> Inactivo</span>';
+                var actionHtml = h.registered
+                    ? '<span class="text-muted small">—</span>'
+                    : '<button type="button" class="btn btn-success btn-xs yuju-hook-activate-btn" data-hook="' + h.name + '"><i class="icon-power-off"></i> Activar</button>';
+                var critBadge = h.critical
+                    ? ' <span class="label label-danger" style="margin-left:6px;" title="Hook crítico para la integración">Crítico</span>'
+                    : '';
+                html += '<tr data-hook-name="' + h.name + '"' + (h.registered ? '' : ' class="warning"') + '>' +
+                    '<td><strong>' + $('<div/>').text(h.label).html() + '</strong>' + critBadge +
+                        '<br><code class="text-muted" style="font-size:11px;">' + h.name + '</code></td>' +
+                    '<td class="text-muted">' + $('<div/>').text(h.description).html() + '</td>' +
+                    '<td class="text-center yuju-hook-status-cell">' + statusHtml + '</td>' +
+                    '<td class="text-center yuju-hook-action-cell">' + actionHtml + '</td>' +
+                    '</tr>';
+            }
+            $tbody.html(html);
+
+            var $accPill = $('#yuju-acc-hooks-heading .yuju-diag-pill');
+            if (allActive) {
+                $accPill.replaceWith('<span class="yuju-diag-pill ok"><i class="icon-check"></i> Todos activos</span>');
+                $('#yuju-hooks-activate-all').hide();
+            } else {
+                $accPill.replaceWith('<span class="yuju-diag-pill warn"><i class="icon-warning"></i> Hay inactivos</span>');
+                $('#yuju-hooks-activate-all').show();
+            }
+        }
+
+        function refreshHooks() {
+            var $btn = $('#yuju-hooks-refresh');
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Cargando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'getYujuHooksStatus',
+                    token: token
+                }
+            }).done(function(r) {
+                if (r && r.success && r.hooks) {
+                    renderRows(r.hooks, !!r.all_active);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).html(origHtml);
+            });
+        }
+
+        $(document).on('click', '#yuju-hooks-refresh', function(e) {
+            e.preventDefault();
+            refreshHooks();
+        });
+
+        $(document).on('click', '.yuju-hook-activate-btn', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var hookName = $btn.data('hook');
+            if (!hookName) { return; }
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Activando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'registerYujuHook',
+                    token: token,
+                    hook: hookName
+                }
+            }).done(function(r) {
+                if (r && r.success) {
+                    refreshHooks();
+                } else {
+                    var msg = (r && r.message) ? r.message : 'No se pudo activar el hook.';
+                    alert(msg);
+                    $btn.prop('disabled', false).html('<i class="icon-power-off"></i> Activar');
+                }
+            }).fail(function() {
+                alert('Error de red al activar el hook.');
+                $btn.prop('disabled', false).html('<i class="icon-power-off"></i> Activar');
+            });
+        });
+
+        $(document).on('click', '#yuju-hooks-activate-all', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            if (!window.confirm('¿Activar todos los hooks inactivos del módulo Yuju?')) {
+                return;
+            }
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Activando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'registerAllYujuHooks',
+                    token: token
+                }
+            }).done(function(r) {
+                if (r && r.hooks) {
+                    renderRows(r.hooks, !!r.all_active);
+                }
+                if (r && r.message) {
+                    // mostrar feedback ligero
+                    var $summary = $('.yuju-hooks-summary');
+                    $summary.append(' <span class="text-muted small" style="margin-left:8px;">' + $('<div/>').text(r.message).html() + '</span>');
+                    setTimeout(function() {
+                        $summary.find('.text-muted.small').remove();
+                    }, 4000);
+                }
+            }).fail(function() {
+                alert('Error de red al activar los hooks.');
+            }).always(function() {
+                $btn.prop('disabled', false).html(origHtml);
+            });
+        });
+    })();
+
+    // ============================================================
+    // Detección y creación de tablas Yuju
+    // ============================================================
+    (function() {
+        var $panel = $('#yuju-tables-panel');
+        if (!$panel.length) {
+            return;
+        }
+
+        var ajaxUrl = $panel.data('ajax-url') || '';
+        var token = $panel.data('token') || '';
+
+        function renderTablesRows(tables, allPresent) {
+            var $tbody = $('#yuju-tables-table tbody');
+            if (!$tbody.length || !tables || !tables.length) {
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < tables.length; i++) {
+                var t = tables[i];
+                var statusHtml = t.exists
+                    ? '<span class="label label-success"><i class="icon-check"></i> Existe</span>'
+                    : '<span class="label label-default"><i class="icon-remove"></i> No existe</span>';
+                var actionHtml = t.exists
+                    ? '<span class="text-muted small">—</span>'
+                    : '<button type="button" class="btn btn-success btn-xs yuju-table-create-btn" data-table="' + t.name + '"><i class="icon-plus"></i> Crear</button>';
+                var critBadge = t.critical
+                    ? ' <span class="label label-danger" style="margin-left:6px;" title="Tabla crítica para la integración">Crítica</span>'
+                    : '';
+                html += '<tr data-table-name="' + t.name + '"' + (t.exists ? '' : ' class="warning"') + '>' +
+                    '<td><strong>' + $('<div/>').text(t.label).html() + '</strong>' + critBadge +
+                        '<br><code class="text-muted" style="font-size:11px;">' + t.full_name + '</code></td>' +
+                    '<td class="text-muted">' + $('<div/>').text(t.description).html() + '</td>' +
+                    '<td class="text-center yuju-table-status-cell">' + statusHtml + '</td>' +
+                    '<td class="text-center yuju-table-action-cell">' + actionHtml + '</td>' +
+                    '</tr>';
+            }
+            $tbody.html(html);
+
+            var $accPill = $('#yuju-acc-tables-heading .yuju-diag-pill');
+            if (allPresent) {
+                $accPill.replaceWith('<span class="yuju-diag-pill ok"><i class="icon-check"></i> Todas presentes</span>');
+                $('#yuju-tables-create-all').hide();
+            } else {
+                $accPill.replaceWith('<span class="yuju-diag-pill warn"><i class="icon-warning"></i> Faltan tablas</span>');
+                $('#yuju-tables-create-all').show();
+            }
+        }
+
+        function refreshTables() {
+            var $btn = $('#yuju-tables-refresh');
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Cargando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'getYujuTablesStatus',
+                    token: token
+                }
+            }).done(function(r) {
+                if (r && r.success && r.tables) {
+                    renderTablesRows(r.tables, !!r.all_present);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).html(origHtml);
+            });
+        }
+
+        $(document).on('click', '#yuju-tables-refresh', function(e) {
+            e.preventDefault();
+            refreshTables();
+        });
+
+        $(document).on('click', '.yuju-table-create-btn', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var tableName = $btn.data('table');
+            if (!tableName) { return; }
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Creando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'createYujuTable',
+                    token: token,
+                    table: tableName
+                }
+            }).done(function(r) {
+                if (r && r.success) {
+                    refreshTables();
+                } else {
+                    var msg = (r && r.message) ? r.message : 'No se pudo crear la tabla.';
+                    alert(msg);
+                    $btn.prop('disabled', false).html('<i class="icon-plus"></i> Crear');
+                }
+            }).fail(function() {
+                alert('Error de red al crear la tabla.');
+                $btn.prop('disabled', false).html('<i class="icon-plus"></i> Crear');
+            });
+        });
+
+        $(document).on('click', '#yuju-tables-create-all', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            if (!window.confirm('¿Crear todas las tablas faltantes del módulo Yuju? Esta acción es segura: las tablas existentes no se modifican.')) {
+                return;
+            }
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Creando…');
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'createAllYujuTables',
+                    token: token
+                }
+            }).done(function(r) {
+                if (r && r.tables) {
+                    renderTablesRows(r.tables, !!r.all_present);
+                }
+                if (r && r.message) {
+                    var $summary = $('.yuju-tables-summary');
+                    $summary.append(' <span class="text-muted small" style="margin-left:8px;">' + $('<div/>').text(r.message).html() + '</span>');
+                    setTimeout(function() {
+                        $summary.find('.text-muted.small').remove();
+                    }, 4000);
+                }
+                if (r && r.errors && r.errors.length) {
+                    alert('Algunas operaciones fallaron:\n' + r.errors.join('\n'));
+                }
+            }).fail(function() {
+                alert('Error de red al crear las tablas.');
+            }).always(function() {
+                $btn.prop('disabled', false).html(origHtml);
+            });
+        });
+    })();
 });
 </script>
+<div class="modal fade yuju-cron-manager-modal" id="yuju-cron-manager-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-cron-manager-title">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="yuju-cron-manager-title"><i class="icon-time"></i> Administrar crons</h4>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> normalmente solo debes programar <code>cron.php</code> en crontab. Los demás scripts son utilitarios, internos o de diagnóstico.</div>
+                <div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>
+                <div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">
+                    <label style="margin:0; font-weight:600; cursor:pointer;">
+                        <input type="checkbox" id="yuju-cron-filter-recommended" style="margin-right:6px; vertical-align:middle;"> Mostrar solo recomendados
+                    </label>
+                    <label style="margin:0; font-weight:600; cursor:pointer;">
+                        <input type="checkbox" id="yuju-cron-filter-hide-diagnostic" style="margin-right:6px; vertical-align:middle;"> Ocultar scripts de diagnóstico
+                    </label>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Cron</th>
+                                <th>Uso</th>
+                                <th>Necesidad</th>
+                                <th>Última ejecución</th>
+                                <th>Estado</th>
+                                <th>Duración</th>
+                                <th width="120">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="yuju-cron-manager-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Cargando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>
+                    <textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly style="font-family: Consolas, monospace;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="yuju-cron-manager-refresh" class="btn btn-default">
+                    <i class="icon-refresh"></i> Actualizar listado
+                </button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
 /* Copy button styles are now in admin.css */
@@ -684,19 +1309,61 @@ $(document).ready(function() {
 .sync-dependent.hidden {
     display: none;
 }
-</style>
 
-<script type="text/javascript">
-$(document).ready(function() {
-    // Inicializar YujuAdmin con la configuración necesaria
-    if (typeof YujuAdmin !== 'undefined') {
-        YujuAdmin.init({
-            ajaxUrl: '{$ajax_url|escape:'javascript':'UTF-8'}',
-            token: '{$token|escape:'javascript':'UTF-8'}'
-        });
-        console.log('YujuAdmin initialized successfully');
-    } else {
-        console.error('YujuAdmin object not found. Check if admin.js is loaded.');
-    }
-});
-</script>
+.yuju-cron-manager-modal .modal-header {
+    background: #f8fafc;
+    border-bottom: 1px solid #dde3ea;
+}
+
+.yuju-cron-manager-modal .modal-title {
+    font-weight: 700;
+    color: #2f3b4a;
+}
+
+.yuju-cron-manager-modal .table > thead > tr > th {
+    background: #f3f6f9;
+    font-size: 12px;
+    color: #4a5560;
+    border-bottom: 1px solid #dbe2ea;
+}
+
+.yuju-cron-manager-modal .table > tbody > tr > td {
+    vertical-align: middle;
+    font-size: 12px;
+}
+
+.yuju-cron-manager-modal code {
+    background: #eef2f7;
+    color: #2f3b4a;
+    border: 1px solid #dbe2ea;
+}
+
+#yuju-cron-manager-alert {
+    margin-bottom: 12px;
+}
+
+/* Salida tipo consola: el BO (PS 8 SMB reskin) fuerza fondo blanco en textarea:hover — igualar su especificidad + ID */
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control,
+textarea#yuju-cron-manager-output.form-control {
+    white-space: pre-wrap;
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border: 1px solid #1f2a44 !important;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:hover,
+.yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:focus,
+textarea#yuju-cron-manager-output.form-control:hover,
+textarea#yuju-cron-manager-output.form-control:focus,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:hover,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:focus {
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border-color: #334155 !important;
+    box-shadow: none !important;
+}
+</style>
+{/block}

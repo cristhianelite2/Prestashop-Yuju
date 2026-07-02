@@ -189,6 +189,116 @@
                 </div>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <i class="icon-sitemap"></i> Configuraciones de Suscripción (Yuju)
+                        <span class="badge pull-right">
+                            {if isset($yuju_webhook_subscription_configs) && $yuju_webhook_subscription_configs}
+                                {count($yuju_webhook_subscription_configs)}
+                            {else}
+                                0
+                            {/if}
+                        </span>
+                    </div>
+                    <div class="panel-body">
+                        {if isset($yuju_webhook_subscription_configs_error) && $yuju_webhook_subscription_configs_error}
+                            <div class="alert alert-warning">
+                                <strong>No se pudieron consultar las configuraciones:</strong>
+                                {$yuju_webhook_subscription_configs_error|escape:'html':'UTF-8'}
+                            </div>
+                        {elseif isset($yuju_webhook_subscription_configs) && $yuju_webhook_subscription_configs && count($yuju_webhook_subscription_configs) > 0}
+                            {foreach from=$yuju_webhook_subscription_configs item=config}
+                                <div class="panel panel-default" style="margin-bottom:12px;">
+                                    <div class="panel-heading">
+                                        <div class="row">
+                                            <div class="col-md-8">
+                                                <strong>Configuración #{$config.id|default:'-'|escape:'html':'UTF-8'}</strong>
+                                                <div><small>{$config.url|default:'-'|escape:'html':'UTF-8'}</small></div>
+                                            </div>
+                                            <div class="col-md-4 text-right">
+                                                {if $config.is_active}
+                                                    <span class="label label-success"><i class="icon-check"></i> Activa</span>
+                                                    <a class="btn btn-xs btn-warning" style="margin-left:8px;"
+                                                       href="{$yuju_webhook_toggle_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&enable=0">
+                                                        <i class="icon-pause"></i> Deshabilitar
+                                                    </a>
+                                                {else}
+                                                    <span class="label label-default"><i class="icon-power-off"></i> Inactiva</span>
+                                                    <a class="btn btn-xs btn-success" style="margin-left:8px;"
+                                                       href="{$yuju_webhook_toggle_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&enable=1">
+                                                        <i class="icon-play"></i> Habilitar
+                                                    </a>
+                                                {/if}
+                                                {if isset($yuju_webhook_delete_config_base) && $config.id}
+                                                    <a class="btn btn-xs btn-danger" style="margin-left:8px;"
+                                                       href="{$yuju_webhook_delete_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}"
+                                                       onclick="return confirm('¿Eliminar la configuración #{$config.id|escape:'javascript':'UTF-8'} de Yuju?\n\nEsto borra la suscripción completa con todos sus topics. Esta acción no se puede deshacer.');">
+                                                        <i class="icon-trash"></i> Eliminar
+                                                    </a>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="panel-body">
+                                        {if isset($config.topics) && $config.topics && count($config.topics) > 0}
+                                            <table class="table table-condensed table-bordered" style="margin-bottom:0;">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Webhook (topic)</th>
+                                                        <th class="text-center" style="width:120px;">Estado</th>
+                                                        <th class="text-right" style="width:170px;">Acción</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {foreach from=$config.topics item=topic}
+                                                        <tr>
+                                                            <td><code>{$topic|escape:'html':'UTF-8'}</code></td>
+                                                            <td class="text-center">
+                                                                <span class="label label-success">Activo</span>
+                                                            </td>
+                                                            <td class="text-right">
+                                                                <a class="btn btn-xs btn-danger"
+                                                                   href="{$yuju_webhook_toggle_topic_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&topic={$topic|escape:'url'}&enable=0">
+                                                                    <i class="icon-times"></i> Deshabilitar
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    {/foreach}
+                                                </tbody>
+                                            </table>
+                                        {else}
+                                            <div class="alert alert-info" style="margin-bottom:8px;">
+                                                Esta configuración no tiene topics activos.
+                                            </div>
+                                        {/if}
+
+                                        {if isset($yuju_required_webhook_subscription.required_topics) && $yuju_required_webhook_subscription.required_topics}
+                                            <div class="text-right" style="margin-top:10px;">
+                                                {foreach from=$yuju_required_webhook_subscription.required_topics item=req_topic}
+                                                    {if !isset($config.topics) || !in_array($req_topic, $config.topics)}
+                                                        <a class="btn btn-xs btn-default"
+                                                           href="{$yuju_webhook_toggle_topic_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&topic={$req_topic|escape:'url'}&enable=1">
+                                                            <i class="icon-plus"></i> Habilitar {$req_topic|escape:'html':'UTF-8'}
+                                                        </a>
+                                                    {/if}
+                                                {/foreach}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </div>
+                            {/foreach}
+                        {else}
+                            <div class="alert alert-info text-center">
+                                <i class="icon-info-circle"></i> No hay configuraciones de suscripción disponibles.
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            </div>
+        </div>
         
         {if $webhook_stats.by_event_type && count($webhook_stats.by_event_type) > 0}
         <div class="row">

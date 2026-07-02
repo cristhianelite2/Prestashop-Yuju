@@ -124,10 +124,16 @@ class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
             
             $token_data = $oauth->exchangeCodeForToken($code, $state);
 
-            if ($token_data['success']) {
+            if (!empty($token_data['success'])) {
                 $this->handleAuthSuccess();
             } else {
-                throw new Exception($token_data['message'] ?? 'Error al obtener el token');
+                $error_message = $token_data['message'] ?? 'Error al obtener el token';
+                $oauth_debug = isset($token_data['debug']) && is_array($token_data['debug']) ? $token_data['debug'] : [];
+                $this->handleAuthError($error_message, [
+                    'oauth_result' => $token_data,
+                    'oauth_debug' => $oauth_debug,
+                ]);
+                return;
             }
         } catch (Exception $e) {
             // Logging del error
@@ -144,15 +150,21 @@ class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
 
     private function handleAuthSuccess()
     {
+        $admin_url = '';
+        if (isset($this->context->link)) {
+            $admin_url = $this->context->link->getAdminLink('AdminYujuConfiguration');
+        }
+
         $this->context->smarty->assign([
             'success' => true,
             'message' => 'Autorización exitosa. Puedes cerrar esta ventana.',
+            'admin_redirect_url' => $admin_url,
         ]);
 
         $this->setTemplate('module:prestashopyuju/views/templates/front/oauth_callback.tpl');
     }
 
-    private function handleAuthError($error_message)
+    private function handleAuthError($error_message, $extra_debug = [])
     {
         // Mostrar información de debugging en desarrollo
         $debug_info = [
@@ -163,6 +175,10 @@ class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
             'state_param' => Tools::getValue('state'),
             'error_param' => Tools::getValue('error'),
         ];
+
+        if (is_array($extra_debug) && !empty($extra_debug)) {
+            $debug_info['oauth_trace'] = $extra_debug;
+        }
 
         $this->context->smarty->assign([
             'success' => false,

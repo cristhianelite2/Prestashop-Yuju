@@ -46,10 +46,21 @@
 .select2-container--default .select2-selection--single .select2-selection__rendered {
     line-height: 30px;
     padding-left: 8px;
+    padding-right: 48px;
     font-size: 13px;
 }
 .select2-container--default .select2-selection--single .select2-selection__arrow {
     height: 30px;
+    right: 6px;
+    width: 18px;
+}
+/* Separar la X del chevron para evitar clics accidentales */
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    position: absolute;
+    right: 30px;
+    margin-right: 0;
+    padding: 0 4px;
+    z-index: 2;
 }
 /* Ocultar el select original cuando Select2 está activo */
 .select2-hidden-accessible {
@@ -133,7 +144,16 @@
         </div>
         
         <div class="row" style="margin-top: 10px;">
-            <div class="col-md-12 text-right">
+            <div class="col-md-6 text-left">
+                <button
+                    type="button"
+                    class="btn btn-warning btn-sm"
+                    onclick="if (confirm('¿Desea recargar los valores por defecto? Esta acción reemplazará los mapeos actuales.')) { window.location.href='{$link->getAdminLink('AdminYujuProductMapping')|escape:'javascript':'UTF-8'}&loadDefaults=1'; } return false;"
+                >
+                    <i class="icon-refresh"></i> Recargar valores por defecto
+                </button>
+            </div>
+            <div class="col-md-6 text-right">
                 <button class="btn btn-primary btn-sm" onclick="saveMappings()">
                     <i class="icon-save"></i> Guardar Mapeos
                 </button>

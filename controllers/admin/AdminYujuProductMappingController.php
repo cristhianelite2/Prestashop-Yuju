@@ -152,41 +152,19 @@ class AdminYujuProductMappingController extends ModuleAdminController
             return; // Mappings already exist
         }
         
-        // Default mappings to insert - Incluye todos los campos obligatorios de la API
-        $defaultMappings = [
-            // Campos obligatorios de Yuju
-            ['ps' => 'name', 'yuju' => 'name', 'default' => '', 'required' => 1],
-            ['ps' => 'reference', 'yuju' => 'sku', 'default' => '', 'required' => 1],
-            ['ps' => 'reference', 'yuju' => 'sku_simple', 'default' => '', 'required' => 1],
-            ['ps' => 'description', 'yuju' => 'description', 'default' => 'Descripcion no disponible', 'required' => 1],
-            ['ps' => 'id_category_default', 'yuju' => 'id_category', 'default' => '', 'required' => 1],
-            ['ps' => 'quantity', 'yuju' => 'stock', 'default' => '', 'required' => 1],
-            ['ps' => 'price', 'yuju' => 'price', 'default' => '', 'required' => 1],
-            ['ps' => 'manufacturer_name', 'yuju' => 'brand', 'default' => 'Global-Laptops', 'required' => 1],
-            ['ps' => 'available_for_order', 'yuju' => 'shipping', 'default' => '1', 'required' => 1],
-            ['ps' => 'unit_dimension', 'yuju' => 'dimensions_unit', 'default' => 'cm', 'required' => 1],
-            ['ps' => 'width', 'yuju' => 'shipping_width', 'default' => '8', 'required' => 1],
-            ['ps' => 'depth', 'yuju' => 'shipping_depth', 'default' => '35', 'required' => 1],
-            ['ps' => 'height', 'yuju' => 'shipping_height', 'default' => '44', 'required' => 1],
-            ['ps' => 'unit_weight', 'yuju' => 'weight_unit', 'default' => 'kg', 'required' => 1],
-            ['ps' => 'weight', 'yuju' => 'weight', 'default' => '1', 'required' => 1],
-            ['ps' => 'images', 'yuju' => 'images', 'default' => '', 'required' => 1],
-            // Campos opcionales pero útiles
-            ['ps' => 'condition', 'yuju' => 'condition', 'default' => 'new', 'required' => 0],
-            ['ps' => 'ean13', 'yuju' => 'ean', 'default' => '', 'required' => 0],
-            ['ps' => 'upc', 'yuju' => 'upc', 'default' => '', 'required' => 0],
-        ];
+        // Defaults canónicos basados en documentación oficial de Yuju.
+        $defaultMappings = $this->getCanonicalDefaultMappings();
         
         // Insert default mappings
         foreach ($defaultMappings as $mapping) {
             $data = [
-                'prestashop_field' => pSQL($mapping['ps']),
-                'yuju_field' => pSQL($mapping['yuju']),
-                'default_value' => pSQL($mapping['default']),
+                'prestashop_field' => pSQL($mapping['prestashop_field']),
+                'yuju_field' => pSQL($mapping['yuju_field']),
+                'default_value' => pSQL($mapping['default_value']),
                 'field_type' => 'string',
                 'sync_direction' => 'bidirectional',
                 'transformation_rule' => 'none',
-                'is_required' => (int)$mapping['required'],
+                'is_required' => (int)$mapping['is_required'],
                 'is_active' => 1,
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s'),
@@ -229,6 +207,9 @@ class AdminYujuProductMappingController extends ModuleAdminController
             if (!is_array($mappings) || empty($mappings)) {
                 throw new Exception('Datos de mapeo inválidos o vacíos');
             }
+
+            // Normalizar estructura y asegurar cobertura de campos obligatorios.
+            $mappings = $this->normalizeAndCompleteRequiredMappings($mappings);
             
             // Clear existing mappings
             Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`');
@@ -248,7 +229,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                     'field_type' => 'string',
                     'sync_direction' => 'bidirectional',
                     'transformation_rule' => 'none',
-                    'is_required' => 0,
+                    'is_required' => !empty($mapping['is_required']) ? 1 : 0,
                     'is_active' => 1,
                     'created_at' => date('Y-m-d H:i:s'),
                     'updated_at' => date('Y-m-d H:i:s'),
@@ -555,227 +536,37 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
     protected function loadDefaultMappings()
     {
-        $default_mappings = [
-            // Campos obligatorios según requerimientos
-            [
-                'prestashop_field' => 'name',
-                'yuju_field' => 'nombre',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'reference',
-                'yuju_field' => 'sku',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'reference',
-                'yuju_field' => 'sku_simple',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'description',
-                'yuju_field' => 'descripcion',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'images',
-                'yuju_field' => 'imagenes',
-                'field_type' => 'array',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'price',
-                'yuju_field' => 'precio',
-                'field_type' => 'decimal',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'quantity',
-                'yuju_field' => 'stock',
-                'field_type' => 'integer',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'manufacturer',
-                'yuju_field' => 'marca',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'condition',
-                'yuju_field' => 'condicion',
-                'field_type' => 'string',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'shipping_method',
-                'yuju_field' => 'metodo_envio',
-                'field_type' => 'string',
-                'sync_direction' => 'ps_to_yuju',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => 'El marketplace lo calcula',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'shipping_price',
-                'yuju_field' => 'precio_envio',
-                'field_type' => 'decimal',
-                'sync_direction' => 'ps_to_yuju',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '0',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'dimension_unit',
-                'yuju_field' => 'unidad_dimension',
-                'field_type' => 'string',
-                'sync_direction' => 'ps_to_yuju',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => 'cm',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'height',
-                'yuju_field' => 'altura',
-                'field_type' => 'decimal',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '0',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'width',
-                'yuju_field' => 'ancho',
-                'field_type' => 'decimal',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '0',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'depth',
-                'yuju_field' => 'profundidad',
-                'field_type' => 'decimal',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '0',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'weight_unit',
-                'yuju_field' => 'unidad_peso',
-                'field_type' => 'string',
-                'sync_direction' => 'ps_to_yuju',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => 'kg',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'weight',
-                'yuju_field' => 'peso',
-                'field_type' => 'decimal',
-                'sync_direction' => 'bidirectional',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => '0',
-                'transformation_rule' => 'none'
-            ],
-            [
-                'prestashop_field' => 'ml_template',
-                'yuju_field' => 'plantilla_mercadolibre',
-                'field_type' => 'string',
-                'sync_direction' => 'ps_to_yuju',
-                'is_required' => 1,
-                'is_active' => 1,
-                'default_value' => 'No usar plantilla',
-                'transformation_rule' => 'none'
-            ]
-        ];
+        $default_mappings = $this->getCanonicalDefaultMappings();
+
+        // Recarga real: reemplazar completamente los mapeos actuales.
+        Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`');
 
         $inserted = 0;
-
         foreach ($default_mappings as $mapping) {
-            // Check if mapping already exists
-            $existing = Db::getInstance()->getRow('
-            SELECT id_mapping FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
-            WHERE prestashop_field = "' . pSQL($mapping['prestashop_field']) . '"
-            ');
+            $mapping['field_type'] = 'string';
+            $mapping['sync_direction'] = 'bidirectional';
+            $mapping['transformation_rule'] = 'none';
+            $mapping['is_active'] = 1;
+            $mapping['created_at'] = date('Y-m-d H:i:s');
+            $mapping['updated_at'] = date('Y-m-d H:i:s');
 
-            if (!$existing) {
-                $mapping['transformation_rule'] = 'none';
-                $mapping['is_active'] = 1;
-                $mapping['created_at'] = date('Y-m-d H:i:s');
-                $mapping['updated_at'] = date('Y-m-d H:i:s');
-
-                if (Db::getInstance()->insert('yuju_product_mapping', $mapping)) {
-                    ++$inserted;
-                }
+            if (Db::getInstance()->insert('yuju_product_mapping', $mapping)) {
+                ++$inserted;
             }
         }
 
-        if ($inserted > 0) {
-            $this->confirmations[] = sprintf($this->l('%d default mappings loaded successfully.'), $inserted);
-            $this->logger->log('Default product mappings loaded: ' . $inserted . ' mappings', 'info');
-        } else {
-            $this->warnings[] = $this->l('No new default mappings to load.');
-        }
+        $this->confirmations[] = sprintf($this->l('%d default mappings loaded successfully.'), $inserted);
+        $this->logger->log('Default product mappings reloaded: ' . $inserted . ' mappings', 'info');
     }
 
     protected function updateRequiredFields()
     {
-        // Lista de campos que deben ser obligatorios según requerimientos
+        // Campos obligatorios de Yuju según API oficial.
         $required_fields = [
-            'name', 'reference', 'description', 'images', 'price', 
-            'quantity', 'manufacturer', 'condition', 'shipping_method', 
-            'shipping_price', 'dimension_unit', 'height', 'width', 
-            'depth', 'weight_unit', 'weight', 'ml_template'
+            'sku_simple', 'sku', 'name', 'description',
+            'stock', 'price', 'brand', 'shipping', 'dimensions_unit',
+            'shipping_width', 'shipping_depth', 'shipping_height',
+            'weight_unit', 'weight', 'images',
         ];
 
         $updated = 0;
@@ -783,7 +574,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             $result = Db::getInstance()->update(
                 'yuju_product_mapping',
                 ['is_required' => 1],
-                'prestashop_field = "' . pSQL($field) . '"'
+                'yuju_field = "' . pSQL($field) . '"'
             );
             
             if ($result) {
@@ -1179,5 +970,109 @@ class AdminYujuProductMappingController extends ModuleAdminController
             // Log error but don't break the controller
             $this->logger->error('Failed to fix mapping constraint: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Defaults canónicos: campos requeridos Yuju + defaults útiles.
+     */
+    private function getCanonicalDefaultMappings()
+    {
+        $shopName = trim((string) Configuration::get('PS_SHOP_NAME'));
+        if ($shopName === '') {
+            $shopName = 'PrestaShop';
+        }
+
+        return [
+            // Requeridos por Yuju (https://api-docs.yuju.io/docs/product-model)
+            ['prestashop_field' => 'reference', 'yuju_field' => 'sku_simple', 'default_value' => '', 'is_required' => 1],
+            ['prestashop_field' => 'reference', 'yuju_field' => 'sku', 'default_value' => '', 'is_required' => 1],
+            ['prestashop_field' => 'name', 'yuju_field' => 'name', 'default_value' => '', 'is_required' => 1],
+            ['prestashop_field' => 'description', 'yuju_field' => 'description', 'default_value' => 'Descripcion no disponible', 'is_required' => 1],
+            ['prestashop_field' => 'quantity', 'yuju_field' => 'stock', 'default_value' => '', 'is_required' => 1],
+            ['prestashop_field' => 'price', 'yuju_field' => 'price', 'default_value' => '', 'is_required' => 1],
+            ['prestashop_field' => 'manufacturer_name', 'yuju_field' => 'brand', 'default_value' => $shopName, 'is_required' => 1],
+            ['prestashop_field' => 'available_for_order', 'yuju_field' => 'shipping', 'default_value' => '1', 'is_required' => 1],
+            ['prestashop_field' => 'unit_dimension', 'yuju_field' => 'dimensions_unit', 'default_value' => 'cm', 'is_required' => 1],
+            ['prestashop_field' => 'width', 'yuju_field' => 'shipping_width', 'default_value' => '8', 'is_required' => 1],
+            ['prestashop_field' => 'depth', 'yuju_field' => 'shipping_depth', 'default_value' => '35', 'is_required' => 1],
+            ['prestashop_field' => 'height', 'yuju_field' => 'shipping_height', 'default_value' => '44', 'is_required' => 1],
+            ['prestashop_field' => 'unit_weight', 'yuju_field' => 'weight_unit', 'default_value' => 'kg', 'is_required' => 1],
+            ['prestashop_field' => 'weight', 'yuju_field' => 'weight', 'default_value' => '1', 'is_required' => 1],
+            ['prestashop_field' => 'images', 'yuju_field' => 'images', 'default_value' => '', 'is_required' => 1],
+            // Opcionales recomendados
+            ['prestashop_field' => 'condition', 'yuju_field' => 'condition', 'default_value' => 'new', 'is_required' => 0],
+            ['prestashop_field' => 'ean13', 'yuju_field' => 'ean', 'default_value' => '', 'is_required' => 0],
+            ['prestashop_field' => 'upc', 'yuju_field' => 'upc', 'default_value' => '', 'is_required' => 0],
+        ];
+    }
+
+    /**
+     * Normaliza llaves del payload y agrega faltantes requeridos.
+     */
+    private function normalizeAndCompleteRequiredMappings(array $mappings)
+    {
+        $normalized = [];
+        $yujuIndex = [];
+        $defaultByYuju = [];
+
+        foreach ($this->getCanonicalDefaultMappings() as $defaultMap) {
+            $defaultByYuju[$defaultMap['yuju_field']] = $defaultMap;
+        }
+
+        foreach ($mappings as $mapping) {
+            $psField = isset($mapping['prestashop_field']) ? $mapping['prestashop_field'] : (isset($mapping['ps_field']) ? $mapping['ps_field'] : '');
+            $yujuField = isset($mapping['yuju_field']) ? $mapping['yuju_field'] : '';
+            $defaultValue = isset($mapping['default_value']) ? $mapping['default_value'] : '';
+
+            if (empty($psField) || empty($yujuField)) {
+                continue;
+            }
+
+            // id_category se gestiona desde el mapeo de categorías.
+            if ($yujuField === 'id_category') {
+                continue;
+            }
+
+            if ($yujuField === 'brand' && ($defaultValue === '' || $defaultValue === 'Global-Laptops')) {
+                $defaultValue = trim((string) Configuration::get('PS_SHOP_NAME'));
+                if ($defaultValue === '') {
+                    $defaultValue = 'PrestaShop';
+                }
+            }
+
+            // Si viene requerido desde defaults canónicos, prevalece.
+            $isRequired = isset($defaultByYuju[$yujuField]) ? (int) $defaultByYuju[$yujuField]['is_required'] : 0;
+
+            $row = [
+                'prestashop_field' => $psField,
+                'yuju_field' => $yujuField,
+                'default_value' => $defaultValue,
+                'is_required' => $isRequired,
+            ];
+
+            $yujuIndex[$yujuField] = count($normalized);
+            $normalized[] = $row;
+        }
+
+        // Garantizar que todos los requeridos de Yuju existan.
+        foreach ($defaultByYuju as $yujuField => $defaultMap) {
+            if ((int) $defaultMap['is_required'] !== 1) {
+                continue;
+            }
+
+            if (!isset($yujuIndex[$yujuField])) {
+                $normalized[] = [
+                    'prestashop_field' => $defaultMap['prestashop_field'],
+                    'yuju_field' => $yujuField,
+                    'default_value' => $defaultMap['default_value'],
+                    'is_required' => 1,
+                ];
+            } else {
+                // Si existe, asegurar flag required.
+                $normalized[$yujuIndex[$yujuField]]['is_required'] = 1;
+            }
+        }
+
+        return $normalized;
     }
 }

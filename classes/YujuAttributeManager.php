@@ -50,14 +50,24 @@ class YujuAttributeManager
         ];
 
         try {
-            // Get attributes from Yuju
-            $yuju_attributes = $this->api_client->getAttributes();
+            $api_result = $this->api_client->getAttributes();
+            $payload = (is_array($api_result) && isset($api_result['data']) && is_array($api_result['data']))
+                ? $api_result['data']
+                : [];
+            $list = [];
+            if (isset($payload['data']) && is_array($payload['data'])) {
+                $list = $payload['data'];
+            } elseif ($payload !== [] && array_keys($payload) === range(0, count($payload) - 1)) {
+                $list = $payload;
+            } elseif (isset($payload['attributes']) && is_array($payload['attributes'])) {
+                $list = $payload['attributes'];
+            }
 
-            if (!$yuju_attributes || !isset($yuju_attributes['data'])) {
+            if ($list === []) {
                 throw new Exception('No attributes received from Yuju API');
             }
 
-            foreach ($yuju_attributes['data'] as $yuju_attribute) {
+            foreach ($list as $yuju_attribute) {
                 try {
                     $sync_result = $this->syncSingleAttributeFromYuju($yuju_attribute, $force_update);
 

@@ -16,7 +16,7 @@ class YujuSyncQueue
      * Agregar producto a la cola de sincronización
      * 
      * @param int $product_id ID del producto en PrestaShop
-     * @param string $action 'create' o 'update'
+     * @param string $action 'create', 'update' o 'delete'
      * @param string $priority 'high' (precio/stock) o 'normal' (otros campos)
      * @param array $data Datos a sincronizar
      * @return bool
@@ -89,42 +89,18 @@ class YujuSyncQueue
     private function processImmediately($product_id, $action, $data)
     {
         require_once dirname(__FILE__) . '/YujuProductManager.php';
-        require_once dirname(__FILE__) . '/YujuApiClient.php';
         
         try {
             $product_manager = new YujuProductManager();
-            $api_client = new YujuApiClient();
-            
-            // Obtener yuju_product_id
-            $status = Db::getInstance()->getRow('
-                SELECT yuju_product_id 
-                FROM ' . _DB_PREFIX_ . 'yuju_product_status 
-                WHERE prestashop_product_id = ' . (int)$product_id
-            );
-            
-            if (!$status || empty($status['yuju_product_id'])) {
-                $this->logger->warning('Cola: Producto no tiene yuju_product_id', [
-                    'product_id' => $product_id
-                ]);
-                return false;
+            if ($action === 'delete') {
+                $result = $product_manager->removeProductFromYujuAndLocalStatus((int) $product_id);
+                return !empty($result['success']);
             }
-            
-            // Enviar actualización
-            $result = $api_client->updateProduct($status['yuju_product_id'], $data);
-            
-            if ($result['success']) {
-                $this->logger->info('Cola: Actualización inmediata exitosa', [
-                    'product_id' => $product_id,
-                    'yuju_product_id' => $status['yuju_product_id']
-                ]);
-                return true;
-            } else {
-                $this->logger->error('Cola: Error en actualización inmediata', [
-                    'product_id' => $product_id,
-                    'error' => $result['message']
-                ]);
-                return false;
-            }
+
+            // create/update: usar el flujo único que aplica todas las validaciones
+            // (duplicados de SKU, mapeo de categoría y campos obligatorios).
+            $result = $product_manager->sendProductToYuju((int) $product_id);
+            return is_array($result) && !empty($result['success']);
         } catch (Exception $e) {
             $this->logger->error('Cola: Excepción en procesamiento inmediato', [
                 'error' => $e->getMessage(),
@@ -181,7 +157,6 @@ class YujuSyncQueue
         ]);
         
         $product_manager = new YujuProductManager();
-        $api_client = new YujuApiClient();
         
         $stats = [
             'processed' => 0,
@@ -194,64 +169,45 @@ class YujuSyncQueue
             
             // Marcar como procesando
             $this->updateQueueStatus($item['id'], 'processing');
+
+            // Reflejar el estado intermedio en yuju_product_status para que la UI
+            // muestre "Actualizando…" / "Creando…" / "Eliminando…" mientras se
+            // procesa el item en la cola (entre "En cola" y "Sincronizado").
+            $this->setProductStatusForQueueAction(
+                (int) $item['prestashop_product_id'],
+                (string) $item['action']
+            );
             
             try {
                 $data = json_decode($item['data'], true);
+                if (!is_array($data)) {
+                    $data = [];
+                }
                 $result = false;
                 $sync_duration = 0;
-                
-                if ($item['action'] === 'create') {
+
+                if ($item['action'] === 'delete') {
                     $start_time = microtime(true);
-                    $result = $product_manager->sendProductToYuju((int)$item['prestashop_product_id']);
+                    $del = $product_manager->removeProductFromYujuAndLocalStatus((int) $item['prestashop_product_id']);
                     $sync_duration = microtime(true) - $start_time;
-                } else {
-                    // Obtener yuju_product_id
-                    $status = Db::getInstance()->getRow('
-                        SELECT yuju_product_id 
-                        FROM ' . _DB_PREFIX_ . 'yuju_product_status 
-                        WHERE prestashop_product_id = ' . (int)$item['prestashop_product_id']
-                    );
-                    
-                    if ($status && !empty($status['yuju_product_id'])) {
-                        $start_time = microtime(true);
-                        $api_result = $api_client->updateProduct($status['yuju_product_id'], $data);
-                        $sync_duration = microtime(true) - $start_time;
-                        $result = $api_result['success'];
-                        
-                        // Guardar historial de actualización
-                        if ($result) {
-                            $this->saveQueueUpdateHistory(
-                                (int)$item['prestashop_product_id'],
-                                $status['yuju_product_id'],
-                                $data,
-                                $api_result,
-                                $sync_duration
-                            );
-                            
-                            // Actualizar last_sync_data para futuras comparaciones
-                            Db::getInstance()->update(
-                                'yuju_product_status',
-                                [
-                                    'sync_status' => pSQL('synced'),
-                                    'last_sync_at' => date('Y-m-d H:i:s'),
-                                    'last_sync_data' => pSQL(json_encode($data)),
-                                    'updated_at' => date('Y-m-d H:i:s')
-                                ],
-                                'prestashop_product_id = ' . (int)$item['prestashop_product_id']
-                            );
-                        } else {
-                            // Error en actualización
-                            Db::getInstance()->update(
-                                'yuju_product_status',
-                                [
-                                    'sync_status' => pSQL('synced_with_errors'),
-                                    'last_error' => pSQL($api_result['message'] ?? 'Error en actualización'),
-                                    'updated_at' => date('Y-m-d H:i:s')
-                                ],
-                                'prestashop_product_id = ' . (int)$item['prestashop_product_id']
-                            );
-                        }
+                    $result = !empty($del['success']);
+                    if (!$result) {
+                        $this->handleQueueError($item['id'], $del['message'] ?? 'Error al eliminar en Yuju');
+                        ++$stats['failed'];
+                        continue;
                     }
+                } elseif ($item['action'] === 'create') {
+                    $start_time = microtime(true);
+                    $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
+                    $sync_duration = microtime(true) - $start_time;
+                    $result = is_array($send_res) && !empty($send_res['success']);
+                } else {
+                    // update (o cola antigua): usar SIEMPRE el flujo centralizado para aplicar
+                    // validaciones de duplicados/mapeo/campos obligatorios antes de enviar a Yuju.
+                    $start_time = microtime(true);
+                    $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
+                    $sync_duration = microtime(true) - $start_time;
+                    $result = is_array($send_res) && !empty($send_res['success']);
                 }
                 
                 if ($result) {
@@ -284,6 +240,34 @@ class YujuSyncQueue
         return $stats;
     }
     
+    /**
+     * Marcar el estado intermedio del producto en yuju_product_status según la
+     * acción que se está procesando en la cola.
+     */
+    private function setProductStatusForQueueAction($product_id, $action)
+    {
+        try {
+            $map = [
+                'create' => 'creating_in_yuju',
+                'update' => 'updating_in_yuju',
+                'delete' => 'deleting_in_yuju',
+            ];
+            $sync_status = isset($map[$action]) ? $map[$action] : 'updating_in_yuju';
+
+            Db::getInstance()->update(
+                'yuju_product_status',
+                [
+                    'sync_status' => pSQL($sync_status),
+                    'last_error' => null,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ],
+                'prestashop_product_id = ' . (int) $product_id
+            );
+        } catch (Exception $e) {
+            // Silencioso: no debe interrumpir el procesamiento de la cola
+        }
+    }
+
     /**
      * Actualizar estado de un elemento en la cola
      */

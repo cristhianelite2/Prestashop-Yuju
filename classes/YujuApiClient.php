@@ -323,14 +323,49 @@ class YujuApiClient
                 'has_whitespace' => (preg_match('/\s/', $access_token) ? 'YES' : 'NO'),
                 'is_base64_like' => (bool)preg_match('/^[A-Za-z0-9+\/]+={0,2}$/', $access_token)
             ]);
-            
-            // Usar Bearer según funciona en Postman
-            $headers[] = 'Authorization: Bearer ' . $access_token;
+
+            $headers[] = $this->buildAuthorizationHeader($access_token);
         } else {
             $this->logger->warning('No access token available for request');
         }
 
         return $headers;
+    }
+
+    /**
+     * Construye el header Authorization sin forzar un esquema incorrecto.
+     *
+     * Algunos tokens de Yuju ya vienen con esquema (ej. "Bearer ...")
+     * o con formato de pares key=value. En esos casos debe enviarse tal cual.
+     */
+    private function buildAuthorizationHeader($access_token)
+    {
+        $token = trim((string) $access_token);
+
+        // Ya viene con header completo.
+        if (stripos($token, 'Authorization:') === 0) {
+            return $token;
+        }
+
+        // Esquemas comunes ya presentes.
+        if (preg_match('/^(Bearer|Basic|Token|HMAC|Signature)\s+/i', $token)) {
+            return 'Authorization: ' . $token;
+        }
+
+        // Formato estilo OAuth/HMAC: key="value", signature="...".
+        if (strpos($token, '=') !== false && strpos($token, ',') !== false) {
+            return 'Authorization: ' . $token;
+        }
+
+        // Tokens hash/base64 puros (ej: abc+/...=) suelen requerir ir "en crudo".
+        // Si forzamos Bearer, algunos gateways de Yuju responden:
+        // "Invalid key=value pair ... in Authorization header".
+        if (preg_match('/^[A-Za-z0-9+\/=]+$/', $token)) {
+            return 'Authorization: ' . $token;
+        }
+
+        // Fallback para tokens opacos/JWT modernos.
+        return 'Authorization: Bearer ' . $token;
     }
 
 
@@ -741,7 +776,7 @@ class YujuApiClient
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Accept: application/json',
-                'Authorization: Bearer ' . $token
+                $this->buildAuthorizationHeader($token)
             ],
         ]);
         
@@ -816,7 +851,7 @@ class YujuApiClient
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Accept: application/json',
-                'Authorization: Bearer ' . $token
+                $this->buildAuthorizationHeader($token)
             ],
         ]);
         
@@ -888,7 +923,7 @@ class YujuApiClient
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'Authorization: Bearer ' . $token
+            $this->buildAuthorizationHeader($token)
         ];
         
         // Debug: Log COMPLETO de la petición
@@ -1009,7 +1044,7 @@ class YujuApiClient
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'Authorization: Bearer ' . $token
+            $this->buildAuthorizationHeader($token)
         ];
         
         $this->logger->info('updateVariation - Petición COMPLETA', [

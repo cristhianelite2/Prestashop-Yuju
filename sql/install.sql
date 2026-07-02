@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) NOT NULL,
     `yuju_product_id` varchar(255),
-    `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued') DEFAULT 'pending',
+    `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued', 'creating_in_yuju', 'updating_in_yuju', 'deleting_in_yuju') DEFAULT 'pending',
     `sync_direction` enum('prestashop_to_yuju', 'yuju_to_prestashop', 'bidirectional') DEFAULT 'bidirectional',
     `last_sync_at` datetime,
     `last_sync_data` text,
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) NOT NULL,
-    `action` enum('create','update') NOT NULL,
+    `action` enum('create','update','delete') NOT NULL,
     `priority` enum('high','normal') NOT NULL DEFAULT 'normal',
     `status` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
     `data` TEXT NOT NULL COMMENT 'JSON con los datos a sincronizar',
@@ -266,6 +266,27 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_value_mapping` (
     KEY `idx_yuju_value` (`yuju_value_id`),
     KEY `idx_active` (`is_active`),
     FOREIGN KEY (`attribute_mapping_id`) REFERENCES `PREFIX_yuju_attribute_mapping` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_sync_history` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `prestashop_product_id` int(11) NOT NULL,
+    `yuju_product_id` varchar(255) DEFAULT NULL,
+    `sync_direction` enum('to_yuju', 'from_yuju') NOT NULL DEFAULT 'to_yuju',
+    `action` enum('create', 'update', 'delete') NOT NULL,
+    `status` enum('success', 'error', 'warning') NOT NULL,
+    `http_status_code` int(11) DEFAULT NULL,
+    `request_data` longtext,
+    `response_data` longtext,
+    `error_message` text,
+    `sync_duration` decimal(10,3) DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` varchar(100) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_prestashop_product` (`prestashop_product_id`),
+    KEY `idx_yuju_product` (`yuju_product_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Los datos por defecto ya se insertan arriba después de la creación de la tabla

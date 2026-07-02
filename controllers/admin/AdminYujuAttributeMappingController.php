@@ -114,6 +114,25 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             return;
         }
         
+        $yuju_attributes_count = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache'
+        );
+        if ($yuju_attributes_count === 0) {
+            $this->loadFallbackAttributesFromJson();
+            $yuju_attributes_count = (int) Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache'
+            );
+        }
+
+        $yuju_attributes_for_modal = $this->getYujuAllowedValueOptionsForModal();
+        if (empty($yuju_attributes_for_modal)) {
+            $yuju_attributes_for_modal = Db::getInstance()->executeS('
+                SELECT yuju_attribute_id AS id, name, type
+                FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+                ORDER BY type ASC, name ASC
+            ') ?: [];
+        }
+
         // Assign data for the template
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuAttributeMapping',
@@ -121,12 +140,12 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             'prestashop_attributes' => $this->getPrestashopAttributes(),
             'prestashop_attribute_groups' => $this->getPrestashopAttributeGroups(),
             'yuju_attributes' => $this->getYujuAttributes(),
+            'yuju_attributes_for_modal' => $yuju_attributes_for_modal,
             'yuju_attribute_groups' => $this->getYujuAttributeGroups(),
-            'attribute_types' => $this->getAttributeTypes(),
-            'field_types' => $this->getFieldTypes(),
-            'transformation_rules' => $this->getTransformationRules(),
+            'yuju_attributes_count' => $yuju_attributes_count,
 
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuAttributeMapping'),
+            'token' => $this->token,
         ]);
         
         parent::initContent();
@@ -137,7 +156,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     public function renderList()
     {
         $this->_select = '
-            agl.name as prestashop_attribute_name,
+            al.name as prestashop_attribute_name,
             (
                 SELECT COUNT(*)
                 FROM ' . _DB_PREFIX_ . 'yuju_attribute_value_mapping avm
@@ -145,9 +164,10 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             ) as value_mapping_count
         ';
 
+        $id_lang = (int) $this->context->language->id;
         $this->_join = '
-            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group ag ON (a.prestashop_attribute_id = ag.id_attribute_group)
-            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON (ag.id_attribute_group = agl.id_attribute_group AND agl.id_lang = ' . (int) $this->context->language->id . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute attr_ps ON (a.prestashop_attribute_id = attr_ps.id_attribute)
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_lang al ON (attr_ps.id_attribute = al.id_attribute AND al.id_lang = ' . $id_lang . ')
         ';
 
         $this->_orderBy = 'a.id';
@@ -281,8 +301,8 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         $existing = Db::getInstance()->getRow('
             SELECT id FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
             WHERE prestashop_attribute_id = ' . (int) $prestashop_attribute_id . '
-            AND id != ' . (int) Tools::getValue('id')
-        );
+            AND id != ' . (int) Tools::getValue('id') . '
+        ');
 
         if ($existing) {
             $this->errors[] = $this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Prestashopyuju.Admin');
@@ -340,50 +360,374 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         </a>';
     }
 
+    /**
+     * La API devuelve el JSON en $apiResult['data']; los ítems suelen ir en ['data'] anidado.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractYujuAttributeItemsFromApiResult($apiResult)
+    {
+        if (!is_array($apiResult) || empty($apiResult['success']) || !isset($apiResult['data']) || !is_array($apiResult['data'])) {
+            return [];
+        }
+
+        $body = $apiResult['data'];
+
+        if (isset($body['data']) && is_array($body['data'])) {
+            return $body['data'];
+        }
+
+        if (isset($body['attributes']) && is_array($body['attributes'])) {
+            return $body['attributes'];
+        }
+
+        $keys = array_keys($body);
+        if ($keys === range(0, count($body) - 1)) {
+            return $body;
+        }
+
+        if (isset($body['id'])) {
+            return [$body];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $attribute
+     *
+     * @return array{id: string, name: string, type: string, required: int, values: array<int, array<string, mixed>>}
+     */
+    protected function normalizeYujuAttributeRow($attribute)
+    {
+        $id = '';
+        if (isset($attribute['id'])) {
+            $id = (string) $attribute['id'];
+        } elseif (isset($attribute['attribute_id'])) {
+            $id = (string) $attribute['attribute_id'];
+        }
+
+        $name = (string) ($attribute['name'] ?? $attribute['label'] ?? $attribute['title'] ?? $id);
+        $typeRaw = $attribute['type'] ?? $attribute['data_type'] ?? $attribute['field_type'] ?? 'select';
+        $type = is_string($typeRaw) ? $typeRaw : 'select';
+
+        $values = [];
+        if (isset($attribute['values']) && is_array($attribute['values'])) {
+            $values = $attribute['values'];
+        } elseif (isset($attribute['options']) && is_array($attribute['options'])) {
+            $values = $attribute['options'];
+        }
+
+        return [
+            'id' => $id,
+            'name' => $name,
+            'type' => $type,
+            'required' => (int) ($attribute['required'] ?? 0),
+            'values' => $values,
+        ];
+    }
+
     protected function syncYujuAttributes()
     {
         try {
             $api_client = new YujuApiClient();
-            $attributes = $api_client->getAttributes();
+            $apiResult = $api_client->getAttributes();
+            $items = $this->extractYujuAttributeItemsFromApiResult($apiResult);
 
-            if ($attributes && isset($attributes['data'])) {
-                // Store attributes in cache table for faster access
-                Db::getInstance()->execute('TRUNCATE TABLE ' . _DB_PREFIX_ . 'yuju_attributes_cache');
+            if (!empty($items)) {
+                $this->persistYujuAttributesInCache($items);
 
-                foreach ($attributes['data'] as $attribute) {
-                    Db::getInstance()->insert('yuju_attributes_cache', [
-                        'yuju_attribute_id' => pSQL($attribute['id']),
-                        'name' => pSQL($attribute['name']),
-                        'type' => pSQL($attribute['type'] ?? 'select'),
-                        'required' => (int) ($attribute['required'] ?? 0),
+                $this->confirmations[] = $this->trans('Yuju attributes synchronized successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->logger->log('Yuju attributes synchronized: ' . count($items) . ' attributes', 'info');
+            } else {
+                $loaded_from_json = $this->loadFallbackAttributesFromJson();
+                if (!$loaded_from_json) {
+                    $this->errors[] = $this->trans('No attributes found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
+                    if (is_array($apiResult) && !empty($apiResult['message'])) {
+                        $this->errors[] = $apiResult['message'];
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $loaded_from_json = $this->loadFallbackAttributesFromJson();
+            if (!$loaded_from_json) {
+                $this->errors[] = $this->trans('Error synchronizing Yuju attributes: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+                $this->logger->log('Error synchronizing Yuju attributes: ' . $e->getMessage(), 'error');
+            }
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    protected function persistYujuAttributesInCache($items)
+    {
+        Db::getInstance()->execute('TRUNCATE TABLE ' . _DB_PREFIX_ . 'yuju_attributes_cache');
+        Db::getInstance()->execute('TRUNCATE TABLE ' . _DB_PREFIX_ . 'yuju_attribute_values_cache');
+
+        foreach ($items as $attribute) {
+            $row = $this->normalizeYujuAttributeRow($attribute);
+            if ($row['id'] === '') {
+                continue;
+            }
+
+            Db::getInstance()->insert('yuju_attributes_cache', [
+                'yuju_attribute_id' => pSQL($row['id']),
+                'name' => pSQL($row['name']),
+                'type' => pSQL($row['type']),
+                'required' => $row['required'],
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            if (!empty($row['values'])) {
+                foreach ($row['values'] as $value) {
+                    if (!is_array($value)) {
+                        continue;
+                    }
+                    $vid = isset($value['id']) ? (string) $value['id'] : (isset($value['value_id']) ? (string) $value['value_id'] : '');
+                    if ($vid === '') {
+                        continue;
+                    }
+                    $vname = (string) ($value['name'] ?? $value['label'] ?? $value['value'] ?? $vid);
+                    Db::getInstance()->insert('yuju_attribute_values_cache', [
+                        'yuju_attribute_id' => pSQL($row['id']),
+                        'yuju_value_id' => pSQL($vid),
+                        'value_name' => pSQL($vname),
+                        'value_code' => pSQL($value['code'] ?? ''),
                         'created_at' => date('Y-m-d H:i:s'),
                         'updated_at' => date('Y-m-d H:i:s'),
                     ]);
-
-                    // Store attribute values if available
-                    if (isset($attribute['values']) && is_array($attribute['values'])) {
-                        foreach ($attribute['values'] as $value) {
-                            Db::getInstance()->insert('yuju_attribute_values_cache', [
-                                'yuju_attribute_id' => pSQL($attribute['id']),
-                                'yuju_value_id' => pSQL($value['id']),
-                                'value_name' => pSQL($value['name']),
-                                'value_code' => pSQL($value['code'] ?? ''),
-                                'created_at' => date('Y-m-d H:i:s'),
-                                'updated_at' => date('Y-m-d H:i:s'),
-                            ]);
-                        }
-                    }
                 }
-
-                $this->confirmations[] = $this->trans('Yuju attributes synchronized successfully.', array(), 'Modules.Prestashopyuju.Admin');
-                $this->logger->log('Yuju attributes synchronized: ' . count($attributes['data']) . ' attributes', 'info');
-            } else {
-                $this->errors[] = $this->trans('No attributes found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
             }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error synchronizing Yuju attributes: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-            $this->logger->log('Error synchronizing Yuju attributes: ' . $e->getMessage(), 'error');
         }
+    }
+
+    protected function getAllowedValuesJsonPath()
+    {
+        return _PS_MODULE_DIR_ . 'prestashopyuju/config/yuju_allowed_values.json';
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getFallbackAttributesFromJson()
+    {
+        $path = $this->getAllowedValuesJsonPath();
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $raw = @file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || !isset($decoded['attributes']) || !is_array($decoded['attributes'])) {
+            return [];
+        }
+
+        return $decoded['attributes'];
+    }
+
+    /**
+     * Opciones del modal: IDs de valor Yuju (p. ej. agua, rojo) según yuju_allowed_values.json.
+     *
+     * @return array<int, array{id: string, name: string, type: string}>
+     */
+    protected function getYujuAllowedValueOptionsForModal()
+    {
+        $attrs = $this->getFallbackAttributesFromJson();
+        if (empty($attrs)) {
+            return [];
+        }
+
+        $seen = [];
+        $out = [];
+        foreach ($attrs as $attr) {
+            if (!is_array($attr) || empty($attr['values']) || !is_array($attr['values'])) {
+                continue;
+            }
+            $ptype = isset($attr['type']) ? (string) $attr['type'] : 'custom';
+            foreach ($attr['values'] as $v) {
+                if (!is_array($v)) {
+                    continue;
+                }
+                $vid = isset($v['id']) ? (string) $v['id'] : '';
+                if ($vid === '' || isset($seen[$vid])) {
+                    continue;
+                }
+                $seen[$vid] = true;
+                $vname = (string) ($v['name'] ?? $vid);
+                $out[] = [
+                    'id' => $vid,
+                    'name' => $vname,
+                    'type' => $ptype,
+                ];
+            }
+        }
+
+        usort($out, function ($a, $b) {
+            return strcasecmp($a['name'], $b['name']);
+        });
+
+        return $out;
+    }
+
+    /**
+     * @param string $value_id
+     *
+     * @return string|false
+     */
+    protected function getYujuValueLabelFromJson($value_id)
+    {
+        $value_id = (string) $value_id;
+        if ($value_id === '') {
+            return false;
+        }
+        foreach ($this->getFallbackAttributesFromJson() as $attr) {
+            if (empty($attr['values']) || !is_array($attr['values'])) {
+                continue;
+            }
+            foreach ($attr['values'] as $v) {
+                if (!is_array($v)) {
+                    continue;
+                }
+                if ((string) ($v['id'] ?? '') === $value_id) {
+                    return (string) ($v['name'] ?? $value_id);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param string $value_id
+     *
+     * @return string Tipo API (color, category, …) o cadena vacía
+     */
+    protected function getYujuApiTypeFromJsonForValueId($value_id)
+    {
+        $value_id = (string) $value_id;
+        if ($value_id === '') {
+            return '';
+        }
+        foreach ($this->getFallbackAttributesFromJson() as $attr) {
+            if (empty($attr['values']) || !is_array($attr['values']) || !isset($attr['type'])) {
+                continue;
+            }
+            foreach ($attr['values'] as $v) {
+                if (!is_array($v)) {
+                    continue;
+                }
+                if ((string) ($v['id'] ?? '') === $value_id) {
+                    return (string) $attr['type'];
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Tipo API para filtros del modal (legacy: id de atributo padre; nuevo: id de valor).
+     *
+     * @param string $id
+     *
+     * @return string
+     */
+    protected function getYujuApiTypeForMappingValue($id)
+    {
+        $id = trim((string) $id);
+        if ($id === '') {
+            return '';
+        }
+        $row = Db::getInstance()->getRow('
+            SELECT type FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+            WHERE yuju_attribute_id = "' . pSQL($id) . '"
+        ');
+        if ($row && !empty($row['type'])) {
+            return (string) $row['type'];
+        }
+        $row = Db::getInstance()->getRow('
+            SELECT yac.type
+            FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache yavc
+            INNER JOIN ' . _DB_PREFIX_ . 'yuju_attributes_cache yac
+                ON (yavc.yuju_attribute_id = yac.yuju_attribute_id)
+            WHERE yavc.yuju_value_id = "' . pSQL($id) . '"
+        ');
+        if ($row && !empty($row['type'])) {
+            return (string) $row['type'];
+        }
+        $t = $this->getYujuApiTypeFromJsonForValueId($id);
+
+        return $t !== '' ? $t : '';
+    }
+
+    /**
+     * @param string $apiType
+     *
+     * @return string
+     */
+    protected function mapYujuApiTypeToAttributeType($apiType)
+    {
+        $apiType = (string) $apiType;
+        if (in_array($apiType, ['color', 'size', 'material'], true)) {
+            return $apiType;
+        }
+
+        return 'custom';
+    }
+
+    /**
+     * @param string $value_id
+     *
+     * @return string|false yuju_attribute_id padre o false
+     */
+    protected function resolveYujuParentAttributeIdFromValueId($value_id)
+    {
+        $value_id = trim((string) $value_id);
+        if ($value_id === '') {
+            return false;
+        }
+        $pid = Db::getInstance()->getValue('
+            SELECT yuju_attribute_id FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache
+            WHERE yuju_value_id = "' . pSQL($value_id) . '"
+        ');
+        if ($pid) {
+            return (string) $pid;
+        }
+        foreach ($this->getFallbackAttributesFromJson() as $attr) {
+            if (empty($attr['id']) || empty($attr['values']) || !is_array($attr['values'])) {
+                continue;
+            }
+            foreach ($attr['values'] as $v) {
+                if (!is_array($v)) {
+                    continue;
+                }
+                if ((string) ($v['id'] ?? '') === $value_id) {
+                    return (string) $attr['id'];
+                }
+            }
+        }
+
+        return false;
+    }
+
+    protected function loadFallbackAttributesFromJson()
+    {
+        $fallback_items = $this->getFallbackAttributesFromJson();
+        if (empty($fallback_items)) {
+            return false;
+        }
+
+        $this->persistYujuAttributesInCache($fallback_items);
+        $this->confirmations[] = $this->trans('Yuju values loaded from local JSON fallback.', array(), 'Modules.Prestashopyuju.Admin');
+        $this->logger->log('Fallback JSON loaded for Yuju attributes. Count: ' . count($fallback_items), 'warning');
+
+        return true;
     }
 
     protected function getYujuAttributes()
@@ -410,12 +754,60 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     protected function getYujuAttributeName($attribute_id)
     {
+        $attribute_id = trim((string) $attribute_id);
+        if ($attribute_id === '') {
+            return false;
+        }
         $result = Db::getInstance()->getRow('
             SELECT name FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
             WHERE yuju_attribute_id = "' . pSQL($attribute_id) . '"
         ');
+        if ($result) {
+            return $result['name'];
+        }
+        $result = Db::getInstance()->getRow('
+            SELECT value_name AS name FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache
+            WHERE yuju_value_id = "' . pSQL($attribute_id) . '"
+        ');
+        if ($result) {
+            return $result['name'];
+        }
 
-        return $result ? $result['name'] : false;
+        return $this->getYujuValueLabelFromJson($attribute_id);
+    }
+
+    /**
+     * Tipo almacenado en BD (enum) a partir del id (atributo padre o valor permitido).
+     */
+    protected function inferAttributeTypeForMapping($yuju_attribute_id)
+    {
+        $yuju_attribute_id = trim((string) $yuju_attribute_id);
+        if ($yuju_attribute_id === '') {
+            return 'custom';
+        }
+        $row = Db::getInstance()->getRow('
+            SELECT type FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+            WHERE yuju_attribute_id = "' . pSQL($yuju_attribute_id) . '"
+        ');
+        if ($row && $row['type'] !== '' && $row['type'] !== null) {
+            return $this->mapYujuApiTypeToAttributeType((string) $row['type']);
+        }
+        $row = Db::getInstance()->getRow('
+            SELECT yac.type
+            FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache yavc
+            INNER JOIN ' . _DB_PREFIX_ . 'yuju_attributes_cache yac
+                ON (yavc.yuju_attribute_id = yac.yuju_attribute_id)
+            WHERE yavc.yuju_value_id = "' . pSQL($yuju_attribute_id) . '"
+        ');
+        if ($row && $row['type'] !== '' && $row['type'] !== null) {
+            return $this->mapYujuApiTypeToAttributeType((string) $row['type']);
+        }
+        $apiType = $this->getYujuApiTypeFromJsonForValueId($yuju_attribute_id);
+        if ($apiType !== '') {
+            return $this->mapYujuApiTypeToAttributeType($apiType);
+        }
+
+        return 'custom';
     }
 
     protected function processBulkEnableMapping()
@@ -474,20 +866,29 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             return;
         }
 
-        // Get PrestaShop attribute values
-        $ps_values = AttributeGroup::getAttributes($this->context->language->id, $mapping['prestashop_attribute_id']);
+        $mapping['id_mapping'] = (int) $mapping['id'];
 
-        // Get Yuju attribute values
-        $yuju_values = Db::getInstance()->executeS('
-            SELECT * FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache
-            WHERE yuju_attribute_id = "' . pSQL($mapping['yuju_attribute_id']) . '"
+        $id_attribute_group = (int) Db::getInstance()->getValue('
+            SELECT id_attribute_group FROM ' . _DB_PREFIX_ . 'attribute
+            WHERE id_attribute = ' . (int) $mapping['prestashop_attribute_id'] . '
         ');
 
-        // Get existing value mappings
+        $ps_values = AttributeGroup::getAttributes($this->context->language->id, $id_attribute_group);
+
+        $yuju_parent_id = $this->resolveYujuParentAttributeIdFromValueId($mapping['yuju_attribute_id']);
+        if (!$yuju_parent_id) {
+            $yuju_parent_id = $mapping['yuju_attribute_id'];
+        }
+
+        $yuju_values = Db::getInstance()->executeS('
+            SELECT * FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache
+            WHERE yuju_attribute_id = "' . pSQL($yuju_parent_id) . '"
+        ');
+
         $existing_mappings = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_attribute_value_mapping
-            WHERE attribute_mapping_id = ' . (int) $id
-        );
+            WHERE attribute_mapping_id = ' . (int) $id . '
+        ');
 
         $this->context->smarty->assign([
             'mapping' => $mapping,
@@ -504,19 +905,31 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     // AJAX Methods
     public function ajaxProcessSaveMapping()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'message' => ''];
 
         try {
-            $id = (int) Tools::getValue('id');
+            $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
             $prestashop_attribute_id = (int) Tools::getValue('prestashop_attribute_id');
-            $yuju_attribute_id = Tools::getValue('yuju_attribute_id');
-            $attribute_type = Tools::getValue('attribute_type');
-            $sync_direction = Tools::getValue('sync_direction');
-            $auto_create_values = (int) Tools::getValue('auto_create_values');
-            $is_active = (int) Tools::getValue('is_active');
+            $yuju_attribute_id = trim((string) Tools::getValue('yuju_attribute_id'));
 
-            // Validation
-            if (!$prestashop_attribute_id || !$yuju_attribute_id || !$attribute_type || !$sync_direction) {
+            $attribute_type = $this->inferAttributeTypeForMapping($yuju_attribute_id);
+            $sync_direction = 'prestashop_to_yuju';
+            $auto_create_values = 1;
+            $is_active = 1;
+
+            if ($id) {
+                $prev = Db::getInstance()->getRow('
+                    SELECT is_active, auto_create_values FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
+                    WHERE id = ' . (int) $id . '
+                ');
+                if ($prev) {
+                    $is_active = (int) $prev['is_active'];
+                    $auto_create_values = (int) $prev['auto_create_values'];
+                }
+            }
+
+            if (!$prestashop_attribute_id || $yuju_attribute_id === '') {
                 throw new Exception($this->trans('All required fields must be filled.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
@@ -524,21 +937,29 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $existing = Db::getInstance()->getRow('
                 SELECT id FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
                 WHERE prestashop_attribute_id = ' . (int) $prestashop_attribute_id . '
-                AND id != ' . (int) $id
-            );
+                AND id != ' . (int) $id . '
+            ');
 
             if ($existing) {
                 throw new Exception($this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
-            // Get Yuju attribute name
             $yuju_attribute_name = $this->getYujuAttributeName($yuju_attribute_id);
             if (!$yuju_attribute_name) {
                 throw new Exception($this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
+            $id_lang = (int) $this->context->language->id;
+            $prestashop_attribute_name = (string) Db::getInstance()->getValue('
+                SELECT al.name
+                FROM ' . _DB_PREFIX_ . 'attribute_lang al
+                WHERE al.id_attribute = ' . (int) $prestashop_attribute_id . '
+                AND al.id_lang = ' . $id_lang . '
+            ');
+
             $data = [
                 'prestashop_attribute_id' => $prestashop_attribute_id,
+                'prestashop_attribute_name' => pSQL($prestashop_attribute_name),
                 'yuju_attribute_id' => pSQL($yuju_attribute_id),
                 'yuju_attribute_name' => pSQL($yuju_attribute_name),
                 'attribute_type' => pSQL($attribute_type),
@@ -549,7 +970,6 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             ];
 
             if ($id) {
-                // Update
                 $result = Db::getInstance()->update(
                     'yuju_attribute_mapping',
                     $data,
@@ -557,7 +977,6 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 );
                 $message = $this->trans('Attribute mapping updated successfully.', array(), 'Modules.Prestashopyuju.Admin');
             } else {
-                // Insert
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $result = Db::getInstance()->insert('yuju_attribute_mapping', $data);
                 $message = $this->trans('Attribute mapping created successfully.', array(), 'Modules.Prestashopyuju.Admin');
@@ -580,20 +999,31 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     public function ajaxProcessGetMapping()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'data' => null];
 
         try {
-            $id = (int) Tools::getValue('id');
+            $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
             if (!$id) {
                 throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
             $mapping = Db::getInstance()->getRow('
                 SELECT * FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
-                WHERE id = ' . (int) $id
-            );
+                WHERE id = ' . (int) $id . '
+            ');
 
             if ($mapping) {
+                $prestashop_attribute_group_id = (int) Db::getInstance()->getValue('
+                    SELECT id_attribute_group FROM ' . _DB_PREFIX_ . 'attribute
+                    WHERE id_attribute = ' . (int) $mapping['prestashop_attribute_id'] . '
+                ');
+                $yuju_attribute_group_id = $this->getYujuApiTypeForMappingValue($mapping['yuju_attribute_id']);
+
+                $mapping['id_mapping'] = (int) $mapping['id'];
+                $mapping['prestashop_attribute_group_id'] = $prestashop_attribute_group_id;
+                $mapping['yuju_attribute_group_id'] = $yuju_attribute_group_id;
+
                 $response['success'] = true;
                 $response['data'] = $mapping;
             } else {
@@ -608,10 +1038,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     public function ajaxProcessDeleteMapping()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'message' => ''];
 
         try {
-            $id = (int) Tools::getValue('id');
+            $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
             if (!$id) {
                 throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
             }
@@ -638,11 +1069,12 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     public function ajaxProcessToggleMapping()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'message' => ''];
 
         try {
-            $id = (int) Tools::getValue('id');
-            $status = (int) Tools::getValue('status');
+            $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
+            $status = (int) Tools::getValue('status', Tools::getValue('is_active'));
 
             if (!$id) {
                 throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
@@ -672,15 +1104,127 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     public function ajaxProcessRefreshYujuAttributes()
     {
+        header('Content-Type: application/json');
         $response = ['success' => false, 'message' => '', 'data' => []];
 
         try {
             $this->syncYujuAttributes();
+            if (!empty($this->errors)) {
+                $response['message'] = implode(' ', $this->errors);
+                die(json_encode($response));
+            }
             $attributes = $this->getYujuAttributes();
-            
+
             $response['success'] = true;
             $response['message'] = $this->trans('Yuju attributes refreshed successfully.', array(), 'Modules.Prestashopyuju.Admin');
             $response['data'] = $attributes;
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessGetPrestashopAttributes()
+    {
+        header('Content-Type: application/json');
+        $response = ['success' => false, 'data' => [], 'message' => ''];
+
+        try {
+            $group_id = (int) Tools::getValue('group_id');
+            $id_lang = (int) $this->context->language->id;
+
+            if ($group_id <= 0) {
+                throw new Exception('Grupo de PrestaShop inválido.');
+            }
+
+            $rows = Db::getInstance()->executeS('
+                SELECT 
+                    a.id_attribute AS id,
+                    al.name
+                FROM ' . _DB_PREFIX_ . 'attribute a
+                INNER JOIN ' . _DB_PREFIX_ . 'attribute_lang al 
+                    ON (
+                        al.id_attribute = a.id_attribute
+                        AND al.id_lang = ' . $id_lang . '
+                    )
+                WHERE a.id_attribute_group = ' . $group_id . '
+                ORDER BY al.name ASC
+            ');
+
+            $response['success'] = true;
+            $response['data'] = $rows ?: [];
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessGetYujuAttributes()
+    {
+        header('Content-Type: application/json');
+        $response = ['success' => false, 'data' => [], 'message' => ''];
+
+        try {
+            $group_id = trim((string) Tools::getValue('group_id', ''));
+
+            $q = trim((string) Tools::getValue('q'));
+            $qLower = $q !== '' ? mb_strtolower($q, 'UTF-8') : '';
+
+            $fromJson = $this->getYujuAllowedValueOptionsForModal();
+            if (!empty($fromJson)) {
+                if ($group_id === '' || $group_id === 'all') {
+                    $response['success'] = true;
+                    $response['data'] = [];
+                    die(json_encode($response));
+                }
+                $filtered = [];
+                foreach ($fromJson as $opt) {
+                    if ((string) $opt['type'] !== $group_id) {
+                        continue;
+                    }
+                    if ($qLower !== '') {
+                        $nameLower = mb_strtolower((string) $opt['name'], 'UTF-8');
+                        $idLower = mb_strtolower((string) $opt['id'], 'UTF-8');
+                        if (strpos($nameLower, $qLower) === false && strpos($idLower, $qLower) === false) {
+                            continue;
+                        }
+                    }
+                    $filtered[] = $opt;
+                }
+                $response['success'] = true;
+                $response['data'] = $filtered;
+
+                die(json_encode($response));
+            }
+
+            if ($group_id === '' || $group_id === 'all') {
+                $response['success'] = true;
+                $response['data'] = [];
+                die(json_encode($response));
+            }
+
+            $whereParts = [];
+            $whereParts[] = 'type = "' . pSQL($group_id) . '"';
+            if ($q !== '') {
+                $like = '%' . pSQL($q) . '%';
+                $whereParts[] = '(name LIKE "' . $like . '" OR yuju_attribute_id LIKE "' . $like . '")';
+            }
+            $where = 'WHERE ' . implode(' AND ', $whereParts);
+
+            $rows = Db::getInstance()->executeS('
+                SELECT 
+                    yuju_attribute_id AS id,
+                    name,
+                    type
+                FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+                ' . $where . '
+                ORDER BY name ASC
+            ');
+
+            $response['success'] = true;
+            $response['data'] = $rows ?: [];
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
         }
@@ -692,26 +1236,39 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     protected function getAttributeMappings()
     {
         $mappings = [];
-        
+
+        $id_lang = (int) $this->context->language->id;
+
         $result = Db::getInstance()->executeS('
             SELECT 
                 am.*,
-                agl.name as prestashop_attribute_name,
+                am.id AS id_mapping,
+                al.name AS prestashop_attribute_name,
+                agl.name AS prestashop_attribute_group_name,
+                COALESCE(yac_direct.type, yac_val.type) AS yuju_attribute_type,
                 (
                     SELECT COUNT(*)
                     FROM ' . _DB_PREFIX_ . 'yuju_attribute_value_mapping avm
                     WHERE avm.attribute_mapping_id = am.id
                 ) as value_mapping_count
             FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping am
-            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group ag ON (am.prestashop_attribute_id = ag.id_attribute_group)
-            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON (ag.id_attribute_group = agl.id_attribute_group AND agl.id_lang = ' . (int) $this->context->language->id . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute a ON (am.prestashop_attribute_id = a.id_attribute)
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_lang al ON (a.id_attribute = al.id_attribute AND al.id_lang = ' . $id_lang . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl ON (a.id_attribute_group = agl.id_attribute_group AND agl.id_lang = ' . $id_lang . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'yuju_attributes_cache yac_direct ON (am.yuju_attribute_id = yac_direct.yuju_attribute_id)
+            LEFT JOIN (
+                SELECT yuju_value_id, MIN(yuju_attribute_id) AS parent_attr_id
+                FROM ' . _DB_PREFIX_ . 'yuju_attribute_values_cache
+                GROUP BY yuju_value_id
+            ) yavc_one ON (am.yuju_attribute_id = yavc_one.yuju_value_id)
+            LEFT JOIN ' . _DB_PREFIX_ . 'yuju_attributes_cache yac_val ON (yavc_one.parent_attr_id = yac_val.yuju_attribute_id)
             ORDER BY am.id DESC
         ');
-        
+
         if ($result) {
             $mappings = $result;
         }
-        
+
         return $mappings;
     }
 
@@ -757,31 +1314,50 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     protected function getYujuAttributeGroups()
     {
-        // Since Yuju attributes don't have explicit groups like PrestaShop,
-        // we'll create virtual groups based on attribute types or use a default group
+        $typesSeen = [];
+        foreach ($this->getFallbackAttributesFromJson() as $attr) {
+            if (!is_array($attr) || empty($attr['type'])) {
+                continue;
+            }
+            $t = (string) $attr['type'];
+            if ($t !== '') {
+                $typesSeen[$t] = true;
+            }
+        }
+
         $groups = [];
-        
+        if (!empty($typesSeen)) {
+            $typeList = array_keys($typesSeen);
+            sort($typeList, SORT_STRING);
+            foreach ($typeList as $type) {
+                $groups[] = [
+                    'id' => $type,
+                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Prestashopyuju.Admin'), $type),
+                ];
+            }
+
+            return $groups;
+        }
+
         $result = Db::getInstance()->executeS('
             SELECT DISTINCT type
             FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
             ORDER BY type
         ');
-        
+
         if ($result) {
             foreach ($result as $row) {
+                $type = (string) $row['type'];
+                if ($type === '') {
+                    continue;
+                }
                 $groups[] = [
-                    'id' => $row['type'],
-                    'name' => ucfirst($row['type']) . ' Attributes',
+                    'id' => $type,
+                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Prestashopyuju.Admin'), $type),
                 ];
             }
         }
-        
-        // Add a default "All" group
-        array_unshift($groups, [
-            'id' => 'all',
-            'name' => 'All Attributes',
-        ]);
-        
+
         return $groups;
     }
 

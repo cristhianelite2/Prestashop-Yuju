@@ -22,6 +22,8 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuWebhookManager.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuWebhookLog.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
 
 class AdminYujuWebhookController extends ModuleAdminController
 {
@@ -101,48 +103,171 @@ class AdminYujuWebhookController extends ModuleAdminController
 
     public function initPageHeaderToolbar()
     {
-        if (empty($this->display)) {
-            $this->page_header_toolbar_btn['register_webhooks'] = [
-            'href' => self::$currentIndex . '&action=registerWebhooks&token=' . $this->token,
-            'desc' => $this->trans('Register Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
-            'icon' => 'process-icon-new',
-            ];
-
-            $this->page_header_toolbar_btn['unregister_webhooks'] = [
-            'href' => self::$currentIndex . '&action=unregisterWebhooks&token=' . $this->token,
-            'desc' => $this->trans('Unregister Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
-            'icon' => 'process-icon-delete',
-            ];
-
-            $this->page_header_toolbar_btn['test_webhook'] = [
-            'href' => self::$currentIndex . '&action=testWebhook&token=' . $this->token,
-            'desc' => $this->trans('Test Webhook', array(), 'Modules.Prestashopyuju.Admin'),
-            'icon' => 'process-icon-cogs',
-            ];
-
-            $this->page_header_toolbar_btn['clean_logs'] = [
-            'href' => self::$currentIndex . '&action=cleanLogs&token=' . $this->token,
-            'desc' => $this->trans('Clean Old Logs', array(), 'Modules.Prestashopyuju.Admin'),
-            'icon' => 'process-icon-eraser',
-            ];
-        }
-
-        parent::initPageHeaderToolbar();
+        // Toolbar oculto a pedido: se usará la alerta con botón "Habilitar webhooks".
+        $this->page_header_toolbar_btn = [];
     }
 
     public function renderList()
     {
         // Add webhook statistics
         $stats = $this->webhook_manager->getWebhookStats();
+        $subscription_status = $this->webhook_manager->getRequiredWebhookSubscriptionStatus();
+        $subscription_configs = [];
+        $subscription_configs_error = null;
+        try {
+            if (method_exists($this->webhook_manager, 'getWebhookSubscriptionsDetailed')) {
+                $subscription_configs = $this->webhook_manager->getWebhookSubscriptionsDetailed();
+            } else {
+                // Compatibilidad con versiones anteriores de YujuWebhookManager
+                $api_client = new YujuApiClient();
+                $raw = $api_client->getWebhookSubscriptions();
+                $subscription_configs = $this->normalizeWebhookSubscriptionConfigsCompat($raw);
+            }
+        } catch (Exception $e) {
+            $subscription_configs_error = $e->getMessage();
+        }
+        $enable_webhooks_url = self::$currentIndex . '&action=registerWebhooks&token=' . $this->token;
 
         $this->context->smarty->assign([
         'webhook_stats' => $stats,
         'webhook_url' => $this->getWebhookUrl(),
+        'yuju_required_webhook_subscription' => $subscription_status,
+        'yuju_enable_webhooks_url' => $enable_webhooks_url,
+        'yuju_webhook_subscription_configs' => $subscription_configs,
+        'yuju_webhook_subscription_configs_error' => $subscription_configs_error,
+        'yuju_webhook_toggle_config_base' => self::$currentIndex . '&action=toggleWebhookConfiguration&token=' . $this->token,
+        'yuju_webhook_toggle_topic_base' => self::$currentIndex . '&action=toggleWebhookTopic&token=' . $this->token,
+        'yuju_webhook_delete_config_base' => self::$currentIndex . '&action=deleteWebhookConfiguration&token=' . $this->token,
         ]);
 
         $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/webhook_stats.tpl');
+        $status_alert_html = '';
+        if (empty($subscription_status['has_required_subscription'])) {
+            $missing_topics = [];
+            if (!empty($subscription_status['missing_topics']) && is_array($subscription_status['missing_topics'])) {
+                $missing_topics = $subscription_status['missing_topics'];
+            }
+            $topics_text = !empty($missing_topics) ? implode(', ', $missing_topics) : 'No se detectaron topics requeridos';
+            $status_alert_html = '<div class="alert alert-warning">'
+                . '<p style="margin:0 0 8px 0;"><strong>Atención:</strong> No se detectó una suscripción activa con todos los webhooks necesarios de Yuju.</p>'
+                . '<p style="margin:0 0 10px 0;">Faltantes: <code>' . htmlspecialchars($topics_text, ENT_QUOTES, 'UTF-8') . '</code></p>'
+                . '<a class="btn btn-warning" href="' . htmlspecialchars($enable_webhooks_url, ENT_QUOTES, 'UTF-8') . '">'
+                . '<i class="icon-check"></i> Habilitar webhooks'
+                . '</a>'
+                . '</div>';
+        } else {
+            $status_alert_html = '<div class="alert alert-info">'
+                . '<p style="margin:0 0 8px 0;"><strong>Webhooks detectados:</strong> Existe una suscripción activa con los topics requeridos.</p>'
+                . '<a class="btn btn-default" href="' . htmlspecialchars($enable_webhooks_url, ENT_QUOTES, 'UTF-8') . '">'
+                . '<i class="icon-refresh"></i> Reintentar suscripción'
+                . '</a>'
+                . '</div>';
+        }
 
-        return $stats_html . parent::renderList();
+        return $status_alert_html . $stats_html . parent::renderList();
+    }
+
+    /**
+     * Normaliza respuesta de suscripciones para UI en modo compatibilidad.
+     *
+     * @param mixed $api_response
+     * @return array<int, array<string,mixed>>
+     */
+    protected function normalizeWebhookSubscriptionConfigsCompat($api_response)
+    {
+        if (!is_array($api_response)) {
+            return [];
+        }
+
+        $subs = [];
+        if (isset($api_response['data']) && is_array($api_response['data'])) {
+            if (isset($api_response['data'][0]) && is_array($api_response['data'][0])) {
+                $subs = $api_response['data'];
+            } else {
+                $subs = [$api_response['data']];
+            }
+        } elseif (isset($api_response[0]) && is_array($api_response[0])) {
+            $subs = $api_response;
+        } else {
+            $subs = [$api_response];
+        }
+
+        $out = [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub)) {
+                continue;
+            }
+            $id = '';
+            foreach (['id', 'subscription_id', 'id_third_party_app_webhook'] as $k) {
+                if (isset($sub[$k]) && trim((string) $sub[$k]) !== '') {
+                    $id = trim((string) $sub[$k]);
+                    break;
+                }
+            }
+            $topics = [];
+            if (isset($sub['topics']) && is_array($sub['topics'])) {
+                $topics = $sub['topics'];
+            } elseif (isset($sub['topic']) && is_string($sub['topic'])) {
+                $topics = [$sub['topic']];
+            }
+            $topics = array_values(array_unique(array_filter(array_map(static function ($t) {
+                return is_string($t) ? str_replace('_', '-', strtolower(trim($t))) : '';
+            }, $topics))));
+
+            $is_active = true;
+            if (array_key_exists('is_active', $sub)) {
+                $is_active = (bool) $sub['is_active'];
+            } elseif (array_key_exists('active', $sub)) {
+                $is_active = (bool) $sub['active'];
+            }
+
+            $out[] = [
+                'id' => $id,
+                'url' => isset($sub['url']) ? (string) $sub['url'] : '',
+                'topics' => $topics,
+                'is_active' => $is_active,
+                'raw' => $sub,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Devuelve la cadena con JSON pretty-printed si el contenido es JSON válido.
+     * Si no lo es (HTML/texto/binario), retorna el valor original sin modificar.
+     *
+     * @param string|null $raw
+     *
+     * @return string
+     */
+    protected function formatJsonForWebhookView($raw)
+    {
+        if ($raw === null) {
+            return '';
+        }
+        $raw_str = (string) $raw;
+        $trim = trim($raw_str);
+        if ($trim === '') {
+            return '';
+        }
+        // Sólo intentamos decodificar si parece JSON (objeto, array o cadena/null/bool/numérico JSON).
+        $first = $trim[0];
+        if (!in_array($first, ['{', '[', '"'], true)
+            && !preg_match('/^(true|false|null|-?\d)/', $trim)
+        ) {
+            return $raw_str;
+        }
+        $decoded = json_decode($raw_str, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return $raw_str;
+        }
+        $pretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($pretty === false) {
+            return $raw_str;
+        }
+
+        return $pretty;
     }
 
     public function renderView()
@@ -163,6 +288,11 @@ class AdminYujuWebhookController extends ModuleAdminController
         $webhook_log['payload_decoded'] = json_decode($webhook_log['payload'], true);
         $webhook_log['headers_decoded'] = json_decode($webhook_log['headers'], true);
         $webhook_log['response_decoded'] = json_decode($webhook_log['response'], true);
+
+        // Pretty-print de payload y response si son JSON válidos (incluye listas, objetos y "null").
+        // Si no son JSON, se conserva el valor original para no romper respuestas HTML/texto.
+        $webhook_log['payload_pretty'] = $this->formatJsonForWebhookView($webhook_log['payload']);
+        $webhook_log['response_pretty'] = $this->formatJsonForWebhookView($webhook_log['response']);
 
         $this->context->smarty->assign([
         'webhook_log' => $webhook_log,
@@ -199,6 +329,11 @@ class AdminYujuWebhookController extends ModuleAdminController
                     $this->trans('Failed to register %d webhooks', array(), 'Modules.Prestashopyuju.Admin'),
                     $error_count
                 );
+                foreach ($results as $result) {
+                    if (($result['status'] ?? '') !== 'registered' && !empty($result['error'])) {
+                        $this->warnings[] = (string) $result['error'];
+                    }
+                }
             }
         } catch (Exception $e) {
             $this->errors[] = $this->trans('Error registering webhooks: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
@@ -216,6 +351,61 @@ class AdminYujuWebhookController extends ModuleAdminController
             );
         } catch (Exception $e) {
             $this->errors[] = $this->trans('Error unregistering webhooks: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+        }
+    }
+
+    public function processToggleWebhookConfiguration()
+    {
+        try {
+            $subscription_id = (string) Tools::getValue('subscription_id', '');
+            $enable_raw = (string) Tools::getValue('enable', '1');
+            $enabled = ($enable_raw === '1' || strtolower($enable_raw) === 'true');
+            $result = $this->webhook_manager->toggleWebhookConfiguration($subscription_id, $enabled);
+            if (!empty($result['success'])) {
+                $this->confirmations[] = (string) ($result['message'] ?? 'Configuración actualizada');
+            } else {
+                $this->warnings[] = (string) ($result['message'] ?? 'No se pudo actualizar la configuración');
+            }
+        } catch (Exception $e) {
+            $this->errors[] = 'Error al actualizar configuración webhook: ' . $e->getMessage();
+        }
+    }
+
+    public function processDeleteWebhookConfiguration()
+    {
+        try {
+            $subscription_id = (string) Tools::getValue('subscription_id', '');
+            if (trim($subscription_id) === '' || (int) $subscription_id <= 0) {
+                $this->errors[] = 'ID de configuración inválido';
+
+                return;
+            }
+            $result = $this->webhook_manager->deleteWebhookConfiguration($subscription_id);
+            if (!empty($result['success'])) {
+                $this->confirmations[] = (string) ($result['message'] ?? 'Configuración eliminada');
+            } else {
+                $this->warnings[] = (string) ($result['message'] ?? 'No se pudo eliminar la configuración');
+            }
+        } catch (Exception $e) {
+            $this->errors[] = 'Error al eliminar configuración webhook: ' . $e->getMessage();
+        }
+    }
+
+    public function processToggleWebhookTopic()
+    {
+        try {
+            $subscription_id = (string) Tools::getValue('subscription_id', '');
+            $topic = (string) Tools::getValue('topic', '');
+            $enable_raw = (string) Tools::getValue('enable', '1');
+            $enabled = ($enable_raw === '1' || strtolower($enable_raw) === 'true');
+            $result = $this->webhook_manager->toggleWebhookTopic($subscription_id, $topic, $enabled);
+            if (!empty($result['success'])) {
+                $this->confirmations[] = (string) ($result['message'] ?? 'Webhook actualizado');
+            } else {
+                $this->warnings[] = (string) ($result['message'] ?? 'No se pudo actualizar el webhook');
+            }
+        } catch (Exception $e) {
+            $this->errors[] = 'Error al actualizar webhook por configuración: ' . $e->getMessage();
         }
     }
 

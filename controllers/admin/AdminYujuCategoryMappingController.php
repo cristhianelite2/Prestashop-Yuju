@@ -114,7 +114,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             'prestashop_categories' => $prestashop_categories,
             'yuju_categories' => $yuju_categories,
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuCategoryMapping'),
-            'token' => $this->token
+            'token' => $this->token,
+            'auto_open_mapping_modal' => (int) Tools::getValue('openModal', 0) === 1,
+            'prefill_ps_category_id' => (int) Tools::getValue('prefill_ps_category_id', 0),
         ]);
         
         parent::initContent();
@@ -675,7 +677,12 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 cm.created_at,
                 cl.name as prestashop_category_name
             FROM ' . _DB_PREFIX_ . 'yuju_category_mapping cm
-            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl ON (cm.prestashop_category_id = cl.id_category AND cl.id_lang = ' . (int) $this->context->language->id . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl 
+                ON (
+                    cm.prestashop_category_id = cl.id_category 
+                    AND cl.id_lang = ' . (int) $this->context->language->id . '
+                    AND cl.id_shop = ' . (int) $this->context->shop->id . '
+                )
             ORDER BY cm.created_at DESC
         ';
         
