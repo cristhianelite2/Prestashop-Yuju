@@ -54,6 +54,72 @@
     margin: 0;
 }
 
+/*
+ * Títulos de panel compactos en todo el módulo Yuju.
+ * Gana al reskin BO: .panel-heading { padding:24px !important; font-size:24px !important }
+ */
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading,
+.yuju-admin-layout .panel > .panel-heading {
+    position: relative !important;
+    top: 0 !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1.25 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    border-radius: 0 !important;
+}
+
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading i,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading i,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading i,
+.yuju-admin-layout .panel > .panel-heading i {
+    margin-right: 4px !important;
+    font-size: 13px !important;
+}
+
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading .panel-title,
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading h3,
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading h4,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading .panel-title,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading h3,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading h4,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading .panel-title,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading h3,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading h4,
+.yuju-admin-layout .panel > .panel-heading .panel-title,
+.yuju-admin-layout .panel > .panel-heading h3,
+.yuju-admin-layout .panel > .panel-heading h4 {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1.25 !important;
+}
+
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel > .panel-heading .panel-heading-action,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel > .panel-heading .panel-heading-action,
+#content.bootstrap .yuju-admin-layout .panel > .panel-heading .panel-heading-action,
+.yuju-admin-layout .panel > .panel-heading .panel-heading-action {
+    top: 4px !important;
+    right: 8px !important;
+}
+
+/* Excepción: acordeón mini de validación (sigue aún más compacto) */
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-admin-layout .panel-heading.yuju-validate-v2__accordion-head,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-admin-layout .panel-heading.yuju-validate-v2__accordion-head,
+#content.bootstrap .yuju-admin-layout .panel-heading.yuju-validate-v2__accordion-head,
+#content.bootstrap .panel-heading.yuju-validate-v2__accordion-head {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    font-size: inherit !important;
+}
+
 .yuju-sidebar {
     margin-bottom: 20px;
     border: 1px solid #ddd;
@@ -67,9 +133,7 @@
     border: 1px solid #dee2e6;
     border-bottom: 1px solid #dee2e6;
     border-radius: 4px 4px 0 0;
-    padding: 12px 15px;
     font-weight: 600;
-    font-size: 14px;
 }
 
 .yuju-sidebar .panel-heading i {
@@ -125,6 +189,72 @@
     width: 16px;
     text-align: center;
     font-size: 14px;
+}
+
+/* Submenú Mapeos */
+.yuju-nav > li.yuju-nav-group > a.yuju-nav-toggle {
+    position: relative;
+    cursor: pointer;
+}
+
+.yuju-nav > li.yuju-nav-group.active-group > a.yuju-nav-toggle {
+    background: #f0f2f8;
+    color: #5a6fd8;
+    font-weight: 600;
+}
+
+.yuju-nav > li.yuju-nav-group.active-group > a.yuju-nav-toggle:hover {
+    background: #e8ebf6;
+    color: #5a6fd8;
+}
+
+.yuju-nav-caret {
+    margin-right: 0 !important;
+    margin-top: 3px;
+    transition: transform 0.2s ease;
+}
+
+.yuju-nav-group.open > a .yuju-nav-caret,
+.yuju-nav-group > a[aria-expanded="true"] .yuju-nav-caret {
+    transform: rotate(180deg);
+}
+
+.yuju-nav-submenu {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fafafa;
+    border-top: 1px solid #f0f0f0;
+}
+
+.yuju-nav-submenu > li {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.yuju-nav-submenu > li:last-child {
+    border-bottom: none;
+}
+
+.yuju-nav-submenu > li > a {
+    padding: 10px 15px 10px 28px;
+    font-size: 13px;
+    color: #666;
+}
+
+.yuju-nav-submenu > li > a:hover {
+    background-color: #f1f3f8;
+    color: #667eea;
+}
+
+.yuju-nav-submenu > li.active > a {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    font-weight: 600;
+}
+
+.yuju-nav-submenu > li.active > a:hover {
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    color: #fff;
 }
 
 /* Responsive adjustments */
@@ -673,6 +803,96 @@
 
 .yuju-dashboard-panel .panel-heading i {
     margin-right: 7px;
+}
+
+/* Meta cuenta/tienda — layout sobrio */
+.yuju-account-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.yuju-account-meta__item {
+    flex: 1 1 180px;
+    padding: 14px 18px;
+    border-right: 1px solid #e8e8e8;
+    min-width: 0;
+}
+
+.yuju-account-meta__item:last-child {
+    border-right: none;
+}
+
+.yuju-account-meta__label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 4px;
+}
+
+.yuju-account-meta__value {
+    display: block;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.yuju-account-meta__value--sm {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+
+.yuju-account-meta__id {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: #999;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+.yuju-account-meta__item--muted .yuju-account-meta__value {
+    font-weight: 500;
+}
+
+.yuju-account-meta__hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #888;
+}
+
+#yuju-channels-table {
+    margin-bottom: 0;
+}
+
+#yuju-channels-table > thead > tr > th {
+    border-bottom-width: 1px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #777;
+    background: transparent;
+    font-weight: 600;
+}
+
+@media (max-width: 767px) {
+    .yuju-account-meta__item {
+        flex: 1 1 100%;
+        border-right: none;
+        border-bottom: 1px solid #e8e8e8;
+    }
+    .yuju-account-meta__item:last-child {
+        border-bottom: none;
+    }
 }
 
 .yuju-mini-stats h3 {
@@ -1474,13 +1694,6 @@
 }
 
 /* Override tema BO (panel-heading) para que sea realmente mini */
-#content.bootstrap .panel-heading.yuju-validate-v2__accordion-head {
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: 0 !important;
-}
-
 #content.bootstrap .panel-heading.yuju-validate-v2__accordion-head h5.panel-title {
     padding: 0 !important;
     margin: 0 !important;
@@ -1697,6 +1910,12 @@
     margin-top: 10px;
 }
 
+/* Panel body un poco más compacto en Category Bulk */
+#content.bootstrap .panel.yuju-cat-bulk > .panel-body.yuju-cat-bulk__panel-body,
+.yuju-admin-layout .panel.yuju-cat-bulk > .panel-body.yuju-cat-bulk__panel-body {
+    padding: 10px 12px;
+}
+
 .yuju-cat-bulk__toolbar {
     margin-bottom: 12px;
     display: flex;
@@ -1707,6 +1926,54 @@
 
 .yuju-cat-bulk__toolbar-help {
     font-size: 12px;
+}
+
+.yuju-cat-bulk__detail-head {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border: 1px solid #e5e9ef;
+    border-radius: 6px;
+    background: #fafbfc;
+}
+
+.yuju-cat-bulk__detail-head-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.yuju-cat-bulk__detail-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.yuju-cat-bulk__detail-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.yuju-cat-bulk__detail-map-name {
+    font-size: 12px;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.yuju-cat-bulk__kpis--filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
 }
 
 .yuju-cat-bulk__context {
@@ -1801,6 +2068,65 @@
     margin-bottom: 8px;
 }
 
+.yuju-cat-bulk__kpis--single {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.yuju-cat-bulk__kpis--single .yuju-cat-bulk__kpi-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0;
+}
+
+.yuju-kpi--compact {
+    padding: 8px 6px;
+    margin-bottom: 0;
+    min-height: 0;
+    text-align: center;
+}
+
+.yuju-kpi--compact .yuju-kpi__value {
+    font-size: 20px;
+}
+
+.yuju-kpi--compact .yuju-kpi__label {
+    font-size: 10px;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+
+.yuju-kpi--compact .yuju-kpi__hint {
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.yuju-kpi--compact .yuju-kpi__detail-btn {
+    padding: 0;
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+@media (max-width: 1200px) {
+    .yuju-cat-bulk__kpis--single {
+        flex-wrap: wrap;
+    }
+
+    .yuju-cat-bulk__kpis--single .yuju-cat-bulk__kpi-item {
+        flex: 1 1 calc(25% - 6px);
+        min-width: 90px;
+    }
+}
+
+@media (max-width: 768px) {
+    .yuju-cat-bulk__kpis--single .yuju-cat-bulk__kpi-item {
+        flex: 1 1 calc(50% - 6px);
+    }
+}
+
 .yuju-kpi {
     border-radius: 8px;
     padding: 14px 16px;
@@ -1832,6 +2158,63 @@
 .yuju-kpi--pending .yuju-kpi__value { color: #b45309; }
 .yuju-kpi--err .yuju-kpi__value { color: #b71c1c; }
 .yuju-kpi--total .yuju-kpi__value { color: #1e3a5f; }
+
+/* KPIs compactos clicables (detalle categoría) — después de .yuju-kpi para ganar cascada */
+.yuju-kpi.yuju-kpi--filter {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid #d5dde8;
+    background: #fff;
+    border-radius: 5px;
+    padding: 4px 8px;
+    margin: 0;
+    min-width: 72px;
+    min-height: 0;
+    text-align: center;
+    cursor: pointer;
+    line-height: 1.15;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.yuju-kpi.yuju-kpi--filter:hover {
+    border-color: #90a4c0;
+    background: #f5f8fb;
+}
+
+.yuju-kpi.yuju-kpi--filter.active {
+    border-color: #2e6da4;
+    box-shadow: 0 0 0 1px #2e6da4 inset;
+    background: #eef5fb;
+}
+
+.yuju-kpi.yuju-kpi--filter .yuju-kpi__value {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    color: #243447;
+}
+
+.yuju-kpi.yuju-kpi--filter .yuju-kpi__label {
+    display: block;
+    font-size: 10px;
+    color: #667788;
+    margin-top: 1px;
+}
+
+.yuju-kpi.yuju-kpi--filter .yuju-kpi__hint {
+    display: block;
+    font-size: 10px;
+    color: #8899aa;
+    margin-top: 0;
+}
+
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--ok .yuju-kpi__value { color: #2e7d32; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--pending .yuju-kpi__value { color: #ef6c00; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--err .yuju-kpi__value { color: #c62828; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--prog .yuju-kpi__value { color: #1565c0; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--inv .yuju-kpi__value { color: #6a1b9a; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--orphan .yuju-kpi__value { color: #546e7a; }
+.yuju-kpi.yuju-kpi--filter.yuju-kpi--total .yuju-kpi__value { color: #1e3a5f; }
 
 .yuju-cat-bulk__bar-wrap {
     margin: 20px 0 16px;
@@ -1891,13 +2274,14 @@
 .yuju-dot--inv { background: #6a1b9a; }
 
 .yuju-cat-bulk__segments {
-    margin: 16px 0 12px;
+    margin: 8px 0 10px;
 }
 
 .yuju-cat-bulk__segments-label {
     display: inline-block;
     margin-right: 8px;
     font-weight: 600;
+    font-size: 12px;
     vertical-align: middle;
 }
 
@@ -1910,8 +2294,613 @@
     margin-bottom: 16px;
 }
 
+.yuju-cat-bulk__mass-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid #d9e2ec;
+    border-radius: 8px;
+    background: #f7f9fc;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+    min-height: 74px;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.yuju-cat-bulk__mass-bar.is-active {
+    border-color: #cfe2ff;
+    background: #f0f7ff;
+}
+
+.yuju-cat-bulk__mass-bar-left {
+    flex: 1 1 220px;
+    font-size: 13px;
+    color: #2a3f5f;
+    min-height: 20px;
+}
+
+.yuju-cat-bulk__mass-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.yuju-cat-bulk__mass-bar-progress {
+    flex: 1 1 100%;
+    font-size: 12px;
+    min-height: 1.35em;
+    line-height: 1.35em;
+}
+
+.yuju-cat-filters {
+    margin: 0 0 10px;
+    border: 1px solid #d8dee8;
+    border-radius: 6px;
+    background: #f7f9fc;
+    overflow: hidden;
+}
+
+.yuju-cat-filters__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    background: #eef2f7;
+    border-bottom: 1px solid transparent;
+}
+
+.yuju-cat-filters.is-open .yuju-cat-filters__toggle {
+    border-bottom-color: #d8dee8;
+}
+
+.yuju-cat-filters__toggle:hover {
+    background: #e6ecf4;
+}
+
+.yuju-cat-filters__toggle-left,
+.yuju-cat-filters__toggle-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.yuju-cat-filters__hint {
+    font-size: 12px;
+}
+
+.yuju-cat-filters__active-badge {
+    font-size: 10px;
+    vertical-align: middle;
+}
+
+.yuju-cat-filters__chev {
+    transition: transform .15s ease;
+}
+
+.yuju-cat-filters.is-open .yuju-cat-filters__chev {
+    transform: rotate(180deg);
+}
+
+.yuju-cat-filters__body {
+    display: none;
+    padding: 10px 12px 12px;
+    background: #fafbfc;
+}
+
+.yuju-cat-filters__body.in {
+    display: block;
+}
+
+.yuju-cat-filters__grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px 10px;
+    margin-bottom: 10px;
+    align-items: end;
+}
+
+@media (max-width: 1200px) {
+    .yuju-cat-filters__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .yuju-cat-filters__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .yuju-cat-filters__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.yuju-cat-filters__field {
+    min-width: 0;
+}
+
+.yuju-cat-filters__field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #556677;
+    margin: 0 0 3px;
+}
+
+/* Misma altura input/select (gana al reskin BO) */
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-cat-filters__field .form-control,
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-cat-filters__field input.form-control,
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-cat-filters__field select.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-cat-filters__field .form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-cat-filters__field input.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-cat-filters__field select.form-control,
+#content.bootstrap .yuju-cat-filters__field .form-control,
+#content.bootstrap .yuju-cat-filters__field input.form-control,
+#content.bootstrap .yuju-cat-filters__field select.form-control,
+.yuju-cat-filters__field .form-control,
+.yuju-cat-filters__field input.form-control,
+.yuju-cat-filters__field select.form-control {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    padding: 2px 8px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    line-height: 22px !important;
+    border-radius: 3px !important;
+}
+
+body:not(.ps-bo-rebrand):not(.no-smb-reskin) .yuju-cat-filters__field select.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) .yuju-cat-filters__field select.form-control,
+#content.bootstrap .yuju-cat-filters__field select.form-control,
+.yuju-cat-filters__field select.form-control {
+    padding-right: 24px !important;
+    appearance: auto;
+    -webkit-appearance: menulist;
+}
+
+.yuju-cat-filters__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.yuju-cat-filters__status-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #556677;
+    margin-right: 2px;
+}
+
+.yuju-cat-filters__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 3px 8px;
+    border: 1px solid #cfd8e3;
+    border-radius: 14px;
+    background: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    color: #445566;
+    cursor: pointer;
+    user-select: none;
+}
+
+.yuju-cat-filters__chip input {
+    margin: 0;
+}
+
+.yuju-cat-filters__chip.is-on {
+    border-color: #2e6da4;
+    background: #e8f1fa;
+    color: #1e4f7a;
+}
+
+.yuju-cat-filters__chip--warn.is-on {
+    border-color: #c27a00;
+    background: #fff4e0;
+    color: #8a5500;
+}
+
+.yuju-cat-filters__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.yuju-cat-filters__sku-hits {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #d5dde8;
+    font-size: 12px;
+}
+
+.yuju-cat-filters__sku-hits .label {
+    margin: 0 4px 4px 0;
+    display: inline-block;
+}
+
+.yuju-cat-filters__summary {
+    margin: 0 0 10px;
+    font-size: 12px;
+}
+
+.yuju-hist-latest__card {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border: 1px solid #d9e2ec;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: none;
+}
+
+.yuju-hist-latest__card--warn {
+    border-color: #f0c36d;
+    background: #fffdf8;
+}
+
+.yuju-hist-latest__card--bad {
+    border-color: #f1b5b5;
+    background: #fffafa;
+}
+
+.yuju-hist-latest__card--info {
+    border-color: #9ec5e8;
+    background: #f7fbff;
+}
+
+.yuju-hist-latest__card--ok {
+    border-color: #b7dfb9;
+    background: #f8fff8;
+}
+
+.yuju-hist-latest__top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.yuju-hist-latest__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2f3b4a;
+}
+
+.yuju-hist-latest__when {
+    font-size: 12px;
+    color: #7a8699;
+    white-space: nowrap;
+}
+
+.yuju-hist-latest__badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.yuju-hist-latest__badges .label {
+    margin: 0;
+}
+
+.yuju-hist-latest__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.yuju-hist-latest__stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(47, 59, 74, 0.06);
+    color: #3d4a5c;
+    font-size: 12px;
+}
+
+.yuju-hist-latest__stat em {
+    font-style: normal;
+    font-weight: 600;
+    color: #6b778a;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.yuju-hist-latest__issue {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    min-height: 22px;
+}
+
+.yuju-hist-latest__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.yuju-hist-latest__pill--ok {
+    background: #e8f6e9;
+    color: #2e7d32;
+}
+
+.yuju-hist-latest__pill i {
+    margin: 0;
+}
+
+.yuju-hist-latest__id {
+    font-size: 12px;
+    background: #eef2f7;
+    border: 1px solid #dbe2ea;
+    color: #2f3b4a;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.yuju-hist-latest__tip {
+    color: #d9534f;
+    font-size: 15px;
+    cursor: help;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.yuju-hist-latest__fail {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #4a5560;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.yuju-hist-latest__fail--bad {
+    color: #a94442;
+}
+
+.yuju-hist-latest__fail--warn {
+    color: #8a6d3b;
+}
+
+.yuju-hist-latest__fail--info {
+    color: #31708f;
+}
+
+.yuju-hist-latest__actions {
+    margin-top: 2px;
+}
+
+.yuju-hist-latest__details {
+    margin: 0;
+}
+
+.yuju-hist-meta {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    background: #f5f7fa;
+    border: 1px solid #e3e8ef;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #3d4a5c;
+}
+
+.yuju-hist-meta__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin: 0 0 4px;
+}
+
+.yuju-hist-meta__row:last-child {
+    margin-bottom: 0;
+}
+
+.yuju-hist-meta__row em {
+    font-style: normal;
+    font-weight: 600;
+    color: #5b6b7c;
+    min-width: 110px;
+}
+
+.yuju-hist-meta__mono {
+    font-family: Consolas, Monaco, monospace;
+    word-break: break-word;
+    color: #2f3b4a;
+}
+
+.yuju-hist-older__body .yuju-hist-meta {
+    margin: 4px 0;
+    padding: 6px 8px;
+}
+
+.yuju-hist-older {
+    margin-top: 4px;
+}
+
+.yuju-hist-older__head {
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    font-size: 12px !important;
+}
+
+.yuju-hist-older__toggle {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px !important;
+    text-decoration: none !important;
+    color: inherit !important;
+    cursor: pointer;
+}
+
+.yuju-hist-older__toggle:hover,
+.yuju-hist-older__toggle:focus {
+    text-decoration: none !important;
+    background: #f5f7fa;
+}
+
+.yuju-hist-older__chev {
+    transition: transform .15s ease;
+}
+
+.yuju-hist-older__toggle:not(.collapsed) .yuju-hist-older__chev {
+    transform: rotate(180deg);
+}
+
+.yuju-hist-older__hint {
+    font-size: 11px;
+    margin-left: auto;
+}
+
+.yuju-hist-older__body .table {
+    font-size: 12px;
+}
+
+.yuju-cat-sort {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.yuju-cat-sort:hover,
+.yuju-cat-sort.is-active {
+    color: #1e4f7a;
+    text-decoration: none;
+}
+
+.yuju-cat-sort.is-active {
+    font-weight: 700;
+}
+
+.yuju-cat-sort i {
+    margin-left: 2px;
+}
+
+/* Colores por estado en overview Category Bulk */
+.yuju-st-num {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.yuju-st-num--synced,
+.yuju-st-col--synced,
+.yuju-st-col--synced .yuju-cat-sort {
+    color: #2e7d32 !important;
+}
+
+.yuju-st-num--queued,
+.yuju-st-col--queued,
+.yuju-st-col--queued .yuju-cat-sort {
+    color: #0277bd !important;
+}
+
+.yuju-st-num--not-sent,
+.yuju-st-col--not-sent,
+.yuju-st-col--not-sent .yuju-cat-sort {
+    color: #6a737d !important;
+}
+
+.yuju-st-num--error,
+.yuju-st-col--error,
+.yuju-st-col--error .yuju-cat-sort {
+    color: #c62828 !important;
+}
+
+.yuju-st-num--wait,
+.yuju-st-col--wait,
+.yuju-st-col--wait .yuju-cat-sort {
+    color: #ef6c00 !important;
+}
+
+.yuju-st-num--invalid,
+.yuju-st-col--invalid,
+.yuju-st-col--invalid .yuju-cat-sort {
+    color: #6a1b9a !important;
+}
+
+.yuju-cat-bulk__overview-scroll {
+    max-height: calc(100vh - 260px);
+    overflow: auto;
+    border: 1px solid #dde3ea;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.yuju-cat-bulk__overview {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
 .yuju-cat-bulk__overview th {
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: #f8fafc;
+    box-shadow: inset 0 -1px 0 #dde3ea;
+    border-bottom: 1px solid #dde3ea !important;
+}
+
+.yuju-cat-map-icon {
+    margin-right: 6px;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.yuju-cat-map-icon--ok {
+    color: #2e7d32;
+}
+
+.yuju-cat-map-icon--parent {
+    color: #0277bd;
+}
+
+.yuju-cat-map-icon--no {
+    color: #ef6c00;
+}
+
+.yuju-cat-map-status .label i {
+    margin-right: 3px;
 }
 
 .yuju-cat-bulk__search {
@@ -1919,13 +2908,102 @@
 }
 
 /**
- * Salida del gestor de crons (AdminYujuConfiguration): PrestaShop 8 SMB reskin aplica
- * :is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea:hover { background: var(--edition-white) }
- * con !important. Se replica el prefijo + ID para ganar en especificidad y mantener estilo consola.
+ * Salida del gestor de crons (AdminYujuConfiguration).
+ * No usar .form-group: el BO PS8 lo pone en flex y deja Ampliar al lado del textarea.
  */
+.yuju-cron-manager-modal .yuju-cron-modal-header,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-header,
+.yuju-cron-manager-modal .modal-header.yuju-cron-modal-header,
+.yuju-cron-output-fullscreen-modal .modal-header.yuju-cron-modal-header {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px;
+    float: none !important;
+    padding: 14px 18px !important;
+    margin: 0 !important;
+    background: #f8fafc !important;
+    border-bottom: 1px solid #dde3ea !important;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-title,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-title {
+    float: none !important;
+    display: block !important;
+    flex: 1 1 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    color: #2f3b4a !important;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-title i,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-title i {
+    margin-right: 6px;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-close,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-close {
+    float: none !important;
+    position: static !important;
+    order: 2;
+    flex: 0 0 auto !important;
+    width: 32px !important;
+    height: 32px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid #d0d7de !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    color: #57606a !important;
+    font-size: 22px !important;
+    font-weight: 400 !important;
+    line-height: 28px !important;
+    text-align: center !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+    cursor: pointer;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-close:hover,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-close:hover {
+    background: #f3f4f6 !important;
+    color: #24292f !important;
+    border-color: #afb8c1 !important;
+}
+
+.yuju-cron-manager-modal .yuju-cron-output-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    margin: 0;
+}
+
+.yuju-cron-manager-modal .yuju-cron-output-head {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px;
+    width: 100% !important;
+    margin: 0 0 6px 0 !important;
+}
+
+.yuju-cron-manager-modal .yuju-cron-output-head label {
+    margin: 0;
+}
+
 .yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control,
 textarea#yuju-cron-manager-output.form-control {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
     white-space: pre-wrap;
+    font-family: Consolas, Monaco, monospace;
     background-color: #0f172a !important;
     color: #d6e0ff !important;
     border: 1px solid #1f2a44 !important;
@@ -1944,4 +3022,318 @@ textarea#yuju-cron-manager-output.form-control:focus,
     color: #d6e0ff !important;
     border-color: #334155 !important;
     box-shadow: none !important;
+}
+
+.yuju-cron-output-fullscreen-dialog {
+    width: 96%;
+    max-width: 1200px;
+    margin: 20px auto;
+}
+
+.yuju-cron-output-fullscreen-modal .modal-body {
+    min-height: 70vh;
+}
+
+.yuju-cron-output-fullscreen-modal textarea#yuju-cron-manager-output-fullscreen.form-control {
+    width: 100%;
+    min-height: 70vh;
+    height: 70vh;
+    resize: vertical;
+    white-space: pre-wrap;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border: 1px solid #1f2a44 !important;
+}
+
+.yuju-cron-output-fullscreen-modal textarea#yuju-cron-manager-output-fullscreen.form-control:hover,
+.yuju-cron-output-fullscreen-modal textarea#yuju-cron-manager-output-fullscreen.form-control:focus,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output-fullscreen.form-control,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output-fullscreen.form-control:hover,
+:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output-fullscreen.form-control:focus {
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border-color: #334155 !important;
+    box-shadow: none !important;
+}
+
+/* Solo apilado: terminal encima de "Administrar crons" */
+.yuju-cron-output-fullscreen-modal {
+    z-index: 20060 !important;
+}
+.modal-backdrop.yuju-cron-output-backdrop {
+    z-index: 20050 !important;
+}
+
+/* Auditoría de ofertas */
+.yuju-audit-run-panel .progress {
+    height: 22px;
+    margin-bottom: 8px;
+}
+.yuju-audit-run-panel .progress-bar {
+    line-height: 22px;
+    font-size: 12px;
+}
+.yuju-audit-kpi .well,
+.yuju-audit-monitor-kpis .well {
+    margin-bottom: 10px;
+}
+#yuju-audit-settings-panel .form-control-static {
+    padding-top: 7px;
+}
+
+#yuju-audit-diff-table .yuju-audit-sku {
+    font-family: Consolas, Monaco, monospace;
+    white-space: nowrap;
+}
+#yuju-audit-diff-table .yuju-audit-name {
+    vertical-align: middle;
+}
+#yuju-audit-diff-table tr.yuju-audit-parent td {
+    font-weight: 600;
+    background-color: #f5f8fa !important;
+    vertical-align: middle;
+}
+#yuju-audit-diff-table .yuju-audit-chevron {
+    display: inline-block;
+    margin-right: 2px;
+    color: #337ab7;
+    font-size: 10px;
+    line-height: 1;
+    vertical-align: middle;
+    font-style: normal;
+}
+#yuju-audit-diff-table .yuju-audit-toggle-group {
+    color: inherit;
+    text-decoration: none;
+    margin-right: 2px;
+}
+#yuju-audit-diff-table .yuju-audit-toggle-group:hover,
+#yuju-audit-diff-table .yuju-audit-toggle-group:focus {
+    text-decoration: none;
+    color: #23527c;
+}
+#yuju-audit-diff-table .yuju-audit-toggle-group:hover .yuju-audit-chevron {
+    color: #23527c;
+}
+#yuju-audit-diff-table tr.yuju-audit-child td.yuju-audit-sku,
+#yuju-audit-diff-table tr.yuju-audit-child td.yuju-audit-name-cell {
+    padding-left: 36px;
+}
+#yuju-audit-diff-table tr.yuju-audit-child.is-hidden {
+    display: none;
+}
+#yuju-audit-diff-table .yuju-audit-diff-badge {
+    margin: 1px 2px 1px 0;
+    display: inline-block;
+}
+#yuju-audit-diff-table .yuju-audit-child-diffs,
+#yuju-audit-diff-table .yuju-audit-parent-diffs {
+    margin-top: 4px;
+}
+#yuju-audit-diff-table .yuju-audit-tip {
+    cursor: help;
+    opacity: 0.75;
+    margin-left: 2px;
+}
+#yuju-audit-diff-table .yuju-audit-tip:hover {
+    opacity: 1;
+}
+#yuju-audit-diff-table .yuju-audit-cmp {
+    display: inline-block;
+    min-width: 3.2em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+#yuju-audit-diff-table .yuju-audit-cmp--ok {
+    color: #3c763d;
+}
+#yuju-audit-diff-table .yuju-audit-cmp--diff {
+    color: #a94442;
+}
+#yuju-audit-diff-table .yuju-audit-cmp--na {
+    color: #999;
+    font-weight: 400;
+}
+#yuju-audit-diff-table .yuju-audit-status {
+    font-size: 16px;
+    cursor: help;
+    display: inline-block;
+    line-height: 1;
+}
+#yuju-audit-diff-table .yuju-audit-status--ok { color: #3c763d; }
+#yuju-audit-diff-table .yuju-audit-status--fixed { color: #337ab7; }
+#yuju-audit-diff-table .yuju-audit-status--diff { color: #8a6d3b; }
+#yuju-audit-diff-table .yuju-audit-status--error { color: #a94442; }
+#yuju-audit-diff-table .yuju-audit-status--missing { color: #777; }
+#yuju-audit-diff-table .yuju-audit-error-link {
+    text-decoration: none;
+}
+#yuju-audit-diff-table .yuju-audit-error-link:hover .yuju-audit-status {
+    opacity: 0.85;
+}
+
+/* Configuration page: collapsible sections */
+#configuration_form > .panel.panel-default.yuju-config-collapsible,
+.yuju-admin-layout .panel.panel-default.yuju-config-collapsible {
+    margin-bottom: 16px;
+}
+
+#content.bootstrap #configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head,
+#configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head,
+.yuju-admin-layout .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head {
+    display: block !important;
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 10px !important;
+}
+
+#content.bootstrap #configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head::before,
+#content.bootstrap #configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head::after,
+#configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head::before,
+#configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head::after {
+    display: none !important;
+    content: none !important;
+    clear: none !important;
+}
+
+.yuju-config-collapsible__row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: nowrap !important;
+    gap: 12px;
+    width: 100%;
+    min-height: 24px;
+}
+
+#content.bootstrap #configuration_form .yuju-config-collapsible__row .panel-title,
+#content.bootstrap #configuration_form .yuju-config-collapsible__row h3,
+#content.bootstrap #configuration_form .yuju-config-collapsible__row h4,
+#configuration_form .yuju-config-collapsible__row .panel-title,
+#configuration_form .yuju-config-collapsible__row h3,
+#configuration_form .yuju-config-collapsible__row h4,
+.yuju-config-collapsible__row .panel-title,
+.yuju-config-collapsible__row h3,
+.yuju-config-collapsible__row h4 {
+    display: inline-flex !important;
+    align-items: center !important;
+    float: none !important;
+    width: auto !important;
+    max-width: calc(100% - 36px);
+    flex: 1 1 auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.4 !important;
+    pointer-events: none;
+}
+
+#configuration_form .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head:hover,
+.yuju-admin-layout .yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head:hover {
+    background-color: #f5f7fa;
+}
+
+.yuju-config-collapsible__chev {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin: 0 !important;
+    float: none !important;
+    color: #6c7a89;
+    border-radius: 4px;
+    transition: transform 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+    line-height: 1;
+}
+
+.yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head:hover .yuju-config-collapsible__chev {
+    background-color: #e8eef5;
+    color: #2c3e50;
+}
+
+.yuju-config-collapsible > .panel-heading.yuju-config-collapsible__head.collapsed .yuju-config-collapsible__chev {
+    transform: rotate(-90deg);
+}
+
+.yuju-config-collapsible__chev i {
+    font-size: 14px;
+    line-height: 1;
+    margin: 0 !important;
+}
+
+.yuju-config-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+/* Modal revisión de esquema de tablas */
+.yuju-schema-review-list {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid #e1e5ea;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.yuju-schema-review-item {
+    border-bottom: 1px solid #eef0f3;
+    padding: 10px 12px;
+}
+
+.yuju-schema-review-item:last-child {
+    border-bottom: 0;
+}
+
+.yuju-schema-review-item[data-status="reviewing"] {
+    background: #f0f7ff;
+}
+
+.yuju-schema-review-item[data-status="ok"] {
+    background: #f7fbf7;
+}
+
+.yuju-schema-review-item[data-status="created"],
+.yuju-schema-review-item[data-status="repaired"] {
+    background: #fffaf0;
+}
+
+.yuju-schema-review-item[data-status="error"] {
+    background: #fdf2f2;
+}
+
+.yuju-schema-review-item__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.yuju-schema-review-item__title code {
+    font-size: 11px;
+    color: #6c7a89;
+}
+
+.yuju-schema-review-item__body {
+    margin-top: 6px;
+}
+
+.yuju-schema-review-actions {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+
+.yuju-schema-review-actions li {
+    margin-bottom: 2px;
+}
+
+.yuju-schema-review-actions i {
+    margin-right: 4px;
+    opacity: 0.85;
 }

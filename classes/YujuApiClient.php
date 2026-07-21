@@ -269,17 +269,21 @@ class YujuApiClient
      */
     private function buildUrl($endpoint, $params = [])
     {
-        // Los endpoints de webhooks, orders y products NO usan versionado
-        // Según documentación: 
+        // Los endpoints de webhooks, orders, products y account NO usan versionado
+        // Según documentación:
         // - https://api.tp.yuju.io/webhook-sub
         // - https://api.tp.yuju.io/orders/
         // - https://api.tp.yuju.io/products/{id_product}
-        if (strpos($endpoint, '/webhook-sub') === 0 || 
+        // - https://api.tp.yuju.io/account
+        if (strpos($endpoint, '/webhook-sub') === 0 ||
             strpos($endpoint, 'webhook-sub') === 0 ||
             strpos($endpoint, '/orders') === 0 ||
             strpos($endpoint, 'orders') === 0 ||
             strpos($endpoint, '/products') === 0 ||
-            strpos($endpoint, 'products') === 0) {
+            strpos($endpoint, 'products') === 0 ||
+            strpos($endpoint, '/account') === 0 ||
+            $endpoint === 'account'
+        ) {
             $url = rtrim($this->base_url, '/') . '/' . ltrim($endpoint, '/');
         } else {
             // Resto de endpoints usan v1
@@ -447,16 +451,29 @@ class YujuApiClient
      */
     private function logRequest($method, $endpoint, $data, $response, $execution_time)
     {
+        // No persistir payloads enormes (imágenes, descripciones) en cada request de cola
+        $reqSummary = null;
+        if (is_array($data)) {
+            $reqSummary = [
+                'keys' => array_keys($data),
+                'sku' => isset($data['sku']) ? $data['sku'] : null,
+            ];
+        }
+        $respSummary = [
+            'success' => !empty($response['success']),
+            'http_code' => isset($response['http_code']) ? $response['http_code'] : null,
+            'error' => isset($response['error']) ? $response['error'] : null,
+        ];
         $log_data = [
             'method' => $method,
             'endpoint' => $endpoint,
-            'request_data' => $data,
-            'response' => $response,
+            'request_summary' => $reqSummary,
+            'response_summary' => $respSummary,
             'execution_time' => $execution_time,
             'timestamp' => date('Y-m-d H:i:s'),
         ];
 
-        $log_level = $response['success'] ? 'info' : 'error';
+        $log_level = !empty($response['success']) ? 'info' : 'error';
         $this->logger->log($log_level, 'API Request: ' . $method . ' ' . $endpoint, $log_data);
     }
 
@@ -476,6 +493,18 @@ class YujuApiClient
     public function getUserInfo()
     {
         return $this->get('user/me');
+    }
+
+    /**
+     * Cuenta, tienda y canales conectados.
+     * Doc: https://api-docs.yuju.io/docs/consultar-tienda-y-conexiones
+     * GET https://api.tp.yuju.io/account
+     *
+     * @return array
+     */
+    public function getAccount()
+    {
+        return $this->get('account');
     }
 
     /**
@@ -754,11 +783,11 @@ class YujuApiClient
         $json_body = json_encode($product_data, JSON_UNESCAPED_SLASHES);
         ini_set('serialize_precision', $old_precision);
         
-        // Log de debug
+        // Log de debug (sin volcar images/payload completo: ralentiza mucho la cola)
         $this->logger->info('Creating product with cURL', [
             'token_length' => strlen($token),
-            'token_preview' => substr($token, 0, 20) . '...',
-            'product_data' => $product_data
+            'sku' => isset($product_data['sku']) ? $product_data['sku'] : null,
+            'fields' => array_keys(is_array($product_data) ? $product_data : []),
         ]);
         
         // Enviar producto a Yuju usando cURL directo
@@ -782,6 +811,7 @@ class YujuApiClient
         
         $response_body = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_time = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
         $curl_error = curl_error($ch);
         curl_close($ch);
         
@@ -791,7 +821,8 @@ class YujuApiClient
                 'error' => 'CURL_ERROR',
                 'message' => $curl_error,
                 'http_code' => 0,
-                'data' => null
+                'data' => null,
+                'curl_time' => $curl_time,
             ];
         }
         
@@ -803,7 +834,8 @@ class YujuApiClient
             'http_code' => $http_code,
             'data' => $decoded_response,
             'error' => $success ? null : 'HTTP_' . $http_code,
-            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code)
+            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code),
+            'curl_time' => $curl_time,
         ];
     }
 
@@ -828,12 +860,11 @@ class YujuApiClient
         $json_body = json_encode($product_data, JSON_UNESCAPED_SLASHES);
         ini_set('serialize_precision', $old_precision);
         
-        // Log de debug
+        // Log de debug (compacto: el payload completo en logs frena lotes de cola)
         $this->logger->info('Updating product with cURL', [
             'product_id' => $product_id,
-            'token_length' => strlen($token),
-            'token_preview' => substr($token, 0, 20) . '...',
-            'product_data' => $product_data
+            'sku' => isset($product_data['sku']) ? $product_data['sku'] : null,
+            'fields' => array_keys(is_array($product_data) ? $product_data : []),
         ]);
         
         // Enviar actualización a Yuju usando cURL directo con PUT (según documentación)
@@ -857,6 +888,7 @@ class YujuApiClient
         
         $response_body = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_time = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
         $curl_error = curl_error($ch);
         curl_close($ch);
         
@@ -866,7 +898,8 @@ class YujuApiClient
                 'error' => 'CURL_ERROR',
                 'message' => $curl_error,
                 'http_code' => 0,
-                'data' => null
+                'data' => null,
+                'curl_time' => $curl_time,
             ];
         }
         
@@ -878,7 +911,8 @@ class YujuApiClient
             'http_code' => $http_code,
             'data' => $decoded_response,
             'error' => $success ? null : 'HTTP_' . $http_code,
-            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code)
+            'message' => $success ? null : ($decoded_response['message'] ?? 'Error HTTP ' . $http_code),
+            'curl_time' => $curl_time,
         ];
     }
     
@@ -1004,6 +1038,157 @@ class YujuApiClient
             'error' => $success ? null : $this->getErrorFromResponse($decoded_response, $http_code),
             'message' => $success ? null : $this->getMessageFromResponse($decoded_response, $http_code),
         ];
+    }
+
+    /**
+     * Actualización masiva de ofertas (stock/precio) vía POST /products-offer (JSONL).
+     * Hasta 20.000 SKUs por llamada. Retorna id_task asíncrono.
+     *
+     * @param array $offers Lista de ['sku'=>string, 'stock'=>?int, 'price'=>?float]
+     *
+     * @return array
+     */
+    public function massUpdateOffers(array $offers)
+    {
+        $token = $this->oauth->getValidAccessToken();
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'NO_TOKEN',
+                'message' => 'No hay token válido disponible',
+                'http_code' => 0,
+                'data' => null,
+            ];
+        }
+
+        if (empty($offers)) {
+            return [
+                'success' => true,
+                'http_code' => 200,
+                'data' => ['status' => 'SKIPPED', 'message' => 'Sin ofertas para actualizar'],
+                'id_task' => null,
+            ];
+        }
+
+        $oldPrecision = ini_get('serialize_precision');
+        ini_set('serialize_precision', -1);
+        $lines = [];
+        foreach ($offers as $offer) {
+            if (empty($offer['sku'])) {
+                continue;
+            }
+            $row = ['sku' => (string) $offer['sku']];
+            if (array_key_exists('stock', $offer) && $offer['stock'] !== null) {
+                $row['stock'] = (int) $offer['stock'];
+            }
+            if (array_key_exists('price', $offer) && $offer['price'] !== null) {
+                $row['price'] = (float) $offer['price'];
+            }
+            if (count($row) < 2) {
+                continue;
+            }
+            $lines[] = json_encode($row, JSON_UNESCAPED_SLASHES);
+        }
+        ini_set('serialize_precision', $oldPrecision);
+
+        if (empty($lines)) {
+            return [
+                'success' => true,
+                'http_code' => 200,
+                'data' => ['status' => 'SKIPPED', 'message' => 'Sin filas JSONL válidas'],
+                'id_task' => null,
+            ];
+        }
+
+        $body = implode("\n", $lines);
+        $url = rtrim($this->base_url, '/') . '/products-offer';
+        $contentTypes = ['application/x-ndjson', 'text/plain', 'application/json'];
+        $decoded = null;
+        $httpCode = 0;
+        $curlError = '';
+        $responseBody = '';
+
+        foreach ($contentTypes as $contentType) {
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 120,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_POSTFIELDS => $body,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: ' . $contentType,
+                    'Accept: application/json',
+                    $this->buildAuthorizationHeader($token),
+                ],
+            ]);
+
+            $responseBody = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                return [
+                    'success' => false,
+                    'error' => 'CURL_ERROR',
+                    'message' => $curlError,
+                    'http_code' => 0,
+                    'data' => null,
+                ];
+            }
+
+            $decoded = json_decode($responseBody, true);
+            // 415 Unsupported Media Type → probar siguiente Content-Type
+            if ($httpCode === 415) {
+                continue;
+            }
+            break;
+        }
+
+        $status = is_array($decoded) ? ($decoded['status'] ?? '') : '';
+        $idTask = is_array($decoded) ? ($decoded['id_task'] ?? null) : null;
+        // CREATED = tarea aceptada; REJECTED = ya hay otra en curso
+        $accepted = ($httpCode >= 200 && $httpCode < 300) && in_array($status, ['CREATED', 'COMPLETED'], true);
+
+        return [
+            'success' => $accepted,
+            'http_code' => $httpCode,
+            'data' => $decoded,
+            'id_task' => $idTask,
+            'error' => $accepted ? null : ('HTTP_' . $httpCode),
+            'message' => $accepted
+                ? null
+                : (is_array($decoded) ? ($decoded['message'] ?? ('Error HTTP ' . $httpCode)) : ('Error HTTP ' . $httpCode)),
+            'rejected' => ($status === 'REJECTED'),
+            'current_id_task' => is_array($decoded) ? ($decoded['details']['current_id_task'] ?? null) : null,
+        ];
+    }
+
+    /**
+     * Consulta estado de una tarea products-offer (actualización masiva).
+     *
+     * @param string $idTask
+     *
+     * @return array
+     */
+    public function getMassUpdateOffersStatus($idTask)
+    {
+        $idTask = trim((string) $idTask);
+        if ($idTask === '') {
+            return [
+                'success' => false,
+                'message' => 'id_task vacío',
+                'http_code' => 0,
+                'data' => null,
+            ];
+        }
+
+        return $this->get('products-offer/' . rawurlencode($idTask));
     }
     
     /**
@@ -1183,6 +1368,58 @@ class YujuApiClient
     public function updateOrderStatus($order_id, $status_data)
     {
         return $this->put('orders/' . $order_id . '/status', $status_data);
+    }
+
+    /**
+     * Crear información outbound de un pedido.
+     * POST /orders/outbounds?id_channel=&id_order=
+     *
+     * @param int|string $id_channel
+     * @param int|string $id_order
+     * @param array $body
+     * @return array
+     */
+    public function createOrderOutbound($id_channel, $id_order, array $body)
+    {
+        return $this->makeRequest('POST', 'orders/outbounds', $body, [
+            'id_channel' => $id_channel,
+            'id_order' => $id_order,
+        ]);
+    }
+
+    /**
+     * Actualizar información outbound de un pedido.
+     * PUT /orders/outbounds?id_channel=&id_order=&order_int_external_pk=
+     *
+     * @param int|string $id_channel
+     * @param int|string $id_order
+     * @param string $order_int_external_pk
+     * @param array $body
+     * @return array
+     */
+    public function updateOrderOutbound($id_channel, $id_order, $order_int_external_pk, array $body)
+    {
+        return $this->makeRequest('PUT', 'orders/outbounds', $body, [
+            'id_channel' => $id_channel,
+            'id_order' => $id_order,
+            'order_int_external_pk' => $order_int_external_pk,
+        ]);
+    }
+
+    /**
+     * Obtener información outbound de un pedido.
+     * GET /orders/outbounds?id_channel=&id_order=
+     *
+     * @param int|string $id_channel
+     * @param int|string $id_order
+     * @return array
+     */
+    public function getOrderOutbounds($id_channel, $id_order)
+    {
+        return $this->get('orders/outbounds', [
+            'id_channel' => $id_channel,
+            'id_order' => $id_order,
+        ]);
     }
 
     /**

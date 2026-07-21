@@ -52,6 +52,7 @@ class YujuWebhookManager
 
         /** @var int|false|null $webhook_id */
         $webhook_id = null;
+        $orderLockId = null;
 
         try {
             // Verify webhook signature (solo si hay payload y secret configurado)
@@ -76,9 +77,42 @@ class YujuWebhookManager
                 $webhook_data = $this->buildWebhookDataFromHeaders($headers);
                 $this->logger->log('Webhook data built from headers: ' . json_encode($webhook_data), 'info');
             }
+
+            // Topic desde payload o headers
+            $topic = $webhook_data['topic'] ?? null;
+            if (!$topic) {
+                foreach ($headers as $key => $value) {
+                    if (strtolower((string) $key) === 'x-yuju-topic') {
+                        $topic = $value;
+                        $webhook_data['topic'] = $topic;
+                        break;
+                    }
+                }
+            }
+
+            // Serializar TODA la pipeline de la misma orden (enrich + create/update)
+            // antes de que dos new-order en ms creen pedidos duplicados.
+            if ($topic && strpos($topic, 'order') !== false) {
+                $orderLockId = $webhook_data['resource_id']
+                    ?? $webhook_data['id_order']
+                    ?? $webhook_data['id']
+                    ?? null;
+                if ($orderLockId) {
+                    if (!$this->order_manager->acquireOrderLockPublic($orderLockId, 45)) {
+                        $this->logger->log('Order webhook lock busy for entity ' . $orderLockId, 'warning');
+                        // false → Yuju puede reintentar; true ocultaría un updated-order de estado
+                        return [
+                            'success' => false,
+                            'message' => 'Order webhook deferred: another process is still handling this order',
+                            'skipped_lock' => true,
+                            'yuju_order_id' => $orderLockId,
+                            'topic' => $topic,
+                        ];
+                    }
+                }
+            }
             
             // Para webhooks de órdenes, hacer fetch automático de los detalles completos
-            $topic = $webhook_data['topic'] ?? null;
             if ($topic && strpos($topic, 'order') !== false) {
                 $this->logger->log('Order webhook detected, fetching full order details', 'info');
                 $webhook_data = $this->enrichOrderWebhookData($webhook_data, $headers);
@@ -109,6 +143,10 @@ class YujuWebhookManager
             }
 
             throw $e;
+        } finally {
+            if ($orderLockId) {
+                $this->order_manager->releaseOrderLockPublic($orderLockId);
+            }
         }
     }
 
@@ -381,6 +419,28 @@ class YujuWebhookManager
                 $confirm = $this->product_manager->confirmProductDeletedFromWebhook($resource_id, $sku, $parent_id);
 
                 return array_merge(['topic' => $topic], $confirm);
+
+            case 'products-gral-report':
+                require_once dirname(__FILE__) . '/YujuProductGralReport.php';
+                $idTask = (string) (
+                    $webhook_data['id_task']
+                    ?? $webhook_data['id']
+                    ?? $resource_id
+                    ?? ''
+                );
+                $url = null;
+                if (!empty($webhook_data['url'])) {
+                    $url = (string) $webhook_data['url'];
+                } elseif (!empty($webhook_data['data']['url'])) {
+                    $url = (string) $webhook_data['data']['url'];
+                }
+                if (!$idTask && !empty($webhook_data['data']['id_task'])) {
+                    $idTask = (string) $webhook_data['data']['id_task'];
+                }
+                $service = new YujuProductGralReport();
+                $result = $service->handleWebhook($idTask, $url);
+
+                return array_merge(['topic' => $topic], $result);
 
             default:
                 $this->logger->log('Topic de producto no manejado: ' . $topic, 'warning');

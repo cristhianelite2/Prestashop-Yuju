@@ -92,7 +92,7 @@ class YujuConfig
             // Sync Settings
             'YUJU_BATCH_SIZE' => 100,
             'YUJU_BATCH_FREQUENCY' => 60, // seconds
-            'YUJU_MAX_DAILY_SYNCS' => 2, // Recomendado: 2 descargas diarias del JSON (cada 12 horas)
+            'YUJU_MAX_DAILY_SYNCS' => 2, // products-offer-report: máx. cada 12h (= 2/día)
             'YUJU_SYNC_BATCH_SIZE' => self::DEFAULT_BATCH_SIZE,
             'YUJU_SYNC_FREQUENCY' => self::DEFAULT_SYNC_FREQUENCY,
             'YUJU_MAX_RETRY_ATTEMPTS' => self::DEFAULT_MAX_RETRY_ATTEMPTS,
@@ -103,6 +103,42 @@ class YujuConfig
             'YUJU_ENABLE_CATEGORY_SYNC' => true,
             'YUJU_ENABLE_PRODUCT_SYNC' => true,
             'YUJU_ENABLE_ORDER_SYNC' => true,
+            // Reportar progreso de creación de órdenes a Yuju (orders/outbounds)
+            'YUJU_ORDER_OUTBOUND_ENABLED' => 1,
+            // JSON: { "13": "mercadolibre", "4301": "shopify", ... }
+            'YUJU_CHANNEL_MARKETPLACE_MAP' => '{}',
+
+            // Offer audit settings (PS is source of truth → push fixes to Yuju only)
+            'YUJU_AUDIT_ENABLED' => 0,
+            'YUJU_AUDIT_UI_ENABLED' => 1,
+            'YUJU_AUDIT_STOCK' => 1,
+            'YUJU_AUDIT_PRICE' => 1,
+            'YUJU_AUDIT_IMAGES' => 0,
+            'YUJU_AUDIT_SCHEDULE' => 'daily',
+            'YUJU_AUDIT_TIMES_PER_PERIOD' => 1,
+            'YUJU_AUDIT_LAST_RUN_AT' => '',
+            'YUJU_AUDIT_CHUNK_SIZE' => 200,
+            // Segundos máx. de trabajo por petición AJAX (varios lotes internos)
+            'YUJU_AUDIT_REQUEST_BUDGET' => 25,
+
+            // Category Bulk: botón masivo «Enviar de nuevo» (≥1h sin webhook). Off por defecto.
+            'YUJU_ENABLE_BULK_RESEND_PENDING' => 0,
+
+            // products-gral-report (info general + imágenes): máx. 2/día UTC — docs Yuju
+            'YUJU_GRAL_REPORT_ENABLED' => 0,
+            'YUJU_GRAL_REPORT_MAX_DAILY' => 2,
+            // Días ISO-8601: 1=lun … 7=dom (coma-separados). Por defecto todos.
+            'YUJU_GRAL_REPORT_WEEKDAYS' => '1,2,3,4,5,6,7',
+            'YUJU_GRAL_REPORT_LAST_REQUEST_AT' => '',
+            'YUJU_GRAL_REPORT_LAST_COMPLETED_AT' => '',
+
+            // products-offer-report (sku/stock/precio): cada 12h — docs Yuju
+            'YUJU_OFFER_REPORT_LAST_REQUEST_AT' => '',
+            'YUJU_OFFER_REPORT_LAST_COMPLETED_AT' => '',
+            'YUJU_OFFER_REPORT_UNLOCK_AT' => '',
+            // Cache GET /account (cuenta, tienda, canales)
+            'YUJU_ACCOUNT_INFO_CACHE' => '',
+            'YUJU_ACCOUNT_INFO_UPDATED_AT' => '',
 
             // Notification Settings
             'YUJU_ENABLE_EMAIL_NOTIFICATIONS' => true,
@@ -377,40 +413,113 @@ class YujuConfig
 class YujuStatusMappings
 {
     /**
-     * PrestaShop to Yuju order status mapping.
+     * Estados oficiales documentados por Yuju.
+     *
+     * @see https://api-docs.yuju.io/docs/estados-de-un-pedido
+     *
+     * @return array<string, string> code => label
      */
-    public static function getOrderStatusMapping()
+    public static function getDocumentedYujuOrderStatuses()
     {
         return [
-            1 => 'pending',           // Awaiting check payment
-            2 => 'processing',        // Payment accepted
-            3 => 'processing',        // Preparation in progress
-            4 => 'shipped',           // Shipped
-            5 => 'delivered',         // Delivered
-            6 => 'cancelled',         // Canceled
-            7 => 'refunded',          // Refunded
-            8 => 'error',             // Payment error
-            9 => 'pending',           // On backorder (paid)
-            10 => 'pending',          // Awaiting bank wire payment
-            11 => 'pending',          // Remote payment accepted
-            12 => 'processing',       // On backorder (not paid)
-            13 => 'pending',           // Awaiting Cash On Delivery validation
+            'paid' => 'Pagado',
+            'ready_to_ship' => 'Confirmada / Lista para enviar',
+            'shipped' => 'Enviado',
+            'delivered' => 'Entregado',
+            'canceled' => 'Cancelado',
+            'refunded' => 'Reembolsado',
+            'with_mediation' => 'Con mediador',
         ];
     }
 
     /**
-     * Yuju to PrestaShop order status mapping.
+     * Estados oficiales Yuju (docs) + aliases que llegan en webhooks/API.
+     *
+     * @return array<string, string>
+     */
+    public static function getOfficialYujuOrderStatuses()
+    {
+        return array_merge(self::getDocumentedYujuOrderStatuses(), [
+            // Aliases / estados frecuentes en payloads
+            'cancelled' => 'Cancelado (alias UK)',
+            'pending' => 'Pendiente / Pago pendiente',
+            'open' => 'Abierta',
+            'processing' => 'En proceso',
+            'error' => 'Error',
+        ]);
+    }
+
+    /**
+     * Defaults Yuju → PrestaShop usando constantes PS_OS_* (fuente para seed UI / OrderManager).
+     * Incluye todos los estados documentados + aliases.
+     *
+     * @return array<string, int>
+     */
+    public static function getDefaultYujuToPsMappings()
+    {
+        $payment = (int) Configuration::get('PS_OS_PAYMENT');
+        $preparation = (int) Configuration::get('PS_OS_PREPARATION');
+        $shipping = (int) Configuration::get('PS_OS_SHIPPING');
+        $delivered = (int) Configuration::get('PS_OS_DELIVERED');
+        $canceled = (int) Configuration::get('PS_OS_CANCELED');
+        $refund = (int) Configuration::get('PS_OS_REFUND');
+        $error = (int) Configuration::get('PS_OS_ERROR');
+        $cheque = (int) Configuration::get('PS_OS_CHEQUE');
+        if ($cheque <= 0) {
+            $cheque = $payment > 0 ? $payment : $preparation;
+        }
+
+        return [
+            // Documentados (api-docs.yuju.io/docs/estados-de-un-pedido)
+            'paid' => $payment,
+            'ready_to_ship' => $preparation,
+            'shipped' => $shipping,
+            'delivered' => $delivered,
+            'canceled' => $canceled,
+            'refunded' => $refund,
+            'with_mediation' => $error > 0 ? $error : $preparation,
+            // Aliases
+            'cancelled' => $canceled,
+            'pending' => $cheque,
+            'open' => $cheque,
+            'processing' => $preparation,
+            'error' => $error > 0 ? $error : $preparation,
+        ];
+    }
+
+    /**
+     * PrestaShop to Yuju order status mapping.
+     */
+    public static function getOrderStatusMapping()
+    {
+        $reverse = [];
+        foreach (self::getDefaultYujuToPsMappings() as $yuju => $ps) {
+            if ($ps > 0 && !isset($reverse[$ps])) {
+                $reverse[$ps] = $yuju;
+            }
+        }
+
+        return $reverse;
+    }
+
+    /**
+     * Yuju to PrestaShop order status mapping (defaults).
      */
     public static function getYujuOrderStatusMapping()
     {
+        return self::getDefaultYujuToPsMappings();
+    }
+
+    /**
+     * Mapa por defecto id_channel → slug de marketplace (email {ref}@{slug}.com).
+     *
+     * @return array<string, string>
+     */
+    public static function getDefaultChannelMarketplaceMap()
+    {
         return [
-            'pending' => 1,           // Awaiting check payment
-            'processing' => 2,        // Payment accepted
-            'shipped' => 4,           // Shipped
-            'delivered' => 5,         // Delivered
-            'cancelled' => 6,         // Canceled
-            'refunded' => 7,          // Refunded
-            'error' => 8,              // Payment error
+            '13' => 'mercadolibre',
+            '1901' => 'shopify',
         ];
     }
 

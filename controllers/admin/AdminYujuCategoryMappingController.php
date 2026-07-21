@@ -103,6 +103,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
     public function initContent()
     {
+        // Varias PS → misma Yuju: quitar UNIQUE histórico si aún existe
+        YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
+
         // Get existing mappings with category names
         $mappings = $this->getCategoryMappings();
         $prestashop_categories = $this->getPrestashopCategories();
@@ -226,7 +229,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $prestashop_category_id = (int) Tools::getValue('prestashop_category_id');
         $yuju_category_id = Tools::getValue('yuju_category_id');
 
-        // Check if mapping already exists
+        // Check if this PrestaShop category already has a mapping
         $existing = Db::getInstance()->getRow(
             '
     SELECT id_mapping FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
@@ -239,6 +242,8 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
             return false;
         }
+
+        YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
 
         // Get Yuju category name
         $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
@@ -500,6 +505,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             if (!$prestashop_category_id || !$yuju_category_id) {
                 throw new Exception('PrestaShop category and Yuju category are required.');
             }
+
+            // Varias PS → misma Yuju está permitido; quitar UNIQUE histórico si existe
+            YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
             
             // Check if mapping already exists (for different mapping)
             $existing = Db::getInstance()->getRow(

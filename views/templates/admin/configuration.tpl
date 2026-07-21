@@ -39,13 +39,16 @@
                 No conectado a la API de Yuju. Por favor configure sus credenciales y autorice la conexión.
             </div>
 
-            <div class="panel panel-default" style="margin-bottom: 20px;">
-                <div class="panel-heading" role="tab" id="yujuConnectionGuideHeading">
-                    <h4 class="panel-title" style="margin: 0;">
-                        <a role="button" data-toggle="collapse" href="#yujuConnectionGuide" aria-expanded="false" aria-controls="yujuConnectionGuide" style="display: block; text-decoration: none;">
+            <div class="panel panel-default yuju-config-collapsible" style="margin-bottom: 20px;">
+                <div class="panel-heading yuju-config-collapsible__head collapsed" role="tab" id="yujuConnectionGuideHeading"
+                     data-toggle="collapse" href="#yujuConnectionGuide" aria-expanded="false" aria-controls="yujuConnectionGuide"
+                     style="cursor:pointer;">
+                    <div class="yuju-config-collapsible__row">
+                        <h4 class="panel-title" style="margin: 0;">
                             <i class="icon-book"></i> Ver tutorial de conexión Yuju + PrestaShop
-                        </a>
-                    </h4>
+                        </h4>
+                        <span class="yuju-config-collapsible__chev" aria-hidden="true"><i class="icon-chevron-down"></i></span>
+                    </div>
                 </div>
                 <div id="yujuConnectionGuide" class="panel-collapse collapse" role="tabpanel" aria-labelledby="yujuConnectionGuideHeading">
                     <div class="panel-body">
@@ -79,6 +82,15 @@
         {/if}
         
         <form id="configuration_form" class="defaultForm form-horizontal" action="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" method="post" enctype="multipart/form-data">
+
+            <div class="yuju-config-toolbar">
+                <button type="button" class="btn btn-default btn-sm" id="yuju-config-expand-all">
+                    <i class="icon-plus-sign"></i> Expandir todas
+                </button>
+                <button type="button" class="btn btn-default btn-sm" id="yuju-config-collapse-all">
+                    <i class="icon-minus-sign"></i> Colapsar todas
+                </button>
+            </div>
             
             {* Configuracion para Crear App Yuju *}
             <div class="panel panel-default">
@@ -269,7 +281,7 @@
                             Configuración CRON
                         </label>
                         <div class="col-lg-9">
-                            <div class="input-group">
+                            <div class="input-group" style="margin-bottom:8px;">
                                 <input type="text" class="form-control" value="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php" readonly>
                                 <span class="input-group-btn">
                                     <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php">
@@ -277,7 +289,19 @@
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">Configure este comando para ejecutarse cada 5 minutos en su servidor</p>
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/process_queue.php" readonly>
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/process_queue.php">
+                                        <i class="icon-copy"></i> Copiar
+                                    </button>
+                                </span>
+                            </div>
+                            <p class="help-block">
+                                <code>cron.php</code> cada 5 min (tareas generales).
+                                <code>process_queue.php</code> cada 1–2 min (cola de productos, respeta YUJU_BATCH_SIZE).
+                                «Ejecutar» en el gestor lanza en segundo plano y no bloquea el backoffice.
+                            </p>
                             {if isset($oauth_status) && $oauth_status.configured && $oauth_status.has_token && $oauth_status.is_connected && isset($config.YUJU_CLIENT_ID) && $config.YUJU_CLIENT_ID|trim != '' && isset($config.YUJU_CLIENT_SECRET) && $config.YUJU_CLIENT_SECRET|trim != ''}
                                 <button type="button" id="yuju-open-cron-manager" class="btn btn-info btn-sm" style="margin-top:8px;" onclick="return openCronManagerModal();">
                                     <i class="icon-time"></i> Administrar crons
@@ -476,6 +500,9 @@
                                                                 {/if}
                                                             </span>
                                                             <span class="yuju-tables-actions">
+                                                                <button type="button" class="btn btn-info btn-sm" id="yuju-tables-review-schema">
+                                                                    <i class="icon-search"></i> Revisar las tablas
+                                                                </button>
                                                                 <button type="button" class="btn btn-default btn-sm" id="yuju-tables-refresh">
                                                                     <i class="icon-refresh"></i> Recargar estado
                                                                 </button>
@@ -530,7 +557,8 @@
                                                             </table>
                                                         </div>
                                                         <p class="help-block" style="margin-top:8px;">
-                                                            Estas tablas son creadas durante la instalación del módulo. Si alguna falta (por instalación parcial, restore de BD u otro motivo), use el botón <strong>Crear</strong> de la fila correspondiente o <strong>Crear tablas faltantes</strong> para crearlas todas a la vez.
+                                                            Use <strong>Revisar las tablas</strong> para comparar el esquema instalado con el del módulo (crear tablas o columnas faltantes con progreso visual).
+                                                            También puede usar <strong>Crear</strong> en cada fila o <strong>Crear tablas faltantes</strong> solo para tablas ausentes.
                                                         </p>
                                                     </div>
                                                 </div>
@@ -725,6 +753,22 @@
                             <p class="help-block">Limpiar etiquetas HTML de las descripciones antes de enviarlas a Yuju</p>
                         </div>
                     </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Enviar de nuevo (Category Bulk)
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_ENABLE_BULK_RESEND_PENDING" id="bulk_resend_on" value="1" {if $config.YUJU_ENABLE_BULK_RESEND_PENDING == '1' || $config.YUJU_ENABLE_BULK_RESEND_PENDING === 1}checked="checked"{/if}>
+                                <label for="bulk_resend_on">Sí</label>
+                                <input type="radio" name="YUJU_ENABLE_BULK_RESEND_PENDING" id="bulk_resend_off" value="0" {if $config.YUJU_ENABLE_BULK_RESEND_PENDING != '1' && $config.YUJU_ENABLE_BULK_RESEND_PENDING !== 1}checked="checked"{/if}>
+                                <label for="bulk_resend_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Muestra el botón masivo «Enviar de nuevo» en Category Bulk para productos en espera ≥1h sin webhook. Desactivado por defecto.</p>
+                        </div>
+                    </div>
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
@@ -742,7 +786,7 @@
                         </label>
                         <div class="col-lg-9">
                             <input type="number" name="YUJU_BATCH_SIZE" value="{$config.YUJU_BATCH_SIZE|default:100|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
-                            <p class="help-block"><i class="icon-cubes"></i> Cantidad de productos a procesar por lote (ej: 100 productos por envío)</p>
+                            <p class="help-block"><i class="icon-cubes"></i> Máximo de <strong>envíos reales a Yuju</strong> por ejecución del cron/cola (1–500). No es el tamaño del encolado masivo: puedes encolar 1.000, pero cada corrida solo manda este tope a la API. Los update sin cambios no consumen este cupo. Carriles: delete → create → update.</p>
                         </div>
                     </div>
                     
@@ -761,22 +805,271 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            <strong>Máximo Descargas Diarias del JSON</strong>
+                            <strong>Máximo Descargas Diarias del JSON (ofertas)</strong>
                         </label>
                         <div class="col-lg-9">
                             <select name="YUJU_MAX_DAILY_SYNCS" class="form-control">
                                 <option value="1" {if $config.YUJU_MAX_DAILY_SYNCS == '1'}selected{/if}>1 vez al día</option>
-                                <option value="2" {if $config.YUJU_MAX_DAILY_SYNCS == '2' || !$config.YUJU_MAX_DAILY_SYNCS}selected{/if}>2 veces al día (recomendado)</option>
-                                <option value="3" {if $config.YUJU_MAX_DAILY_SYNCS == '3'}selected{/if}>3 veces al día</option>
-                                <option value="4" {if $config.YUJU_MAX_DAILY_SYNCS == '4'}selected{/if}>4 veces al día</option>
-                                <option value="5" {if $config.YUJU_MAX_DAILY_SYNCS == '5'}selected{/if}>5 veces al día (máximo)</option>
+                                <option value="2" {if $config.YUJU_MAX_DAILY_SYNCS == '2' || !$config.YUJU_MAX_DAILY_SYNCS}selected{/if}>2 veces al día (máximo API)</option>
                             </select>
                             <p class="help-block">
-                                <i class="icon-info-circle"></i> <strong>Límite de descargas del JSON desde Yuju</strong> (cada 24h ÷ valor = intervalo).<br>
-                                <strong>IMPORTANTE:</strong> El endpoint <code>/products-offer-report</code> devuelve una URL con el JSON que debe descargarse.<br>
-                                Ej: 2 veces/día = descarga cada 12 horas. El JSON se guarda localmente en <code>cache/yuju_products.json</code>.<br>
-                                <strong>Yuju limita</strong> las descargas a máximo cada 3 horas.
+                                <i class="icon-info-circle"></i>
+                                Endpoint <code>/products-offer-report</code>: Yuju permite generarlo <strong>cada 12 horas</strong> (máx. 2/día).
+                                El JSON se guarda en <code>cache/yuju_products.json</code>.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {* products-gral-report — información general *}
+            <div class="panel panel-default" id="yuju-gral-report-panel">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="icon-file-text-o"></i>
+                        Reporte general de productos (revisión)
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="alert alert-info">
+                        Usa el endpoint <code>POST /products-gral-report</code>
+                        (<a href="https://api-docs.yuju.io/docs/obtener-informacion-general" target="_blank" rel="noopener">
+                            (documentación Yuju)
+                        </a>.
+                        Genera un JSONL con campos generales (nombre, descripción, imágenes, variaciones…).
+                        <strong>Límite de la API: máximo 2 veces por día</strong> (créditos a las 00:00 UTC).
+                        Cada descarga se guarda en el histórico y se puede revisar en el visualizador del monitoreo.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Habilitar solicitud programada</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_GRAL_REPORT_ENABLED" id="gral_enabled_on" value="1" {if $config.YUJU_GRAL_REPORT_ENABLED == '1' || $config.YUJU_GRAL_REPORT_ENABLED === 1}checked="checked"{/if}>
+                                <label for="gral_enabled_on">Sí</label>
+                                <input type="radio" name="YUJU_GRAL_REPORT_ENABLED" id="gral_enabled_off" value="0" {if $config.YUJU_GRAL_REPORT_ENABLED != '1' && $config.YUJU_GRAL_REPORT_ENABLED !== 1}checked="checked"{/if}>
+                                <label for="gral_enabled_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Si está activo, <code>cron.php</code> / <code>gral_report.php</code> solicitará reportes respetando el cupo diario.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Días de la semana</label>
+                        <div class="col-lg-9">
+                            {assign var=wd_sel value=$gral_weekdays_selected|default:[]}
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="1" {if isset($wd_sel[1])}checked="checked"{/if}> Lunes
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="2" {if isset($wd_sel[2])}checked="checked"{/if}> Martes
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="3" {if isset($wd_sel[3])}checked="checked"{/if}> Miércoles
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="4" {if isset($wd_sel[4])}checked="checked"{/if}> Jueves
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="5" {if isset($wd_sel[5])}checked="checked"{/if}> Viernes
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="6" {if isset($wd_sel[6])}checked="checked"{/if}> Sábado
+                            </label>
+                            <label class="checkbox-inline" style="margin-right:12px;">
+                                <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="7" {if isset($wd_sel[7])}checked="checked"{/if}> Domingo
+                            </label>
+                            <p class="help-block">Solo en estos días el cron solicitará el reporte programado (zona horaria de la tienda). Si no marca ninguno, no se ejecutará solo.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Veces al día (UTC)</label>
+                        <div class="col-lg-9">
+                            <select name="YUJU_GRAL_REPORT_MAX_DAILY" class="form-control" style="max-width:220px;">
+                                <option value="1" {if $config.YUJU_GRAL_REPORT_MAX_DAILY == '1'}selected{/if}>1 vez al día</option>
+                                <option value="2" {if $config.YUJU_GRAL_REPORT_MAX_DAILY == '2' || !$config.YUJU_GRAL_REPORT_MAX_DAILY}selected{/if}>2 veces al día (máximo API)</option>
+                            </select>
+                            <p class="help-block">
+                                Cupo hoy (UTC {$gral_quota.utc_day|escape:'html':'UTF-8'}):
+                                <strong>{$gral_quota.used|intval}/{$gral_quota.max|intval}</strong>
+                                — restantes: {$gral_quota.remaining|intval}.
+                                Con 2 veces se reparte ~cada 12h UTC.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Última solicitud / completado</label>
+                        <div class="col-lg-9">
+                            <p class="form-control-static">
+                                Solicitud:
+                                {if $config.YUJU_GRAL_REPORT_LAST_REQUEST_AT}
+                                    {$config.YUJU_GRAL_REPORT_LAST_REQUEST_AT|escape:'html':'UTF-8'}
+                                {else}
+                                    <em>nunca</em>
+                                {/if}
+                                &nbsp;|&nbsp;
+                                Completado:
+                                {if $config.YUJU_GRAL_REPORT_LAST_COMPLETED_AT}
+                                    {$config.YUJU_GRAL_REPORT_LAST_COMPLETED_AT|escape:'html':'UTF-8'}
+                                {else}
+                                    <em>nunca</em>
+                                {/if}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Acciones</label>
+                        <div class="col-lg-9">
+                            <button type="button" class="btn btn-primary" id="yuju-gral-request-btn"
+                                    data-ajax-url="{$ajax_url|escape:'html':'UTF-8'}"
+                                    data-token="{$token|escape:'html':'UTF-8'}"
+                                    {if !$gral_quota.allowed}disabled title="Cupo diario agotado"{/if}>
+                                <i class="icon-cloud-download"></i> Solicitar reporte ahora
+                            </button>
+                            <a href="{$audit_monitoring_link|escape:'html':'UTF-8'}#yuju-gral-reports" class="btn btn-default">
+                                <i class="icon-eye"></i> Ver histórico / visualizador
+                            </a>
+                            <span id="yuju-gral-request-status" class="text-muted" style="margin-left:10px;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {* Offer Audit Settings *}
+            <div class="panel panel-default" id="yuju-audit-settings-panel">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="icon-search"></i>
+                        Auditoría de Ofertas
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="alert alert-info">
+                        Compara stock, precio e imágenes entre Yuju y PrestaShop.
+                        <strong>PrestaShop es la fuente de verdad</strong>: si hay diferencias, se corrige solo en Yuju (nunca se modifican productos en PrestaShop).
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Habilitar auditoría programada</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_AUDIT_ENABLED" id="audit_enabled_on" value="1" {if $config.YUJU_AUDIT_ENABLED == '1' || $config.YUJU_AUDIT_ENABLED === 1}checked="checked"{/if}>
+                                <label for="audit_enabled_on">Sí</label>
+                                <input type="radio" name="YUJU_AUDIT_ENABLED" id="audit_enabled_off" value="0" {if $config.YUJU_AUDIT_ENABLED != '1' && $config.YUJU_AUDIT_ENABLED !== 1}checked="checked"{/if}>
+                                <label for="audit_enabled_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Si está activo, <code>cron.php</code> ejecutará la auditoría según la programación.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Habilitar interfaz gráfica</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_AUDIT_UI_ENABLED" id="audit_ui_on" value="1" {if $config.YUJU_AUDIT_UI_ENABLED !== '0'}checked="checked"{/if}>
+                                <label for="audit_ui_on">Sí</label>
+                                <input type="radio" name="YUJU_AUDIT_UI_ENABLED" id="audit_ui_off" value="0" {if $config.YUJU_AUDIT_UI_ENABLED === '0'}checked="checked"{/if}>
+                                <label for="audit_ui_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Permite ejecutar la auditoría en vivo y ver el comparativo/progreso.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Auditar stock</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_AUDIT_STOCK" id="audit_stock_on" value="1" {if $config.YUJU_AUDIT_STOCK !== '0'}checked="checked"{/if}>
+                                <label for="audit_stock_on">Sí</label>
+                                <input type="radio" name="YUJU_AUDIT_STOCK" id="audit_stock_off" value="0" {if $config.YUJU_AUDIT_STOCK === '0'}checked="checked"{/if}>
+                                <label for="audit_stock_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Auditar precio</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_AUDIT_PRICE" id="audit_price_on" value="1" {if $config.YUJU_AUDIT_PRICE !== '0'}checked="checked"{/if}>
+                                <label for="audit_price_on">Sí</label>
+                                <input type="radio" name="YUJU_AUDIT_PRICE" id="audit_price_off" value="0" {if $config.YUJU_AUDIT_PRICE === '0'}checked="checked"{/if}>
+                                <label for="audit_price_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Auditar imágenes</label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_AUDIT_IMAGES" id="audit_images_on" value="1" {if $config.YUJU_AUDIT_IMAGES == '1' || $config.YUJU_AUDIT_IMAGES === 1}checked="checked"{/if}>
+                                <label for="audit_images_on">Sí</label>
+                                <input type="radio" name="YUJU_AUDIT_IMAGES" id="audit_images_off" value="0" {if $config.YUJU_AUDIT_IMAGES != '1' && $config.YUJU_AUDIT_IMAGES !== 1}checked="checked"{/if}>
+                                <label for="audit_images_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">Más lento: consulta producto en Yuju para comparar imágenes.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Periodicidad</label>
+                        <div class="col-lg-9">
+                            <select name="YUJU_AUDIT_SCHEDULE" class="form-control">
+                                <option value="hourly" {if $config.YUJU_AUDIT_SCHEDULE == 'hourly'}selected{/if}>Por hora</option>
+                                <option value="daily" {if $config.YUJU_AUDIT_SCHEDULE == 'daily' || !$config.YUJU_AUDIT_SCHEDULE}selected{/if}>Diaria</option>
+                                <option value="weekly" {if $config.YUJU_AUDIT_SCHEDULE == 'weekly'}selected{/if}>Semanal</option>
+                            </select>
+                            <p class="help-block">Periodo base sobre el que se reparte la cantidad de ejecuciones.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Veces por periodo</label>
+                        <div class="col-lg-9">
+                            <input type="number" name="YUJU_AUDIT_TIMES_PER_PERIOD" class="form-control" min="1" max="24"
+                                   value="{$config.YUJU_AUDIT_TIMES_PER_PERIOD|default:1|escape:'html':'UTF-8'}">
+                            <p class="help-block">Ej.: 2 veces al día, o 1 vez a la semana.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Última ejecución</label>
+                        <div class="col-lg-9">
+                            <p class="form-control-static">
+                                {if $config.YUJU_AUDIT_LAST_RUN_AT}
+                                    {$config.YUJU_AUDIT_LAST_RUN_AT|escape:'html':'UTF-8'}
+                                {else}
+                                    <em>Aún no se ha ejecutado</em>
+                                {/if}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Acciones</label>
+                        <div class="col-lg-9">
+                            {if $config.YUJU_AUDIT_UI_ENABLED !== '0'}
+                                <a href="{$audit_ui_link|escape:'html':'UTF-8'}" class="btn btn-primary">
+                                    <i class="icon-play"></i> Ejecutar auditoría ahora
+                                </a>
+                            {else}
+                                <button type="button" class="btn btn-default" disabled title="Habilite la interfaz gráfica">
+                                    <i class="icon-play"></i> Ejecutar auditoría ahora
+                                </button>
+                            {/if}
+                            <a href="{$audit_monitoring_link|escape:'html':'UTF-8'}" class="btn btn-default">
+                                <i class="icon-bar-chart"></i> Ver monitoreo
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -861,12 +1154,12 @@ function openCronManagerModal() {
             '<div class="modal fade yuju-cron-manager-modal" id="yuju-cron-manager-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-cron-manager-title">' +
                 '<div class="modal-dialog modal-lg" role="document">' +
                     '<div class="modal-content">' +
-                        '<div class="modal-header">' +
-                            '<button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>' +
-                            '<h4 class="modal-title" id="yuju-cron-manager-title"><i class="icon-time"></i> Administrar crons</h4>' +
+                        '<div class="modal-header yuju-cron-modal-header">' +
+                            '<h4 class="modal-title yuju-cron-modal-title" id="yuju-cron-manager-title"><i class="icon-time"></i> Administrar crons</h4>' +
+                            '<button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>' +
                         '</div>' +
                         '<div class="modal-body">' +
-                            '<div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> normalmente solo debes programar <code>cron.php</code> en crontab. Los demás scripts son utilitarios, internos o de diagnóstico.</div>' +
+                            '<div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> programe <code>cron.php</code> y <code>process_queue.php</code> (cola) en crontab. Los demás son utilitarios, internos o de diagnóstico. <strong>Ejecutar</strong> desde aquí corre en segundo plano y no bloquea el BO.</div>' +
                             '<div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>' +
                             '<div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">' +
                                 '<label style="margin:0; font-weight:600; cursor:pointer;">' +
@@ -894,9 +1187,14 @@ function openCronManagerModal() {
                                     '</tbody>' +
                                 '</table>' +
                             '</div>' +
-                            '<div class="form-group" style="margin-bottom:0;">' +
-                                '<label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>' +
-                                '<textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly style="font-family: Consolas, monospace;"></textarea>' +
+                            '<div class="yuju-cron-output-wrap">' +
+                                '<div class="yuju-cron-output-head">' +
+                                    '<label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>' +
+                                    '<button type="button" id="yuju-cron-output-expand" class="btn btn-default btn-xs" title="Ver resultado en pantalla completa">' +
+                                        '<i class="icon-resize-full"></i> Ampliar' +
+                                    '</button>' +
+                                '</div>' +
+                                '<textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly></textarea>' +
                             '</div>' +
                         '</div>' +
                         '<div class="modal-footer">' +
@@ -907,7 +1205,34 @@ function openCronManagerModal() {
                 '</div>' +
             '</div>';
         jQuery('body').append(modalHtml);
+        if (!jQuery('#yuju-cron-output-fullscreen-modal').length) {
+            jQuery('body').append(
+                '<div class="modal fade yuju-cron-output-fullscreen-modal" id="yuju-cron-output-fullscreen-modal" tabindex="-1" role="dialog">' +
+                    '<div class="modal-dialog modal-lg yuju-cron-output-fullscreen-dialog" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header yuju-cron-modal-header">' +
+                                '<h4 class="modal-title yuju-cron-modal-title"><i class="icon-file-text"></i> Resultado del cron</h4>' +
+                                '<button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>' +
+                            '</div>' +
+                            '<div class="modal-body" style="padding-top:12px;">' +
+                                '<textarea id="yuju-cron-manager-output-fullscreen" class="form-control" readonly></textarea>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
         $modal = jQuery('#yuju-cron-manager-modal');
+    }
+    if ($modal.length && !$modal.parent().is('body')) {
+        $modal.appendTo('body');
+    }
+    var $fsModal = jQuery('#yuju-cron-output-fullscreen-modal');
+    if ($fsModal.length && !$fsModal.parent().is('body')) {
+        $fsModal.appendTo('body');
     }
     $modal.modal('show');
     try {
@@ -923,6 +1248,118 @@ function openCronManagerModal() {
 
 // Handle sync dependencies
 $(document).ready(function() {
+    // ============================================================
+    // Secciones colapsables (chevron derecha) en Configuración
+    // ============================================================
+    (function initYujuConfigCollapsibleSections() {
+        var $form = $('#configuration_form');
+        if (!$form.length) {
+            return;
+        }
+
+        var storageKey = 'yuju_config_collapsed_sections';
+        var saved = {};
+        try {
+            saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+        } catch (e) {
+            saved = {};
+        }
+
+        function sectionKey($panel, index) {
+            var title = $.trim($panel.children('.panel-heading').find('.panel-title').first().text() || '');
+            return title ? title : ('section_' + index);
+        }
+
+        function persist($head, key) {
+            saved[key] = $head.hasClass('collapsed') || $head.attr('aria-expanded') === 'false';
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(saved));
+            } catch (e) {}
+        }
+
+        $form.children('.panel.panel-default').each(function (index) {
+            var $panel = $(this);
+            if ($panel.hasClass('yuju-config-collapsible')) {
+                return;
+            }
+
+            var $heading = $panel.children('.panel-heading').first();
+            var $body = $panel.children('.panel-body').first();
+            if (!$heading.length || !$body.length) {
+                return;
+            }
+
+            var id = 'yuju-cfg-section-' + index;
+            var key = sectionKey($panel, index);
+            var startCollapsed = !!saved[key];
+
+            $panel.addClass('yuju-config-collapsible');
+            $heading
+                .addClass('yuju-config-collapsible__head')
+                .attr({
+                    role: 'button',
+                    tabindex: '0',
+                    'data-toggle': 'collapse',
+                    'data-target': '#' + id,
+                    'aria-expanded': startCollapsed ? 'false' : 'true',
+                    'aria-controls': id
+                });
+
+            if (startCollapsed) {
+                $heading.addClass('collapsed');
+            }
+
+            // Fila título + chevron (evita que el clearfix del BO tire el icono abajo)
+            var $row = $heading.children('.yuju-config-collapsible__row');
+            if (!$row.length) {
+                $heading.wrapInner('<div class="yuju-config-collapsible__row"></div>');
+                $row = $heading.children('.yuju-config-collapsible__row');
+            }
+            if (!$row.find('.yuju-config-collapsible__chev').length) {
+                $row.append(
+                    '<span class="yuju-config-collapsible__chev" aria-hidden="true"><i class="icon-chevron-down"></i></span>'
+                );
+            }
+
+            $body.wrap('<div id="' + id + '" class="panel-collapse collapse' + (startCollapsed ? '' : ' in') + '"></div>');
+
+            $('#' + id).on('shown.bs.collapse', function () {
+                $heading.removeClass('collapsed').attr('aria-expanded', 'true');
+                persist($heading, key);
+            }).on('hidden.bs.collapse', function () {
+                $heading.addClass('collapsed').attr('aria-expanded', 'false');
+                persist($heading, key);
+            });
+
+            $heading.on('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.key === ' ' || ev.keyCode === 13 || ev.keyCode === 32) {
+                    ev.preventDefault();
+                    $heading.trigger('click');
+                }
+            });
+        });
+
+        // Keep chevron state in sync for any config collapse (incl. tutorial fuera del form)
+        $(document).on('shown.bs.collapse', '.yuju-config-collapsible .panel-collapse', function () {
+            $(this).closest('.yuju-config-collapsible')
+                .children('.panel-heading')
+                .removeClass('collapsed')
+                .attr('aria-expanded', 'true');
+        }).on('hidden.bs.collapse', '.yuju-config-collapsible .panel-collapse', function () {
+            $(this).closest('.yuju-config-collapsible')
+                .children('.panel-heading')
+                .addClass('collapsed')
+                .attr('aria-expanded', 'false');
+        });
+
+        $('#yuju-config-expand-all').on('click', function () {
+            $form.find('.yuju-config-collapsible .panel-collapse').collapse('show');
+        });
+        $('#yuju-config-collapse-all').on('click', function () {
+            $form.find('.yuju-config-collapsible .panel-collapse').collapse('hide');
+        });
+    })();
+
     function toggleSyncDependentFields() {
         var syncEnabled = $('input[name="YUJU_SYNC_ENABLED"]:checked').val() === '1';
         $('.sync-dependent').toggle(syncEnabled);
@@ -1228,18 +1665,269 @@ $(document).ready(function() {
                 $btn.prop('disabled', false).html(origHtml);
             });
         });
+
+        // ========================================================
+        // Revisar las tablas (esquema + columnas) con modal visual
+        // ========================================================
+        function ensureSchemaReviewModal() {
+            if ($('#yuju-schema-review-modal').length) {
+                return;
+            }
+            var html = '' +
+                '<div class="modal fade" id="yuju-schema-review-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-schema-review-title">' +
+                    '<div class="modal-dialog modal-lg" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>' +
+                                '<h4 class="modal-title" id="yuju-schema-review-title"><i class="icon-database"></i> Revisar tablas del módulo</h4>' +
+                            '</div>' +
+                            '<div class="modal-body">' +
+                                '<p class="help-block" style="margin-top:0;">Compara cada tabla con <code>sql/install.sql</code>. Si falta la tabla o alguna columna, se crea/agrega automáticamente. No elimina datos ni columnas extra.</p>' +
+                                '<div class="progress" style="height:22px; margin-bottom:12px;">' +
+                                    '<div id="yuju-schema-review-progress" class="progress-bar progress-bar-info progress-bar-striped active" role="progressbar" style="width:0%; min-width:2em; line-height:22px;">0%</div>' +
+                                '</div>' +
+                                '<div id="yuju-schema-review-summary" class="alert alert-info" style="display:none;"></div>' +
+                                '<div class="yuju-schema-review-list" id="yuju-schema-review-list"></div>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-primary" id="yuju-schema-review-start"><i class="icon-play"></i> Iniciar revisión</button>' +
+                                '<button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            $('body').append(html);
+        }
+
+        function statusBadge(status) {
+            switch (status) {
+                case 'pending': return '<span class="label label-default">En espera</span>';
+                case 'reviewing': return '<span class="label label-info"><i class="icon-spinner icon-spin"></i> Revisando…</span>';
+                case 'ok': return '<span class="label label-success"><i class="icon-check"></i> OK</span>';
+                case 'created': return '<span class="label label-primary"><i class="icon-plus"></i> Creada</span>';
+                case 'repaired': return '<span class="label label-warning"><i class="icon-wrench"></i> Reparada</span>';
+                case 'error': return '<span class="label label-danger"><i class="icon-remove"></i> Error</span>';
+                default: return '<span class="label label-default">' + status + '</span>';
+            }
+        }
+
+        function renderSchemaList(tables) {
+            var $list = $('#yuju-schema-review-list');
+            var html = '';
+            tables.forEach(function (t, idx) {
+                html += '<div class="yuju-schema-review-item" data-table="' + t.name + '" data-index="' + idx + '">' +
+                    '<div class="yuju-schema-review-item__head">' +
+                        '<div class="yuju-schema-review-item__title">' +
+                            '<strong>' + $('<div/>').text(t.label).html() + '</strong> ' +
+                            (t.critical ? '<span class="label label-danger">Crítica</span> ' : '') +
+                            '<code>' + t.full_name + '</code>' +
+                        '</div>' +
+                        '<div class="yuju-schema-review-item__status">' + statusBadge('pending') + '</div>' +
+                    '</div>' +
+                    '<div class="yuju-schema-review-item__body text-muted small">Pendiente de revisión…</div>' +
+                '</div>';
+            });
+            $list.html(html);
+        }
+
+        function setItemState($item, status, message, actions) {
+            $item.attr('data-status', status);
+            $item.find('.yuju-schema-review-item__status').html(statusBadge(status));
+            var body = $('<div/>').text(message || '').html();
+            if (actions && actions.length) {
+                body += '<ul class="yuju-schema-review-actions">';
+                actions.forEach(function (a) {
+                    var icon = 'icon-info-sign';
+                    if (a.type === 'create_table') icon = 'icon-plus';
+                    if (a.type === 'add_column') icon = 'icon-edit';
+                    if (a.type === 'add_column_error') icon = 'icon-warning-sign';
+                    if (a.type === 'check') icon = 'icon-ok';
+                    if (a.type === 'patch') icon = 'icon-cog';
+                    body += '<li><i class="' + icon + '"></i> ' + $('<div/>').text(a.detail || '').html() + '</li>';
+                });
+                body += '</ul>';
+            }
+            $item.find('.yuju-schema-review-item__body').html(body);
+        }
+
+        function updateSchemaProgress(done, total) {
+            var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            $('#yuju-schema-review-progress')
+                .css('width', pct + '%')
+                .text(pct + '%');
+        }
+
+        var schemaRunning = false;
+
+        function runSchemaReview(tables) {
+            if (schemaRunning) return;
+            schemaRunning = true;
+            var $startBtn = $('#yuju-schema-review-start');
+            $startBtn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Revisando…');
+            $('#yuju-schema-review-progress')
+                .removeClass('progress-bar-success progress-bar-danger')
+                .addClass('progress-bar-info active');
+            $('#yuju-schema-review-summary').hide().removeClass('alert-success alert-warning alert-danger').addClass('alert-info');
+
+            var totals = { ok: 0, created: 0, repaired: 0, error: 0 };
+            var i = 0;
+
+            function next() {
+                if (i >= tables.length) {
+                    schemaRunning = false;
+                    $startBtn.prop('disabled', false).html('<i class="icon-repeat"></i> Volver a revisar');
+                    $('#yuju-schema-review-progress').removeClass('active progress-bar-info')
+                        .addClass(totals.error ? 'progress-bar-warning' : 'progress-bar-success');
+                    var msg = 'Finalizado: ' + totals.ok + ' OK, ' +
+                        totals.created + ' creadas, ' +
+                        totals.repaired + ' reparadas, ' +
+                        totals.error + ' con error.';
+                    $('#yuju-schema-review-summary').text(msg).show()
+                        .removeClass('alert-info')
+                        .addClass(totals.error ? 'alert-warning' : 'alert-success');
+                    refreshTables();
+                    return;
+                }
+
+                var t = tables[i];
+                var $item = $('.yuju-schema-review-item[data-table="' + t.name + '"]');
+                setItemState($item, 'reviewing', 'Comparando esquema e intentando reparar si hace falta…', []);
+                updateSchemaProgress(i, tables.length);
+
+                $.ajax({
+                    url: ajaxUrl,
+                    method: 'POST',
+                    dataType: 'json',
+                    data: {
+                        ajax: true,
+                        action: 'repairYujuTableSchema',
+                        token: token,
+                        table: t.name
+                    }
+                }).done(function (r) {
+                    var report = (r && r.report) ? r.report : {};
+                    var st = report.status || (r && r.success ? 'ok' : 'error');
+                    if (totals[st] !== undefined) {
+                        totals[st]++;
+                    } else if (st === 'ok' || st === 'created' || st === 'repaired') {
+                        totals[st]++;
+                    } else {
+                        totals.error++;
+                        st = 'error';
+                    }
+                    setItemState($item, st, report.message || (r && r.message) || '', report.actions || []);
+                }).fail(function () {
+                    totals.error++;
+                    setItemState($item, 'error', 'Error de red al revisar esta tabla.', []);
+                }).always(function () {
+                    i++;
+                    updateSchemaProgress(i, tables.length);
+                    setTimeout(next, 60);
+                });
+            }
+
+            next();
+        }
+
+        $(document).on('click', '#yuju-tables-review-schema', function (e) {
+            e.preventDefault();
+            ensureSchemaReviewModal();
+            var $modal = $('#yuju-schema-review-modal');
+            $('#yuju-schema-review-list').html('<div class="text-center text-muted" style="padding:20px;"><i class="icon-spinner icon-spin"></i> Cargando catálogo de tablas…</div>');
+            $('#yuju-schema-review-summary').hide();
+            updateSchemaProgress(0, 1);
+            $('#yuju-schema-review-progress').css('width', '0%').text('0%')
+                .removeClass('progress-bar-success progress-bar-danger progress-bar-warning')
+                .addClass('progress-bar-info');
+            $modal.modal('show');
+
+            $.ajax({
+                url: ajaxUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'getYujuSchemaReviewCatalog',
+                    token: token
+                }
+            }).done(function (r) {
+                if (!r || !r.success || !r.tables) {
+                    $('#yuju-schema-review-list').html('<div class="alert alert-danger">' +
+                        $('<div/>').text((r && r.message) ? r.message : 'No se pudo cargar el catálogo.').html() +
+                        '</div>');
+                    return;
+                }
+                renderSchemaList(r.tables);
+                $modal.data('schema-tables', r.tables);
+            }).fail(function () {
+                $('#yuju-schema-review-list').html('<div class="alert alert-danger">Error de red al cargar el catálogo.</div>');
+            });
+        });
+
+        $(document).on('click', '#yuju-schema-review-start', function (e) {
+            e.preventDefault();
+            var tables = $('#yuju-schema-review-modal').data('schema-tables');
+            if (!tables || !tables.length) {
+                alert('Aún no hay catálogo de tablas cargado.');
+                return;
+            }
+            renderSchemaList(tables);
+            runSchemaReview(tables);
+        });
     })();
+
+    // products-gral-report: solicitar desde configuración
+    $('#yuju-gral-request-btn').on('click', function () {
+        var $btn = $(this);
+        var $status = $('#yuju-gral-request-status');
+        if ($btn.prop('disabled')) {
+            return;
+        }
+        $btn.prop('disabled', true);
+        $status.text('Solicitando reporte…').removeClass('text-danger text-success').addClass('text-muted');
+        $.ajax({
+            url: $btn.data('ajax-url'),
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: 1,
+                action: 'RequestGralReport',
+                token: $btn.data('token')
+            }
+        }).done(function (resp) {
+            if (!resp) {
+                $status.text('Respuesta vacía').addClass('text-danger');
+                return;
+            }
+            if (resp.success) {
+                $status.text(resp.message || 'OK').removeClass('text-danger').addClass('text-success');
+                if (resp.quota) {
+                    $status.append(' (cupo ' + resp.quota.used + '/' + resp.quota.max + ')');
+                }
+            } else {
+                $status.text(resp.message || 'Error').removeClass('text-success').addClass('text-danger');
+                if (resp.quota && resp.quota.allowed) {
+                    $btn.prop('disabled', false);
+                }
+            }
+        }).fail(function (xhr) {
+            $status.text('Error HTTP ' + xhr.status).addClass('text-danger');
+            $btn.prop('disabled', false);
+        });
+    });
 });
 </script>
 <div class="modal fade yuju-cron-manager-modal" id="yuju-cron-manager-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-cron-manager-title">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="yuju-cron-manager-title"><i class="icon-time"></i> Administrar crons</h4>
+            <div class="modal-header yuju-cron-modal-header">
+                <h4 class="modal-title yuju-cron-modal-title" id="yuju-cron-manager-title">
+                    <i class="icon-time"></i> Administrar crons
+                </h4>
+                <button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> normalmente solo debes programar <code>cron.php</code> en crontab. Los demás scripts son utilitarios, internos o de diagnóstico.</div>
+                <div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> programe <code>cron.php</code> y <code>process_queue.php</code> (cola) en crontab. Los demás son utilitarios, internos o de diagnóstico. <strong>Ejecutar</strong> desde aquí corre en segundo plano y no bloquea el BO.</div>
                 <div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>
                 <div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">
                     <label style="margin:0; font-weight:600; cursor:pointer;">
@@ -1269,15 +1957,42 @@ $(document).ready(function() {
                         </tbody>
                     </table>
                 </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>
-                    <textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly style="font-family: Consolas, monospace;"></textarea>
+                <div class="yuju-cron-output-wrap">
+                    <div class="yuju-cron-output-head">
+                        <label for="yuju-cron-manager-output"><strong>Resultado:</strong></label>
+                        <button type="button"
+                                id="yuju-cron-output-expand"
+                                class="btn btn-default btn-xs"
+                                title="Ver resultado en pantalla completa">
+                            <i class="icon-resize-full"></i> Ampliar
+                        </button>
+                    </div>
+                    <textarea id="yuju-cron-manager-output" class="form-control" rows="10" readonly></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" id="yuju-cron-manager-refresh" class="btn btn-default">
                     <i class="icon-refresh"></i> Actualizar listado
                 </button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade yuju-cron-output-fullscreen-modal" id="yuju-cron-output-fullscreen-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-cron-output-fullscreen-title">
+    <div class="modal-dialog modal-lg yuju-cron-output-fullscreen-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header yuju-cron-modal-header">
+                <h4 class="modal-title yuju-cron-modal-title" id="yuju-cron-output-fullscreen-title">
+                    <i class="icon-file-text"></i> Resultado del cron
+                </h4>
+                <button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top:12px;">
+                <textarea id="yuju-cron-manager-output-fullscreen" class="form-control" readonly></textarea>
+            </div>
+            <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
             </div>
         </div>
@@ -1310,14 +2025,80 @@ $(document).ready(function() {
     display: none;
 }
 
-.yuju-cron-manager-modal .modal-header {
-    background: #f8fafc;
-    border-bottom: 1px solid #dde3ea;
+.yuju-cron-manager-modal .modal-header,
+.yuju-cron-manager-modal .yuju-cron-modal-header,
+.yuju-cron-output-fullscreen-modal .modal-header,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-header {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px;
+    float: none !important;
+    padding: 14px 18px !important;
+    margin: 0 !important;
+    background: #f8fafc !important;
+    border-bottom: 1px solid #dde3ea !important;
 }
 
-.yuju-cron-manager-modal .modal-title {
-    font-weight: 700;
-    color: #2f3b4a;
+.yuju-cron-manager-modal .yuju-cron-modal-title,
+.yuju-cron-manager-modal .modal-title,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-title,
+.yuju-cron-output-fullscreen-modal .modal-title {
+    float: none !important;
+    display: block !important;
+    flex: 1 1 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    color: #2f3b4a !important;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-title i,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-title i {
+    margin-right: 6px;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-close,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-close {
+    float: none !important;
+    position: static !important;
+    order: 2;
+    flex: 0 0 auto !important;
+    width: 32px !important;
+    height: 32px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid #d0d7de !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    color: #57606a !important;
+    font-size: 22px !important;
+    font-weight: 400 !important;
+    line-height: 28px !important;
+    text-align: center !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+    cursor: pointer;
+}
+
+.yuju-cron-manager-modal .yuju-cron-modal-close:hover,
+.yuju-cron-output-fullscreen-modal .yuju-cron-modal-close:hover {
+    background: #f3f4f6 !important;
+    color: #24292f !important;
+    border-color: #afb8c1 !important;
+}
+
+/* Anular el .close de Bootstrap 3 si quedara en el DOM */
+.yuju-cron-manager-modal .modal-header > .close,
+.yuju-cron-output-fullscreen-modal .modal-header > .close {
+    float: none !important;
+    position: static !important;
+    order: 2;
+    margin: 0 !important;
 }
 
 .yuju-cron-manager-modal .table > thead > tr > th {
@@ -1342,10 +2123,34 @@ $(document).ready(function() {
     margin-bottom: 12px;
 }
 
-/* Salida tipo consola: el BO (PS 8 SMB reskin) fuerza fondo blanco en textarea:hover — igualar su especificidad + ID */
+/* No usar .form-group: el BO PS8 lo pone en flex y deja Ampliar al lado del textarea */
+.yuju-cron-manager-modal .yuju-cron-output-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    margin: 0;
+}
+.yuju-cron-manager-modal .yuju-cron-output-head {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px;
+    width: 100% !important;
+    margin: 0 0 6px 0 !important;
+}
+.yuju-cron-manager-modal .yuju-cron-output-head label {
+    margin: 0;
+}
+
+/* Salida tipo consola */
 .yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control,
 textarea#yuju-cron-manager-output.form-control {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
     white-space: pre-wrap;
+    font-family: Consolas, Monaco, monospace;
     background-color: #0f172a !important;
     color: #d6e0ff !important;
     border: 1px solid #1f2a44 !important;
@@ -1356,14 +2161,40 @@ textarea#yuju-cron-manager-output.form-control {
 .yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:hover,
 .yuju-cron-manager-modal textarea#yuju-cron-manager-output.form-control:focus,
 textarea#yuju-cron-manager-output.form-control:hover,
-textarea#yuju-cron-manager-output.form-control:focus,
-:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control,
-:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:hover,
-:is(body:not(.ps-bo-rebrand)):is(body:not(.no-smb-reskin)) textarea#yuju-cron-manager-output.form-control:focus {
+textarea#yuju-cron-manager-output.form-control:focus {
     background-color: #0f172a !important;
     color: #d6e0ff !important;
     border-color: #334155 !important;
     box-shadow: none !important;
+}
+
+/* Terminal encima de Administrar crons */
+.yuju-cron-output-fullscreen-modal {
+    z-index: 20060 !important;
+}
+.modal-backdrop.yuju-cron-output-backdrop {
+    z-index: 20050 !important;
+}
+.yuju-cron-output-fullscreen-dialog {
+    width: 96%;
+    max-width: 1200px;
+    margin: 20px auto;
+}
+.yuju-cron-output-fullscreen-modal .modal-body {
+    min-height: 70vh;
+}
+.yuju-cron-output-fullscreen-modal textarea#yuju-cron-manager-output-fullscreen.form-control {
+    width: 100%;
+    min-height: 70vh;
+    height: 70vh;
+    resize: vertical;
+    white-space: pre-wrap;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    background-color: #0f172a !important;
+    color: #d6e0ff !important;
+    border: 1px solid #1f2a44 !important;
 }
 </style>
 {/block}

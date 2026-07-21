@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `ps_yuju_category_mapping` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_prestashop_category` (`prestashop_category_id`),
-    UNIQUE KEY `unique_yuju_category` (`yuju_category_id`),
+    KEY `idx_yuju_category` (`yuju_category_id`),
     KEY `idx_sync_enabled` (`sync_enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

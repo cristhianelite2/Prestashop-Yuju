@@ -77,10 +77,12 @@ class Prestashopyuju extends Module
         return parent::install()
         && $this->installDb()
         && $this->ensureProductStatusIntermediateWebhookStates()
+        && $this->ensureAuditTables()
         && $this->installTabs()
         && $this->registerHooks()
         && $this->installConfiguration()
-        && $this->createDirectories();
+        && $this->createDirectories()
+        && $this->ensureYujuCarrier();
     }
 
     /**
@@ -178,6 +180,7 @@ class Prestashopyuju extends Module
             $this->ensureSyncHistoryTable();
             $this->ensureSyncQueueActionIncludesDelete();
             $this->ensureProductStatusIntermediateWebhookStates();
+            $this->ensureAuditTables();
         } catch (Exception $e) {
             $result['errors'][] = $e->getMessage();
         }
@@ -204,6 +207,139 @@ class Prestashopyuju extends Module
 
         $sql = file_get_contents($path);
         $sql = str_replace('PREFIX_', _DB_PREFIX_, $sql);
+        $queries = preg_split("/;\s*$/m", $sql);
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query !== '') {
+                Db::getInstance()->execute($query);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Crea tablas de auditoría de ofertas si faltan (instalaciones ya existentes).
+     *
+     * @return bool
+     */
+    public function ensureAuditTables()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        // Evitar ALTER/SHOW en cada AJAX de chunk (eran ~14+ por auditoría)
+        // Bump este entero cuando haya un cambio de esquema de auditoría.
+        $schemaVer = 2;
+        if ((int) Configuration::get('YUJU_AUDIT_SCHEMA_OK') >= $schemaVer) {
+            return true;
+        }
+
+        $path = dirname(__FILE__) . '/sql/add_audit_tables.sql';
+        if (!is_readable($path)) {
+            return false;
+        }
+
+        $sql = file_get_contents($path);
+        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
+        $queries = preg_split("/;\s*$/m", $sql);
+
+        foreach ($queries as $query) {
+            $query = trim($query);
+            if ($query !== '') {
+                Db::getInstance()->execute($query);
+            }
+        }
+
+        // result diff_found = solo comparación (sin corregir Yuju)
+        try {
+            Db::getInstance()->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_audit_run_details`
+                 MODIFY COLUMN `result` ENUM(\'matched\',\'diff_fixed\',\'diff_found\',\'diff_error\',\'not_found\')
+                 NOT NULL DEFAULT \'matched\''
+            );
+        } catch (Exception $e) {
+            // ya actualizado
+        }
+
+        try {
+            Db::getInstance()->execute(
+                'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_audit_runs`
+                 MODIFY COLUMN `status` ENUM(\'pending\',\'running\',\'paused\',\'completed\',\'failed\',\'cancelled\')
+                 NOT NULL DEFAULT \'pending\''
+            );
+        } catch (Exception $e) {
+            // ya actualizado
+        }
+
+        try {
+            $cols = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'yuju_audit_runs` LIKE "duration_seconds"');
+            if (empty($cols)) {
+                Db::getInstance()->execute(
+                    'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_audit_runs` ADD COLUMN `duration_seconds` INT(11) DEFAULT NULL AFTER `finished_at`'
+                );
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        try {
+            $cols = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details` LIKE "product_name"');
+            if (empty($cols)) {
+                Db::getInstance()->execute(
+                    'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_audit_run_details` ADD COLUMN `product_name` VARCHAR(512) DEFAULT NULL AFTER `sku`'
+                );
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        // Índice compuesto para filtros del panel de monitoreo
+        try {
+            $idx = Db::getInstance()->executeS(
+                'SHOW INDEX FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details` WHERE Key_name = \'idx_run_result\''
+            );
+            if (empty($idx)) {
+                Db::getInstance()->execute(
+                    'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_audit_run_details`
+                     ADD KEY `idx_run_result` (`id_audit_run`, `result`)'
+                );
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        $this->ensureProductReportsTable();
+
+        Configuration::updateValue('YUJU_AUDIT_SCHEMA_OK', $schemaVer);
+
+        return true;
+    }
+
+    /**
+     * Tabla histórico products-gral-report (upgrades).
+     *
+     * @return bool
+     */
+    public function ensureProductReportsTable()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $path = dirname(__FILE__) . '/sql/add_product_reports_table.sql';
+        if (!is_readable($path)) {
+            return false;
+        }
+
+        $sql = file_get_contents($path);
+        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
         $queries = preg_split("/;\s*$/m", $sql);
 
         foreach ($queries as $query) {
@@ -325,6 +461,13 @@ class Prestashopyuju extends Module
         'active' => 1,
         ],
         [
+        'class_name' => 'AdminYujuOrderStatusMapping',
+        'name' => $this->trans('Mapeo de Estados', array(), 'Modules.Prestashopyuju.Admin'),
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
         'class_name' => 'AdminYujuProductStatus',
         'name' => $this->trans('Product Status', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
@@ -334,6 +477,20 @@ class Prestashopyuju extends Module
         [
         'class_name' => 'AdminYujuCategoryBulk',
         'name' => $this->trans('Acciones por categoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
+        'class_name' => 'AdminYujuAudit',
+        'name' => $this->trans('Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
+        'class_name' => 'AdminYujuAuditMonitoring',
+        'name' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
@@ -431,6 +588,124 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Crea pestañas de Auditoría / Monitoreo si faltan (upgrades).
+     *
+     * @return bool
+     */
+    public function ensureYujuAuditTabs()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $this->ensureYujuCategoryBulkTab();
+
+        $parentTab = Tab::getInstanceFromClassName('AdminYuju');
+        if (!Validate::isLoadedObject($parentTab) || !(int) $parentTab->id) {
+            return false;
+        }
+
+        $tabs = [
+            'AdminYujuAudit' => $this->trans('Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+            'AdminYujuAuditMonitoring' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+        ];
+
+        foreach ($tabs as $className => $name) {
+            $existing = Tab::getInstanceFromClassName($className);
+            if (Validate::isLoadedObject($existing) && (int) $existing->id > 0) {
+                continue;
+            }
+
+            $tab = new Tab();
+            $tab->class_name = $className;
+            $tab->module = $this->name;
+            $tab->active = true;
+            $tab->id_parent = (int) $parentTab->id;
+            foreach (Language::getLanguages(false) as $language) {
+                $tab->name[$language['id_lang']] = $name;
+            }
+            if (!$tab->save()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Crea pestaña de mapeo de estados de pedido si falta (upgrades).
+     *
+     * @return bool
+     */
+    public function ensureYujuOrderStatusMappingTab()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $existing = Tab::getInstanceFromClassName('AdminYujuOrderStatusMapping');
+        if (Validate::isLoadedObject($existing) && (int) $existing->id > 0) {
+            return true;
+        }
+
+        $parentTab = Tab::getInstanceFromClassName('AdminYuju');
+        if (!Validate::isLoadedObject($parentTab) || !(int) $parentTab->id) {
+            return false;
+        }
+
+        $tab = new Tab();
+        $tab->class_name = 'AdminYujuOrderStatusMapping';
+        $tab->module = $this->name;
+        $tab->active = true;
+        $tab->id_parent = (int) $parentTab->id;
+        $name = $this->trans('Mapeo de Estados', array(), 'Modules.Prestashopyuju.Admin');
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[$language['id_lang']] = $name;
+        }
+
+        return (bool) $tab->save();
+    }
+
+    /**
+     * Asegura que exista el carrier "Yuju" para pedidos marketplace.
+     *
+     * @return bool
+     */
+    public function ensureYujuCarrier()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        $existing = (int) Db::getInstance()->getValue('
+            SELECT id_carrier FROM ' . _DB_PREFIX_ . 'carrier
+            WHERE name = "Yuju" AND deleted = 0
+            ORDER BY id_carrier DESC
+        ');
+        if ($existing > 0) {
+            return true;
+        }
+
+        require_once dirname(__FILE__) . '/classes/YujuOrderManager.php';
+        try {
+            $manager = new YujuOrderManager();
+            $carrier_id = $manager->ensureYujuCarrierPublic();
+
+            return (int) $carrier_id > 0;
+        } catch (Exception $e) {
+            PrestaShopLogger::addLog('Yuju carrier ensure failed: ' . $e->getMessage(), 3);
+
+            return false;
+        }
+    }
+
+    /**
      * Uninstall admin tabs.
      */
     protected function uninstallTabs()
@@ -438,8 +713,11 @@ class Prestashopyuju extends Module
         $tab_classes = [
         'AdminYujuLogs',
         'AdminYujuWebhook',
+        'AdminYujuAuditMonitoring',
+        'AdminYujuAudit',
         'AdminYujuCategoryBulk',
         'AdminYujuProductStatus',
+        'AdminYujuOrderStatusMapping',
         'AdminYujuAttributeMapping',
         'AdminYujuProductMapping',
         'AdminYujuConfiguration',
@@ -626,6 +904,12 @@ class Prestashopyuju extends Module
     {
         require_once dirname(__FILE__) . '/classes/YujuLogger.php';
         require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
+        require_once dirname(__FILE__) . '/classes/YujuOrderManager.php';
+
+        // Evitar doble push: tras crear orden Yuju el OrderManager ya empuja el stock
+        if (!empty(YujuOrderManager::$suppressStockHookToYuju)) {
+            return;
+        }
         
         $logger = new YujuLogger();
         
@@ -733,14 +1017,15 @@ class Prestashopyuju extends Module
                 $product_id,
                 $yuju_product_id,
                 [
-                    'changed_fields' => ['quantity'],
+                    'changed_fields' => ['quantity', 'stock'],
                     'priority' => 'high', // Stock siempre es prioridad alta
                     'old_values' => ['quantity' => $old_stock],
                     'new_values' => ['quantity' => $new_stock]
                 ],
                 $yuju_data,
                 $result,
-                $sync_duration
+                $sync_duration,
+                'auto_stock'
             );
             
             // Actualizar estado si hubo error
@@ -1038,24 +1323,54 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Registra CSS/JS admin del BO.
+     * Usa addCSS/addJS (fiable en controladores AdminYuju*).
+     * No añadir ?v= a la ruta: en PS 8 rompe la resolución del archivo.
+     *
+     * @param bool $includeProductModal
+     *
+     * @return void
+     */
+    protected function registerYujuAdminAssets($includeProductModal = false)
+    {
+        if (!isset($this->context->controller) || !is_object($this->context->controller)) {
+            return;
+        }
+
+        $controller = $this->context->controller;
+
+        // addCSS/addJS: mismo patrón que AdminYujuController (probado en este módulo)
+        if (method_exists($controller, 'addCSS')) {
+            $controller->addCSS($this->_path . 'views/css/admin.css');
+        }
+        if (method_exists($controller, 'addJS')) {
+            $controller->addJS($this->_path . 'views/js/admin.js');
+            if ($includeProductModal) {
+                $controller->addJS($this->_path . 'views/js/yuju_product_info_modal.js');
+            }
+        }
+    }
+
+    /**
      * Back office header hook.
      */
     public function hookDisplayBackOfficeHeader()
     {
         $controller = Tools::getValue('controller');
-        $version = $this->version . '.' . time(); // Añade timestamp para versionado
         $this->ensureYujuCategoryBulkTab();
-        
+        $this->ensureYujuAuditTabs();
+        $this->ensureYujuOrderStatusMappingTab();
+        $this->ensureAuditTables();
+        $this->ensureYujuCarrier();
+
         // Cargar CSS/JS en página de configuración del módulo
         if ($controller == 'AdminModules' && Tools::getValue('configure') == $this->name) {
-            $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
-            $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
+            $this->registerYujuAdminAssets(false);
         }
-        
+
         // Cargar CSS/JS en TODOS los controladores del módulo Yuju
         if (strpos($controller, 'AdminYuju') === 0) {
-            $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
-            $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
+            $this->registerYujuAdminAssets(true);
         }
     }
 
@@ -1067,20 +1382,21 @@ class Prestashopyuju extends Module
         // Only load on module's configuration page and all Yuju module controllers
         if (isset($this->context->controller)) {
             $this->ensureYujuCategoryBulkTab();
+            $this->ensureYujuAuditTabs();
+            $this->ensureYujuOrderStatusMappingTab();
+            $this->ensureAuditTables();
+            $this->ensureYujuCarrier();
             $controller = get_class($this->context->controller);
-            $version = $this->version . '.' . time(); // Añade timestamp para versionado
-            
+
             // Load on module configuration page
-            if ($this->context->controller instanceof AdminModulesController && 
+            if ($this->context->controller instanceof AdminModulesController &&
                 Tools::getValue('configure') == $this->name) {
-                $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
-                $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
+                $this->registerYujuAdminAssets(false);
             }
-            
+
             // Load on all Yuju module controllers
             if (strpos($controller, 'AdminYuju') !== false) {
-                $this->context->controller->addCSS($this->_path . 'views/css/admin.css?v=' . $version);
-                $this->context->controller->addJS($this->_path . 'views/js/admin.js?v=' . $version);
+                $this->registerYujuAdminAssets(true);
             }
         }
     }
@@ -1321,7 +1637,10 @@ class Prestashopyuju extends Module
                     'changed_fields' => $changes_info['changed_fields']
                 ]);
                 
-                $queued = $sync_queue->addToQueue($product_id, 'update', 'normal', $yuju_data);
+                $queued = $sync_queue->addToQueue($product_id, 'update', 'normal', array_merge(
+                    is_array($yuju_data) ? $yuju_data : [],
+                    ['origin' => 'auto_product']
+                ));
                 
                 if ($queued) {
                     // Actualizar estado a queued
@@ -1355,7 +1674,8 @@ class Prestashopyuju extends Module
                 $changes_info,
                 $yuju_data,
                 $result,
-                $sync_duration
+                $sync_duration,
+                'auto_product'
             );
             
             // Actualizar estado si hubo error
@@ -1412,29 +1732,32 @@ class Prestashopyuju extends Module
     /**
      * Guarda el historial de actualización automática
      */
-    private function saveProductUpdateHistory($product_id, $yuju_product_id, $changes_info, $yuju_data, $result, $sync_duration)
+    private function saveProductUpdateHistory($product_id, $yuju_product_id, $changes_info, $yuju_data, $result, $sync_duration, $origin = 'auto_stock')
     {
-        $request_data = [
-            'method' => 'PUT',
-            'url' => 'https://api.tp.yuju.io/products/' . $yuju_product_id,
-            'changed_fields' => $changes_info['changed_fields'],
-            'priority' => $changes_info['priority'],
-            'old_values' => $changes_info['old_values'],
-            'new_values' => $changes_info['new_values'],
-            'body' => $yuju_data
-        ];
-        
+        require_once dirname(__FILE__) . '/classes/YujuProductManager.php';
+        $pm = new YujuProductManager();
+        $request_data = $pm->buildHistoryRequestPayload($yuju_data, [
+            'origin' => $origin,
+            'changed_fields' => $changes_info['changed_fields'] ?? array_keys((array) $yuju_data),
+            'old_values' => $changes_info['old_values'] ?? null,
+            'new_values' => $changes_info['new_values'] ?? null,
+            'priority' => $changes_info['priority'] ?? 'high',
+            'action' => 'update',
+        ]);
+
         Db::getInstance()->insert('yuju_product_sync_history', [
-            'prestashop_product_id' => (int)$product_id,
+            'prestashop_product_id' => (int) $product_id,
             'yuju_product_id' => pSQL($yuju_product_id),
+            'sync_direction' => 'to_yuju',
             'action' => pSQL('update'),
             'status' => pSQL($result['success'] ? 'success' : 'error'),
-            'http_status_code' => isset($result['http_code']) ? (int)$result['http_code'] : 0,
-            'request_data' => pSQL(json_encode($request_data)),
-            'response_data' => pSQL(json_encode($result)),
+            'http_status_code' => isset($result['http_code']) ? (int) $result['http_code'] : 0,
+            'request_data' => pSQL($request_data, true),
+            'response_data' => pSQL(json_encode($result), true),
             'error_message' => $result['success'] ? null : pSQL($result['message'] ?? 'Error desconocido'),
             'sync_duration' => $sync_duration,
-            'created_at' => date('Y-m-d H:i:s')
+            'created_at' => date('Y-m-d H:i:s'),
+            'created_by' => pSQL($origin),
         ]);
     }
 

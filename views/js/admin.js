@@ -94,6 +94,10 @@ var YujuAdmin = {
                 self.runCronScript(script, $(this));
             }
         });
+        $(document).on('click', '#yuju-cron-output-expand', function(e) {
+            e.preventDefault();
+            self.openCronOutputFullscreen();
+        });
 
         // OAuth Authorization button
         $(document).on('click', '#yuju-oauth-authorize', function(e) {
@@ -158,8 +162,19 @@ var YujuAdmin = {
 
     /**
      * Start auto-refresh for sync status
+     * Solo en pantallas que realmente implementan getSyncStatus (no Auditoría/Monitoreo/etc.).
      */
     startAutoRefresh: function() {
+        var href = (window.location && window.location.href) ? window.location.href : '';
+        var isSyncUi = $('.yuju-progress-bar').length > 0
+            || $('#yuju-sync-status').length > 0
+            || href.indexOf('AdminYujuSync') !== -1;
+
+        // No spamear getSyncStatus en Configuración / Auditoría / Product Status / etc.
+        if (!isSyncUi) {
+            return;
+        }
+
         var self = this;
         if (this.state.syncInterval) {
             clearInterval(this.state.syncInterval);
@@ -646,6 +661,9 @@ var YujuAdmin = {
      */
     openCronManager: function() {
         var $modal = this.getCronManagerModal();
+        if ($modal.length && !$modal.parent().is('body')) {
+            $modal.appendTo('body');
+        }
         $modal.find('#yuju-cron-manager-output').val('');
         $modal.find('#yuju-cron-manager-alert').hide().removeClass('alert-success alert-danger alert-info').text('');
         $modal.modal('show');
@@ -658,6 +676,65 @@ var YujuAdmin = {
             return $visible;
         }
         return $('.yuju-cron-manager-modal').first();
+    },
+
+    /**
+     * Abre el resultado del cron en un modal más grande (lectura cómoda).
+     * Debe quedar SIEMPRE por encima de "Administrar crons" (modal apilado).
+     */
+    openCronOutputFullscreen: function() {
+        var self = this;
+        var $manager = this.getCronManagerModal();
+        var text = $manager.find('#yuju-cron-manager-output').val() || '';
+        var $fs = $('#yuju-cron-output-fullscreen-modal');
+        if (!$fs.length) {
+            $('body').append(
+                '<div class="modal fade yuju-cron-output-fullscreen-modal" id="yuju-cron-output-fullscreen-modal" tabindex="-1" role="dialog">' +
+                    '<div class="modal-dialog modal-lg yuju-cron-output-fullscreen-dialog" role="document">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header yuju-cron-modal-header">' +
+                                '<h4 class="modal-title yuju-cron-modal-title"><i class="icon-file-text"></i> Resultado del cron</h4>' +
+                                '<button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>' +
+                            '</div>' +
+                            '<div class="modal-body" style="padding-top:12px;">' +
+                                '<textarea id="yuju-cron-manager-output-fullscreen" class="form-control" readonly></textarea>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+            $fs = $('#yuju-cron-output-fullscreen-modal');
+        }
+
+        // Sacarlo de wrappers del BO (transform/overflow/z-index) y ponerlo al final del body
+        if (!$fs.parent().is('body')) {
+            $fs.appendTo('body');
+        }
+
+        $fs.find('#yuju-cron-manager-output-fullscreen').val(text || '(Sin resultado todavía. Ejecute un cron primero.)');
+
+        $fs.off('shown.bs.modal.yujuCronFs hidden.bs.modal.yujuCronFs');
+        $fs.on('shown.bs.modal.yujuCronFs', function() {
+            var $backdrop = $('.modal-backdrop').not('.yuju-cron-output-backdrop').last();
+            $backdrop.addClass('yuju-cron-output-backdrop');
+            // Por encima del modal "Administrar crons" y de temas PS con z-index altos
+            $fs.css('z-index', 20060);
+            $backdrop.css('z-index', 20050);
+        });
+        $fs.on('hidden.bs.modal.yujuCronFs', function() {
+            $('.modal-backdrop.yuju-cron-output-backdrop').removeClass('yuju-cron-output-backdrop').css('z-index', '');
+            // Al cerrar el hijo, Bootstrap quita modal-open; mantener el padre abierto
+            var $mgr = self.getCronManagerModal();
+            if ($mgr.hasClass('in') || $mgr.hasClass('show') || $mgr.is(':visible')) {
+                $('body').addClass('modal-open');
+            }
+        });
+
+        $fs.css('z-index', 20060);
+        $fs.modal('show');
     },
 
     /**
@@ -770,7 +847,7 @@ var YujuAdmin = {
     },
 
     /**
-     * Ejecuta un cron y muestra su salida.
+     * Ejecuta un cron en background y hace poll del estado (sin bloquear el BO).
      */
     runCronScript: function(script, $btn) {
         var self = this;
@@ -781,13 +858,26 @@ var YujuAdmin = {
         var $out = $modal.find('#yuju-cron-manager-output');
         var $alert = $modal.find('#yuju-cron-manager-alert');
 
-        // Indicador en vivo de progreso dentro del textarea.
-        // Se actualiza cada segundo mientras la petición AJAX sigue abierta.
         var spinnerFrames = ['|', '/', '-', '\\'];
         var spinnerIdx = 0;
         var startedAt = Date.now();
         var scriptName = String(script || '');
-        var paintRunning = function() {
+        var jobId = null;
+        var pollTimer = null;
+        var paintTimer = null;
+
+        var stopTimers = function() {
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+            if (paintTimer) {
+                clearInterval(paintTimer);
+                paintTimer = null;
+            }
+        };
+
+        var paintRunning = function(extraLine) {
             var elapsedMs = Date.now() - startedAt;
             var elapsedS = Math.floor(elapsedMs / 1000);
             var mm = Math.floor(elapsedS / 60);
@@ -796,30 +886,82 @@ var YujuAdmin = {
             var frame = spinnerFrames[spinnerIdx % spinnerFrames.length];
             spinnerIdx++;
             var lines = [
-                '[' + frame + '] Se está ejecutando ' + scriptName + '…',
-                '    Tiempo transcurrido: ' + human + ' (' + elapsedS + ' s)',
+                '[' + frame + '] Ejecutando en segundo plano: ' + scriptName,
+                '    Tiempo: ' + human + ' (' + elapsedS + ' s)',
                 '    Inicio: ' + new Date(startedAt).toLocaleTimeString(),
+                '    Job: ' + (jobId || '(iniciando…)'),
                 '',
-                '(La pantalla se actualizará automáticamente cuando termine el cron.)'
+                'Puede navegar otras pestañas del backoffice; este modal seguirá actualizándose.',
+                extraLine ? ('\n' + extraLine) : ''
             ];
             $out.val(lines.join('\n'));
         };
 
-        // Alerta inicial informando que el cron está activo.
+        var finishUi = function(ok, message, meta, output) {
+            stopTimers();
+            var alertClass = ok ? 'alert-success' : 'alert-danger';
+            $alert
+                .removeClass('alert-success alert-danger alert-info')
+                .addClass('alert ' + alertClass)
+                .html(self.escapeHtml(message || '') + (meta && meta.length ? ('<br><small>' + self.escapeHtml(meta.join(' · ')) + '</small>') : ''))
+                .show();
+            $out.val(output || '(sin salida)');
+            $btn.prop('disabled', false).html(originalHtml);
+            self.loadCronManagerData();
+        };
+
+        var pollJob = function() {
+            if (!jobId) {
+                return;
+            }
+            $.ajax({
+                url: self.config.ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'getCronJobStatus',
+                    job_id: jobId,
+                    token: self.config.token
+                },
+                success: function(response) {
+                    if (!response || !response.success || !response.job) {
+                        paintRunning('Esperando estado del job…');
+                        pollTimer = setTimeout(pollJob, 2000);
+                        return;
+                    }
+                    var job = response.job;
+                    if (!response.done) {
+                        var st = job.status || 'running';
+                        paintRunning('Estado: ' + st + (job.message ? (' — ' + job.message) : ''));
+                        pollTimer = setTimeout(pollJob, 2000);
+                        return;
+                    }
+                    var ok = String(job.status) === 'success';
+                    var meta = [];
+                    if (typeof job.exit_code !== 'undefined' && job.exit_code !== null) {
+                        meta.push('exit_code=' + job.exit_code);
+                    }
+                    if (typeof job.duration_ms !== 'undefined' && job.duration_ms !== null) {
+                        meta.push('duración=' + job.duration_ms + ' ms');
+                    }
+                    finishUi(ok, job.message || (ok ? 'Cron OK' : 'Cron con error'), meta, job.output || '');
+                },
+                error: function() {
+                    paintRunning('Reintentando lectura del estado…');
+                    pollTimer = setTimeout(pollJob, 3000);
+                }
+            });
+        };
+
         $alert
             .removeClass('alert-success alert-danger alert-info')
             .addClass('alert alert-info')
-            .html('<i class="icon-refresh yuju-spin"></i> Ejecutando <code>' + self.escapeHtml(scriptName) + '</code>… espere a que termine.')
+            .html('<i class="icon-refresh yuju-spin"></i> Lanzando <code>' + self.escapeHtml(scriptName) + '</code> en segundo plano… puede seguir navegando.')
             .show();
 
         paintRunning();
-        var runningTimer = setInterval(paintRunning, 1000);
-        var stopRunningTimer = function() {
-            if (runningTimer) {
-                clearInterval(runningTimer);
-                runningTimer = null;
-            }
-        };
+        paintTimer = setInterval(function() { paintRunning(); }, 1000);
 
         $.ajax({
             url: this.config.ajaxUrl,
@@ -832,10 +974,23 @@ var YujuAdmin = {
                 token: this.config.token
             },
             success: function(response) {
-                stopRunningTimer();
+                if (!response || !response.success) {
+                    finishUi(false, (response && response.message) ? response.message : 'No se pudo iniciar el cron.', [], '');
+                    return;
+                }
+                if (response.async && response.job_id) {
+                    jobId = response.job_id;
+                    $alert
+                        .removeClass('alert-success alert-danger alert-info')
+                        .addClass('alert alert-info')
+                        .html('<i class="icon-refresh yuju-spin"></i> <code>' + self.escapeHtml(scriptName) + '</code> en background (job <code>' + self.escapeHtml(jobId) + '</code>). Puede usar otras pestañas del módulo.')
+                        .show();
+                    paintRunning('Job iniciado.');
+                    pollJob();
+                    return;
+                }
+                // Fallback por si el backend respondiera en modo síncrono
                 var ok = !!(response && response.success);
-                var alertClass = ok ? 'alert-success' : 'alert-danger';
-                var msg = response && response.message ? response.message : 'Sin respuesta del servidor';
                 var meta = [];
                 if (response && typeof response.exit_code !== 'undefined') {
                     meta.push('exit_code=' + response.exit_code);
@@ -843,30 +998,11 @@ var YujuAdmin = {
                 if (response && typeof response.duration_ms !== 'undefined') {
                     meta.push('duración=' + response.duration_ms + ' ms');
                 }
-
-                $alert
-                    .removeClass('alert-success alert-danger alert-info')
-                    .addClass('alert ' + alertClass)
-                    .html(self.escapeHtml(msg) + (meta.length ? ('<br><small>' + self.escapeHtml(meta.join(' · ')) + '</small>') : ''))
-                    .show();
-
-                var out = response && typeof response.output === 'string' ? response.output : '';
-                $out.val(out || '(sin salida)');
-                self.loadCronManagerData();
+                finishUi(ok, response.message || '', meta, response.output || '');
             },
             error: function(xhr) {
-                stopRunningTimer();
                 var txt = xhr && xhr.responseText ? xhr.responseText : 'Error de red';
-                $alert
-                    .removeClass('alert-success alert-danger alert-info')
-                    .addClass('alert alert-danger')
-                    .text('No se pudo ejecutar el cron.')
-                    .show();
-                $out.val(txt);
-            },
-            complete: function() {
-                stopRunningTimer();
-                $btn.prop('disabled', false).html(originalHtml);
+                finishUi(false, 'No se pudo lanzar el cron en background.', [], txt);
             }
         });
     },
@@ -1623,6 +1759,13 @@ $(document).ready(function() {
         
         // Inicializar YujuAdmin
         YujuAdmin.init(config);
+
+        // En Auditoría / Monitoreo: nunca poll getSyncStatus
+        if (window.location.href.indexOf('AdminYujuAudit') !== -1) {
+            if (typeof YujuAdmin.stopAutoRefresh === 'function') {
+                YujuAdmin.stopAutoRefresh();
+            }
+        }
         
 
     } else {

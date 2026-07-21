@@ -38,6 +38,41 @@
 </div>
 
 <style>
+.yuju-order-search-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    background: #f8f8f8;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+.yuju-order-search-bar label {
+    margin: 0 4px 0 0;
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+}
+.yuju-order-search-bar .form-control {
+    height: 28px;
+    padding: 2px 8px;
+    font-size: 12px;
+    width: 140px;
+    display: inline-block;
+}
+.yuju-order-search-bar .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.3;
+}
+.yuju-order-search-bar .checkbox-inline {
+    margin: 0 8px 0 0;
+    padding-top: 0;
+    font-size: 12px;
+    font-weight: normal;
+}
 .yuju-webhook-container {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;

@@ -117,7 +117,7 @@ class YujuCategoryMapping extends ObjectModel
     }
 
     /**
-     * Get category mapping by Yuju category ID.
+     * Get category mapping by Yuju category ID (una de las posibles; varias PS pueden compartir Yuju).
      *
      * @param string $yuju_category_id
      * @return YujuCategoryMapping|false
@@ -162,6 +162,91 @@ class YujuCategoryMapping extends ObjectModel
                 WHERE prestashop_category_id = ' . (int) $prestashop_category_id;
         
         return (bool) Db::getInstance()->getValue($sql);
+    }
+
+    /**
+     * Permite que varias categorías PrestaShop compartan la misma categoría Yuju.
+     * Elimina el índice UNIQUE histórico sobre yuju_category_id y deja un INDEX normal.
+     *
+     * @return bool true si el esquema quedó compatible (o ya lo estaba)
+     */
+    public static function ensureSharedYujuCategoryAllowed()
+    {
+        $table = _DB_PREFIX_ . 'yuju_category_mapping';
+        try {
+            $exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"');
+            if (empty($exists)) {
+                return true;
+            }
+
+            $indexes = Db::getInstance()->executeS('SHOW INDEX FROM `' . bqSQL($table) . '`');
+            if (!is_array($indexes)) {
+                return true;
+            }
+
+            $hasUniqueYuju = false;
+            $hasNonUniqueYuju = false;
+            foreach ($indexes as $idx) {
+                $keyName = isset($idx['Key_name']) ? (string) $idx['Key_name'] : '';
+                $col = isset($idx['Column_name']) ? (string) $idx['Column_name'] : '';
+                $nonUnique = isset($idx['Non_unique']) ? (int) $idx['Non_unique'] : 1;
+                if ($col !== 'yuju_category_id') {
+                    continue;
+                }
+                if ($keyName === 'unique_yuju_category' || $nonUnique === 0) {
+                    $hasUniqueYuju = true;
+                }
+                if ($keyName === 'idx_yuju_category' && $nonUnique === 1) {
+                    $hasNonUniqueYuju = true;
+                }
+            }
+
+            if ($hasUniqueYuju) {
+                // Puede llamarse unique_yuju_category u otro nombre UNIQUE sobre esa columna
+                $uniqueNames = [];
+                foreach ($indexes as $idx) {
+                    $keyName = isset($idx['Key_name']) ? (string) $idx['Key_name'] : '';
+                    $col = isset($idx['Column_name']) ? (string) $idx['Column_name'] : '';
+                    $nonUnique = isset($idx['Non_unique']) ? (int) $idx['Non_unique'] : 1;
+                    if ($col === 'yuju_category_id' && $nonUnique === 0 && $keyName !== 'PRIMARY') {
+                        $uniqueNames[$keyName] = true;
+                    }
+                }
+                foreach (array_keys($uniqueNames) as $keyName) {
+                    Db::getInstance()->execute(
+                        'ALTER TABLE `' . bqSQL($table) . '` DROP INDEX `' . bqSQL($keyName) . '`'
+                    );
+                }
+                $hasNonUniqueYuju = false;
+            }
+
+            if (!$hasNonUniqueYuju) {
+                // Releer por si quedó algún índice no unique
+                $indexes2 = Db::getInstance()->executeS('SHOW INDEX FROM `' . bqSQL($table) . '`');
+                $hasIdx = false;
+                if (is_array($indexes2)) {
+                    foreach ($indexes2 as $idx) {
+                        if (
+                            isset($idx['Key_name'], $idx['Column_name'])
+                            && $idx['Key_name'] === 'idx_yuju_category'
+                            && $idx['Column_name'] === 'yuju_category_id'
+                        ) {
+                            $hasIdx = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$hasIdx) {
+                    Db::getInstance()->execute(
+                        'ALTER TABLE `' . bqSQL($table) . '` ADD INDEX `idx_yuju_category` (`yuju_category_id`)'
+                    );
+                }
+            }
+
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
     }
 
     /**

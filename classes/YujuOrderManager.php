@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
+require_once dirname(__FILE__) . '/YujuOrderOutbound.php';
 require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOrderManager
@@ -30,6 +31,20 @@ class YujuOrderManager
     private $logger;
     private $status_mapping;
     private $context;
+
+    /** @var array<string,int> Contador de locks anidados por yuju_order_id (GET_LOCK no es reentrante) */
+    private $orderLocksHeld = [];
+
+    /**
+     * Cuando true, hookActionUpdateQuantity no vuelve a empujar a Yuju
+     * (el push lo hace explícitamente applyOrderStockDecrementAndPushToYuju).
+     *
+     * @var bool
+     */
+    public static $suppressStockHookToYuju = false;
+
+    /** @var bool */
+    private $orderMappingSchemaReady = false;
 
     public function __construct($context = null)
     {
@@ -40,49 +55,260 @@ class YujuOrderManager
     }
 
     /**
+     * Lock público para serializar todo el pipeline del webhook (enrich + create/update).
+     *
+     * @param string|int $yuju_order_id
+     * @param int $timeoutSeconds
+     * @return bool
+     */
+    public function acquireOrderLockPublic($yuju_order_id, $timeoutSeconds = 45)
+    {
+        return $this->acquireOrderLock($yuju_order_id, $timeoutSeconds);
+    }
+
+    /**
+     * @param string|int $yuju_order_id
+     * @return void
+     */
+    public function releaseOrderLockPublic($yuju_order_id)
+    {
+        $this->releaseOrderLock($yuju_order_id);
+    }
+
+    /**
+     * Nombre corto y estable para MySQL GET_LOCK (máx. 64 chars).
+     *
+     * @param string|int $yuju_order_id
+     * @return string
+     */
+    protected function orderLockName($yuju_order_id)
+    {
+        return 'yuju_ord_' . substr(md5((string) $yuju_order_id), 0, 40);
+    }
+
+    /**
+     * Serializa creación/actualización de la misma orden Yuju entre requests concurrentes.
+     *
+     * @param string|int $yuju_order_id
+     * @param int $timeoutSeconds
+     * @return bool
+     */
+    protected function acquireOrderLock($yuju_order_id, $timeoutSeconds = 45)
+    {
+        $key = (string) $yuju_order_id;
+        if ($key === '') {
+            return false;
+        }
+        if (!empty($this->orderLocksHeld[$key])) {
+            $this->orderLocksHeld[$key]++;
+            return true;
+        }
+
+        $lockName = $this->orderLockName($key);
+        $got = (int) Db::getInstance()->getValue(
+            'SELECT GET_LOCK("' . pSQL($lockName) . '", ' . (int) $timeoutSeconds . ')'
+        );
+        if ($got === 1) {
+            $this->orderLocksHeld[$key] = 1;
+            return true;
+        }
+
+        $this->logger->log('Could not acquire order lock for Yuju ID ' . $key . ' (result=' . $got . ')', 'warning');
+        return false;
+    }
+
+    /**
+     * @param string|int $yuju_order_id
+     * @return void
+     */
+    protected function releaseOrderLock($yuju_order_id)
+    {
+        $key = (string) $yuju_order_id;
+        if ($key === '' || empty($this->orderLocksHeld[$key])) {
+            return;
+        }
+        $this->orderLocksHeld[$key]--;
+        if ($this->orderLocksHeld[$key] > 0) {
+            return;
+        }
+        unset($this->orderLocksHeld[$key]);
+        $lockName = $this->orderLockName($key);
+        Db::getInstance()->execute('SELECT RELEASE_LOCK("' . pSQL($lockName) . '")');
+    }
+
+    /**
+     * Placeholder negativo único por yuju_order_id (claim pendiente).
+     * Nunca usamos NULL: funciona con columnas NOT NULL y UNIQUE.
+     *
+     * @param string $yuju_order_id
+     * @return int < 0
+     */
+    protected function pendingMappingPlaceholder($yuju_order_id)
+    {
+        $h = sprintf('%u', crc32((string) $yuju_order_id));
+        $n = (int) ($h % 2000000000);
+        if ($n <= 0) {
+            $n = 1;
+        }
+        return -1 * $n;
+    }
+
+    /**
+     * ¿El valor de mapping es claim pendiente (aún sin orden PS real)?
+     *
+     * @param mixed $prestashop_order_id
+     * @return bool
+     */
+    protected function isPendingMappingPsId($prestashop_order_id)
+    {
+        if ($prestashop_order_id === null || $prestashop_order_id === '') {
+            return true;
+        }
+        return (int) $prestashop_order_id <= 0;
+    }
+
+    /**
+     * Normaliza filas legacy con prestashop_order_id = 0 (rompe UNIQUE si hay varias).
+     * No escribe NULL nunca.
+     *
+     * @return void
+     */
+    protected function ensureOrderMappingSchema()
+    {
+        if ($this->orderMappingSchemaReady) {
+            return;
+        }
+        $this->orderMappingSchemaReady = true;
+
+        try {
+            $table = _DB_PREFIX_ . 'yuju_order_mapping';
+            $this->ensureOrderMappingOutboundColumns($table);
+
+            $rows = Db::getInstance()->executeS(
+                'SELECT `id`, `yuju_order_id` FROM `' . $table . '`
+                 WHERE `prestashop_order_id` IS NULL OR `prestashop_order_id` = 0'
+            );
+            if (!is_array($rows)) {
+                return;
+            }
+            foreach ($rows as $row) {
+                $yujuId = isset($row['yuju_order_id']) ? (string) $row['yuju_order_id'] : '';
+                if ($yujuId === '') {
+                    continue;
+                }
+                $placeholder = (int) $this->pendingMappingPlaceholder($yujuId);
+                Db::getInstance()->execute(
+                    'UPDATE `' . $table . '`
+                     SET `prestashop_order_id` = ' . $placeholder . ',
+                         `updated_at` = "' . pSQL(date('Y-m-d H:i:s')) . '"
+                     WHERE `id` = ' . (int) $row['id'] . '
+                     AND (`prestashop_order_id` IS NULL OR `prestashop_order_id` = 0)'
+                );
+            }
+        } catch (Exception $e) {
+            $this->logger->log('ensureOrderMappingSchema failed: ' . $e->getMessage(), 'warning');
+        } catch (Throwable $e) {
+            $this->logger->log('ensureOrderMappingSchema failed: ' . $e->getMessage(), 'warning');
+        }
+    }
+
+    /**
+     * Asegura columnas outbound en yuju_order_mapping (tiendas ya instaladas).
+     *
+     * @param string $table full table name with prefix
+     * @return void
+     */
+    protected function ensureOrderMappingOutboundColumns($table)
+    {
+        $needed = [
+            'id_channel' => 'varchar(64) DEFAULT NULL',
+            'outbound_external_pk' => 'varchar(64) DEFAULT NULL',
+            'outbound_status' => 'varchar(32) DEFAULT NULL',
+            'outbound_updated_at' => 'datetime DEFAULT NULL',
+        ];
+        foreach ($needed as $col => $definition) {
+            try {
+                $exists = Db::getInstance()->executeS(
+                    'SHOW COLUMNS FROM `' . pSQL($table) . '` LIKE "' . pSQL($col) . '"'
+                );
+                if (!empty($exists)) {
+                    continue;
+                }
+                // pSQL no es ideal para identificadores; validar nombre de columna
+                if (!preg_match('/^[a-z0-9_]+$/i', $col)) {
+                    continue;
+                }
+                Db::getInstance()->execute(
+                    'ALTER TABLE `' . $table . '` ADD COLUMN `' . $col . '` ' . $definition
+                );
+            } catch (Exception $e) {
+                $this->logger->log(
+                    'ensureOrderMappingOutboundColumns ' . $col . ': ' . $e->getMessage(),
+                    'warning'
+                );
+            } catch (Throwable $e) {
+                $this->logger->log(
+                    'ensureOrderMappingOutboundColumns ' . $col . ': ' . $e->getMessage(),
+                    'warning'
+                );
+            }
+        }
+    }
+
+    /**
      * Load order status mapping configuration.
      */
     protected function loadStatusMapping()
     {
+        $defaults = YujuStatusMappings::getDefaultYujuToPsMappings();
         $this->status_mapping = [
-            'ps_to_yuju' => [
-                '1' => 'pending',           // Payment accepted
-                '2' => 'processing',        // Payment error
-                '3' => 'processing',        // Preparation in progress
-                '4' => 'shipped',           // Shipped
-                '5' => 'delivered',         // Delivered
-                '6' => 'cancelled',         // Canceled
-                '7' => 'refunded',          // Refunded
-                '8' => 'error',             // Payment error
-                '9' => 'processing',        // On backorder (paid)
-                '10' => 'processing',       // Awaiting bank wire payment
-                '11' => 'processing',       // Remote payment accepted
-                '12' => 'processing',       // On backorder (not paid)
-            ],
-            'yuju_to_ps' => [
-                'pending' => '1',           // Payment accepted
-                'processing' => '3',        // Preparation in progress
-                'shipped' => '4',           // Shipped
-                'delivered' => '5',         // Delivered
-                'cancelled' => '6',         // Canceled
-                'refunded' => '7',          // Refunded
-                'error' => '8',             // Payment error
-                // Progress-based states from Yuju
-                'paid' => '2',              // PS_OS_PAYMENT - Payment accepted
-                'ready_to_ship' => '3',     // PS_OS_PREPARATION - Preparation in progress
-            ],
+            'ps_to_yuju' => [],
+            'yuju_to_ps' => [],
         ];
 
-        // Load custom mappings from database if they exist
-        $custom_mappings = Db::getInstance()->executeS('
-        SELECT prestashop_status_id, yuju_status_name
-        FROM ' . _DB_PREFIX_ . 'yuju_order_status_mapping
-        ');
-
-        foreach ($custom_mappings as $mapping) {
-            $this->status_mapping['ps_to_yuju'][$mapping['prestashop_status_id']] = $mapping['yuju_status_name'];
-            $this->status_mapping['yuju_to_ps'][$mapping['yuju_status_name']] = $mapping['prestashop_status_id'];
+        foreach ($defaults as $yuju_status => $ps_status_id) {
+            $ps_status_id = (int) $ps_status_id;
+            if ($ps_status_id <= 0) {
+                continue;
+            }
+            $this->status_mapping['yuju_to_ps'][$yuju_status] = (string) $ps_status_id;
+            if (!isset($this->status_mapping['ps_to_yuju'][(string) $ps_status_id])) {
+                $this->status_mapping['ps_to_yuju'][(string) $ps_status_id] = $yuju_status;
+            }
         }
+
+        // Custom DB mappings override defaults (solo activos)
+        try {
+            $custom_mappings = Db::getInstance()->executeS('
+                SELECT prestashop_status_id, yuju_status_name
+                FROM ' . _DB_PREFIX_ . 'yuju_order_status_mapping
+                WHERE is_active = 1
+            ');
+        } catch (Exception $e) {
+            $custom_mappings = [];
+        }
+
+        if (is_array($custom_mappings)) {
+            foreach ($custom_mappings as $mapping) {
+                $ps_id = (string) (int) $mapping['prestashop_status_id'];
+                $yuju_name = (string) $mapping['yuju_status_name'];
+                if ($yuju_name === '' || (int) $ps_id <= 0) {
+                    continue;
+                }
+                $this->status_mapping['ps_to_yuju'][$ps_id] = $yuju_name;
+                $this->status_mapping['yuju_to_ps'][$yuju_name] = $ps_id;
+            }
+        }
+    }
+
+    /**
+     * Expone la creación/obtención del carrier "Yuju" (install/upgrade).
+     *
+     * @return int
+     */
+    public function ensureYujuCarrierPublic()
+    {
+        return (int) $this->getCarrierId('Yuju');
     }
 
     /**
@@ -185,140 +411,219 @@ class YujuOrderManager
 
     /**
      * Adapta los datos de orden de Yuju al formato esperado por PrestaShop.
-     * 
-     * @param array $yuju_data Datos originales de Yuju
+     *
+     * @param array $yuju_data Datos originales de Yuju (estructura normal)
      * @return array Datos adaptados
      */
     protected function adaptYujuOrderData($yuju_data)
     {
-        // LOG: Ver estructura original recibida
-        $this->logger->log('adaptYujuOrderData - ORIGINAL DATA STRUCTURE: Has order_details=' . (isset($yuju_data['order_details']) ? 'YES' : 'NO') . 
-            ' | Has customer in root=' . (isset($yuju_data['customer']) ? 'YES' : 'NO') . 
+        $this->logger->log('adaptYujuOrderData - ORIGINAL DATA STRUCTURE: Has order_details=' . (isset($yuju_data['order_details']) ? 'YES' : 'NO') .
+            ' | Has customer in root=' . (isset($yuju_data['customer']) ? 'YES' : 'NO') .
             ' | Has shipping_address in root=' . (isset($yuju_data['shipping_address']) ? 'YES' : 'NO'), 'debug');
-        
-        // Normalizar estructura: Si tiene order_details, extraer datos de allí
-        // pero mantener customer y shipping_address de la raíz si existen
+
         if (isset($yuju_data['order_details'])) {
             $order_details = $yuju_data['order_details'];
-            
-            // Mantener customer y shipping_address de la raíz si existen, sino tomar de order_details
             $yuju_data = array_merge($order_details, [
                 'customer' => $yuju_data['customer'] ?? $order_details['customer'] ?? [],
                 'shipping_address' => $yuju_data['shipping_address'] ?? $order_details['shipping_address'] ?? [],
                 'billing_address' => $yuju_data['billing_address'] ?? $order_details['billing_address'] ?? null,
                 'items' => $yuju_data['items'] ?? $order_details['items'] ?? [],
+                'id_channel' => $yuju_data['id_channel'] ?? $order_details['id_channel'] ?? null,
+                'progress' => $yuju_data['progress'] ?? $order_details['progress'] ?? null,
             ]);
-            
-            $this->logger->log('adaptYujuOrderData - AFTER NORMALIZATION: customer=' . json_encode($yuju_data['customer']) . 
-                ' | shipping_address=' . json_encode($yuju_data['shipping_address']), 'debug');
         }
-        
-        // Mapear nombre del país a código ISO
+
         $country_map = [
-            'México' => 'MX',
-            'Mexico' => 'MX',
-            'Estados Unidos' => 'US',
-            'United States' => 'US',
-            'Colombia' => 'CO',
-            'Chile' => 'CL',
-            'Argentina' => 'AR',
-            'Perú' => 'PE',
-            'Peru' => 'PE',
-            'Brasil' => 'BR',
-            'Brazil' => 'BR',
+            'México' => 'MX', 'Mexico' => 'MX',
+            'Estados Unidos' => 'US', 'United States' => 'US',
+            'Colombia' => 'CO', 'Chile' => 'CL',
+            'Argentina' => 'AR', 'Perú' => 'PE', 'Peru' => 'PE',
+            'Brasil' => 'BR', 'Brazil' => 'BR',
         ];
-        
-        // Extraer país y convertir a código
-        $country_name = isset($yuju_data['shipping_address']['country']) ? $yuju_data['shipping_address']['country'] : '';
-        $country_code = isset($country_map[$country_name]) ? $country_map[$country_name] : 'MX'; // Default MX
-        
-        // Extraer nombres del cliente - SIEMPRE de customer
-        $customer_first_name = !empty($yuju_data['customer']['first_name']) ? trim($yuju_data['customer']['first_name']) : 'Not Found';
-        $customer_last_name = !empty($yuju_data['customer']['last_name']) ? trim($yuju_data['customer']['last_name']) : 'Not Found';
-        
-        // Extraer nombres de dirección - usar shipping_address solo si tiene last_name válido, sino usar customer
-        // Yuju a veces pone el nombre completo en first_name y deja last_name vacío
+
+        $shipping = isset($yuju_data['shipping_address']) && is_array($yuju_data['shipping_address'])
+            ? $yuju_data['shipping_address'] : [];
+        $billing_raw = isset($yuju_data['billing_address']) && is_array($yuju_data['billing_address'])
+            ? $yuju_data['billing_address'] : null;
+
+        $country_name = isset($shipping['country']) ? $shipping['country'] : '';
+        $country_code = isset($country_map[$country_name]) ? $country_map[$country_name] : 'MX';
+
+        $customer_first_name = !empty($yuju_data['customer']['first_name']) ? trim($yuju_data['customer']['first_name']) : 'Cliente';
+        $customer_last_name = !empty($yuju_data['customer']['last_name']) ? trim($yuju_data['customer']['last_name']) : 'Yuju';
+
         $address_first_name = $customer_first_name;
         $address_last_name = $customer_last_name;
-        
-        if (!empty($yuju_data['shipping_address']['first_name']) && !empty($yuju_data['shipping_address']['last_name'])) {
-            // Si shipping_address tiene ambos nombres, usarlos
-            $address_first_name = trim($yuju_data['shipping_address']['first_name']);
-            $address_last_name = trim($yuju_data['shipping_address']['last_name']);
+        if (!empty($shipping['first_name']) && !empty($shipping['last_name'])) {
+            $address_first_name = trim($shipping['first_name']);
+            $address_last_name = trim($shipping['last_name']);
         }
-        
-        // Construir estructura adaptada
+
+        $reference = (string) ($yuju_data['reference'] ?? $yuju_data['id_order'] ?? '');
+        $id_channel = $yuju_data['id_channel'] ?? null;
+        $marketplace_email = $this->buildMarketplaceEmail($reference, $id_channel);
+
+        $shipping_address = [
+            'first_name' => $address_first_name,
+            'last_name' => $address_last_name,
+            'company' => '',
+            'address_line_1' => !empty($shipping['address'])
+                ? $shipping['address']
+                : ((!empty($shipping['street_name']) ? $shipping['street_name'] : 'Not Found')
+                    . (!empty($shipping['street_number']) ? ' ' . $shipping['street_number'] : '')),
+            'address_line_2' => (!empty($shipping['neighborhood']) ? $shipping['neighborhood'] . '. ' : '')
+                . (!empty($shipping['reference']) ? $shipping['reference'] : ''),
+            'city' => !empty($shipping['city']) ? $shipping['city'] : 'Not Found',
+            'postal_code' => !empty($shipping['postal_code']) ? $shipping['postal_code'] : '00000',
+            'country_code' => $country_code,
+            'state_code' => '',
+            'phone' => $shipping['phone'] ?? $yuju_data['customer']['phone'] ?? '000000000',
+            'dni' => $yuju_data['customer']['doc_number'] ?? ($billing_raw['taxid'] ?? '00000000'),
+        ];
+
+        $billing_address = $shipping_address;
+        if ($billing_raw) {
+            $billing_country = isset($billing_raw['country']) ? $billing_raw['country'] : $country_name;
+            $billing_country_code = isset($country_map[$billing_country]) ? $country_map[$billing_country] : $country_code;
+            $billing_line = !empty($billing_raw['address'])
+                ? $billing_raw['address']
+                : ((!empty($billing_raw['street_name']) ? $billing_raw['street_name'] : '')
+                    . (!empty($billing_raw['street_number']) ? ' ' . $billing_raw['street_number'] : ''));
+            if (trim($billing_line) !== '') {
+                $billing_address = [
+                    'first_name' => !empty($billing_raw['name']) ? trim($billing_raw['name']) : $address_first_name,
+                    'last_name' => $address_last_name,
+                    'company' => '',
+                    'address_line_1' => $billing_line,
+                    'address_line_2' => (!empty($billing_raw['neighborhood']) ? $billing_raw['neighborhood'] . '. ' : '')
+                        . (!empty($billing_raw['reference']) ? $billing_raw['reference'] : ''),
+                    'city' => !empty($billing_raw['city']) ? $billing_raw['city'] : $shipping_address['city'],
+                    'postal_code' => !empty($billing_raw['postal_code']) ? $billing_raw['postal_code'] : $shipping_address['postal_code'],
+                    'country_code' => $billing_country_code,
+                    'state_code' => '',
+                    'phone' => $billing_raw['phone'] ?? $shipping_address['phone'],
+                    'dni' => $billing_raw['taxid'] ?? $shipping_address['dni'],
+                ];
+            }
+        }
+
+        $products_total = floatval($yuju_data['total'] ?? 0);
+        $shipping_cost = floatval($yuju_data['shipping_cost'] ?? 0);
+        $paid_total = isset($yuju_data['paid_total'])
+            ? floatval($yuju_data['paid_total'])
+            : ($products_total + $shipping_cost);
+
         $adapted = [
-            'id' => $yuju_data['id_order'] ?? $yuju_data['reference'] ?? uniqid('yuju_'),
-            'reference' => $yuju_data['reference'] ?? $yuju_data['id_order'] ?? '',
+            'id' => $yuju_data['id_order'] ?? $reference ?: uniqid('yuju_'),
+            'reference' => $reference,
+            'id_channel' => $id_channel,
+            'marketplace_slug' => $this->resolveMarketplaceSlug($id_channel),
             'status' => $yuju_data['status'] ?? 'open',
-            'progress' => $yuju_data['progress'] ?? null, // Array de progreso de Yuju
+            'progress' => $yuju_data['progress'] ?? null,
             'currency' => strtoupper($yuju_data['currency'] ?? 'MXN'),
             'payment_method' => $yuju_data['payment_method'] ?? 'Yuju',
-            'shipping_method' => 'Yuju Shipping',
-            'created_at' => isset($yuju_data['order_created_at']) ? date('Y-m-d H:i:s', strtotime($yuju_data['order_created_at'])) : date('Y-m-d H:i:s'),
-            
-            // Totales - IMPORTANTE: paid_total incluye shipping_cost, total NO lo incluye
-            // paid_total = total + shipping_cost
-            // Ejemplo: total=$3000, shipping_cost=$200, paid_total=$3200
-            'total_amount' => floatval($yuju_data['paid_total'] ?? ($yuju_data['total'] ?? 0) + ($yuju_data['shipping_cost'] ?? 0)),
-            'total_amount_tax_excl' => floatval($yuju_data['paid_total'] ?? ($yuju_data['total'] ?? 0) + ($yuju_data['shipping_cost'] ?? 0)),
-            'products_total' => floatval($yuju_data['total'] ?? 0), // Solo productos, sin envío
-            'shipping_cost' => floatval($yuju_data['shipping_cost'] ?? 0),
-            
-            // Cliente - campos requeridos con "Not Found" como fallback
+            'shipping_method' => 'Yuju',
+            'created_at' => isset($yuju_data['order_created_at'])
+                ? date('Y-m-d H:i:s', strtotime($yuju_data['order_created_at']))
+                : date('Y-m-d H:i:s'),
+            'total_amount' => $paid_total,
+            'total_amount_tax_excl' => $paid_total,
+            'products_total' => $products_total,
+            'shipping_cost' => $shipping_cost,
             'customer' => [
-                'email' => !empty($yuju_data['customer']['email']) ? $yuju_data['customer']['email'] : 'noemail@yuju.io',
+                'email' => $marketplace_email,
                 'first_name' => $customer_first_name,
                 'last_name' => $customer_last_name,
                 'phone' => $yuju_data['customer']['phone'] ?? '000000000',
+                'doc_type' => $yuju_data['customer']['doc_type'] ?? null,
+                'doc_number' => $yuju_data['customer']['doc_number'] ?? null,
             ],
-            
-            // Dirección de envío - usar SOLO datos de shipping_address
-            'shipping_address' => [
-                'first_name' => $address_first_name,
-                'last_name' => $address_last_name,
-                'company' => '',
-                'address_line_1' => !empty($yuju_data['shipping_address']['address']) 
-                    ? $yuju_data['shipping_address']['address'] 
-                    : ((!empty($yuju_data['shipping_address']['street_name']) ? $yuju_data['shipping_address']['street_name'] : 'Not Found') 
-                        . (!empty($yuju_data['shipping_address']['street_number']) ? ' ' . $yuju_data['shipping_address']['street_number'] : '')),
-                'address_line_2' => (!empty($yuju_data['shipping_address']['neighborhood']) ? $yuju_data['shipping_address']['neighborhood'] . '. ' : '') 
-                    . (!empty($yuju_data['shipping_address']['reference']) ? $yuju_data['shipping_address']['reference'] : ''),
-                'city' => !empty($yuju_data['shipping_address']['city']) ? $yuju_data['shipping_address']['city'] : 'Not Found',
-                'postal_code' => !empty($yuju_data['shipping_address']['postal_code']) ? $yuju_data['shipping_address']['postal_code'] : '00000',
-                'country_code' => $country_code,
-                'state_code' => '', // Yuju no envía código de estado, solo nombre
-                'phone' => $yuju_data['shipping_address']['phone'] ?? $yuju_data['customer']['phone'] ?? '000000000',
-                'dni' => $yuju_data['customer']['doc_number'] ?? '00000000', // DNI/RFC/Documento de identidad
-            ],
-            
-            // Items - Procesar items si existen
+            'shipping_address' => $shipping_address,
+            'billing_address' => $billing_address,
             'items' => [],
         ];
-        
-        // Procesar items de la orden
+
         if (!empty($yuju_data['items']) && is_array($yuju_data['items'])) {
             foreach ($yuju_data['items'] as $item) {
+                $sku = $item['sku'] ?? $item['channel_sku'] ?? $item['product_id'] ?? $item['id_item'] ?? null;
+                $qty = intval($item['quantity'] ?? 1);
+                $unit_price = floatval($item['unit_price'] ?? $item['price'] ?? 0);
+                $tracking = $item['tracking_code'] ?? null;
                 $adapted['items'][] = [
                     'product_id' => $item['id_product'] ?? $item['product_id'] ?? null,
-                    'sku' => $item['sku'] ?? $item['reference'] ?? null,
+                    'sku' => $sku,
+                    'channel_sku' => $item['channel_sku'] ?? null,
                     'name' => $item['name'] ?? $item['product_name'] ?? 'Unknown Product',
-                    'quantity' => intval($item['quantity'] ?? 1),
-                    'unit_price' => floatval($item['unit_price'] ?? $item['price'] ?? 0),
-                    'total_price' => floatval($item['total_price'] ?? $item['total'] ?? 0),
+                    'quantity' => $qty,
+                    'unit_price' => $unit_price,
+                    'total_price' => floatval($item['total_price'] ?? $item['total'] ?? ($unit_price * $qty)),
                     'product_attribute_id' => $item['product_attribute_id'] ?? null,
+                    'tracking_code' => $tracking,
+                    'status' => $item['status'] ?? null,
                 ];
             }
-            
             $this->logger->log('Processed ' . count($adapted['items']) . ' items from Yuju order', 'info');
         } else {
             $this->logger->log('No items found in Yuju order data', 'warning');
         }
-        
-        $this->logger->log('Adapted Yuju order data with ' . count($adapted['items']) . ' items', 'debug');
-        
+
+        $this->logger->log('Adapted Yuju order data with email ' . $marketplace_email . ' and ' . count($adapted['items']) . ' items', 'debug');
+
         return $adapted;
+    }
+
+    /**
+     * Email sintético: {reference}@{marketplace}.com
+     *
+     * @param string $reference
+     * @param mixed $id_channel
+     * @return string
+     */
+    protected function buildMarketplaceEmail($reference, $id_channel)
+    {
+        $ref = preg_replace('/[^a-zA-Z0-9._+-]/', '', (string) $reference);
+        if ($ref === '') {
+            $ref = 'order' . substr(md5((string) microtime(true)), 0, 8);
+        }
+        // Local-part max ~64 chars for common email limits
+        $ref = substr($ref, 0, 64);
+        $marketplace = $this->resolveMarketplaceSlug($id_channel);
+
+        return strtolower($ref) . '@' . $marketplace . '.com';
+    }
+
+    /**
+     * Resuelve slug de marketplace desde id_channel.
+     *
+     * @param mixed $id_channel
+     * @return string
+     */
+    protected function resolveMarketplaceSlug($id_channel)
+    {
+        $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
+        if (is_string($map)) {
+            $decoded = json_decode($map, true);
+            $map = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($map) || empty($map)) {
+            $map = YujuStatusMappings::getDefaultChannelMarketplaceMap();
+        }
+
+        $key = (string) $id_channel;
+        if ($key !== '' && isset($map[$key]) && $map[$key] !== '') {
+            $slug = preg_replace('/[^a-z0-9-]/', '', strtolower((string) $map[$key]));
+            if ($slug !== '') {
+                return $slug;
+            }
+        }
+
+        if ($key !== '' && $key !== '0') {
+            $fallback = preg_replace('/[^a-z0-9]/', '', strtolower($key));
+
+            return 'channel' . ($fallback !== '' ? $fallback : 'yuju');
+        }
+
+        return 'marketplace';
     }
 
     /**
@@ -350,45 +655,100 @@ class YujuOrderManager
         
         // Adaptar estructura de datos de Yuju al formato esperado
         $adapted_data = $this->adaptYujuOrderData($order_data);
-        
-        // Check if order already exists (puede ser 0 para pending_sync o > 0 para orden real)
+        $yuju_order_id = (string) ($adapted_data['id'] ?? '');
+
+        if ($yuju_order_id === '') {
+            return [
+                'success' => false,
+                'message' => 'Missing Yuju order id',
+                'details' => $details,
+            ];
+        }
+
+        if (!$this->acquireOrderLock($yuju_order_id)) {
+            return [
+                'success' => false,
+                'message' => 'Another process is creating/updating this order. Retry later.',
+                'yuju_order_id' => $yuju_order_id,
+                'details' => $details,
+                'lock_busy' => true,
+            ];
+        }
+
+        try {
+            return $this->createOrderFromYujuLocked($adapted_data, $order_data, $force, $details);
+        } finally {
+            $this->releaseOrderLock($yuju_order_id);
+        }
+    }
+
+    /**
+     * Cuerpo de creación con lock ya adquirido.
+     *
+     * @param array $adapted_data
+     * @param array $order_data
+     * @param bool $force
+     * @param array $details
+     * @return array
+     */
+    protected function createOrderFromYujuLocked(array $adapted_data, array $order_data, $force, array $details)
+    {
+        $yuju_order_id = (string) $adapted_data['id'];
+        $id_channel = $adapted_data['id_channel'] ?? ($order_data['id_channel'] ?? null);
+        $yuju_reference = (string) ($adapted_data['reference'] ?? $yuju_order_id);
+        $outbound = new YujuOrderOutbound($this->api_client, $this->logger);
+
+        // Check if order already exists (puede ser null claim, 0 legacy, o > 0 orden real)
         // SOLO si NO se está forzando la creación
         if (!$force) {
-            $existing_order = $this->findOrderByYujuId($adapted_data['id']);
+            $existing_order = $this->findOrderByYujuId($yuju_order_id);
 
-            if ($existing_order !== null) {
-                if ($existing_order > 0) {
-                    // Orden real ya existe
-                    $this->logger->log('Order already exists with Yuju ID: ' . $adapted_data['id'] . ', order ID: ' . $existing_order, 'warning');
-                    return [
-                        'success' => false,
-                        'message' => 'Order already exists',
-                        'yuju_order_id' => $adapted_data['id'],
-                        'prestashop_order_id' => $existing_order,
-                        'details' => $details,
-                    ];
-                } else {
-                    // Mapping temporal existe (pending_sync)
-                    $this->logger->log('Order webhook already received for Yuju ID: ' . $adapted_data['id'] . ' (pending full sync)', 'info');
-                    return [
-                        'success' => true,
-                        'message' => 'Order webhook already received. Waiting for full order sync.',
-                        'action_required' => 'fetch_full_order',
-                        'yuju_order_id' => $adapted_data['id'],
-                        'yuju_reference' => $adapted_data['reference'],
-                        'status' => 'pending_sync_duplicate',
-                        'details' => $details,
-                    ];
-                }
+            if ($existing_order !== null && (int) $existing_order > 0) {
+                $this->logger->log(
+                    'Order already exists with Yuju ID: ' . $yuju_order_id . ', order ID: ' . $existing_order . ' — idempotent sync',
+                    'info'
+                );
+                return $this->syncExistingOrderFromYuju((int) $existing_order, $adapted_data, $details, true);
             }
         } else {
             // Si se está forzando, eliminar mapping existente si hay
-            $existing_order = $this->findOrderByYujuId($adapted_data['id']);
+            $existing_order = $this->findOrderByYujuId($yuju_order_id);
             if ($existing_order !== null) {
-                $this->logger->log('Force mode: Deleting existing mapping for Yuju ID: ' . $adapted_data['id'], 'info');
-                Db::getInstance()->delete('yuju_order_mapping', 'yuju_order_id = "' . pSQL($adapted_data['id']) . '"');
+                $this->logger->log('Force mode: Deleting existing mapping for Yuju ID: ' . $yuju_order_id, 'info');
+                Db::getInstance()->delete('yuju_order_mapping', 'yuju_order_id = "' . pSQL($yuju_order_id) . '"');
             }
         }
+
+        // Claim atómico del mapping ANTES de crear customer/cart/order (UNIQUE yuju_order_id)
+        if (!$force) {
+            $claim = $this->claimOrderMapping($yuju_order_id);
+            if (!$claim['claimed']) {
+                $psId = isset($claim['prestashop_order_id']) ? (int) $claim['prestashop_order_id'] : 0;
+                if ($psId > 0) {
+                    $this->logger->log(
+                        'Claim lost: order already mapped Yuju ID ' . $yuju_order_id . ' → PS ' . $psId,
+                        'info'
+                    );
+                    return $this->syncExistingOrderFromYuju($psId, $adapted_data, $details, true);
+                }
+                // Claim de otro proceso aún sin PS id: esperar un momento y re-leer
+                $waited = $this->waitForMappedOrder($yuju_order_id, 8);
+                if ($waited > 0) {
+                    return $this->syncExistingOrderFromYuju($waited, $adapted_data, $details, true);
+                }
+                return [
+                    'success' => true,
+                    'message' => 'Order is being created by another process',
+                    'yuju_order_id' => $yuju_order_id,
+                    'status' => 'creating_elsewhere',
+                    'details' => $details,
+                ];
+            }
+            $details['mapping_id'] = $claim['mapping_id'];
+            $details['mapping_status'] = 'CLAIMED';
+        }
+
+        $outbound->start($id_channel, $yuju_order_id, $yuju_reference, []);
 
         // LOG: Ver datos adaptados antes de crear cliente
         $this->logger->log('ADAPTED DATA - customer: ' . json_encode($adapted_data['customer']) . 
@@ -410,10 +770,23 @@ class YujuOrderManager
             } else {
                 $details['customer_status'] = 'CREATED';
             }
+            $custLabel = $details['customer_status'] === 'EXISTING' ? 'existente' : 'nuevo';
+            $outbound->step(
+                'processing',
+                'Cliente ' . $custLabel . ' listo (ID ' . (int) $customer->id . ').',
+                [
+                    'customer_id' => (int) $customer->id,
+                    'customer_status' => $details['customer_status'],
+                ],
+                'Cliente'
+            );
         } catch (Exception $e) {
             $details['customer_error'] = $e->getMessage();
             $this->logger->log('Failed to create customer: ' . $e->getMessage(), 'error');
-            // NO lanzar excepción, solo retornar con error
+            $this->releaseClaimedMapping($yuju_order_id);
+            $outbound->finishError('Failed to get or create customer: ' . $e->getMessage(), [
+                'customer_error' => $e->getMessage(),
+            ]);
             return [
                 'success' => false,
                 'message' => 'Failed to get or create customer: ' . $e->getMessage(),
@@ -433,13 +806,25 @@ class YujuOrderManager
                 throw new Exception('Address object is null or has no ID');
             }
             $details['shipping_address_id'] = $address->id;
-            $details['billing_address_id'] = $address->id; // Using same address for billing
             $details['address_status'] = $address_existed ? 'EXISTING' : 'CREATED';
+            $addrLabel = $address_existed ? 'ya existía' : 'creada';
+            $outbound->step(
+                'processing',
+                'Dirección de envío ' . $addrLabel . ' (ID ' . (int) $address->id . ').',
+                [
+                    'shipping_address_id' => (int) $address->id,
+                    'address_status' => $details['address_status'],
+                ],
+                'Dirección'
+            );
         } catch (Exception $e) {
             $details['shipping_address_error'] = $e->getMessage();
             $details['billing_address_error'] = $e->getMessage();
             $this->logger->log('Failed to create address: ' . $e->getMessage(), 'error');
-            // NO lanzar excepción, solo retornar con error
+            $this->releaseClaimedMapping($yuju_order_id);
+            $outbound->finishError('Failed to create shipping address: ' . $e->getMessage(), [
+                'shipping_address_error' => $e->getMessage(),
+            ]);
             return [
                 'success' => false,
                 'message' => 'Failed to create shipping address: ' . $e->getMessage(),
@@ -447,30 +832,58 @@ class YujuOrderManager
             ];
         }
 
+        // Billing address (si difiere del shipping)
+        $invoice_address = $address;
+        try {
+            $billing_data = isset($adapted_data['billing_address']) ? $adapted_data['billing_address'] : $adapted_data['shipping_address'];
+            $same_billing = (
+                ($billing_data['address_line_1'] ?? '') === ($adapted_data['shipping_address']['address_line_1'] ?? '')
+                && ($billing_data['city'] ?? '') === ($adapted_data['shipping_address']['city'] ?? '')
+                && ($billing_data['postal_code'] ?? '') === ($adapted_data['shipping_address']['postal_code'] ?? '')
+            );
+            if (!$same_billing) {
+                $billing_result = $this->getOrCreateAddress($billing_data, $customer->id);
+                $invoice_address = $billing_result['address'];
+                $details['billing_address_status'] = !empty($billing_result['existed']) ? 'EXISTING' : 'CREATED';
+            } else {
+                $details['billing_address_status'] = 'SAME_AS_SHIPPING';
+            }
+            $details['billing_address_id'] = $invoice_address->id;
+        } catch (Exception $e) {
+            $details['billing_address_error'] = $e->getMessage();
+            $details['billing_address_id'] = $address->id;
+            $invoice_address = $address;
+            $this->logger->log('Billing address fallback to shipping: ' . $e->getMessage(), 'warning');
+        }
+
         // Verificar si hay items para crear el carrito y orden completa
         if (empty($adapted_data['items'])) {
-            // Webhook de new-order NO incluye items, solo guardar mapping y retornar
-            $this->logger->log('Webhook new-order received without items. Order registered but not created in PrestaShop yet. Yuju Order ID: ' . $adapted_data['id'], 'warning');
-            
-            // Crear mapping temporal (solo llega aquí si no existía)
-            $this->createOrderMapping(0, $adapted_data['id'], [
-                'status' => 'pending_sync',
-                'yuju_reference' => $adapted_data['reference'],
-                'created_at' => date('Y-m-d H:i:s'),
-                'webhook_data' => json_encode($order_data),
-            ]);
+            // Webhook de new-order NO incluye items: dejar claim pendiente (NULL) para el siguiente evento
+            $this->logger->log(
+                'Webhook new-order received without items. Mapping claimed; waiting for full sync. Yuju Order ID: ' . $yuju_order_id,
+                'warning'
+            );
+            $outbound->step(
+                'processing',
+                'El webhook llegó sin productos. Se espera la sincronización completa del pedido.',
+                [
+                    'pending_note' => 'Sin ítems en el webhook; pendiente de sync completo',
+                ],
+                'Esperando ítems'
+            );
             
             return [
                 'success' => true,
                 'message' => 'Order webhook received. Full order sync required to create in PrestaShop.',
                 'action_required' => 'fetch_full_order',
-                'yuju_order_id' => $adapted_data['id'],
+                'yuju_order_id' => $yuju_order_id,
                 'yuju_reference' => $adapted_data['reference'],
+                'status' => 'pending_sync',
                 'details' => $details,
             ];
         }
 
-        // Create cart (solo si hay items)
+        // Create cart (solo si hay items) — un carrito nuevo solo cuando vamos a crear la orden
         $cart = null;
         $cart_existed = false;
         try {
@@ -483,13 +896,23 @@ class YujuOrderManager
             }
             $details['cart_id'] = $cart->id;
             $details['cart_status'] = $cart_existed ? 'EXISTING' : 'CREATED';
-            
-            // Obtener info de productos agregados desde los logs del método
-            // El método createCartFromOrderData ya loguea cuántos productos se agregaron
+            $cartLabel = $cart_existed ? 'reutilizado' : 'creado';
+            $outbound->step(
+                'processing',
+                'Carrito ' . $cartLabel . ' (ID ' . (int) $cart->id . ').',
+                [
+                    'cart_id' => (int) $cart->id,
+                    'cart_status' => $details['cart_status'],
+                ],
+                'Carrito'
+            );
         } catch (Exception $e) {
             $details['cart_error'] = $e->getMessage();
             $this->logger->log('Failed to create cart: ' . $e->getMessage(), 'error');
-            // NO lanzar excepción, solo retornar con error
+            $this->releaseClaimedMapping($yuju_order_id);
+            $outbound->finishError('Failed to create cart: ' . $e->getMessage(), [
+                'cart_error' => $e->getMessage(),
+            ]);
             return [
                 'success' => false,
                 'message' => 'Failed to create cart: ' . $e->getMessage(),
@@ -505,8 +928,9 @@ class YujuOrderManager
             $order->id_currency = $this->getCurrencyId($adapted_data['currency']);
             $order->id_lang = $this->context->language->id;
             $order->id_address_delivery = $address->id;
-            $order->id_address_invoice = $address->id;
-            $order->id_carrier = $this->getCarrierId($adapted_data['shipping_method']);
+            $order->id_address_invoice = $invoice_address->id;
+            $order->id_carrier = $this->getCarrierId('Yuju');
+            $details['carrier_id'] = (int) $order->id_carrier;
             $order->payment = isset($adapted_data['payment_method']) ? $adapted_data['payment_method'] : 'Yuju';
             $order->module = 'prestashopyuju';
             $order->secure_key = $customer->secure_key; // Clave de seguridad del cliente
@@ -533,9 +957,9 @@ class YujuOrderManager
 
             if (!$order->add()) {
                 // Obtener errores de validación de PrestaShop
-                $errors = $order->getErrors();
-                $error_msg = !empty($errors) 
-                    ? 'PrestaShop validation errors: ' . implode(', ', $errors)
+                $errors = method_exists($order, 'getErrors') ? $order->validateFields(false, true) : false;
+                $error_msg = is_string($errors) && $errors !== ''
+                    ? 'PrestaShop validation errors: ' . $errors
                     : 'Order->add() returned false. Possible causes: Invalid order state, missing required fields, or database constraint violations.';
                 
                 // Log detallado de los datos de la orden
@@ -545,11 +969,27 @@ class YujuOrderManager
                 throw new Exception($error_msg);
             }
             $details['order_id'] = $order->id;
+            $details['order_status'] = 'CREATED';
+            $details['customer_email'] = $adapted_data['customer']['email'] ?? null;
+            $details['marketplace_slug'] = $adapted_data['marketplace_slug'] ?? null;
             $this->logger->log('Order created successfully with ID: ' . $order->id . ' for shop ' . $order->id_shop, 'info');
+            $outbound->step(
+                'processing',
+                'Orden creada en PrestaShop #' . (int) $order->id
+                . ' (ref. ' . (string) $order->reference . ').',
+                [
+                    'prestashop_order_id' => (int) $order->id,
+                    'order_reference' => (string) $order->reference,
+                ],
+                'Orden PrestaShop'
+            );
         } catch (Exception $e) {
             $details['order_error'] = $e->getMessage();
             $this->logger->log('Failed to create order: ' . $e->getMessage(), 'error');
-            // NO lanzar excepción, solo retornar con error
+            $this->releaseClaimedMapping($yuju_order_id);
+            $outbound->finishError('Failed to create order in PrestaShop: ' . $e->getMessage(), [
+                'order_error' => $e->getMessage(),
+            ]);
             return [
                 'success' => false,
                 'message' => 'Failed to create order in PrestaShop: ' . $e->getMessage(),
@@ -557,16 +997,20 @@ class YujuOrderManager
             ];
         }
 
-        // NO agregar order details manualmente ya que los productos están en el carrito
-        // PrestaShop los copiará automáticamente cuando se cree el OrderHistory
-        
-        // Store Yuju order mapping
+        // Vincular claim → id real de PrestaShop
         try {
-            $mapping_id = $this->createOrderMapping($order->id, $adapted_data['id']);
+            $mapping_id = $this->bindOrderMapping($order->id, $yuju_order_id);
             $details['mapping_id'] = $mapping_id;
+            $details['mapping_status'] = 'BOUND';
         } catch (Exception $e) {
             $details['mapping_error'] = $e->getMessage();
-            $this->logger->log('Failed to create mapping: ' . $e->getMessage(), 'warning');
+            $this->logger->log('Failed to bind mapping: ' . $e->getMessage(), 'error');
+            // Orden ya creada: no borrar claim; intentar upsert de nuevo
+            try {
+                $this->createOrderMapping($order->id, $yuju_order_id);
+            } catch (Exception $e2) {
+                $this->logger->log('Mapping upsert fallback failed: ' . $e2->getMessage(), 'error');
+            }
         }
 
         // Add order history - ESTO ES CRÍTICO para que la orden aparezca en el backoffice
@@ -584,12 +1028,172 @@ class YujuOrderManager
             }
         }
 
-        $this->logger->log('Created order from Yuju: PS Order ID ' . $order->id . ', Yuju Order ID ' . $adapted_data['id'], 'info');
+        // Transportista visible en BO + costo de envío (0 = gratis, >0 = con costo)
+        try {
+            $tracking = null;
+            if (!empty($adapted_data['tracking_number'])) {
+                $tracking = $adapted_data['tracking_number'];
+            } elseif (!empty($adapted_data['items']) && is_array($adapted_data['items'])) {
+                foreach ($adapted_data['items'] as $it) {
+                    if (!empty($it['tracking_code'])) {
+                        $tracking = $it['tracking_code'];
+                        break;
+                    }
+                }
+            }
+            $this->attachOrderCarrier(
+                $order,
+                isset($adapted_data['shipping_cost']) ? (float) $adapted_data['shipping_cost'] : 0.0,
+                $tracking
+            );
+            $details['carrier_id'] = (int) $order->id_carrier;
+            $details['shipping_cost'] = (float) ($adapted_data['shipping_cost'] ?? 0);
+        } catch (Exception $e) {
+            $this->logger->log('Failed to attach order carrier: ' . $e->getMessage(), 'warning');
+        }
+
+        // Ciclo completo: bajar stock en PS → empujar stock nuevo a Yuju
+        try {
+            $stockSync = $this->applyOrderStockDecrementAndPushToYuju($order);
+            $details['stock_sync'] = $stockSync;
+            $outbound->step(
+                'processing',
+                'Stock descontado en PrestaShop y actualizado en Yuju.',
+                [
+                    'prestashop_order_id' => (int) $order->id,
+                    'stock_sync' => $stockSync,
+                ],
+                'Stock'
+            );
+        } catch (Exception $e) {
+            $details['stock_sync_error'] = $e->getMessage();
+            $this->logger->log('Stock cycle after order failed: ' . $e->getMessage(), 'error');
+            $outbound->step(
+                'processing',
+                'Orden creada, pero hubo un problema al sincronizar el stock: ' . $e->getMessage(),
+                [
+                    'prestashop_order_id' => (int) $order->id,
+                    'stock_sync_error' => $e->getMessage(),
+                ],
+                'Stock'
+            );
+        }
+
+        $this->logger->log('Created order from Yuju: PS Order ID ' . $order->id . ', Yuju Order ID ' . $yuju_order_id, 'info');
+
+        $outbound->setReference((string) $order->reference);
+        $outbound->finishSuccess(
+            'Orden creada correctamente en PrestaShop #' . (int) $order->id . '.',
+            [
+                'prestashop_order_id' => (int) $order->id,
+                'order_reference' => (string) $order->reference,
+                'carrier_id' => $details['carrier_id'] ?? null,
+            ]
+        );
 
         return [
             'success' => true,
             'prestashop_order_id' => $order->id,
-            'yuju_order_id' => $adapted_data['id'],
+            'yuju_order_id' => $yuju_order_id,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Actualiza estado/tracking de una orden PS ya mapeada (idempotente).
+     *
+     * @param int $prestashop_order_id
+     * @param array $adapted_data
+     * @param array $details
+     * @param bool $from_duplicate_webhook
+     * @return array
+     */
+    protected function syncExistingOrderFromYuju($prestashop_order_id, array $adapted_data, array $details = [], $from_duplicate_webhook = false)
+    {
+        $order = new Order((int) $prestashop_order_id);
+        if (!Validate::isLoadedObject($order)) {
+            return [
+                'success' => false,
+                'message' => 'Mapped PrestaShop order not found: ' . (int) $prestashop_order_id,
+                'yuju_order_id' => $adapted_data['id'] ?? null,
+                'prestashop_order_id' => (int) $prestashop_order_id,
+                'details' => $details,
+            ];
+        }
+
+        $details['order_id'] = (int) $order->id;
+        $details['order_status'] = 'EXISTING';
+        $details['customer_id'] = (int) $order->id_customer;
+        $details['shipping_address_id'] = (int) $order->id_address_delivery;
+        $details['billing_address_id'] = (int) $order->id_address_invoice;
+        $details['cart_id'] = (int) $order->id_cart;
+
+        $new_status = $this->mapYujuStatusToPrestaShop(
+            $adapted_data['status'] ?? '',
+            isset($adapted_data['progress']) ? $adapted_data['progress'] : null
+        );
+        $status_changed = false;
+        if ($new_status && !$this->orderAlreadyHasState((int) $order->id, (int) $new_status)) {
+            try {
+                $status_changed = (bool) $this->applyOrderStatusChange(
+                    $order,
+                    (int) $new_status,
+                    'Status synced from Yuju: ' . ($adapted_data['status'] ?? '')
+                );
+                if ($status_changed) {
+                    $details['status_synced_to'] = (int) $new_status;
+                } else {
+                    $details['status_skipped_same'] = (int) $new_status;
+                }
+            } catch (Exception $e) {
+                $details['status_sync_error'] = $e->getMessage();
+                $this->logger->log('Failed to sync status on existing order: ' . $e->getMessage(), 'warning');
+            }
+        } else {
+            $details['status_skipped_same'] = (int) $new_status;
+        }
+
+        if (!empty($adapted_data['tracking_number'])) {
+            try {
+                $order->shipping_number = $adapted_data['tracking_number'];
+                $order->update();
+                $details['tracking_updated'] = true;
+            } catch (Exception $e) {
+                $this->logger->log('Failed to update tracking on existing order: ' . $e->getMessage(), 'warning');
+            }
+        }
+
+        // Asegurar transportista Yuju + fila order_carrier (pedidos creados antes del fix)
+        try {
+            $yujuCarrierId = $this->getCarrierId('Yuju');
+            if ($yujuCarrierId > 0 && (int) $order->id_carrier !== $yujuCarrierId) {
+                $order->id_carrier = $yujuCarrierId;
+                $order->update();
+            }
+            $shipping = isset($adapted_data['shipping_cost'])
+                ? (float) $adapted_data['shipping_cost']
+                : (float) $order->total_shipping_tax_incl;
+            $this->attachOrderCarrier(
+                $order,
+                $shipping,
+                !empty($adapted_data['tracking_number']) ? $adapted_data['tracking_number'] : null
+            );
+            $details['carrier_id'] = (int) $order->id_carrier;
+        } catch (Exception $e) {
+            $this->logger->log('Failed to sync carrier on existing order: ' . $e->getMessage(), 'warning');
+        }
+
+        return [
+            'success' => true,
+            'already_exists' => true,
+            'from_duplicate_webhook' => (bool) $from_duplicate_webhook,
+            'status_changed' => $status_changed,
+            'message' => $from_duplicate_webhook
+                ? 'Order already exists — webhook ignored for creation, status synced if needed'
+                : 'Order synced',
+            'prestashop_order_id' => (int) $order->id,
+            'order_id' => (int) $order->id,
+            'yuju_order_id' => $adapted_data['id'] ?? null,
             'details' => $details,
         ];
     }
@@ -599,33 +1203,48 @@ class YujuOrderManager
      */
     protected function updateOrderFromYuju($order_data)
     {
-        $order = $this->findOrderByYujuId($order_data['id']);
+        $adapted_data = $this->adaptYujuOrderData($order_data);
+        $yuju_order_id = (string) ($adapted_data['id'] ?? '');
 
-        if (!$order) {
-            // If order doesn't exist, create it
-            return $this->createOrderFromYuju($order_data);
+        if ($yuju_order_id === '') {
+            return [
+                'success' => false,
+                'message' => 'Missing Yuju order id on updated-order',
+            ];
         }
 
-        // Update order status if changed
-        $new_status = $this->mapYujuStatusToPrestaShop($order_data['status']);
-
-        if ($order->current_state != $new_status) {
-            $this->updateOrderStatus($order_data);
+        if (!$this->acquireOrderLock($yuju_order_id)) {
+            return [
+                'success' => false,
+                'message' => 'Another process is handling this order',
+                'yuju_order_id' => $yuju_order_id,
+                'lock_busy' => true,
+            ];
         }
 
-        // Update tracking information if provided
-        if (isset($order_data['tracking_number']) && !empty($order_data['tracking_number'])) {
-            $order->shipping_number = $order_data['tracking_number'];
-            $order->update();
+        try {
+            $ps_order_id = $this->findOrderByYujuId($yuju_order_id);
+
+            if (!empty($order_data['tracking_number'])) {
+                $adapted_data['tracking_number'] = $order_data['tracking_number'];
+            }
+
+            if ($ps_order_id === null || (int) $ps_order_id <= 0) {
+                // No existe (o solo claim pendiente): crear / completar
+                return $this->createOrderFromYujuLocked($adapted_data, $order_data, false, [
+                    'customer_id' => null,
+                    'shipping_address_id' => null,
+                    'billing_address_id' => null,
+                    'cart_id' => null,
+                    'order_id' => null,
+                    'mapping_id' => null,
+                ]);
+            }
+
+            return $this->syncExistingOrderFromYuju((int) $ps_order_id, $adapted_data, [], false);
+        } finally {
+            $this->releaseOrderLock($yuju_order_id);
         }
-
-        $this->logger->log('Updated order from Yuju: PS Order ID ' . $order->id . ', Yuju Order ID ' . $order_data['id'], 'info');
-
-        return [
-            'success' => true,
-            'order_id' => $order->id,
-            'yuju_order_id' => $order_data['id'],
-        ];
     }
 
     /**
@@ -633,36 +1252,52 @@ class YujuOrderManager
      */
     protected function updateOrderStatus($order_data)
     {
-        $order = $this->findOrderByYujuId($order_data['id']);
+        $adapted_data = $this->adaptYujuOrderData($order_data);
+        $yuju_order_id = (string) ($adapted_data['id'] ?? '');
 
-        if (!$order) {
-            throw new Exception('Order not found with Yuju ID: ' . $order_data['id']);
+        if ($yuju_order_id === '') {
+            throw new Exception('Order not found: missing Yuju order id');
         }
 
-        $new_status = $this->mapYujuStatusToPrestaShop($order_data['status']);
+        if (!$this->acquireOrderLock($yuju_order_id)) {
+            throw new Exception('Could not lock order for status update: ' . $yuju_order_id);
+        }
 
-        if ($order->current_state != $new_status) {
-            $order_history = new OrderHistory();
-            $order_history->id_order = $order->id;
-            $order_history->id_employee = 0; // System update
-            $order_history->changeIdOrderState($new_status, $order->id);
-
-            $message = 'Status updated from Yuju: ' . $order_data['status'];
-
-            if (isset($order_data['status_message'])) {
-                $message .= ' - ' . $order_data['status_message'];
+        try {
+            $ps_order_id = $this->findOrderByYujuId($yuju_order_id);
+            if (!$ps_order_id || (int) $ps_order_id <= 0) {
+                throw new Exception('Order not found with Yuju ID: ' . $yuju_order_id);
             }
 
-            $order_history->addWithemail(true, [], $this->context);
+            $order = new Order((int) $ps_order_id);
+            if (!Validate::isLoadedObject($order)) {
+                throw new Exception('PrestaShop order not loaded: ' . (int) $ps_order_id);
+            }
 
-            $this->logger->log('Updated order status: PS Order ID ' . $order->id . ' to status ' . $new_status, 'info');
+            $new_status = $this->mapYujuStatusToPrestaShop(
+                $adapted_data['status'] ?? '',
+                isset($adapted_data['progress']) ? $adapted_data['progress'] : null
+            );
+
+            $changed = false;
+            if ($new_status && !$this->orderAlreadyHasState((int) $order->id, (int) $new_status)) {
+                $message = 'Status updated from Yuju: ' . ($adapted_data['status'] ?? '');
+                if (!empty($order_data['status_message'])) {
+                    $message .= ' - ' . $order_data['status_message'];
+                }
+                $changed = (bool) $this->applyOrderStatusChange($order, (int) $new_status, $message);
+            }
+
+            return [
+                'success' => true,
+                'order_id' => (int) $order->id,
+                'new_status' => (int) $new_status,
+                'status_changed' => $changed,
+                'status_skipped_same' => !$changed,
+            ];
+        } finally {
+            $this->releaseOrderLock($yuju_order_id);
         }
-
-        return [
-            'success' => true,
-            'order_id' => $order->id,
-            'new_status' => $new_status,
-        ];
     }
 
     /**
@@ -670,34 +1305,159 @@ class YujuOrderManager
      */
     protected function cancelOrder($order_data)
     {
-        $order = $this->findOrderByYujuId($order_data['id']);
+        $adapted_data = $this->adaptYujuOrderData($order_data);
+        $yuju_order_id = (string) ($adapted_data['id'] ?? '');
 
-        if (!$order) {
-            throw new Exception('Order not found with Yuju ID: ' . $order_data['id']);
+        if ($yuju_order_id === '') {
+            throw new Exception('Order not found: missing Yuju order id');
         }
 
-        $cancelled_status = (int) Configuration::get('PS_OS_CANCELED');
-
-        $order_history = new OrderHistory();
-        $order_history->id_order = $order->id;
-        $order_history->id_employee = 0;
-        $order_history->changeIdOrderState($cancelled_status, $order->id);
-
-        $message = 'Order cancelled from Yuju';
-
-        if (isset($order_data['cancellation_reason'])) {
-            $message .= ' - Reason: ' . $order_data['cancellation_reason'];
+        if (!$this->acquireOrderLock($yuju_order_id)) {
+            throw new Exception('Could not lock order for cancel: ' . $yuju_order_id);
         }
 
-        $order_history->addWithemail(true, [], $this->context);
+        try {
+            $ps_order_id = $this->findOrderByYujuId($yuju_order_id);
+            if (!$ps_order_id || (int) $ps_order_id <= 0) {
+                throw new Exception('Order not found with Yuju ID: ' . $yuju_order_id);
+            }
 
-        $this->logger->log('Cancelled order: PS Order ID ' . $order->id, 'info');
+            $order = new Order((int) $ps_order_id);
+            if (!Validate::isLoadedObject($order)) {
+                throw new Exception('PrestaShop order not loaded: ' . (int) $ps_order_id);
+            }
+
+            $cancelled_status = (int) Configuration::get('PS_OS_CANCELED');
+            $message = 'Order cancelled from Yuju';
+            if (!empty($order_data['cancellation_reason'])) {
+                $message .= ' - Reason: ' . $order_data['cancellation_reason'];
+            }
+            $this->applyOrderStatusChange($order, $cancelled_status, $message);
+
+            $this->logger->log('Cancelled order: PS Order ID ' . $order->id, 'info');
+
+            return [
+                'success' => true,
+                'order_id' => (int) $order->id,
+                'status' => 'cancelled',
+            ];
+        } finally {
+            $this->releaseOrderLock($yuju_order_id);
+        }
+    }
+
+    /**
+     * Estado actual real en BD + último del historial.
+     *
+     * @param int $order_id
+     * @return array{current:int,last_history:int}
+     */
+    protected function getOrderStateSnapshot($order_id)
+    {
+        $order_id = (int) $order_id;
+        $current = (int) Db::getInstance()->getValue(
+            'SELECT `current_state` FROM `' . _DB_PREFIX_ . 'orders` WHERE `id_order` = ' . $order_id
+        );
+        $lastHistory = (int) Db::getInstance()->getValue(
+            'SELECT `id_order_state` FROM `' . _DB_PREFIX_ . 'order_history`
+             WHERE `id_order` = ' . $order_id . '
+             ORDER BY `id_order_history` DESC'
+        );
 
         return [
-            'success' => true,
-            'order_id' => $order->id,
-            'status' => 'cancelled',
+            'current' => $current,
+            'last_history' => $lastHistory,
         ];
+    }
+
+    /**
+     * True si la orden ya está (o el último historial ya es) el estado indicado.
+     * No registrar otro OrderHistory en ese caso.
+     *
+     * @param int $order_id
+     * @param int $status_id
+     * @return bool
+     */
+    protected function orderAlreadyHasState($order_id, $status_id)
+    {
+        $status_id = (int) $status_id;
+        if ($status_id <= 0) {
+            return true;
+        }
+        $snap = $this->getOrderStateSnapshot($order_id);
+
+        return $snap['current'] === $status_id || $snap['last_history'] === $status_id;
+    }
+
+    /**
+     * Cambia estado de una orden PS (OrderHistory) solo si el estado realmente cambia.
+     * Webhooks repetidos con el mismo estado no deben crear filas duplicadas.
+     *
+     * @param Order $order
+     * @param int $new_status
+     * @param string $message
+     * @return bool true si cambió; false si se omitió
+     */
+    protected function applyOrderStatusChange(Order $order, $new_status, $message = '')
+    {
+        $new_status = (int) $new_status;
+        $order_id = (int) $order->id;
+        if ($new_status <= 0 || $order_id <= 0) {
+            return false;
+        }
+
+        $snap = $this->getOrderStateSnapshot($order_id);
+
+        // Ya en ese estado (current o último historial) → no registrar de nuevo
+        if ($snap['current'] === $new_status || $snap['last_history'] === $new_status) {
+            if ($snap['current'] !== $new_status && $snap['last_history'] === $new_status) {
+                // Historial ya tiene el estado; sanear current_state sin nueva fila
+                Db::getInstance()->update(
+                    'orders',
+                    ['current_state' => $new_status],
+                    'id_order = ' . $order_id
+                );
+            }
+            $order->current_state = $new_status;
+            $this->logger->log(
+                'Skip status change (idempotent): PS Order ' . $order_id
+                . ' already at state ' . $new_status
+                . ' (current=' . $snap['current'] . ', last_history=' . $snap['last_history'] . ')'
+                . ($message !== '' ? (' — ' . $message) : ''),
+                'info'
+            );
+
+            return false;
+        }
+
+        $employee = $this->getOrCreateYujuEmployee();
+        $employeeId = ($employee && !empty($employee->id)) ? (int) $employee->id : 0;
+        if (!isset($this->context->employee) || !$this->context->employee->id) {
+            $this->context->employee = $employee;
+        }
+
+        $order_history = new OrderHistory();
+        $order_history->id_order = $order_id;
+        $order_history->id_employee = $employeeId;
+        $order_history->changeIdOrderState($new_status, $order);
+        $order_history->addWithemail(true, [], $this->context);
+
+        // Asegurar current_state en BD (changeIdOrderState a veces deja el objeto desfasado)
+        Db::getInstance()->update(
+            'orders',
+            ['current_state' => $new_status],
+            'id_order = ' . $order_id
+        );
+        $order->current_state = $new_status;
+
+        $this->logger->log(
+            'Updated order status: PS Order ID ' . $order_id
+            . ' from ' . $snap['current'] . ' to ' . $new_status
+            . ($message !== '' ? (' — ' . $message) : ''),
+            'info'
+        );
+
+        return true;
     }
 
     /**
@@ -828,10 +1588,19 @@ class YujuOrderManager
         $customer->active = true;
 
         if (!$customer->add()) {
-            // Obtener errores de validación de PrestaShop
-            $errors = $customer->getErrors();
-            $error_msg = !empty($errors) 
-                ? 'PrestaShop validation errors: ' . implode(', ', $errors)
+            // Carrera: otro request creó el mismo email entre el EXISTS y el add()
+            $race_id = Customer::customerExists($email, true);
+            if ($race_id) {
+                $customer = new Customer((int) $race_id);
+                if (Validate::isLoadedObject($customer)) {
+                    $this->logger->log('Customer race resolved — reusing ID: ' . $customer->id, 'info');
+                    return $customer;
+                }
+            }
+
+            $errors = method_exists($customer, 'getErrors') ? $customer->validateFields(false, true) : false;
+            $error_msg = is_string($errors) && $errors !== ''
+                ? 'PrestaShop validation errors: ' . $errors
                 : 'Customer->add() returned false without specific error message';
             
             $this->logger->log('Failed to create customer: ' . $error_msg . ' | Data: ' . json_encode($customer_data), 'error');
@@ -980,7 +1749,7 @@ class YujuOrderManager
         $cart->id_address_invoice = $address_id;
         $cart->id_lang = $this->context->language->id;
         $cart->id_currency = $this->getCurrencyId($order_data['currency']);
-        $cart->id_carrier = $this->getCarrierId($order_data['shipping_method']);
+        $cart->id_carrier = $this->getCarrierId('Yuju');
 
         if (!$cart->add()) {
             // Obtener errores de validación de PrestaShop
@@ -1004,18 +1773,26 @@ class YujuOrderManager
             // Intentar encontrar producto por mapping de Yuju
             $product_id = $this->findProductByYujuId($item['product_id']);
             
-            // Si no existe mapping, buscar por SKU/reference
-            if (!$product_id && !empty($item['sku'])) {
-                $product_id = $this->findProductBySKU($item['sku']);
-                if (!$product_id) {
-                    $error_detail = 'Product not found - Yuju ID: ' . $item['product_id'] . ', SKU: ' . ($item['sku'] ?? 'N/A') . ', Name: ' . ($item['name'] ?? 'N/A');
-                    $products_failed[] = $error_detail;
-                    $this->logger->log($error_detail, 'error');
-                    continue;
+            // Si no existe mapping, buscar por SKU / channel_sku / reference
+            if (!$product_id) {
+                $sku_candidates = array_filter([
+                    $item['sku'] ?? null,
+                    $item['channel_sku'] ?? null,
+                ]);
+                foreach ($sku_candidates as $sku_try) {
+                    $product_id = $this->findProductBySKU($sku_try);
+                    if ($product_id) {
+                        $this->logger->log('Product found by SKU: ' . $sku_try . ' -> ID: ' . $product_id, 'info');
+                        break;
+                    }
                 }
-                $this->logger->log('Product found by SKU: ' . $item['sku'] . ' -> ID: ' . $product_id, 'info');
-            } elseif (!$product_id) {
-                $error_detail = 'Product not found by Yuju ID: ' . $item['product_id'] . ' and no SKU provided';
+            }
+
+            if (!$product_id) {
+                $error_detail = 'Product not found - Yuju ID: ' . ($item['product_id'] ?? 'N/A')
+                    . ', SKU: ' . ($item['sku'] ?? 'N/A')
+                    . ', channel_sku: ' . ($item['channel_sku'] ?? 'N/A')
+                    . ', Name: ' . ($item['name'] ?? 'N/A');
                 $products_failed[] = $error_detail;
                 $this->logger->log($error_detail, 'error');
                 continue;
@@ -1183,17 +1960,178 @@ class YujuOrderManager
      */
     protected function findOrderByYujuId($yuju_order_id)
     {
-        $mapping = Db::getInstance()->getRow('
-        SELECT prestashop_order_id FROM ' . _DB_PREFIX_ . 'yuju_order_mapping
-        WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"
-        ');
-
-        if ($mapping && isset($mapping['prestashop_order_id'])) {
-            // Retornar solo el ID, no el objeto Order
-            return (int) $mapping['prestashop_order_id'];
+        if ($yuju_order_id === null || $yuju_order_id === '') {
+            return null;
         }
 
-        return null;
+        $this->ensureOrderMappingSchema();
+
+        $mapping = Db::getInstance()->getRow('
+            SELECT prestashop_order_id FROM ' . _DB_PREFIX_ . 'yuju_order_mapping
+            WHERE yuju_order_id = "' . pSQL((string) $yuju_order_id) . '"
+        ');
+
+        if (!$mapping) {
+            return null;
+        }
+
+        // Claim pendiente (NULL / 0 / negativo) → 0; orden real → id > 0
+        if ($this->isPendingMappingPsId($mapping['prestashop_order_id'])) {
+            return 0;
+        }
+
+        return (int) $mapping['prestashop_order_id'];
+    }
+
+    /**
+     * Inserta claim atómico con placeholder negativo (NUNCA NULL).
+     * UNIQUE(yuju_order_id) impide doble claim.
+     *
+     * @param string $yuju_order_id
+     * @return array{claimed:bool,prestashop_order_id:?int,mapping_id:?int}
+     */
+    protected function claimOrderMapping($yuju_order_id)
+    {
+        $this->ensureOrderMappingSchema();
+        $yuju_order_id = (string) $yuju_order_id;
+
+        $existing = $this->findOrderByYujuId($yuju_order_id);
+        if ($existing !== null) {
+            if ((int) $existing > 0) {
+                return [
+                    'claimed' => false,
+                    'prestashop_order_id' => (int) $existing,
+                    'mapping_id' => null,
+                ];
+            }
+            $mapping_id = (int) Db::getInstance()->getValue(
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_order_mapping
+                 WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+            );
+            Db::getInstance()->execute(
+                'UPDATE ' . _DB_PREFIX_ . 'yuju_order_mapping
+                 SET updated_at = "' . pSQL(date('Y-m-d H:i:s')) . '"
+                 WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+            );
+            return [
+                'claimed' => true,
+                'prestashop_order_id' => 0,
+                'mapping_id' => $mapping_id ?: null,
+            ];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $placeholder = (int) $this->pendingMappingPlaceholder($yuju_order_id);
+
+        try {
+            $ok = Db::getInstance()->execute(
+                'INSERT INTO `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                (`prestashop_order_id`, `yuju_order_id`, `created_at`, `updated_at`)
+                VALUES (' . $placeholder . ', "' . pSQL($yuju_order_id) . '", "' . pSQL($now) . '", "' . pSQL($now) . '")'
+            );
+        } catch (Exception $e) {
+            $ok = false;
+            $this->logger->log('claimOrderMapping insert failed: ' . $e->getMessage(), 'warning');
+        } catch (Throwable $e) {
+            $ok = false;
+            $this->logger->log('claimOrderMapping insert failed: ' . $e->getMessage(), 'warning');
+        }
+
+        if ($ok) {
+            return [
+                'claimed' => true,
+                'prestashop_order_id' => $placeholder,
+                'mapping_id' => (int) Db::getInstance()->Insert_ID(),
+            ];
+        }
+
+        $existing = $this->findOrderByYujuId($yuju_order_id);
+        return [
+            'claimed' => false,
+            'prestashop_order_id' => $existing,
+            'mapping_id' => null,
+        ];
+    }
+
+    /**
+     * Vincula el claim al id real de la orden PrestaShop.
+     *
+     * @param int $prestashop_order_id
+     * @param string $yuju_order_id
+     * @return int|false mapping id
+     */
+    protected function bindOrderMapping($prestashop_order_id, $yuju_order_id)
+    {
+        $this->ensureOrderMappingSchema();
+        $prestashop_order_id = (int) $prestashop_order_id;
+        $yuju_order_id = (string) $yuju_order_id;
+        $now = date('Y-m-d H:i:s');
+
+        if ($prestashop_order_id <= 0) {
+            throw new Exception('bindOrderMapping requiere prestashop_order_id > 0');
+        }
+
+        $updated = Db::getInstance()->execute(
+            'UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping`
+             SET prestashop_order_id = ' . $prestashop_order_id . ',
+                 updated_at = "' . pSQL($now) . '"
+             WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+        );
+
+        if ($updated) {
+            $id = (int) Db::getInstance()->getValue(
+                'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                 WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+            );
+            return $id ?: true;
+        }
+
+        return $this->createOrderMapping($prestashop_order_id, $yuju_order_id);
+    }
+
+    /**
+     * Elimina claim pendiente si falló la creación, para permitir reintento.
+     *
+     * @param string $yuju_order_id
+     * @return void
+     */
+    protected function releaseClaimedMapping($yuju_order_id)
+    {
+        $yuju_order_id = (string) $yuju_order_id;
+        if ($yuju_order_id === '') {
+            return;
+        }
+        try {
+            Db::getInstance()->execute(
+                'DELETE FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                 WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"
+                 AND (prestashop_order_id IS NULL OR prestashop_order_id <= 0)'
+            );
+        } catch (Exception $e) {
+            $this->logger->log('releaseClaimedMapping failed: ' . $e->getMessage(), 'warning');
+        } catch (Throwable $e) {
+            $this->logger->log('releaseClaimedMapping failed: ' . $e->getMessage(), 'warning');
+        }
+    }
+
+    /**
+     * Espera a que otro proceso termine de bindear el mapping.
+     *
+     * @param string $yuju_order_id
+     * @param int $seconds
+     * @return int PS order id o 0
+     */
+    protected function waitForMappedOrder($yuju_order_id, $seconds = 8)
+    {
+        $deadline = microtime(true) + max(1, (int) $seconds);
+        while (microtime(true) < $deadline) {
+            usleep(250000);
+            $psId = $this->findOrderByYujuId($yuju_order_id);
+            if ($psId !== null && (int) $psId > 0) {
+                return (int) $psId;
+            }
+        }
+        return 0;
     }
 
     protected function findProductByYujuId($yuju_product_id)
@@ -1218,26 +2156,84 @@ class YujuOrderManager
 
     protected function createOrderMapping($prestashop_order_id, $yuju_order_id, $extra_data = [])
     {
-        // Solo guardar los campos que existen en la tabla
-        // extra_data se ignora ya que la tabla no tiene columnas adicionales
-        $data = [
-            'prestashop_order_id' => (int) $prestashop_order_id,
-            'yuju_order_id' => pSQL($yuju_order_id),
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s'),
-        ];
-        
-        // Log de datos extra si se proporcionaron (para debugging)
+        $this->ensureOrderMappingSchema();
+
+        $prestashop_order_id = (int) $prestashop_order_id;
+        $yuju_order_id = (string) $yuju_order_id;
+        $now = date('Y-m-d H:i:s');
+
+        // Nunca NULL ni 0: orden real > 0, o placeholder negativo pendiente
+        if ($prestashop_order_id > 0) {
+            $psSql = (string) $prestashop_order_id;
+        } else {
+            $psSql = (string) (int) $this->pendingMappingPlaceholder($yuju_order_id);
+        }
+
         if (!empty($extra_data)) {
             $this->logger->log('Order mapping extra data (not stored in DB): ' . json_encode($extra_data), 'debug');
         }
-        
-        $result = Db::getInstance()->insert('yuju_order_mapping', $data);
-        
-        if ($result) {
-            return Db::getInstance()->Insert_ID();
+
+        $exists = Db::getInstance()->getValue(
+            'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
+             WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+        );
+
+        if ($exists) {
+            try {
+                $ok = Db::getInstance()->execute(
+                    'UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                     SET prestashop_order_id = ' . $psSql . ',
+                         updated_at = "' . pSQL($now) . '"
+                     WHERE id = ' . (int) $exists
+                );
+            } catch (Exception $e) {
+                $ok = false;
+                $this->logger->log('createOrderMapping update failed: ' . $e->getMessage(), 'warning');
+            } catch (Throwable $e) {
+                $ok = false;
+                $this->logger->log('createOrderMapping update failed: ' . $e->getMessage(), 'warning');
+            }
+            return $ok ? (int) $exists : false;
         }
-        
+
+        try {
+            $ok = Db::getInstance()->execute(
+                'INSERT INTO `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                (`prestashop_order_id`, `yuju_order_id`, `created_at`, `updated_at`)
+                VALUES (' . $psSql . ', "' . pSQL($yuju_order_id) . '", "' . pSQL($now) . '", "' . pSQL($now) . '")'
+            );
+        } catch (Exception $e) {
+            $ok = false;
+            $this->logger->log('createOrderMapping insert failed: ' . $e->getMessage(), 'warning');
+        } catch (Throwable $e) {
+            $ok = false;
+            $this->logger->log('createOrderMapping insert failed: ' . $e->getMessage(), 'warning');
+        }
+
+        if ($ok) {
+            return (int) Db::getInstance()->Insert_ID();
+        }
+
+        $exists = Db::getInstance()->getValue(
+            'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
+             WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
+        );
+        if ($exists && $prestashop_order_id > 0) {
+            try {
+                Db::getInstance()->execute(
+                    'UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                     SET prestashop_order_id = ' . (int) $prestashop_order_id . ',
+                         updated_at = "' . pSQL($now) . '"
+                     WHERE id = ' . (int) $exists
+                );
+            } catch (Exception $e) {
+                return false;
+            } catch (Throwable $e) {
+                return false;
+            }
+            return (int) $exists;
+        }
+
         return false;
     }
 
@@ -1258,10 +2254,15 @@ class YujuOrderManager
                 $yuju_status = $current_status;
             }
         }
-        
+
+        $yuju_status = strtolower(trim((string) $yuju_status));
+        if ($yuju_status === 'cancelled') {
+            $yuju_status = 'canceled';
+        }
+
         return isset($this->status_mapping['yuju_to_ps'][$yuju_status])
-            ? $this->status_mapping['yuju_to_ps'][$yuju_status]
-            : Configuration::get('PS_OS_PREPARATION');
+            ? (int) $this->status_mapping['yuju_to_ps'][$yuju_status]
+            : (int) Configuration::get('PS_OS_PREPARATION');
     }
     
     /**
@@ -1311,86 +2312,561 @@ class YujuOrderManager
 
     protected function getCarrierId($shipping_method)
     {
-        // Si no especifica método, usar "Yuju" por defecto
-        if (empty($shipping_method)) {
-            $shipping_method = 'Yuju';
+        // Carrier dedicado marketplace: no tocar carriers nativos de la tienda
+        $shipping_method = 'Yuju';
+
+        $configId = (int) Configuration::get('YUJU_CARRIER_ID');
+        if ($configId > 0) {
+            $carrier = new Carrier($configId);
+            if (Validate::isLoadedObject($carrier) && !(int) $carrier->deleted) {
+                if (!(int) $carrier->active) {
+                    $carrier->active = 1;
+                    $carrier->update();
+                }
+                return (int) $carrier->id;
+            }
         }
-        
-        // Buscar carrier por nombre
-        $carrier_id = Db::getInstance()->getValue('
-            SELECT id_carrier FROM ' . _DB_PREFIX_ . 'carrier
-            WHERE name = "' . pSQL($shipping_method) . '" AND deleted = 0
+
+        $carrier_id = (int) Db::getInstance()->getValue('
+            SELECT c.id_carrier FROM `' . _DB_PREFIX_ . 'carrier` c
+            WHERE c.name = "' . pSQL($shipping_method) . '"
+              AND c.deleted = 0
+            ORDER BY c.active DESC, c.id_carrier DESC
         ');
 
-        // Si no existe, crear el carrier "Yuju"
-        if (!$carrier_id && $shipping_method === 'Yuju') {
-            $this->logger->log('Creating Yuju carrier...', 'info');
-            $carrier_id = $this->createYujuCarrier();
+        if ($carrier_id > 0) {
+            Configuration::updateValue('YUJU_CARRIER_ID', $carrier_id);
+            return $carrier_id;
         }
 
-        // Si aún no hay carrier, usar el por defecto
-        return $carrier_id ? $carrier_id : Configuration::get('PS_CARRIER_DEFAULT');
+        $this->logger->log('Creating Yuju carrier...', 'info');
+        $carrier_id = (int) $this->createYujuCarrier();
+
+        if ($carrier_id > 0) {
+            Configuration::updateValue('YUJU_CARRIER_ID', $carrier_id);
+            return $carrier_id;
+        }
+
+        $fallback = (int) Configuration::get('PS_CARRIER_DEFAULT');
+        $this->logger->log(
+            'Yuju carrier unavailable, falling back to PS_CARRIER_DEFAULT=' . $fallback,
+            'error'
+        );
+
+        return $fallback;
     }
-    
+
     /**
-     * Create Yuju carrier if it doesn't exist
+     * Crea el transportista "Yuju" usable con envío gratis o con costo
+     * (el importe real se aplica en order_carrier por pedido).
+     *
+     * @return int id_carrier o 0
      */
     protected function createYujuCarrier()
     {
         try {
             $carrier = new Carrier();
             $carrier->name = 'Yuju';
-            $carrier->delay = [
-                Configuration::get('PS_LANG_DEFAULT') => 'Envío gestionado por Yuju'
-            ];
-            $carrier->active = true;
-            $carrier->deleted = false;
-            $carrier->shipping_handling = false;
+            $carrier->active = 1;
+            $carrier->deleted = 0;
+            $carrier->is_module = 1;
+            $carrier->external_module_name = 'prestashopyuju';
+            $carrier->shipping_external = 0;
+            $carrier->need_range = 1;
+            $carrier->shipping_handling = 0;
             $carrier->range_behavior = 0;
-            $carrier->is_module = false;
-            $carrier->shipping_external = false;
-            $carrier->external_module_name = '';
-            $carrier->need_range = false;
+            $carrier->is_free = 0;
+            // 2 = SHIPPING_METHOD_PRICE (rango por precio; tarifa base 0, costo real en el pedido)
+            $carrier->shipping_method = 2;
+            $carrier->max_width = 0;
+            $carrier->max_height = 0;
+            $carrier->max_depth = 0;
+            $carrier->max_weight = 0;
+            $carrier->grade = 0;
             $carrier->url = '';
-            
-            // Agregar para todos los idiomas
+
             $languages = Language::getLanguages(false);
+            if (empty($languages)) {
+                $languages = [['id_lang' => (int) Configuration::get('PS_LANG_DEFAULT')]];
+            }
             foreach ($languages as $language) {
-                $carrier->delay[$language['id_lang']] = 'Envío gestionado por Yuju';
+                $carrier->delay[(int) $language['id_lang']] = 'Envío gestionado por Yuju / marketplace';
             }
-            
-            if ($carrier->add()) {
-                // Crear grupos asociados
-                $groups = Group::getGroups(true);
+
+            if (!$carrier->add()) {
+                $msg = method_exists($carrier, 'validateFields')
+                    ? (string) $carrier->validateFields(false, true)
+                    : 'Carrier->add() returned false';
+                throw new Exception('Failed to create Yuju carrier: ' . $msg);
+            }
+
+            // Referencia estable (PS la usa al editar carriers)
+            $carrier->id_reference = (int) $carrier->id;
+            $carrier->update();
+
+            // Tiendas (multistore)
+            $shopIds = Shop::getContextListShopID();
+            if (empty($shopIds)) {
+                $shopIds = [(int) $this->context->shop->id];
+            }
+            foreach ($shopIds as $id_shop) {
+                Db::getInstance()->execute(
+                    'INSERT IGNORE INTO `' . _DB_PREFIX_ . 'carrier_shop`
+                    (`id_carrier`, `id_shop`) VALUES (' . (int) $carrier->id . ', ' . (int) $id_shop . ')'
+                );
+            }
+
+            // Grupos de clientes
+            $groups = Group::getGroups((int) Configuration::get('PS_LANG_DEFAULT'));
+            if (is_array($groups)) {
                 foreach ($groups as $group) {
-                    Db::getInstance()->insert('carrier_group', [
-                        'id_carrier' => (int)$carrier->id,
-                        'id_group' => (int)$group['id_group']
-                    ]);
+                    Db::getInstance()->execute(
+                        'INSERT IGNORE INTO `' . _DB_PREFIX_ . 'carrier_group`
+                        (`id_carrier`, `id_group`) VALUES (' . (int) $carrier->id . ', ' . (int) $group['id_group'] . ')'
+                    );
                 }
-                
-                // Crear zonas (todas las zonas disponibles)
-                $zones = Zone::getZones(true);
-                foreach ($zones as $zone) {
-                    Db::getInstance()->insert('carrier_zone', [
-                        'id_carrier' => (int)$carrier->id,
-                        'id_zone' => (int)$zone['id_zone']
-                    ]);
-                }
-                
-                $this->logger->log('Yuju carrier created successfully', [
-                    'carrier_id' => $carrier->id
-                ]);
-                
-                return $carrier->id;
             }
-            
-            throw new Exception('Failed to create Yuju carrier');
-            
+
+            // Zonas + rango de precio amplio con tarifa 0
+            // (0 = gratis por defecto; el costo real del marketplace va en order_carrier)
+            $rangePrice = new RangePrice();
+            $rangePrice->id_carrier = (int) $carrier->id;
+            $rangePrice->delimiter1 = '0';
+            $rangePrice->delimiter2 = '10000000';
+            if (!$rangePrice->add()) {
+                throw new Exception('Failed to create price range for Yuju carrier');
+            }
+
+            $zones = Zone::getZones(true);
+            if (!is_array($zones) || empty($zones)) {
+                $zones = [['id_zone' => (int) Configuration::get('PS_ZONE_DEFAULT') ?: 1]];
+            }
+
+            foreach ($zones as $zone) {
+                $id_zone = (int) $zone['id_zone'];
+                if ($id_zone <= 0) {
+                    continue;
+                }
+                Db::getInstance()->execute(
+                    'INSERT IGNORE INTO `' . _DB_PREFIX_ . 'carrier_zone`
+                    (`id_carrier`, `id_zone`) VALUES (' . (int) $carrier->id . ', ' . $id_zone . ')'
+                );
+
+                // delivery: precio 0 → flexible (gratis o se sobrescribe en el pedido)
+                $id_shop = (int) $this->context->shop->id;
+                $id_shop_group = (int) $this->context->shop->id_shop_group;
+                Db::getInstance()->execute(
+                    'INSERT INTO `' . _DB_PREFIX_ . 'delivery`
+                    (`id_carrier`, `id_range_price`, `id_range_weight`, `id_zone`, `id_shop`, `id_shop_group`, `price`)
+                    VALUES (
+                        ' . (int) $carrier->id . ',
+                        ' . (int) $rangePrice->id . ',
+                        NULL,
+                        ' . $id_zone . ',
+                        ' . $id_shop . ',
+                        ' . $id_shop_group . ',
+                        0
+                    )'
+                );
+            }
+
+            // Tax rules: sin impuesto forzado (el costo viene de Yuju)
+            if (method_exists($carrier, 'setTaxRulesGroup')) {
+                try {
+                    $carrier->setTaxRulesGroup(0);
+                } catch (Exception $e) {
+                    // ignore
+                }
+            }
+
+            Configuration::updateValue('YUJU_CARRIER_ID', (int) $carrier->id);
+
+            $this->logger->log('Yuju carrier created successfully', [
+                'carrier_id' => (int) $carrier->id,
+                'range_price_id' => (int) $rangePrice->id,
+            ]);
+
+            return (int) $carrier->id;
         } catch (Exception $e) {
             $this->logger->log('Error creating Yuju carrier: ' . $e->getMessage(), 'error');
-            return Configuration::get('PS_CARRIER_DEFAULT');
+            return 0;
+        } catch (Throwable $e) {
+            $this->logger->log('Error creating Yuju carrier: ' . $e->getMessage(), 'error');
+            return 0;
         }
+    }
+
+    /**
+     * Registra el transportista en el pedido (sección Transportista del BO).
+     * Aplica costo de envío de Yuju: 0 = gratis, >0 = con costo.
+     *
+     * @param Order $order
+     * @param float $shipping_cost
+     * @param string|null $tracking_number
+     * @return bool
+     */
+    protected function attachOrderCarrier(Order $order, $shipping_cost = 0.0, $tracking_number = null)
+    {
+        if (!Validate::isLoadedObject($order) || !(int) $order->id) {
+            return false;
+        }
+
+        $id_carrier = (int) $order->id_carrier;
+        if ($id_carrier <= 0) {
+            $id_carrier = $this->getCarrierId('Yuju');
+            $order->id_carrier = $id_carrier;
+            $order->update();
+        }
+
+        $shipping = round((float) $shipping_cost, 6);
+        if ($shipping < 0) {
+            $shipping = 0;
+        }
+
+        $weight = 0.0;
+        try {
+            if (method_exists($order, 'getTotalWeight')) {
+                $weight = (float) $order->getTotalWeight();
+            }
+        } catch (Exception $e) {
+            $weight = 0.0;
+        }
+
+        $id_order_carrier = (int) Db::getInstance()->getValue(
+            'SELECT id_order_carrier FROM `' . _DB_PREFIX_ . 'order_carrier`
+             WHERE id_order = ' . (int) $order->id
+        );
+
+        try {
+            if ($id_order_carrier > 0) {
+                $orderCarrier = new OrderCarrier($id_order_carrier);
+            } else {
+                $orderCarrier = new OrderCarrier();
+                $orderCarrier->id_order = (int) $order->id;
+            }
+
+            $orderCarrier->id_carrier = $id_carrier;
+            $orderCarrier->id_order_invoice = 0;
+            $orderCarrier->weight = $weight;
+            $orderCarrier->shipping_cost_tax_excl = $shipping;
+            $orderCarrier->shipping_cost_tax_incl = $shipping;
+            if ($tracking_number !== null && $tracking_number !== '') {
+                $orderCarrier->tracking_number = pSQL((string) $tracking_number);
+            }
+
+            $ok = $id_order_carrier > 0 ? $orderCarrier->update() : $orderCarrier->add();
+            if (!$ok) {
+                // Fallback SQL por si ObjectModel falla
+                if ($id_order_carrier > 0) {
+                    Db::getInstance()->execute(
+                        'UPDATE `' . _DB_PREFIX_ . 'order_carrier`
+                         SET id_carrier = ' . $id_carrier . ',
+                             shipping_cost_tax_excl = ' . (float) $shipping . ',
+                             shipping_cost_tax_incl = ' . (float) $shipping . ',
+                             weight = ' . (float) $weight . '
+                         WHERE id_order_carrier = ' . $id_order_carrier
+                    );
+                } else {
+                    Db::getInstance()->execute(
+                        'INSERT INTO `' . _DB_PREFIX_ . 'order_carrier`
+                        (`id_order`, `id_carrier`, `id_order_invoice`, `weight`,
+                         `shipping_cost_tax_excl`, `shipping_cost_tax_incl`, `tracking_number`, `date_add`)
+                        VALUES (
+                            ' . (int) $order->id . ',
+                            ' . $id_carrier . ',
+                            0,
+                            ' . (float) $weight . ',
+                            ' . (float) $shipping . ',
+                            ' . (float) $shipping . ',
+                            "' . pSQL((string) $tracking_number) . '",
+                            "' . pSQL(date('Y-m-d H:i:s')) . '"
+                        )'
+                    );
+                }
+            }
+
+            // Totales de envío en la orden (gratis o con costo)
+            $order->total_shipping = $shipping;
+            $order->total_shipping_tax_incl = $shipping;
+            $order->total_shipping_tax_excl = $shipping;
+            if ($tracking_number) {
+                $order->shipping_number = (string) $tracking_number;
+            }
+            $order->update();
+
+            $this->logger->log(
+                'OrderCarrier attached: order=' . (int) $order->id
+                . ' carrier=' . $id_carrier
+                . ' shipping=' . $shipping,
+                'info'
+            );
+
+            return true;
+        } catch (Exception $e) {
+            $this->logger->log('attachOrderCarrier failed: ' . $e->getMessage(), 'error');
+            return false;
+        } catch (Throwable $e) {
+            $this->logger->log('attachOrderCarrier failed: ' . $e->getMessage(), 'error');
+            return false;
+        }
+    }
+
+    /**
+     * Tras venta Yuju → orden PS: descuenta stock en PrestaShop y empuja el stock nuevo a Yuju.
+     *
+     * @param Order $order
+     * @return array
+     */
+    protected function applyOrderStockDecrementAndPushToYuju(Order $order)
+    {
+        $report = [
+            'decreased' => [],
+            'pushed' => [],
+            'skipped' => [],
+            'errors' => [],
+        ];
+
+        if (!Validate::isLoadedObject($order) || !(int) $order->id) {
+            $report['errors'][] = 'Orden inválida';
+            return $report;
+        }
+
+        $lines = [];
+        try {
+            $lines = $order->getProducts();
+        } catch (Exception $e) {
+            $lines = [];
+        }
+        if (empty($lines)) {
+            $lines = Db::getInstance()->executeS(
+                'SELECT product_id, product_attribute_id, product_quantity, product_reference
+                 FROM `' . _DB_PREFIX_ . 'order_detail`
+                 WHERE id_order = ' . (int) $order->id
+            );
+        }
+        if (!is_array($lines) || empty($lines)) {
+            $report['errors'][] = 'Sin líneas de pedido para descontar stock';
+            return $report;
+        }
+
+        $id_shop = (int) $order->id_shop;
+        if ($id_shop <= 0) {
+            $id_shop = (int) $this->context->shop->id;
+        }
+
+        // Agrupar por producto+atributo (por si hay líneas duplicadas)
+        $qtyByKey = [];
+        foreach ($lines as $line) {
+            $id_product = (int) ($line['product_id'] ?? $line['id_product'] ?? 0);
+            $id_attr = (int) ($line['product_attribute_id'] ?? $line['id_product_attribute'] ?? 0);
+            $qty = (int) ($line['product_quantity'] ?? $line['cart_quantity'] ?? 0);
+            if ($id_product <= 0 || $qty <= 0) {
+                continue;
+            }
+            $key = $id_product . ':' . $id_attr;
+            if (!isset($qtyByKey[$key])) {
+                $qtyByKey[$key] = [
+                    'id_product' => $id_product,
+                    'id_product_attribute' => $id_attr,
+                    'qty' => 0,
+                ];
+            }
+            $qtyByKey[$key]['qty'] += $qty;
+        }
+
+        self::$suppressStockHookToYuju = true;
+        $productsToPush = []; // id_product => true (push stock total del producto)
+
+        try {
+            foreach ($qtyByKey as $row) {
+                $id_product = (int) $row['id_product'];
+                $id_attr = (int) $row['id_product_attribute'];
+                $qty = (int) $row['qty'];
+
+                try {
+                    $before = (int) StockAvailable::getQuantityAvailableByProduct(
+                        $id_product,
+                        $id_attr > 0 ? $id_attr : null,
+                        $id_shop
+                    );
+
+                    // Delta negativo = venta
+                    StockAvailable::updateQuantity($id_product, $id_attr, -$qty, $id_shop);
+
+                    $after = (int) StockAvailable::getQuantityAvailableByProduct(
+                        $id_product,
+                        $id_attr > 0 ? $id_attr : null,
+                        $id_shop
+                    );
+
+                    $report['decreased'][] = [
+                        'id_product' => $id_product,
+                        'id_product_attribute' => $id_attr,
+                        'qty' => $qty,
+                        'stock_before' => $before,
+                        'stock_after' => $after,
+                    ];
+                    $productsToPush[$id_product] = true;
+
+                    $this->logger->log(
+                        'Stock decreased for order ' . (int) $order->id
+                        . ': product=' . $id_product
+                        . ' attr=' . $id_attr
+                        . ' -' . $qty
+                        . ' (' . $before . ' → ' . $after . ')',
+                        'info'
+                    );
+                } catch (Exception $e) {
+                    $report['errors'][] = 'product ' . $id_product . ': ' . $e->getMessage();
+                    $this->logger->log(
+                        'Failed to decrease stock product ' . $id_product . ': ' . $e->getMessage(),
+                        'error'
+                    );
+                }
+            }
+
+            foreach (array_keys($productsToPush) as $id_product) {
+                $pushResult = $this->pushProductStockToYuju((int) $id_product, $id_shop);
+                if (!empty($pushResult['skipped'])) {
+                    $report['skipped'][] = $pushResult;
+                } elseif (!empty($pushResult['success'])) {
+                    $report['pushed'][] = $pushResult;
+                } else {
+                    $report['errors'][] = $pushResult;
+                }
+            }
+        } finally {
+            self::$suppressStockHookToYuju = false;
+        }
+
+        return $report;
+    }
+
+    /**
+     * Empuja el stock actual de un producto PS a Yuju (PUT product stock).
+     *
+     * @param int $prestashop_product_id
+     * @param int $id_shop
+     * @return array
+     */
+    protected function pushProductStockToYuju($prestashop_product_id, $id_shop = null)
+    {
+        $prestashop_product_id = (int) $prestashop_product_id;
+        $result = [
+            'success' => false,
+            'prestashop_product_id' => $prestashop_product_id,
+            'yuju_product_id' => null,
+            'stock' => null,
+            'skipped' => false,
+            'message' => '',
+        ];
+
+        if ($prestashop_product_id <= 0) {
+            $result['skipped'] = true;
+            $result['message'] = 'Invalid product id';
+            return $result;
+        }
+
+        $yuju_product_id = $this->findYujuProductId($prestashop_product_id);
+        if (!$yuju_product_id) {
+            $result['skipped'] = true;
+            $result['message'] = 'Product not mapped to Yuju';
+            $this->logger->log(
+                'Stock push skipped: PS product ' . $prestashop_product_id . ' has no yuju_product_id',
+                'warning'
+            );
+            return $result;
+        }
+
+        $result['yuju_product_id'] = $yuju_product_id;
+        $stock = (int) StockAvailable::getQuantityAvailableByProduct(
+            $prestashop_product_id,
+            null,
+            $id_shop ? (int) $id_shop : null
+        );
+        if ($stock < 0) {
+            $stock = 0;
+        }
+        $result['stock'] = $stock;
+
+        try {
+            Db::getInstance()->update(
+                'yuju_product_status',
+                [
+                    'sync_status' => pSQL('updating_in_yuju'),
+                    'last_error' => null,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ],
+                'prestashop_product_id = ' . $prestashop_product_id
+            );
+
+            $payload = ['stock' => $stock];
+            $api = $this->api_client ?: new YujuApiClient();
+            $start_time = microtime(true);
+            $response = $api->updateProduct($yuju_product_id, $payload);
+            $sync_duration = microtime(true) - $start_time;
+            $ok = is_array($response) && !empty($response['success']);
+
+            Db::getInstance()->update(
+                'yuju_product_status',
+                [
+                    'sync_status' => pSQL($ok ? 'synced' : 'synced_with_errors'),
+                    'last_error' => $ok ? null : pSQL($response['message'] ?? 'Stock push failed'),
+                    'last_sync_at' => $ok ? date('Y-m-d H:i:s') : null,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ],
+                'prestashop_product_id = ' . $prestashop_product_id
+            );
+
+            $result['success'] = $ok;
+            $result['message'] = $ok
+                ? 'Stock pushed to Yuju'
+                : ($response['message'] ?? 'Stock push failed');
+            $result['api_response'] = $response;
+
+            try {
+                require_once dirname(__FILE__) . '/YujuProductManager.php';
+                $pm = new YujuProductManager();
+                $pm->logSyncHistory([
+                    'prestashop_product_id' => $prestashop_product_id,
+                    'yuju_product_id' => $yuju_product_id,
+                    'sync_direction' => 'to_yuju',
+                    'action' => 'update',
+                    'status' => $ok ? 'success' : 'error',
+                    'http_status_code' => (int) ($response['http_code'] ?? 0),
+                    'request_data' => $pm->buildHistoryRequestPayload($payload, [
+                        'origin' => 'venta',
+                        'changed_fields' => ['stock'],
+                        'action' => 'update',
+                        'new_values' => ['stock' => $stock],
+                        'priority' => 'high',
+                    ]),
+                    'response_data' => json_encode($response),
+                    'error_message' => $ok ? '' : ($response['message'] ?? 'Stock push failed'),
+                    'sync_duration' => $sync_duration,
+                    'created_by' => 'venta',
+                ]);
+            } catch (Exception $histEx) {
+                $this->logger->log(
+                    'pushProductStockToYuju: historial no guardado: ' . $histEx->getMessage(),
+                    'warning'
+                );
+            }
+
+            $this->logger->log(
+                ($ok ? 'Stock pushed' : 'Stock push FAILED')
+                . ' PS=' . $prestashop_product_id
+                . ' Yuju=' . $yuju_product_id
+                . ' stock=' . $stock
+                . ($ok ? '' : (' err=' . $result['message'])),
+                $ok ? 'info' : 'error'
+            );
+        } catch (Exception $e) {
+            $result['message'] = $e->getMessage();
+            $this->logger->log('pushProductStockToYuju exception: ' . $e->getMessage(), 'error');
+        }
+
+        return $result;
     }
 
     protected function getCountryId($country_code)
@@ -1417,6 +2893,24 @@ class YujuOrderManager
     protected function generateOrderReference($order_data = null)
     {
         $prefix = YujuConfig::get('YUJU_ORDER_PREFIX', null) ?: 'YJ';
+
+        // Preferir la referencia estable de Yuju (evita IDs opacos y ayuda a detectar duplicados)
+        if (is_array($order_data) && !empty($order_data['reference'])) {
+            $ref = preg_replace('/[^A-Za-z0-9\-]/', '', (string) $order_data['reference']);
+            $ref = substr($ref, 0, 32);
+            if ($ref !== '') {
+                $exists = (int) Db::getInstance()->getValue(
+                    'SELECT id_order FROM ' . _DB_PREFIX_ . 'orders
+                     WHERE reference = "' . pSQL($ref) . '"'
+                );
+                if (!$exists) {
+                    return $ref;
+                }
+                // Ya usada (p.ej. orden duplicada histórica): sufijo corto único
+                return substr($ref, 0, 24) . '-' . substr((string) time(), -4);
+            }
+        }
+
         $timestamp = time();
         $random = mt_rand(1000, 9999);
 
@@ -1621,15 +3115,30 @@ class YujuOrderManager
         if (!class_exists('OrderHistory')) {
             throw new Exception('PrestaShop OrderHistory class not loaded');
         }
+
+        $order_id = (int) $order_id;
+        $status_id = (int) $status_id;
+        if ($order_id <= 0 || $status_id <= 0) {
+            return false;
+        }
+
+        // Idempotente: no duplicar historial si ya está en ese estado
+        if ($this->orderAlreadyHasState($order_id, $status_id)) {
+            $this->logger->log(
+                'updateOrderState skipped (same state): order ' . $order_id . ' status ' . $status_id,
+                'info'
+            );
+            return true;
+        }
         
         // Obtener o crear empleado Yuju
         $employee = $this->getOrCreateYujuEmployee();
         
         // Crear el registro de historial manualmente
         $order_history = new OrderHistory();
-        $order_history->id_order = (int)$order_id;
-        $order_history->id_order_state = (int)$status_id;
-        $order_history->id_employee = (int)$employee->id;
+        $order_history->id_order = $order_id;
+        $order_history->id_order_state = $status_id;
+        $order_history->id_employee = (int) $employee->id;
         $order_history->date_add = date('Y-m-d H:i:s');
         
         if (!$order_history->add()) {
@@ -1639,8 +3148,8 @@ class YujuOrderManager
         // Actualizar el estado actual de la orden
         Db::getInstance()->update(
             'orders',
-            ['current_state' => (int)$status_id],
-            'id_order = ' . (int)$order_id
+            ['current_state' => $status_id],
+            'id_order = ' . $order_id
         );
         
         $this->logger->log('Order state updated using alternative method for order ' . $order_id, 'info');

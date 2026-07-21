@@ -47,6 +47,16 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $this->toolbar_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
     }
 
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        if ($this->module) {
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+        }
+    }
+
     public function initContent()
     {
         parent::initContent();
@@ -92,7 +102,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_SYNC_FREQUENCY' => YujuConfig::get('YUJU_SYNC_FREQUENCY', 3600),
             'YUJU_BATCH_SIZE' => YujuConfig::get('YUJU_BATCH_SIZE', 100),
             'YUJU_BATCH_FREQUENCY' => YujuConfig::get('YUJU_BATCH_FREQUENCY', 60),
-            'YUJU_MAX_DAILY_SYNCS' => YujuConfig::get('YUJU_MAX_DAILY_SYNCS', 5),
+            'YUJU_MAX_DAILY_SYNCS' => YujuConfig::get('YUJU_MAX_DAILY_SYNCS', 2),
             'YUJU_EMAIL_NOTIFICATIONS' => YujuConfig::get('YUJU_EMAIL_NOTIFICATIONS', 1),
             'YUJU_NOTIFICATION_EMAIL' => YujuConfig::get('YUJU_NOTIFICATION_EMAIL'),
             'YUJU_WEBHOOK_SECRET' => YujuConfig::get('YUJU_WEBHOOK_SECRET'),
@@ -107,9 +117,32 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_SYNC_IMAGES' => YujuConfig::get('YUJU_SYNC_IMAGES', 1),
             'YUJU_SYNC_ORDERS' => YujuConfig::get('YUJU_SYNC_ORDERS', 1),
             'YUJU_CLEAN_HTML' => YujuConfig::get('YUJU_CLEAN_HTML', 1),
+            'YUJU_ENABLE_BULK_RESEND_PENDING' => YujuConfig::get('YUJU_ENABLE_BULK_RESEND_PENDING', 0),
             'YUJU_LOGGING_ENABLED' => YujuConfig::get('YUJU_LOGGING_ENABLED', 1),
             'YUJU_FORCE_UPDATE' => YujuConfig::get('YUJU_FORCE_UPDATE', 0),
+            'YUJU_AUDIT_ENABLED' => YujuConfig::get('YUJU_AUDIT_ENABLED', 0),
+            'YUJU_AUDIT_UI_ENABLED' => YujuConfig::get('YUJU_AUDIT_UI_ENABLED', 1),
+            'YUJU_AUDIT_STOCK' => YujuConfig::get('YUJU_AUDIT_STOCK', 1),
+            'YUJU_AUDIT_PRICE' => YujuConfig::get('YUJU_AUDIT_PRICE', 1),
+            'YUJU_AUDIT_IMAGES' => YujuConfig::get('YUJU_AUDIT_IMAGES', 0),
+            'YUJU_AUDIT_SCHEDULE' => YujuConfig::get('YUJU_AUDIT_SCHEDULE', 'daily'),
+            'YUJU_AUDIT_TIMES_PER_PERIOD' => YujuConfig::get('YUJU_AUDIT_TIMES_PER_PERIOD', 1),
+            'YUJU_AUDIT_LAST_RUN_AT' => YujuConfig::get('YUJU_AUDIT_LAST_RUN_AT', ''),
+            'YUJU_GRAL_REPORT_ENABLED' => YujuConfig::get('YUJU_GRAL_REPORT_ENABLED', 0),
+            'YUJU_GRAL_REPORT_MAX_DAILY' => YujuConfig::get('YUJU_GRAL_REPORT_MAX_DAILY', 2),
+            'YUJU_GRAL_REPORT_WEEKDAYS' => YujuConfig::get('YUJU_GRAL_REPORT_WEEKDAYS', '1,2,3,4,5,6,7'),
+            'YUJU_GRAL_REPORT_LAST_REQUEST_AT' => YujuConfig::get('YUJU_GRAL_REPORT_LAST_REQUEST_AT', ''),
+            'YUJU_GRAL_REPORT_LAST_COMPLETED_AT' => YujuConfig::get('YUJU_GRAL_REPORT_LAST_COMPLETED_AT', ''),
         ];
+
+        $gralWeekdaysRaw = (string) $config['YUJU_GRAL_REPORT_WEEKDAYS'];
+        $gralWeekdaysSelected = [];
+        foreach (preg_split('/[\s,;]+/', $gralWeekdaysRaw, -1, PREG_SPLIT_NO_EMPTY) as $d) {
+            $di = (int) $d;
+            if ($di >= 1 && $di <= 7) {
+                $gralWeekdaysSelected[$di] = true;
+            }
+        }
 
         // Generar URLs importantes para la configuración
         $link = new Link();
@@ -155,6 +188,22 @@ class AdminYujuConfigurationController extends ModuleAdminController
             }
         }
 
+        if ($this->module && method_exists($this->module, 'ensureAuditTables')) {
+            $this->module->ensureAuditTables();
+        }
+        if ($this->module && method_exists($this->module, 'ensureProductReportsTable')) {
+            $this->module->ensureProductReportsTable();
+        }
+        if ($this->module && method_exists($this->module, 'ensureYujuAuditTabs')) {
+            $this->module->ensureYujuAuditTabs();
+        }
+
+        require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductGralReport.php';
+        $gral_quota = YujuProductGralReport::getQuotaStatus();
+
+        $audit_ui_link = $this->context->link->getAdminLink('AdminYujuAudit');
+        $audit_monitoring_link = $this->context->link->getAdminLink('AdminYujuAuditMonitoring');
+
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
             'api_stats' => $api_stats,
@@ -173,6 +222,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'current_index' => self::$currentIndex,
             'token' => Tools::getAdminTokenLite('AdminYujuConfiguration'),
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuConfiguration'),
+            'audit_ui_link' => $audit_ui_link,
+            'audit_monitoring_link' => $audit_monitoring_link,
+            'gral_quota' => $gral_quota,
+            'gral_weekdays_selected' => $gralWeekdaysSelected,
             // Datos adicionales para el template
             'prestashop_shops' => Shop::getShops(true),
             'available_languages' => Language::getLanguages(false),
@@ -376,6 +429,42 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         parent::postProcess();
+    }
+
+    /**
+     * AJAX: solicita products-gral-report (máx. 2/día UTC).
+     */
+    public function ajaxProcessRequestGralReport()
+    {
+        try {
+            if ($this->module && method_exists($this->module, 'ensureProductReportsTable')) {
+                $this->module->ensureProductReportsTable();
+            }
+            require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductGralReport.php';
+            $service = new YujuProductGralReport();
+            $result = $service->requestReport('manual', false);
+
+            if (!empty($result['success']) && !empty($result['report_id']) && empty($result['already_running'])) {
+                // Primer poll (async task; puede seguir processing)
+                sleep(2);
+                $poll = $service->pollAndDownload((int) $result['report_id']);
+                $result['poll'] = $poll;
+                if (!empty($poll['report'])) {
+                    $result['report'] = $poll['report'];
+                }
+                if (!empty($poll['finished']) && !empty($poll['success'])) {
+                    $result['message'] = $poll['message'];
+                }
+            }
+
+            $result['quota'] = YujuProductGralReport::getQuotaStatus();
+            exit(json_encode($result));
+        } catch (Exception $e) {
+            exit(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
     }
 
     /**
@@ -628,10 +717,15 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
-     * AJAX: ejecuta un cron seleccionado y devuelve salida.
+     * AJAX: lanza un cron en segundo plano (no bloquea la sesión del BO).
      */
     public function ajaxProcessRunCronScript()
     {
+        // Liberar lock de sesión YA: otras pestañas del admin pueden seguir navegando.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+
         $script = trim((string) Tools::getValue('script', ''));
         $catalog = $this->getCronScriptsCatalog();
         $allowed = [];
@@ -662,32 +756,67 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]));
         }
 
-        $command = escapeshellarg($phpBin)
-            . ' -d date.timezone=America/Bogota '
-            . escapeshellarg($path)
-            . ' 2>&1';
-        $outputLines = [];
-        $exitCode = 0;
-        $start = microtime(true);
-        @exec($command, $outputLines, $exitCode);
-        $durationMs = (int) round((microtime(true) - $start) * 1000);
-        $output = trim(implode("\n", $outputLines));
-        if ($output === '') {
-            $output = '(sin salida)';
+        require_once dirname(__FILE__) . '/../../classes/YujuCronJobRunner.php';
+        $runner = new YujuCronJobRunner();
+        $started = $runner->start($script, $phpBin);
+
+        if (empty($started['success'])) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'async' => true,
+                'job_id' => isset($started['job_id']) ? $started['job_id'] : null,
+                'message' => isset($started['message']) ? $started['message'] : 'No se pudo iniciar el cron en background.',
+            ]));
         }
 
-        $status = $exitCode === 0 ? 'success' : 'error';
-        $this->registerCronRun($script, $status, $durationMs, $output);
+        $this->ajaxDie(json_encode([
+            'success' => true,
+            'async' => true,
+            'job_id' => $started['job_id'],
+            'script' => $script,
+            'message' => $started['message'],
+        ]));
+    }
+
+    /**
+     * AJAX: estado/salida de un job de cron en background.
+     */
+    public function ajaxProcessGetCronJobStatus()
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+
+        $jobId = trim((string) Tools::getValue('job_id', ''));
+        require_once dirname(__FILE__) . '/../../classes/YujuCronJobRunner.php';
+        $runner = new YujuCronJobRunner();
+        $job = $runner->getJob($jobId);
+
+        if (!$job) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Job no encontrado.',
+            ]));
+        }
+
+        $status = isset($job['status']) ? (string) $job['status'] : '';
+        $done = in_array($status, ['success', 'error'], true);
 
         $this->ajaxDie(json_encode([
-            'success' => ($exitCode === 0),
-            'status' => $status,
-            'script' => $script,
-            'exit_code' => $exitCode,
-            'duration_ms' => $durationMs,
-            'output' => $output,
-            'ran_at' => date('Y-m-d H:i:s'),
-            'message' => $exitCode === 0 ? 'Cron ejecutado correctamente.' : 'El cron terminó con error (exit code ' . (int) $exitCode . ').',
+            'success' => true,
+            'done' => $done,
+            'job' => [
+                'id' => isset($job['id']) ? $job['id'] : $jobId,
+                'script' => isset($job['script']) ? $job['script'] : '',
+                'status' => $status,
+                'message' => isset($job['message']) ? $job['message'] : '',
+                'created_at' => isset($job['created_at']) ? $job['created_at'] : null,
+                'started_at' => isset($job['started_at']) ? $job['started_at'] : null,
+                'finished_at' => isset($job['finished_at']) ? $job['finished_at'] : null,
+                'exit_code' => isset($job['exit_code']) ? $job['exit_code'] : null,
+                'duration_ms' => isset($job['duration_ms']) ? $job['duration_ms'] : null,
+                'output' => isset($job['output']) ? $job['output'] : '',
+            ],
         ]));
     }
 
@@ -812,8 +941,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             return;
         }
         
-        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 5) {
-            $this->errors[] = $this->trans('El máximo de actualizaciones diarias debe estar entre 1 y 5', array(), 'Modules.Prestashopyuju.Admin');
+        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 2) {
+            $this->errors[] = $this->trans('El máximo de actualizaciones diarias debe ser 1 o 2 (límite API Yuju)', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -1142,12 +1271,53 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_SYNC_IMAGES' => (int) Tools::getValue('YUJU_SYNC_IMAGES'),
             'YUJU_SYNC_ORDERS' => (int) Tools::getValue('YUJU_SYNC_ORDERS'),
             'YUJU_CLEAN_HTML' => (int) Tools::getValue('YUJU_CLEAN_HTML'),
+            'YUJU_ENABLE_BULK_RESEND_PENDING' => (int) Tools::getValue('YUJU_ENABLE_BULK_RESEND_PENDING'),
             'YUJU_LOGGING_ENABLED' => (int) Tools::getValue('YUJU_LOGGING_ENABLED'),
+            'YUJU_AUDIT_ENABLED' => (int) Tools::getValue('YUJU_AUDIT_ENABLED'),
+            'YUJU_AUDIT_UI_ENABLED' => (int) Tools::getValue('YUJU_AUDIT_UI_ENABLED'),
+            'YUJU_AUDIT_STOCK' => (int) Tools::getValue('YUJU_AUDIT_STOCK'),
+            'YUJU_AUDIT_PRICE' => (int) Tools::getValue('YUJU_AUDIT_PRICE'),
+            'YUJU_AUDIT_IMAGES' => (int) Tools::getValue('YUJU_AUDIT_IMAGES'),
+            'YUJU_AUDIT_SCHEDULE' => Tools::getValue('YUJU_AUDIT_SCHEDULE', 'daily'),
+            'YUJU_AUDIT_TIMES_PER_PERIOD' => (int) Tools::getValue('YUJU_AUDIT_TIMES_PER_PERIOD', 1),
+            'YUJU_GRAL_REPORT_ENABLED' => (int) Tools::getValue('YUJU_GRAL_REPORT_ENABLED'),
+            'YUJU_GRAL_REPORT_MAX_DAILY' => (int) Tools::getValue('YUJU_GRAL_REPORT_MAX_DAILY', 2),
         ];
+
+        $weekdaysRaw = Tools::getValue('YUJU_GRAL_REPORT_WEEKDAYS');
+        if (!is_array($weekdaysRaw)) {
+            $weekdaysRaw = [];
+        }
+        $weekdays = [];
+        foreach ($weekdaysRaw as $d) {
+            $di = (int) $d;
+            if ($di >= 1 && $di <= 7) {
+                $weekdays[$di] = $di;
+            }
+        }
+        $weekdays = array_values($weekdays);
+        sort($weekdays);
+        $configs['YUJU_GRAL_REPORT_WEEKDAYS'] = implode(',', $weekdays);
 
         // Validaciones básicas
         if (empty($client_id) || empty($client_secret)) {
             $this->errors[] = $this->trans('Client ID y Client Secret son requeridos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        $allowedSchedules = ['hourly', 'daily', 'weekly'];
+        if (!in_array($configs['YUJU_AUDIT_SCHEDULE'], $allowedSchedules, true)) {
+            $this->errors[] = $this->trans('Periodicidad de auditoría inválida', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_AUDIT_TIMES_PER_PERIOD'] < 1 || $configs['YUJU_AUDIT_TIMES_PER_PERIOD'] > 24) {
+            $this->errors[] = $this->trans('Veces por periodo de auditoría debe estar entre 1 y 24', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_AUDIT_ENABLED'] && !$configs['YUJU_AUDIT_STOCK'] && !$configs['YUJU_AUDIT_PRICE'] && !$configs['YUJU_AUDIT_IMAGES']) {
+            $this->errors[] = $this->trans('Debe habilitar al menos un campo de auditoría (stock, precio o imágenes)', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
 
@@ -1166,8 +1336,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
             return;
         }
         
-        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 5) {
-            $this->errors[] = $this->trans('El máximo de sincronizaciones diarias debe estar entre 1 y 5', array(), 'Modules.Prestashopyuju.Admin');
+        if ($configs['YUJU_MAX_DAILY_SYNCS'] < 1 || $configs['YUJU_MAX_DAILY_SYNCS'] > 2) {
+            $this->errors[] = $this->trans('El máximo de descargas diarias de ofertas debe ser 1 o 2 (límite API Yuju)', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if ($configs['YUJU_GRAL_REPORT_MAX_DAILY'] < 1 || $configs['YUJU_GRAL_REPORT_MAX_DAILY'] > 2) {
+            $this->errors[] = $this->trans('El reporte general admite máximo 2 solicitudes por día (UTC)', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
 
@@ -1251,7 +1426,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $meta = [
             'cron.php' => [
                 'label' => 'cron.php',
-                'description' => 'Cron principal del módulo: procesa cola, tareas automáticas y sincronización programada.',
+                'description' => 'Cron principal del módulo (token, tareas y también procesa un lote de cola). En producción combine con process_queue.php cada 1–5 min.',
+                'required_mode' => 'programar',
+            ],
+            'process_queue.php' => [
+                'label' => 'process_queue.php',
+                'description' => 'Worker dedicado de cola (create/update/delete → Yuju). Respeta YUJU_BATCH_SIZE. Recomendado en crontab cada 1–5 minutos.',
                 'required_mode' => 'programar',
             ],
             'check_token.php' => [
@@ -1268,6 +1448,16 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'label' => 'sync_products.php',
                 'description' => 'Sincronización avanzada de productos con cache JSON. Operación manual/diagnóstico.',
                 'required_mode' => 'manual',
+            ],
+            'audit_offers.php' => [
+                'label' => 'audit_offers.php',
+                'description' => 'Auditoría de ofertas (stock/precio/imágenes): compara PS vs Yuju y corrige solo en Yuju. Respetá la programación o use --force.',
+                'required_mode' => 'programar',
+            ],
+            'gral_report.php' => [
+                'label' => 'gral_report.php',
+                'description' => 'Reporte general de productos (products-gral-report). Máx. 2/día UTC. Descarga JSONL al histórico. Use --force para forzar.',
+                'required_mode' => 'programar',
             ],
             'sync_to_yuju.php' => [
                 'label' => 'sync_to_yuju.php',
@@ -1354,7 +1544,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $rows = [];
         foreach ($files as $full) {
             $file = basename($full);
-            if ($file === 'index.php') {
+            if ($file === 'index.php' || $file === 'run_cron_job.php') {
                 continue;
             }
 
@@ -1824,6 +2014,21 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'description' => 'Mapeo de estados de pedido entre PrestaShop y Yuju.',
                 'critical' => false,
             ],
+            'yuju_audit_runs' => [
+                'label' => 'Auditorías de ofertas',
+                'description' => 'Historial de ejecuciones de auditoría (stock/precio/imágenes).',
+                'critical' => false,
+            ],
+            'yuju_audit_run_details' => [
+                'label' => 'Detalle de auditorías',
+                'description' => 'Detalle por producto de cada auditoría de ofertas.',
+                'critical' => false,
+            ],
+            'yuju_product_reports' => [
+                'label' => 'Reportes generales de productos',
+                'description' => 'Histórico de products-gral-report (JSONL, máx. 2/día UTC).',
+                'critical' => false,
+            ],
         ];
 
         $rows = [];
@@ -1872,6 +2077,80 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $this->ajaxDie(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: catálogo de tablas + metadatos para el modal de revisión de esquema.
+     */
+    public function ajaxProcessGetYujuSchemaReviewCatalog()
+    {
+        try {
+            require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSchemaRepair.php';
+            $repair = new YujuSchemaRepair();
+            $statusRows = $this->getYujuTablesStatus();
+            $expectedFromSql = $repair->getExpectedTableNames();
+
+            $catalog = [];
+            foreach ($statusRows as $row) {
+                $catalog[] = [
+                    'name' => $row['name'],
+                    'full_name' => $row['full_name'],
+                    'label' => $row['label'],
+                    'description' => $row['description'],
+                    'critical' => !empty($row['critical']),
+                    'exists' => !empty($row['exists']),
+                    'has_definition' => in_array($row['name'], $expectedFromSql, true),
+                ];
+            }
+
+            $this->ajaxDie(json_encode([
+                'success' => true,
+                'tables' => $catalog,
+                'total' => count($catalog),
+            ]));
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: revisa/repara UNA tabla (crear si falta + agregar columnas ausentes).
+     */
+    public function ajaxProcessRepairYujuTableSchema()
+    {
+        $table = trim((string) Tools::getValue('table', ''));
+        $allowed = array_column($this->getYujuTablesStatus(), 'name');
+
+        if ($table === '' || !in_array($table, $allowed, true)) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => 'Tabla no válida o no permitida.',
+            ]));
+        }
+
+        try {
+            require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSchemaRepair.php';
+            $repair = new YujuSchemaRepair();
+            $report = $repair->repairTable($table);
+            $this->ajaxDie(json_encode([
+                'success' => !empty($report['success']),
+                'report' => $report,
+            ]));
+        } catch (Exception $e) {
+            $this->ajaxDie(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'report' => [
+                    'table' => $table,
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                    'actions' => [],
+                ],
             ]));
         }
     }

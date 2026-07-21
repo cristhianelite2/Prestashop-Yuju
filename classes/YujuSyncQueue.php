@@ -13,8 +13,9 @@ class YujuSyncQueue
     }
     
     /**
-     * Agregar producto a la cola de sincronización
-     * 
+     * Agregar producto a la cola de sincronización.
+     * Nunca duplica el mismo producto+acción si ya hay uno pending/processing.
+     *
      * @param int $product_id ID del producto en PrestaShop
      * @param string $action 'create', 'update' o 'delete'
      * @param string $priority 'high' (precio/stock) o 'normal' (otros campos)
@@ -24,6 +25,13 @@ class YujuSyncQueue
     public function addToQueue($product_id, $action, $priority = 'normal', $data = [])
     {
         try {
+            $product_id = (int) $product_id;
+            $action = (string) $action;
+            if (!is_array($data)) {
+                $data = [];
+            }
+            $forceResend = !empty($data['force_resend_create']);
+
             // Si es prioridad alta (precio/stock), procesar inmediatamente
             if ($priority === 'high') {
                 $this->logger->info('Cola: Prioridad ALTA - Procesando inmediatamente', [
@@ -32,47 +40,78 @@ class YujuSyncQueue
                 ]);
                 return $this->processImmediately($product_id, $action, $data);
             }
-            
-            // Verificar si ya existe en cola pendiente
+
+            // Ya en cola (pending o processing) → actualizar datos del más antiguo, no insertar otro
             $existing = Db::getInstance()->getRow('
-                SELECT id 
-                FROM ' . _DB_PREFIX_ . 'yuju_sync_queue 
-                WHERE prestashop_product_id = ' . (int)$product_id . '
-                AND action = "' . pSQL($action) . '"
-                AND status = "pending"
+                SELECT id, status
+                FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+                WHERE prestashop_product_id = ' . $product_id . '
+                  AND action = "' . pSQL($action) . '"
+                  AND status IN ("pending", "processing")
+                ORDER BY id ASC
             ');
-            
+
             if ($existing) {
-                // Actualizar el registro existente
-                Db::getInstance()->update('yuju_sync_queue', [
-                    'data' => pSQL(json_encode($data)),
-                    'created_at' => date('Y-m-d H:i:s')
-                ], 'id = ' . (int)$existing['id']);
-                
-                $this->logger->info('Cola: Actualizado registro existente', [
+                // Si está processing, no tocar el payload en vuelo; solo evitar duplicado
+                if ((string) $existing['status'] === 'pending') {
+                    Db::getInstance()->update('yuju_sync_queue', [
+                        'data' => pSQL(json_encode($data)),
+                        'priority' => pSQL($priority),
+                        'created_at' => date('Y-m-d H:i:s'),
+                    ], 'id = ' . (int) $existing['id']);
+                }
+
+                // Cancelar cualquier otro pending duplicado del mismo producto+acción
+                $this->cancelDuplicatePendingItems($product_id, $action, (int) $existing['id']);
+
+                $this->logger->info('Cola: Sin duplicar — registro activo actualizado/reutilizado', [
                     'queue_id' => $existing['id'],
-                    'product_id' => $product_id
-                ]);
-            } else {
-                // Crear nuevo registro en cola
-                Db::getInstance()->insert('yuju_sync_queue', [
-                    'prestashop_product_id' => (int)$product_id,
-                    'action' => pSQL($action),
-                    'priority' => pSQL($priority),
-                    'status' => 'pending',
-                    'data' => pSQL(json_encode($data)),
-                    'attempts' => 0,
-                    'max_attempts' => 3,
-                    'created_at' => date('Y-m-d H:i:s')
-                ]);
-                
-                $this->logger->info('Cola: Producto agregado', [
                     'product_id' => $product_id,
                     'action' => $action,
-                    'priority' => $priority
+                    'status' => $existing['status'],
                 ]);
+
+                return true;
             }
-            
+
+            // Create ya enviado y en espera de webhook: no encolar otro create
+            if ($action === 'create' && !$forceResend) {
+                $syncStatus = (string) Db::getInstance()->getValue(
+                    'SELECT sync_status FROM ' . _DB_PREFIX_ . 'yuju_product_status
+                    WHERE prestashop_product_id = ' . $product_id
+                );
+                if ($syncStatus === 'creating_in_yuju') {
+                    $this->logger->info('Cola: Create omitido — producto ya en espera de webhook', [
+                        'product_id' => $product_id,
+                    ]);
+
+                    return true;
+                }
+            }
+
+            Db::getInstance()->insert('yuju_sync_queue', [
+                'prestashop_product_id' => $product_id,
+                'action' => pSQL($action),
+                'priority' => pSQL($priority),
+                'status' => 'pending',
+                'data' => pSQL(json_encode($data)),
+                'attempts' => 0,
+                'max_attempts' => 3,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            $newId = (int) Db::getInstance()->Insert_ID();
+            if ($newId > 0) {
+                $this->cancelDuplicatePendingItems($product_id, $action, $newId);
+            }
+
+            $this->logger->info('Cola: Producto agregado', [
+                'product_id' => $product_id,
+                'action' => $action,
+                'priority' => $priority,
+                'queue_id' => $newId,
+            ]);
+
             return true;
         } catch (Exception $e) {
             $this->logger->error('Cola: Error al agregar producto', [
@@ -81,6 +120,35 @@ class YujuSyncQueue
             ]);
             return false;
         }
+    }
+
+    /**
+     * Marca como failed otros pending del mismo producto+acción (deja solo $keepId).
+     *
+     * @param int $product_id
+     * @param string $action
+     * @param int $keepId
+     *
+     * @return void
+     */
+    protected function cancelDuplicatePendingItems($product_id, $action, $keepId)
+    {
+        $product_id = (int) $product_id;
+        $keepId = (int) $keepId;
+        if ($product_id <= 0 || $keepId <= 0) {
+            return;
+        }
+
+        Db::getInstance()->execute(
+            'UPDATE ' . _DB_PREFIX_ . 'yuju_sync_queue
+            SET status = "failed",
+                error_message = "Cancelado: duplicado en cola (mismo producto/acción)",
+                processed_at = "' . pSQL(date('Y-m-d H:i:s')) . '"
+            WHERE prestashop_product_id = ' . $product_id . '
+              AND action = "' . pSQL($action) . '"
+              AND status = "pending"
+              AND id <> ' . $keepId
+        );
     }
     
     /**
@@ -99,7 +167,8 @@ class YujuSyncQueue
 
             // create/update: usar el flujo único que aplica todas las validaciones
             // (duplicados de SKU, mapeo de categoría y campos obligatorios).
-            $result = $product_manager->sendProductToYuju((int) $product_id);
+            // Pasar $data (p.ej. preferred_ps_category_id) para no perder el mapeo del contexto.
+            $result = $product_manager->sendProductToYuju((int) $product_id, is_array($data) ? $data : []);
             return is_array($result) && !empty($result['success']);
         } catch (Exception $e) {
             $this->logger->error('Cola: Excepción en procesamiento inmediato', [
@@ -111,133 +180,393 @@ class YujuSyncQueue
     }
     
     /**
-     * Obtener lote de productos pendientes para procesar
-     * 
-     * @param int $batch_size Tamaño del lote
+     * Tamaño de lote efectivo: siempre respeta YUJU_BATCH_SIZE de configuración
+     * (AdminYujuConfiguration). Nunca supera ese tope aunque el caller pida más.
+     *
+     * Ese valor limita los envíos reales a la API Yuju por ejecución de cola.
+     *
+     * @param int|null $requested
+     *
+     * @return int
+     */
+    public function resolveBatchSize($requested = null)
+    {
+        if (!class_exists('YujuConfig', false)) {
+            require_once dirname(__FILE__) . '/../config/config.php';
+        }
+
+        $configured = (int) YujuConfig::get('YUJU_BATCH_SIZE', 100);
+        if ($configured < 1) {
+            $configured = 100;
+        }
+        if ($configured > 500) {
+            $configured = 500;
+        }
+
+        if ($requested === null || (int) $requested <= 0) {
+            return $configured;
+        }
+
+        return min((int) $requested, $configured);
+    }
+
+    /**
+     * Obtener lote de productos pendientes para procesar.
+     *
+     * @param int $batch_size Tamaño del lote (candidatos a evaluar)
+     * @param string|array|null $actions Filtro opcional: 'create', 'update', 'delete' o lista
+     *
      * @return array
      */
-    public function getNextBatch($batch_size = 100)
+    public function getNextBatch($batch_size = 100, $actions = null)
     {
+        $batch_size = (int) $batch_size;
+        if ($batch_size < 1) {
+            return [];
+        }
+
+        $actionFilter = '';
+        if ($actions !== null && $actions !== '') {
+            $list = is_array($actions) ? $actions : [$actions];
+            $safe = [];
+            foreach ($list as $action) {
+                $action = (string) $action;
+                if (in_array($action, ['create', 'update', 'delete'], true)) {
+                    $safe[] = '"' . pSQL($action) . '"';
+                }
+            }
+            if (!empty($safe)) {
+                $actionFilter = ' AND action IN (' . implode(',', $safe) . ')';
+            }
+        }
+
+        // Un solo item pendiente por producto+acción (el más antiguo),
+        // por si quedaron duplicados históricos antes del dedupe.
+        // Orden por tipo: delete → create → update (opción 5: carriles separados).
         $items = Db::getInstance()->executeS('
-            SELECT * 
-            FROM ' . _DB_PREFIX_ . 'yuju_sync_queue 
-            WHERE status = "pending"
-            AND attempts < max_attempts
-            ORDER BY priority DESC, created_at ASC
-            LIMIT ' . (int)$batch_size
+            SELECT q.*
+            FROM ' . _DB_PREFIX_ . 'yuju_sync_queue q
+            INNER JOIN (
+                SELECT MIN(id) AS id
+                FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+                WHERE status = "pending"
+                  AND attempts < max_attempts
+                  ' . $actionFilter . '
+                GROUP BY prestashop_product_id, action
+            ) t ON t.id = q.id
+            ORDER BY FIELD(q.action, "delete", "create", "update"),
+                     q.priority DESC,
+                     q.created_at ASC
+            LIMIT ' . $batch_size
         );
-        
+
         return $items ? $items : [];
     }
     
     /**
-     * Procesar un lote de productos
-     * 
-     * @param int $batch_size Tamaño del lote
+     * Procesar un lote de la cola respetando YUJU_BATCH_SIZE como tope de
+     * envíos reales a Yuju (no de items locales).
+     *
+     * Carriles (opción 5):
+     * 1) delete  2) create (throttle ~2 req/s)  3) update
+     * Los update sin cambios (skipped_no_diff) no consumen cupo de API.
+     *
+     * @param int|null $batch_size Tope solicitado; se recorta a la config
+     *
      * @return array Resultados del procesamiento
      */
-    public function processBatch($batch_size = 100)
+    public function processBatch($batch_size = null)
     {
         require_once dirname(__FILE__) . '/YujuProductManager.php';
         require_once dirname(__FILE__) . '/YujuApiClient.php';
-        
-        $batch = $this->getNextBatch($batch_size);
-        
-        if (empty($batch)) {
-            $this->logger->info('Cola: No hay elementos pendientes para procesar');
-            return [
-                'processed' => 0,
-                'success' => 0,
-                'failed' => 0
-            ];
-        }
-        
-        $this->logger->info('Cola: Procesando lote', [
-            'batch_size' => count($batch)
-        ]);
-        
+
+        $apiBudget = $this->resolveBatchSize($batch_size);
         $product_manager = new YujuProductManager();
-        
+
         $stats = [
             'processed' => 0,
             'success' => 0,
-            'failed' => 0
+            'failed' => 0,
+            'items' => [],
+            'phase_totals_ms' => [
+                'resolve_id_ms' => 0.0,
+                'dup_check_ms' => 0.0,
+                'prepare_ms' => 0.0,
+                'validate_ms' => 0.0,
+                'diff_ms' => 0.0,
+                'api_ms' => 0.0,
+                'persist_ms' => 0.0,
+            ],
+            'skipped_no_diff' => 0,
+            'api_calls' => 0,
+            'api_budget' => $apiBudget,
+            'by_action' => [
+                'delete' => ['processed' => 0, 'success' => 0, 'failed' => 0, 'api_calls' => 0],
+                'create' => ['processed' => 0, 'success' => 0, 'failed' => 0, 'api_calls' => 0],
+                'update' => ['processed' => 0, 'success' => 0, 'failed' => 0, 'api_calls' => 0, 'skipped_no_diff' => 0],
+            ],
+            'stopped_at_budget' => false,
         ];
-        
-        foreach ($batch as $item) {
-            $stats['processed']++;
-            
-            // Marcar como procesando
-            $this->updateQueueStatus($item['id'], 'processing');
 
-            // Reflejar el estado intermedio en yuju_product_status para que la UI
-            // muestre "Actualizando…" / "Creando…" / "Eliminando…" mientras se
-            // procesa el item en la cola (entre "En cola" y "Sincronizado").
-            $this->setProductStatusForQueueAction(
-                (int) $item['prestashop_product_id'],
-                (string) $item['action']
-            );
-            
-            try {
-                $data = json_decode($item['data'], true);
-                if (!is_array($data)) {
-                    $data = [];
-                }
-                $result = false;
-                $sync_duration = 0;
+        $this->logger->info('Cola: Procesando lote (tope envíos Yuju)', [
+            'api_budget' => $apiBudget,
+            'configured_batch_size' => $apiBudget,
+        ]);
 
-                if ($item['action'] === 'delete') {
-                    $start_time = microtime(true);
-                    $del = $product_manager->removeProductFromYujuAndLocalStatus((int) $item['prestashop_product_id']);
-                    $sync_duration = microtime(true) - $start_time;
-                    $result = !empty($del['success']);
-                    if (!$result) {
-                        $this->handleQueueError($item['id'], $del['message'] ?? 'Error al eliminar en Yuju');
-                        ++$stats['failed'];
-                        continue;
-                    }
-                } elseif ($item['action'] === 'create') {
-                    $start_time = microtime(true);
-                    $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
-                    $sync_duration = microtime(true) - $start_time;
-                    $result = is_array($send_res) && !empty($send_res['success']);
-                } else {
-                    // update (o cola antigua): usar SIEMPRE el flujo centralizado para aplicar
-                    // validaciones de duplicados/mapeo/campos obligatorios antes de enviar a Yuju.
-                    $start_time = microtime(true);
-                    $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
-                    $sync_duration = microtime(true) - $start_time;
-                    $result = is_array($send_res) && !empty($send_res['success']);
+        // Mín. 500 ms entre llamadas reales a Yuju (límite ~2 req/s).
+        $apiGapUs = 500000;
+        $lastApiAt = null;
+
+        foreach (['delete', 'create', 'update'] as $lane) {
+            while ($stats['api_calls'] < $apiBudget) {
+                $remainingBudget = $apiBudget - $stats['api_calls'];
+                // En update se pueden drenar muchos skip sin API: traer más candidatos.
+                $fetchLimit = ($lane === 'update')
+                    ? min(max($remainingBudget * 5, $remainingBudget), 500)
+                    : $remainingBudget;
+
+                $batch = $this->getNextBatch($fetchLimit, $lane);
+                if (empty($batch)) {
+                    break;
                 }
-                
-                if ($result) {
-                    $this->updateQueueStatus($item['id'], 'completed');
-                    $stats['success']++;
-                    
-                    $this->logger->info('Cola: Producto procesado exitosamente', [
-                        'queue_id' => $item['id'],
-                        'product_id' => $item['prestashop_product_id'],
-                        'action' => $item['action']
-                    ]);
-                } else {
-                    $this->handleQueueError($item['id'], 'Error al procesar producto');
-                    $stats['failed']++;
-                }
-            } catch (Exception $e) {
-                $this->handleQueueError($item['id'], $e->getMessage());
-                $stats['failed']++;
-                
-                $this->logger->error('Cola: Error procesando producto', [
-                    'queue_id' => $item['id'],
-                    'product_id' => $item['prestashop_product_id'],
-                    'error' => $e->getMessage()
+
+                $this->logger->info('Cola: Carril ' . $lane, [
+                    'candidates' => count($batch),
+                    'api_remaining' => $remainingBudget,
                 ]);
+
+                $apiBeforeLaneChunk = (int) $stats['api_calls'];
+                $processedBefore = (int) $stats['processed'];
+
+                foreach ($batch as $item) {
+                    if ($stats['api_calls'] >= $apiBudget) {
+                        $stats['stopped_at_budget'] = true;
+                        break 3;
+                    }
+
+                    $this->processQueueItem($item, $product_manager, $stats, $lastApiAt, $apiGapUs);
+                }
+
+                // Evitar bucle infinito si no avanzamos (no debería ocurrir).
+                if ((int) $stats['processed'] === $processedBefore
+                    && (int) $stats['api_calls'] === $apiBeforeLaneChunk
+                ) {
+                    break;
+                }
+
+                // Create/delete: un fetch basta para el cupo restante.
+                // Update: seguir si aún hay cupo (más skips/updates pendientes).
+                if ($lane !== 'update') {
+                    break;
+                }
+            }
+
+            if ($stats['api_calls'] >= $apiBudget) {
+                $stats['stopped_at_budget'] = true;
+                break;
             }
         }
-        
-        $this->logger->info('Cola: Lote procesado', $stats);
-        
+
+        if ($stats['processed'] === 0) {
+            $this->logger->info('Cola: No hay elementos pendientes para procesar');
+        }
+
+        $this->logger->info('Cola: Lote procesado', [
+            'processed' => $stats['processed'],
+            'success' => $stats['success'],
+            'failed' => $stats['failed'],
+            'skipped_no_diff' => $stats['skipped_no_diff'],
+            'api_calls' => $stats['api_calls'],
+            'api_budget' => $stats['api_budget'],
+            'stopped_at_budget' => $stats['stopped_at_budget'],
+            'by_action' => $stats['by_action'],
+            'phase_totals_ms' => $stats['phase_totals_ms'],
+        ]);
+
         return $stats;
+    }
+
+    /**
+     * Procesa un item de cola y actualiza $stats.
+     * Respeta throttle entre envíos reales a Yuju.
+     *
+     * @param array $item
+     * @param YujuProductManager $product_manager
+     * @param array $stats
+     * @param float|null $lastApiAt
+     * @param int $apiGapUs
+     *
+     * @return void
+     */
+    private function processQueueItem($item, $product_manager, array &$stats, &$lastApiAt, $apiGapUs)
+    {
+        $action = (string) $item['action'];
+        if (!isset($stats['by_action'][$action])) {
+            $action = 'update';
+        }
+
+        $stats['processed']++;
+        $stats['by_action'][$action]['processed']++;
+
+        $this->updateQueueStatus($item['id'], 'processing');
+        $this->setProductStatusForQueueAction(
+            (int) $item['prestashop_product_id'],
+            $action
+        );
+
+        $itemDetail = [
+            'queue_id' => (int) $item['id'],
+            'product_id' => (int) $item['prestashop_product_id'],
+            'queue_action' => $action,
+            'ok' => false,
+            'duration_s' => 0,
+            'api_action' => $action,
+            'skipped_no_diff' => false,
+            'timings' => [],
+            'diff_fields' => null,
+            'had_baseline' => null,
+            'error' => null,
+        ];
+
+        try {
+            $data = json_decode($item['data'], true);
+            if (!is_array($data)) {
+                $data = [];
+            }
+            if (empty($data['origin'])) {
+                $data['origin'] = 'cola';
+            }
+            $result = false;
+            $sync_duration = 0;
+            $send_res = null;
+            $madeApiCall = false;
+
+            if ($action === 'delete') {
+                $this->waitForApiGap($lastApiAt, $apiGapUs);
+                $start_time = microtime(true);
+                $del = $product_manager->removeProductFromYujuAndLocalStatus((int) $item['prestashop_product_id']);
+                $sync_duration = microtime(true) - $start_time;
+                $lastApiAt = microtime(true);
+                $madeApiCall = true;
+                $result = !empty($del['success']);
+                $itemDetail['duration_s'] = round($sync_duration, 3);
+                $itemDetail['api_action'] = 'delete';
+                if (!$result) {
+                    $itemDetail['error'] = $del['message'] ?? 'Error al eliminar en Yuju';
+                    $stats['items'][] = $itemDetail;
+                    $this->handleQueueError($item['id'], $del['message'] ?? 'Error al eliminar en Yuju');
+                    ++$stats['failed'];
+                    ++$stats['by_action'][$action]['failed'];
+                    ++$stats['api_calls'];
+                    ++$stats['by_action'][$action]['api_calls'];
+
+                    return;
+                }
+            } else {
+                // create: siempre throttle antes (1 request = 1 envío).
+                // update: throttle solo si el gap vs la última API aún no se cumplió;
+                // los skip sin diff no renuevan lastApiAt, así no frenan el drenaje.
+                if ($action === 'create' || $lastApiAt !== null) {
+                    $this->waitForApiGap($lastApiAt, $apiGapUs);
+                }
+                $start_time = microtime(true);
+                $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
+                $sync_duration = microtime(true) - $start_time;
+                $result = is_array($send_res) && !empty($send_res['success']);
+            }
+
+            $itemDetail['duration_s'] = round($sync_duration, 3);
+            if (is_array($send_res)) {
+                $itemDetail['api_action'] = isset($send_res['action']) ? (string) $send_res['action'] : $action;
+                $itemDetail['skipped_no_diff'] = !empty($send_res['skipped_no_diff']);
+                $itemDetail['timings'] = isset($send_res['timings']) && is_array($send_res['timings']) ? $send_res['timings'] : [];
+                $itemDetail['diff_fields'] = isset($send_res['diff_fields']) ? $send_res['diff_fields'] : null;
+                $itemDetail['had_baseline'] = isset($send_res['had_baseline']) ? $send_res['had_baseline'] : null;
+                if (!$result) {
+                    $itemDetail['error'] = $send_res['error'] ?? ($send_res['message'] ?? 'Error');
+                }
+                foreach ($stats['phase_totals_ms'] as $phaseKey => $_) {
+                    if (isset($itemDetail['timings'][$phaseKey])) {
+                        $stats['phase_totals_ms'][$phaseKey] += (float) $itemDetail['timings'][$phaseKey];
+                    }
+                }
+                if (!empty($send_res['skipped_no_diff'])) {
+                    ++$stats['skipped_no_diff'];
+                    if (isset($stats['by_action'][$action]['skipped_no_diff'])) {
+                        ++$stats['by_action'][$action]['skipped_no_diff'];
+                    }
+                    // Skip local: no consume cupo YUJU_BATCH_SIZE ni renueva el throttle.
+                } elseif (!empty($itemDetail['timings']['api_ms']) && (float) $itemDetail['timings']['api_ms'] > 0) {
+                    $madeApiCall = true;
+                    $lastApiAt = microtime(true);
+                } elseif ($result && in_array($action, ['create', 'update'], true)) {
+                    // Éxito sin timings.api_ms: contar como envío real a Yuju.
+                    $madeApiCall = true;
+                    $lastApiAt = microtime(true);
+                } elseif (!$result && !empty($itemDetail['timings']['api_ms']) && (float) $itemDetail['timings']['api_ms'] > 0) {
+                    $madeApiCall = true;
+                    $lastApiAt = microtime(true);
+                }
+            }
+
+            if ($madeApiCall) {
+                ++$stats['api_calls'];
+                ++$stats['by_action'][$action]['api_calls'];
+            }
+
+            if ($result) {
+                $this->updateQueueStatus($item['id'], 'completed');
+                $stats['success']++;
+                $stats['by_action'][$action]['success']++;
+                $itemDetail['ok'] = true;
+
+                $this->logger->info('Cola: Producto procesado exitosamente', [
+                    'queue_id' => $item['id'],
+                    'product_id' => $item['prestashop_product_id'],
+                    'action' => $action,
+                    'duration_s' => round($sync_duration, 3),
+                    'skipped_no_diff' => $itemDetail['skipped_no_diff'],
+                    'api_action' => $itemDetail['api_action'],
+                    'timings' => $itemDetail['timings'],
+                ]);
+            } else {
+                $this->handleQueueError($item['id'], $itemDetail['error'] ?: 'Error al procesar producto');
+                $stats['failed']++;
+                $stats['by_action'][$action]['failed']++;
+            }
+            $stats['items'][] = $itemDetail;
+        } catch (Exception $e) {
+            $itemDetail['error'] = $e->getMessage();
+            $stats['items'][] = $itemDetail;
+            $this->handleQueueError($item['id'], $e->getMessage());
+            $stats['failed']++;
+            $stats['by_action'][$action]['failed']++;
+
+            $this->logger->error('Cola: Error procesando producto', [
+                'queue_id' => $item['id'],
+                'product_id' => $item['prestashop_product_id'],
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Espera el gap mínimo entre llamadas HTTP a Yuju.
+     *
+     * @param float|null $lastApiAt
+     * @param int $apiGapUs
+     *
+     * @return void
+     */
+    private function waitForApiGap(&$lastApiAt, $apiGapUs)
+    {
+        if ($lastApiAt === null) {
+            return;
+        }
+        $elapsedUs = (int) ((microtime(true) - $lastApiAt) * 1000000);
+        if ($elapsedUs < $apiGapUs) {
+            usleep($apiGapUs - $elapsedUs);
+        }
     }
     
     /**
@@ -324,10 +653,20 @@ class YujuSyncQueue
                 SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN status = "processing" THEN 1 ELSE 0 END) as processing,
                 SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed
+                SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = "pending" AND action = "create" THEN 1 ELSE 0 END) as pending_create,
+                SUM(CASE WHEN status = "pending" AND action = "update" THEN 1 ELSE 0 END) as pending_update,
+                SUM(CASE WHEN status = "pending" AND action = "delete" THEN 1 ELSE 0 END) as pending_delete
             FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
         ');
-        
+
+        if (!is_array($stats)) {
+            $stats = [];
+        }
+        foreach (['total', 'pending', 'processing', 'completed', 'failed', 'pending_create', 'pending_update', 'pending_delete'] as $key) {
+            $stats[$key] = isset($stats[$key]) ? (int) $stats[$key] : 0;
+        }
+
         return $stats;
     }
     

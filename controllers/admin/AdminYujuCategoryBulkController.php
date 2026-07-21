@@ -18,11 +18,15 @@ if (!defined('_PS_VERSION_')) {
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductManager.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSyncQueue.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/config/config.php';
 
 class AdminYujuCategoryBulkController extends ModuleAdminController
 {
     /** @var YujuProductManager */
     protected $product_manager;
+
+    /** @var array<int, array{reference:string,name:string}> */
+    protected $bulkProductInfoCache = [];
 
     public function __construct()
     {
@@ -47,7 +51,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     public function initContent()
     {
         $idCategory = (int) Tools::getValue('id_category', 0);
-        $search = trim((string) Tools::getValue('q', ''));
+        $overviewFilters = $this->getOverviewFiltersFromRequest();
 
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuCategoryBulk',
@@ -55,15 +59,31 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             'token' => $this->token,
             'yuju_logs_admin_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
             'product_status_url' => $this->context->link->getAdminLink('AdminYujuProductStatus', true),
+            'product_status_token' => Tools::getAdminTokenLite('AdminYujuProductStatus'),
+            'yuju_product_info_ajax_url' => $this->context->link->getAdminLink('AdminYujuProductStatus', true),
+            'yuju_product_info_token' => Tools::getAdminTokenLite('AdminYujuProductStatus'),
+            'product_admin_url' => $this->context->link->getAdminLink('AdminProducts', true),
             'category_mapping_url' => $this->context->link->getAdminLink('AdminYujuCategoryMapping', true),
             'id_category' => $idCategory,
-            'search_q' => $search,
-            'overview_rows' => $idCategory > 0 ? [] : $this->getCategoryOverviewRows($search),
+            'search_q' => $overviewFilters['q'],
+            'overview_filters' => $overviewFilters,
+            'overview_filters_active' => $this->overviewFiltersAreActive($overviewFilters),
+            'overview_sort_links' => $idCategory > 0 ? [] : $this->buildOverviewSortLinks($overviewFilters),
+            'overview_rows' => $idCategory > 0 ? [] : $this->getCategoryOverviewRows($overviewFilters),
+            'overview_sku_hits' => [],
             'detail' => $idCategory > 0 ? $this->buildCategoryDetail($idCategory) : null,
             'yuju_category_options' => $this->getYujuCategoryOptions(),
             'yuju_sync_history_table_missing' => !$this->isYujuProductSyncHistoryTablePresent(),
             'yuju_sync_history_table_name' => _DB_PREFIX_ . 'yuju_product_sync_history',
+            'yuju_enable_bulk_resend_pending' => (int) YujuConfig::get('YUJU_ENABLE_BULK_RESEND_PENDING', 0) === 1,
         ]);
+
+        if ($idCategory <= 0 && $overviewFilters['sku'] !== '') {
+            $this->context->smarty->assign(
+                'overview_sku_hits',
+                $this->findProductsBySkuForOverview($overviewFilters['sku'], 12)
+            );
+        }
 
         parent::initContent();
         $this->setTemplate('category_bulk.tpl');
@@ -83,6 +103,9 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 case 'categoryBulkProductIds':
                     $this->ajaxProcessCategoryBulkProductIds();
                     break;
+                case 'categoryBulkMultiProductIds':
+                    $this->ajaxProcessCategoryBulkMultiProductIds();
+                    break;
                 case 'createSyncHistoryTable':
                     $this->ajaxProcessCreateSyncHistoryTable();
                     break;
@@ -91,6 +114,9 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                     break;
                 case 'categoryBulkErrorDetails':
                     $this->ajaxProcessCategoryBulkErrorDetails();
+                    break;
+                case 'categoryBulkResendChunk':
+                    $this->ajaxProcessCategoryBulkResendChunk();
                     break;
                 default:
                     break;
@@ -176,20 +202,13 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             return;
         }
 
+        // Varias categorías PS pueden compartir la misma categoría Yuju.
+        // Solo se exige unicidad por prestashop_category_id.
+        $this->ensureCategoryMappingAllowsSharedYujuCategory();
+
         $exists = (int) Db::getInstance()->getValue(
             'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE prestashop_category_id = ' . (int) $psCategoryId
         );
-        $duplicateYuju = (int) Db::getInstance()->getValue(
-            'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"'
-            . ($exists > 0 ? ' AND id != ' . (int) $exists : '')
-        );
-        if ($duplicateYuju > 0) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Esa categoría de Yuju ya está mapeada con otra categoría de PrestaShop.',
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
 
         $data = [
             'prestashop_category_id' => (int) $psCategoryId,
@@ -211,6 +230,18 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 ? 'Mapeo guardado correctamente.'
                 : ('No se pudo guardar el mapeo. ' . Db::getInstance()->getMsgError()),
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Varias categorías PrestaShop pueden apuntar a la misma categoría Yuju.
+     * Quita el UNIQUE antiguo sobre yuju_category_id si aún existe en BD.
+     *
+     * @return void
+     */
+    protected function ensureCategoryMappingAllowsSharedYujuCategory()
+    {
+        require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
+        YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
     }
 
     /**
@@ -368,6 +399,103 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     }
 
     /**
+     * JSON: reenvía create de productos en «En espera» ≥1h sin webhook.
+     *
+     * @return void
+     */
+    protected function ajaxProcessCategoryBulkResendChunk()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $logsUrl = $this->context->link->getAdminLink('AdminYujuLogs', true);
+
+        if ((int) YujuConfig::get('YUJU_ENABLE_BULK_RESEND_PENDING', 0) !== 1) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'La acción masiva «Enviar de nuevo» está deshabilitada en la configuración del módulo.',
+                'logs_url' => $logsUrl,
+            ], JSON_UNESCAPED_UNICODE);
+
+            return;
+        }
+
+        $productIds = [];
+        $json = (string) Tools::getValue('product_ids_json', '');
+        if ($json !== '') {
+            $decoded = json_decode($json, true);
+            if (is_array($decoded)) {
+                $productIds = array_values(array_unique(array_filter(array_map('intval', $decoded), static function ($id) {
+                    return $id > 0;
+                })));
+            }
+        }
+
+        if ($productIds === []) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No se recibieron productos en este lote.',
+                'logs_url' => $logsUrl,
+            ], JSON_UNESCAPED_UNICODE);
+
+            return;
+        }
+
+        $successCount = 0;
+        $skippedCount = 0;
+        $errorCount = 0;
+        $errors = [];
+
+        $this->preloadBulkProductInfo($productIds);
+
+        foreach ($productIds as $productId) {
+            try {
+                $result = $this->product_manager->resendPendingCreate((int) $productId);
+                if (!is_array($result)) {
+                    ++$errorCount;
+                    $errors[] = $this->buildBulkErrorItem((int) $productId, 'Respuesta inválida al reenviar');
+                    continue;
+                }
+                if (!empty($result['success'])) {
+                    ++$successCount;
+                    continue;
+                }
+                if (!empty($result['too_early'])) {
+                    ++$skippedCount;
+                    continue;
+                }
+                ++$errorCount;
+                $errors[] = $this->buildBulkErrorItem(
+                    (int) $productId,
+                    (string) ($result['message'] ?? 'No se pudo reenviar')
+                );
+            } catch (Exception $e) {
+                ++$errorCount;
+                $errors[] = $this->buildBulkErrorItem((int) $productId, $e->getMessage());
+            }
+        }
+
+        $message = sprintf(
+            '%d reenviado(s). %d omitido(s) (<1h o no elegibles). %d error(es).',
+            $successCount,
+            $skippedCount,
+            $errorCount
+        );
+
+        echo json_encode([
+            'success' => ($successCount > 0 || $skippedCount > 0) && $errorCount === 0,
+            'message' => $message,
+            'logs_url' => $logsUrl,
+            'errors' => $errors,
+            'details' => [
+                'success' => $successCount,
+                'skipped' => $skippedCount,
+                'errors' => $errorCount,
+                'bulk_action' => 'resend_stale',
+            ],
+            'reload' => $successCount > 0,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
      * @param string $errorMessage
      * @param string $status
      *
@@ -425,6 +553,82 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             'product_ids' => $ids,
             'next_offset' => $offset + count($ids),
             'has_more' => $hasMore,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * JSON: IDs únicos de productos activos en varias categorías (paginado).
+     * Input: category_ids_json=[1,2,3], segment, offset, limit
+     */
+    protected function ajaxProcessCategoryBulkMultiProductIds()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $categoryIds = [];
+        $json = (string) Tools::getValue('category_ids_json', '');
+        if ($json !== '') {
+            $decoded = json_decode($json, true);
+            if (is_array($decoded)) {
+                $categoryIds = array_values(array_unique(array_filter(array_map('intval', $decoded), static function ($id) {
+                    return $id > 0;
+                })));
+            }
+        }
+
+        $segment = (string) Tools::getValue('segment', 'all');
+        $offset = max(0, (int) Tools::getValue('offset', 0));
+        $limit = min(800, max(50, (int) Tools::getValue('limit', 400)));
+
+        if ($categoryIds === []) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Seleccione al menos una categoría.',
+            ], JSON_UNESCAPED_UNICODE);
+
+            return;
+        }
+
+        // Cap defensivo: no más de 50 categorías por petición
+        if (count($categoryIds) > 50) {
+            $categoryIds = array_slice($categoryIds, 0, 50);
+        }
+
+        $idLang = (int) $this->context->language->id;
+        $segWhere = $this->getSegmentWhereSql($segment);
+        $ypsJoin = $this->getYpsJoinSql();
+        $idsSql = implode(',', $categoryIds);
+
+        $sql = 'SELECT DISTINCT p.id_product
+            FROM ' . _DB_PREFIX_ . 'category_product cp
+            INNER JOIN ' . _DB_PREFIX_ . 'product p ON p.id_product = cp.id_product AND p.active = 1
+            LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                ON p.id_product = pl.id_product AND pl.id_lang = ' . $idLang . ' AND pl.id_shop = p.id_shop_default
+            ' . $ypsJoin . '
+            WHERE cp.id_category IN (' . $idsSql . ')' . $segWhere . '
+            ORDER BY p.id_product DESC
+            LIMIT ' . (int) $offset . ', ' . (int) ($limit + 1);
+
+        $rows = Db::getInstance()->executeS($sql);
+        $ids = [];
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                if (!empty($r['id_product'])) {
+                    $ids[] = (int) $r['id_product'];
+                }
+            }
+        }
+
+        $hasMore = count($ids) > $limit;
+        if ($hasMore) {
+            $ids = array_slice($ids, 0, $limit);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'product_ids' => $ids,
+            'next_offset' => $offset + count($ids),
+            'has_more' => $hasMore,
+            'category_count' => count($categoryIds),
         ], JSON_UNESCAPED_UNICODE);
     }
 
@@ -493,6 +697,27 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             $bulkAction = 'create';
         }
 
+        // Create: si hay categoría de contexto, exigir mapeo (propio o padre) antes de validar producto a producto
+        if ($bulkAction === 'create' && $contextCategoryId > 0) {
+            $coverage = $this->getCategoryOrAncestorMappingCoverage($contextCategoryId);
+            if (empty($coverage['covered'])) {
+                $mapUrl = $this->context->link->getAdminLink('AdminYujuCategoryMapping', true)
+                    . '&openModal=1&prefill_ps_category_id=' . $contextCategoryId;
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'La categoría PrestaShop #' . $contextCategoryId
+                        . ' no tiene mapeo Yuju (ni por herencia de padre). '
+                        . 'Mapee la categoría antes de crear/sincronizar.',
+                    'logs_url' => $logsUrl,
+                    'error_code' => 'category_not_mapped',
+                    'id_category' => (int) $contextCategoryId,
+                    'map_url' => $mapUrl,
+                ], JSON_UNESCAPED_UNICODE);
+
+                return;
+            }
+        }
+
         $deleteOk = (string) Tools::getValue('bulk_delete_confirmed', '') === '1';
         if ($bulkAction === 'delete' && !$deleteOk) {
             echo json_encode([
@@ -512,16 +737,16 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             return;
         }
 
-        // 1) Omitir productos que ya están en error desde el inicio del lote
-        $initialErrorIds = $this->getProductIdsWithInitialErrorStatus($productIds);
-        if (!empty($initialErrorIds)) {
-            $productIds = array_values(array_diff($productIds, $initialErrorIds));
-        }
+        // 1) Create/Update: reintentar también productos que ya están en error
+        //    (p. ej. fallaron antes por falta de mapeo). Solo informamos cuántos se reintentan.
+        $this->preloadBulkProductInfo($productIds);
+        $initialErrorRows = $this->getProductErrorSummaries($productIds);
+        $initialErrorIds = array_map(static function ($row) {
+            return (int) $row['id_product'];
+        }, $initialErrorRows);
 
         $skippedReasons = [];
-        if (!empty($initialErrorIds)) {
-            $skippedReasons[] = count($initialErrorIds) . ' omitido(s) por estado inicial con error';
-        }
+        $skippedProductDetails = [];
 
         // 2) Si quedan conflictos de SKU, omitir solo esos y continuar
         $conflicts = $this->product_manager->getDuplicateSkuConflictsForProductIds($productIds);
@@ -540,26 +765,58 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             }
             if (!empty($conflictIds)) {
                 $productIds = array_values(array_diff($productIds, array_keys($conflictIds)));
-                $skippedReasons[] = count($conflictIds) . ' omitido(s) por SKU duplicado';
+                $skippedReasons[] = count($conflictIds) . ' omitido(s) por referencia/SKU duplicada en el catálogo PrestaShop';
+                foreach (array_keys($conflictIds) as $cid) {
+                    $info = $this->getBulkProductInfo((int) $cid);
+                    $skippedProductDetails[] = [
+                        'id_product' => (int) $cid,
+                        'reference' => (string) ($info['reference'] ?? ''),
+                        'name' => (string) ($info['name'] ?? ''),
+                        'reason' => 'SKU/referencia duplicada en PrestaShop',
+                        'last_error' => 'No se puede enviar mientras exista otra ficha con la misma referencia.',
+                        'message' => 'No se puede enviar mientras exista otra ficha con la misma referencia.',
+                    ];
+                }
             }
         }
 
         if ($productIds === []) {
+            $msg = 'No se procesó ningún producto.';
+            if (!empty($skippedReasons)) {
+                $msg .= "\n\nMotivo:\n• " . implode("\n• ", $skippedReasons);
+            }
+            if (!empty($initialErrorRows) && empty($conflicts)) {
+                $msg .= "\n\nEstos productos tenían error de un intento anterior. Corrija el problema (mapeo, descripción, etc.) y vuelva a intentar Crear.";
+            }
             echo json_encode([
                 'success' => false,
-                'message' => 'No quedaron productos elegibles para procesar. ' . implode('. ', $skippedReasons) . '.',
+                'message' => $msg,
                 'logs_url' => $logsUrl,
-                'error_code' => !empty($conflicts) ? 'duplicate_prestashop_sku' : null,
+                'error_code' => !empty($conflicts) ? 'duplicate_prestashop_sku' : 'no_eligible_products',
                 'duplicate_sku_conflicts' => !empty($conflicts) ? $conflicts : [],
+                'skipped_products' => $skippedProductDetails,
+                'previous_error_products' => $initialErrorRows,
+                'errors' => array_map(function ($row) {
+                    return $this->buildBulkErrorItem(
+                        (int) ($row['id_product'] ?? 0),
+                        trim((string) ($row['last_error'] ?? '')) !== ''
+                            ? (string) $row['last_error']
+                            : 'Error previo sin detalle'
+                    );
+                }, $initialErrorRows),
             ], JSON_UNESCAPED_UNICODE);
             return;
         }
 
         $payload = $this->runBulkSendForProductIds($productIds, $bulkAction, $logsUrl, $contextCategoryId);
+        if (!empty($initialErrorIds)) {
+            $payload['retried_previous_errors'] = count($initialErrorIds);
+            $payload['previous_error_products'] = $initialErrorRows;
+        }
         if (!empty($skippedReasons)) {
             $suffix = ' Omitidos: ' . implode(' | ', $skippedReasons) . '.';
             $payload['message'] = (isset($payload['message']) ? (string) $payload['message'] : '') . $suffix;
-            $payload['initial_error_skipped'] = $initialErrorIds;
+            $payload['skipped_products'] = $skippedProductDetails;
             if (!empty($conflicts)) {
                 $payload['error_code'] = 'duplicate_prestashop_sku';
                 $payload['duplicate_sku_conflicts'] = $conflicts;
@@ -569,13 +826,13 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     }
 
     /**
-     * IDs con estado inicial en error para omitir antes de procesar lote.
+     * Resumen de productos en error (para mensajes claros / UI).
      *
      * @param int[] $productIds
      *
-     * @return int[]
+     * @return array<int, array{id_product:int,reference:string,name:string,sync_status:string,last_error:string}>
      */
-    protected function getProductIdsWithInitialErrorStatus(array $productIds)
+    protected function getProductErrorSummaries(array $productIds)
     {
         $productIds = array_values(array_unique(array_map('intval', $productIds)));
         $productIds = array_values(array_filter($productIds, static function ($id) {
@@ -585,10 +842,19 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             return [];
         }
 
-        $sql = 'SELECT DISTINCT prestashop_product_id
-                FROM ' . _DB_PREFIX_ . 'yuju_product_status
-                WHERE prestashop_product_id IN (' . implode(',', $productIds) . ')
-                  AND sync_status IN ("error", "synced_with_errors")';
+        $idLang = (int) $this->context->language->id;
+        $sql = 'SELECT yps.prestashop_product_id AS id_product,
+                       yps.sync_status,
+                       yps.last_error,
+                       p.reference,
+                       pl.name
+                FROM ' . _DB_PREFIX_ . 'yuju_product_status yps
+                INNER JOIN ' . _DB_PREFIX_ . 'product p ON (p.id_product = yps.prestashop_product_id)
+                LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                    ON (pl.id_product = p.id_product AND pl.id_lang = ' . (int) $idLang . ')
+                WHERE yps.prestashop_product_id IN (' . implode(',', $productIds) . ')
+                  AND yps.sync_status IN ("error", "synced_with_errors")
+                ORDER BY yps.prestashop_product_id ASC';
         $rows = Db::getInstance()->executeS($sql);
         if (!is_array($rows)) {
             return [];
@@ -596,13 +862,112 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         $out = [];
         foreach ($rows as $row) {
-            $pid = isset($row['prestashop_product_id']) ? (int) $row['prestashop_product_id'] : 0;
-            if ($pid > 0) {
-                $out[] = $pid;
+            $pid = (int) ($row['id_product'] ?? 0);
+            if ($pid <= 0) {
+                continue;
             }
+            $out[] = [
+                'id_product' => $pid,
+                'reference' => (string) ($row['reference'] ?? ''),
+                'name' => (string) ($row['name'] ?? ''),
+                'sync_status' => (string) ($row['sync_status'] ?? ''),
+                'last_error' => (string) ($row['last_error'] ?? ''),
+            ];
         }
 
-        return array_values(array_unique($out));
+        return $out;
+    }
+
+    /**
+     * Precarga referencia/nombre de productos para errores del lote.
+     *
+     * @param int[] $productIds
+     *
+     * @return void
+     */
+    protected function preloadBulkProductInfo(array $productIds)
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+        if ($productIds === []) {
+            return;
+        }
+        $idLang = (int) $this->context->language->id;
+        $rows = Db::getInstance()->executeS(
+            'SELECT p.id_product, p.reference, pl.name
+             FROM `' . _DB_PREFIX_ . 'product` p
+             LEFT JOIN `' . _DB_PREFIX_ . 'product_lang` pl
+                ON pl.id_product = p.id_product AND pl.id_lang = ' . (int) $idLang . '
+             WHERE p.id_product IN (' . implode(',', $productIds) . ')'
+        );
+        if (!is_array($rows)) {
+            return;
+        }
+        foreach ($rows as $row) {
+            $pid = (int) ($row['id_product'] ?? 0);
+            if ($pid <= 0) {
+                continue;
+            }
+            $this->bulkProductInfoCache[$pid] = [
+                'reference' => (string) ($row['reference'] ?? ''),
+                'name' => (string) ($row['name'] ?? ''),
+            ];
+        }
+    }
+
+    /**
+     * @param int $productId
+     *
+     * @return array{reference:string,name:string}
+     */
+    protected function getBulkProductInfo($productId)
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return ['reference' => '', 'name' => ''];
+        }
+        if (!isset($this->bulkProductInfoCache[$productId])) {
+            $this->preloadBulkProductInfo([$productId]);
+        }
+        if (!isset($this->bulkProductInfoCache[$productId])) {
+            $this->bulkProductInfoCache[$productId] = ['reference' => '', 'name' => ''];
+        }
+
+        return $this->bulkProductInfoCache[$productId];
+    }
+
+    /**
+     * Error estructurado para la tabla del modal (ID, referencia, nombre, mensaje).
+     *
+     * @param int $productId
+     * @param string $message
+     *
+     * @return array{id_product:int,reference:string,name:string,message:string}
+     */
+    protected function buildBulkErrorItem($productId, $message)
+    {
+        $productId = (int) $productId;
+        $info = $this->getBulkProductInfo($productId);
+
+        return [
+            'id_product' => $productId,
+            'reference' => (string) ($info['reference'] ?? ''),
+            'name' => (string) ($info['name'] ?? ''),
+            'message' => (string) $message,
+        ];
+    }
+
+    /**
+     * @deprecated Usar getProductErrorSummaries(); se mantiene por compatibilidad interna.
+     *
+     * @param int[] $productIds
+     *
+     * @return int[]
+     */
+    protected function getProductIdsWithInitialErrorStatus(array $productIds)
+    {
+        return array_map(static function ($row) {
+            return (int) $row['id_product'];
+        }, $this->getProductErrorSummaries($productIds));
     }
 
     /**
@@ -612,9 +977,26 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     {
         $productCount = count($productIds);
         $contextCategoryId = (int) $contextCategoryId;
-        $createOptions = $contextCategoryId > 0 ? ['preferred_ps_category_id' => $contextCategoryId] : [];
+        $createOptions = [
+            'origin' => 'category_bulk',
+        ];
+        if ($contextCategoryId > 0) {
+            $createOptions['preferred_ps_category_id'] = $contextCategoryId;
+        }
+        // Multi-categoría desde overview: preferir la primera seleccionada como pista de mapeo
+        $multiCatJson = (string) Tools::getValue('category_ids_json', '');
+        if ($multiCatJson !== '' && empty($createOptions['preferred_ps_category_id'])) {
+            $multiDecoded = json_decode($multiCatJson, true);
+            if (is_array($multiDecoded) && !empty($multiDecoded)) {
+                $first = (int) $multiDecoded[0];
+                if ($first > 0) {
+                    $createOptions['preferred_ps_category_id'] = $first;
+                }
+            }
+        }
 
         if ($productCount > 5) {
+            $this->preloadBulkProductInfo($productIds);
             $syncQueue = new YujuSyncQueue();
             $queuedCount = 0;
             $skippedCount = 0;
@@ -627,44 +1009,60 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                         'SELECT yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
                         WHERE prestashop_product_id = ' . (int) $productId
                     );
-                    $hasYujuLink = $this->yujuStatusRowHasProductLink($status);
+                    $resolvedYujuId = $this->product_manager->resolveExistingYujuProductId((int) $productId);
+                    $hasYujuLink = $this->yujuStatusRowHasProductLink($status) || ($resolvedYujuId !== '');
 
                     if ($bulkAction === 'delete') {
                         if (!$hasYujuLink) {
                             ++$skippedCount;
                             continue;
                         }
-                        if (!$this->ensureProductQueuedRowForYuju((int) $productId)) {
+                        if (!$this->ensureProductQueuedRowForYuju((int) $productId, false)) {
                             ++$errorCount;
-                            $errors[] = 'Producto ID ' . (int) $productId . ': no válido o no encontrado en PrestaShop';
+                            $errors[] = $this->buildBulkErrorItem((int) $productId, 'no válido o no encontrado en PrestaShop');
                             continue;
                         }
                         $result = $syncQueue->addToQueue((int) $productId, 'delete', 'normal', []);
-                    } elseif ($bulkAction === 'create') {
+                    } elseif ($bulkAction === 'create' && !$hasYujuLink) {
                         $validation = $this->product_manager->validateProductForYujuCreate((int) $productId, $createOptions);
                         if (empty($validation['success'])) {
                             $validationMsg = implode(' ', $validation['errors']);
                             $this->product_manager->updateProductStatus((int) $productId, 'error', $validationMsg, null);
                             $this->product_manager->logValidationErrorHistory((int) $productId, $validationMsg, 'create');
                             ++$errorCount;
-                            $errors[] = 'Producto ID ' . (int) $productId . ': ' . $validationMsg;
+                            $errors[] = $this->buildBulkErrorItem((int) $productId, $validationMsg);
                             continue;
                         }
-                        if (!$this->ensureProductQueuedRowForYuju((int) $productId)) {
+                        if (!$this->ensureProductQueuedRowForYuju((int) $productId, true)) {
                             ++$errorCount;
-                            $errors[] = 'Producto ID ' . (int) $productId . ': no válido o no encontrado en PrestaShop';
+                            $errors[] = $this->buildBulkErrorItem((int) $productId, 'no válido o no encontrado en PrestaShop');
                             continue;
                         }
                         $queueData = $createOptions;
                         $result = $syncQueue->addToQueue((int) $productId, 'create', 'normal', $queueData);
                     } else {
-                        if (!$this->ensureProductQueuedRowForYuju((int) $productId)) {
+                        // Update (o create con ID ya existente): no degradar status a queued
+                        if ($hasYujuLink && !$this->product_manager->productNeedsYujuUpdate((int) $productId, $createOptions)) {
+                            // Sin cambios vs último envío: seguir como synced / En Yuju OK
+                            $this->product_manager->updateProductStatus(
+                                (int) $productId,
+                                'synced',
+                                null,
+                                $resolvedYujuId !== '' ? $resolvedYujuId : null
+                            );
+                            ++$skippedCount;
+                            continue;
+                        }
+                        if (!$this->ensureProductQueuedRowForYuju((int) $productId, !$hasYujuLink)) {
                             ++$errorCount;
-                            $errors[] = 'Producto ID ' . (int) $productId . ': no válido o no encontrado en PrestaShop';
+                            $errors[] = $this->buildBulkErrorItem((int) $productId, 'no válido o no encontrado en PrestaShop');
                             continue;
                         }
                         if ($hasYujuLink) {
-                            $payload = $this->product_manager->buildProductPayloadForYujuQueue((int) $productId);
+                            $payload = $this->product_manager->buildProductPayloadForYujuQueue(
+                                (int) $productId,
+                                $createOptions
+                            );
                             $payload = is_array($payload) ? $payload : [];
                             $result = $syncQueue->addToQueue((int) $productId, 'update', 'normal', $payload);
                         } else {
@@ -677,16 +1075,16 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                         ++$queuedCount;
                     } else {
                         ++$errorCount;
-                        $errors[] = 'Error agregando producto ID ' . (int) $productId . ' a la cola';
+                        $errors[] = $this->buildBulkErrorItem((int) $productId, 'Error agregando a la cola');
                     }
                 } catch (Exception $e) {
                     ++$errorCount;
-                    $errors[] = 'Producto ID ' . (int) $productId . ': ' . $e->getMessage();
+                    $errors[] = $this->buildBulkErrorItem((int) $productId, $e->getMessage());
                 }
             }
 
             $message = sprintf(
-                '%d producto(s) en cola. %d omitido(s). %d error(es).',
+                '%d producto(s) en cola. %d omitido(s) (sin cambios o no aplicables). %d error(es).',
                 $queuedCount,
                 $skippedCount,
                 $errorCount
@@ -696,9 +1094,6 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             }
             if ($queuedCount > 0) {
                 $message .= ' Se procesarán en el próximo ciclo del cron.';
-            }
-            if ($errorCount > 0 && $errors !== []) {
-                $message .= "\n\n" . implode("\n", $errors);
             }
 
             return [
@@ -716,10 +1111,12 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             ];
         }
 
+        $this->preloadBulkProductInfo($productIds);
         $successCount = 0;
         $errorCount = 0;
         $skippedCount = 0;
         $errors = [];
+        $waitingNotes = [];
 
         foreach ($productIds as $productId) {
             try {
@@ -727,7 +1124,8 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                     'SELECT yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
                     WHERE prestashop_product_id = ' . (int) $productId
                 );
-                $hasYujuLink = $this->yujuStatusRowHasProductLink($status);
+                $resolvedYujuId = $this->product_manager->resolveExistingYujuProductId((int) $productId);
+                $hasYujuLink = $this->yujuStatusRowHasProductLink($status) || ($resolvedYujuId !== '');
 
                 if ($bulkAction === 'delete') {
                     if (!$hasYujuLink) {
@@ -739,19 +1137,22 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                         ++$successCount;
                     } else {
                         ++$errorCount;
-                        $errors[] = 'Producto ID ' . (int) $productId . ': ' . ($del['message'] ?? 'Error al eliminar');
+                        $errors[] = $this->buildBulkErrorItem(
+                            (int) $productId,
+                            (string) ($del['message'] ?? 'Error al eliminar')
+                        );
                     }
                     continue;
                 }
 
-                if ($bulkAction === 'create') {
+                if ($bulkAction === 'create' && !$hasYujuLink) {
                     $validation = $this->product_manager->validateProductForYujuCreate((int) $productId, $createOptions);
                     if (empty($validation['success'])) {
                         $validationMsg = implode(' ', $validation['errors']);
                         $this->product_manager->updateProductStatus((int) $productId, 'error', $validationMsg, null);
                         $this->product_manager->logValidationErrorHistory((int) $productId, $validationMsg, 'create');
                         ++$errorCount;
-                        $errors[] = 'Producto ID ' . (int) $productId . ': ' . $validationMsg;
+                        $errors[] = $this->buildBulkErrorItem((int) $productId, $validationMsg);
                         continue;
                     }
                 }
@@ -759,16 +1160,22 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 $ok = is_array($result) && !empty($result['success']);
                 if ($ok) {
                     ++$successCount;
+                    if (!empty($result['awaiting_webhook'])) {
+                        $waitingNotes[] = $this->buildBulkErrorItem(
+                            (int) $productId,
+                            (string) ($result['message'] ?? 'En espera de respuesta de Yuju.')
+                        );
+                    }
                 } else {
                     ++$errorCount;
                     $errDetail = is_array($result)
                         ? ($result['error'] ?? $result['message'] ?? 'Error desconocido')
                         : 'Respuesta inválida del gestor de productos';
-                    $errors[] = 'Producto ID ' . (int) $productId . ': ' . $errDetail;
+                    $errors[] = $this->buildBulkErrorItem((int) $productId, (string) $errDetail);
                 }
             } catch (Exception $e) {
                 ++$errorCount;
-                $errors[] = 'Producto ID ' . (int) $productId . ': ' . $e->getMessage();
+                $errors[] = $this->buildBulkErrorItem((int) $productId, $e->getMessage());
             }
         }
 
@@ -781,8 +1188,8 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         if ($bulkAction === 'delete' && $skippedCount > 0) {
             $message .= ' Omitidos: sin ID Yuju.';
         }
-        if ($errorCount > 0 && $errors !== []) {
-            $message .= "\n\n" . implode("\n", $errors);
+        if (!empty($waitingNotes)) {
+            $message .= ' En espera de respuesta de Yuju: ' . count($waitingNotes) . '.';
         }
 
         return [
@@ -790,10 +1197,12 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             'message' => $message,
             'logs_url' => $logsUrl,
             'errors' => $errors,
+            'waiting_notes' => $waitingNotes,
             'details' => [
                 'success' => $successCount,
                 'skipped' => $skippedCount,
                 'errors' => $errorCount,
+                'waiting' => count($waitingNotes),
                 'bulk_action' => $bulkAction,
             ],
             'reload' => $successCount > 0,
@@ -816,11 +1225,16 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     }
 
     /**
-     * @param int $productId
+     * Garantiza fila en yuju_product_status antes de encolar.
+     * Solo marca sync_status=queued si aún NO tiene ID Yuju (los ya sincronizados
+     * deben seguir contando como "En Yuju OK" hasta que el cron los procese).
      *
-     * @return bool
+     * @param int  $productId
+     * @param bool $markAsQueued Forzar estado queued (p.ej. create sin ID)
+     *
+     * @return bool false si el producto PrestaShop no existe
      */
-    protected function ensureProductQueuedRowForYuju($productId)
+    protected function ensureProductQueuedRowForYuju($productId, $markAsQueued = true)
     {
         $productId = (int) $productId;
         $product = new Product($productId, false, (int) $this->context->language->id);
@@ -828,19 +1242,28 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             return false;
         }
 
-        $existing = Db::getInstance()->getValue(
-            'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
+        $row = Db::getInstance()->getRow(
+            'SELECT id, yuju_product_id, sync_status FROM ' . _DB_PREFIX_ . 'yuju_product_status 
             WHERE prestashop_product_id = ' . $productId
         );
 
-        if (!$existing) {
+        $hasYujuId = false;
+        if ($row && isset($row['yuju_product_id'])) {
+            $yujuPid = trim((string) $row['yuju_product_id']);
+            $hasYujuId = ($yujuPid !== '' && strtolower($yujuPid) !== 'null' && $yujuPid !== '0');
+        }
+
+        // Productos ya en Yuju: no degradar synced → queued (rompe los KPIs)
+        $shouldQueueStatus = $markAsQueued && !$hasYujuId;
+
+        if (!$row) {
             Db::getInstance()->insert('yuju_product_status', [
                 'prestashop_product_id' => $productId,
-                'sync_status' => pSQL('queued'),
+                'sync_status' => pSQL($shouldQueueStatus ? 'queued' : 'pending'),
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s'),
             ]);
-        } else {
+        } elseif ($shouldQueueStatus) {
             Db::getInstance()->update(
                 'yuju_product_status',
                 [
@@ -861,7 +1284,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     {
         return '
             LEFT JOIN (
-                SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`last_error`
+                SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`updated_at`, y.`last_error`
                 FROM `' . _DB_PREFIX_ . 'yuju_product_status` y
                 INNER JOIN (
                     SELECT `prestashop_product_id`, MAX(`id`) AS `max_id`
@@ -900,11 +1323,26 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         switch ($segment) {
             case 'errors':
-                return ' AND NOT ' . $inv . ' AND yps.sync_status IN ("error","synced_with_errors") ';
+                return ' AND NOT ' . $inv . ' AND (
+                    yps.sync_status = "error"
+                    OR (yps.sync_status = "synced_with_errors" AND ' . $vy . ')
+                ) ';
+            case 'queued':
+                return ' AND NOT ' . $inv . ' AND yps.sync_status = "queued" ';
             case 'pending':
-                return ' AND NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","queued")) ';
+            case 'not_sent':
+                // "No enviado": sin ID Yuju y aún no en cola / proceso
+                return ' AND NOT ' . $inv . ' AND NOT ' . $vy . '
+                    AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","synced","synced_with_warnings","synced_with_errors")) ';
             case 'in_progress':
                 return ' AND NOT ' . $inv . ' AND yps.sync_status IN ("syncing","creating_in_yuju","updating_in_yuju","deleting_in_yuju") ';
+            case 'stale_creating':
+                // En espera de webhook product-created desde hace ≥ 1 hora (elegibles para reenvío)
+                return ' AND NOT ' . $inv . '
+                    AND yps.sync_status = "creating_in_yuju"
+                    AND NOT ' . $vy . '
+                    AND COALESCE(yps.updated_at, yps.last_sync_at) IS NOT NULL
+                    AND COALESCE(yps.updated_at, yps.last_sync_at) <= DATE_SUB(NOW(), INTERVAL 1 HOUR) ';
             case 'synced_ok':
                 return ' AND NOT ' . $inv . ' AND ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings") ';
             case 'disabled':
@@ -912,6 +1350,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             case 'invalid':
                 return ' AND ' . $inv . ' ';
             case 'orphan_synced':
+                // Compat: mismo criterio que "No enviados" con status synced*
                 return ' AND NOT ' . $inv . ' AND NOT ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings","synced_with_errors") ';
             case 'all':
             default:
@@ -920,19 +1359,317 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     }
 
     /**
-     * @param string $search
+     * Filtros del listado overview (GET).
+     *
+     * @return array<string, mixed>
+     */
+    protected function getOverviewFiltersFromRequest()
+    {
+        $mapping = (string) Tools::getValue('mapping', 'all');
+        if (!in_array($mapping, ['all', 'mapped', 'own', 'ancestor', 'unmapped'], true)) {
+            $mapping = 'all';
+        }
+
+        $sort = (string) Tools::getValue('sort', 'total');
+        if ($sort === 'pending') {
+            $sort = 'queued';
+        }
+        if ($sort === 'orphan') {
+            $sort = 'not_sent';
+        }
+        $allowedSort = [
+            'total', 'name', 'synced_ok', 'queued', 'not_sent', 'errors',
+            'in_progress', 'invalid', 'mapped',
+        ];
+        if (!in_array($sort, $allowedSort, true)) {
+            $sort = 'total';
+        }
+
+        $dir = strtolower((string) Tools::getValue('dir', 'desc'));
+        if ($dir !== 'asc' && $dir !== 'desc') {
+            $dir = 'desc';
+        }
+
+        $boolKeys = [
+            'has_synced', 'has_queued', 'has_not_sent', 'has_errors', 'has_in_progress',
+            'has_invalid', 'only_issues',
+        ];
+        $flags = [];
+        foreach ($boolKeys as $key) {
+            $flags[$key] = (int) Tools::getValue($key, 0) === 1 ? 1 : 0;
+        }
+        // Compat con URLs antiguas
+        if ((int) Tools::getValue('has_pending', 0) === 1) {
+            $flags['has_queued'] = 1;
+        }
+        if ((int) Tools::getValue('has_orphan', 0) === 1) {
+            $flags['has_not_sent'] = 1;
+        }
+
+        return array_merge([
+            'q' => trim((string) Tools::getValue('q', '')),
+            'sku' => trim((string) Tools::getValue('sku', '')),
+            'mapping' => $mapping,
+            'sort' => $sort,
+            'dir' => $dir,
+            'min_total' => max(0, (int) Tools::getValue('min_total', 0)),
+            'filters_open' => (int) Tools::getValue('filters_open', 0) === 1 ? 1 : 0,
+        ], $flags);
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return bool
+     */
+    protected function overviewFiltersAreActive(array $filters)
+    {
+        if ($filters['q'] !== '' || $filters['sku'] !== '') {
+            return true;
+        }
+        if ($filters['mapping'] !== 'all') {
+            return true;
+        }
+        if ((int) $filters['min_total'] > 0) {
+            return true;
+        }
+        if ($filters['sort'] !== 'total' || $filters['dir'] !== 'desc') {
+            return true;
+        }
+        foreach (['has_synced', 'has_queued', 'has_not_sent', 'has_errors', 'has_in_progress', 'has_invalid', 'only_issues'] as $key) {
+            if (!empty($filters[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * URLs de ordenación por columna (conservan el resto de filtros).
+     *
+     * @param array<string, mixed> $filters
+     *
+     * @return array<string, array<string, string|int>>
+     */
+    protected function buildOverviewSortLinks(array $filters)
+    {
+        $base = $this->context->link->getAdminLink('AdminYujuCategoryBulk', true);
+        $columns = [
+            'name' => 'name',
+            'total' => 'total',
+            'synced_ok' => 'synced_ok',
+            'queued' => 'queued',
+            'not_sent' => 'not_sent',
+            'errors' => 'errors',
+            'in_progress' => 'in_progress',
+            'invalid' => 'invalid',
+            'mapped' => 'mapped',
+        ];
+        $links = [];
+        foreach ($columns as $key => $sort) {
+            $nextDir = ($filters['sort'] === $sort && $filters['dir'] === 'asc') ? 'desc' : 'asc';
+            if ($filters['sort'] !== $sort) {
+                $nextDir = in_array($sort, ['name', 'mapped'], true) ? 'asc' : 'desc';
+            }
+            $params = array_merge($filters, [
+                'sort' => $sort,
+                'dir' => $nextDir,
+                'filters_open' => !empty($filters['filters_open']) || $this->overviewFiltersAreActive($filters) ? 1 : 0,
+            ]);
+            $links[$key] = [
+                'url' => $base . '&' . http_build_query($this->overviewFiltersToQuery($params)),
+                'active' => $filters['sort'] === $sort ? 1 : 0,
+                'dir' => $filters['sort'] === $sort ? $filters['dir'] : '',
+            ];
+        }
+
+        return $links;
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<string, scalar>
+     */
+    protected function overviewFiltersToQuery(array $filters)
+    {
+        $out = [];
+        foreach ($filters as $k => $v) {
+            if ($k === 'q' || $k === 'sku') {
+                if ((string) $v !== '') {
+                    $out[$k] = (string) $v;
+                }
+                continue;
+            }
+            if ($k === 'mapping') {
+                if ((string) $v !== 'all') {
+                    $out[$k] = (string) $v;
+                }
+                continue;
+            }
+            if ($k === 'sort') {
+                if ((string) $v !== 'total') {
+                    $out[$k] = (string) $v;
+                }
+                continue;
+            }
+            if ($k === 'dir') {
+                if ((string) $v !== 'desc') {
+                    $out[$k] = (string) $v;
+                }
+                continue;
+            }
+            if ((int) $v > 0) {
+                $out[$k] = (int) $v;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Productos que coinciden con el SKU (para resumen del filtro).
+     *
+     * @param string $sku
+     * @param int $limit
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function getCategoryOverviewRows($search)
+    protected function findProductsBySkuForOverview($sku, $limit = 12)
     {
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return [];
+        }
+        $idLang = (int) $this->context->language->id;
+        $like = '%' . pSQL($sku) . '%';
+        $exact = pSQL($sku);
+        $limit = max(1, min(50, (int) $limit));
+
+        $sql = 'SELECT DISTINCT p.id_product, p.reference, pl.name,
+                (CASE WHEN UPPER(TRIM(p.reference)) = UPPER("' . $exact . '") THEN 0 ELSE 1 END) AS rank_exact
+            FROM ' . _DB_PREFIX_ . 'product p
+            LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                ON pl.id_product = p.id_product AND pl.id_lang = ' . $idLang . ' AND pl.id_shop = p.id_shop_default
+            LEFT JOIN ' . _DB_PREFIX_ . 'product_attribute pa ON pa.id_product = p.id_product
+            WHERE p.active = 1
+              AND (
+                p.reference LIKE "' . $like . '"
+                OR pa.reference LIKE "' . $like . '"
+              )
+            ORDER BY rank_exact ASC, p.reference ASC
+            LIMIT ' . (int) $limit;
+
+        $rows = Db::getInstance()->executeS($sql);
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * @param array<string, mixed>|string $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getCategoryOverviewRows($filters)
+    {
+        if (!is_array($filters)) {
+            $filters = [
+                'q' => trim((string) $filters),
+                'sku' => '',
+                'mapping' => 'all',
+                'sort' => 'total',
+                'dir' => 'desc',
+                'min_total' => 0,
+                'has_synced' => 0,
+                'has_queued' => 0,
+                'has_not_sent' => 0,
+                'has_errors' => 0,
+                'has_in_progress' => 0,
+                'has_invalid' => 0,
+                'only_issues' => 0,
+            ];
+        }
+
         $idLang = (int) $this->context->language->id;
         $idShop = (int) $this->context->shop->id;
-        $searchSql = '';
-        if ($search !== '') {
-            $like = '%' . pSQL($search) . '%';
-            $searchSql = ' AND cl.name LIKE "' . $like . '" ';
+        $whereExtra = '';
+        $havingParts = ['total > 0'];
+
+        $q = isset($filters['q']) ? trim((string) $filters['q']) : '';
+        if ($q !== '') {
+            $like = '%' . pSQL($q) . '%';
+            $whereExtra .= ' AND cl.name LIKE "' . $like . '" ';
         }
+
+        $sku = isset($filters['sku']) ? trim((string) $filters['sku']) : '';
+        if ($sku !== '') {
+            $likeSku = '%' . pSQL($sku) . '%';
+            $whereExtra .= ' AND EXISTS (
+                SELECT 1
+                FROM ' . _DB_PREFIX_ . 'category_product cp_sku
+                INNER JOIN ' . _DB_PREFIX_ . 'product p_sku
+                    ON p_sku.id_product = cp_sku.id_product AND p_sku.active = 1
+                LEFT JOIN ' . _DB_PREFIX_ . 'product_attribute pa_sku
+                    ON pa_sku.id_product = p_sku.id_product
+                WHERE cp_sku.id_category = cp.id_category
+                  AND (
+                    p_sku.reference LIKE "' . $likeSku . '"
+                    OR pa_sku.reference LIKE "' . $likeSku . '"
+                  )
+            ) ';
+        }
+
+        $minTotal = isset($filters['min_total']) ? (int) $filters['min_total'] : 0;
+        if ($minTotal > 0) {
+            $havingParts[] = 'total >= ' . (int) $minTotal;
+        }
+        if (!empty($filters['has_synced'])) {
+            $havingParts[] = 'cnt_synced_ok > 0';
+        }
+        if (!empty($filters['has_queued']) || !empty($filters['has_pending'])) {
+            $havingParts[] = 'cnt_queued > 0';
+        }
+        if (!empty($filters['has_not_sent']) || !empty($filters['has_orphan'])) {
+            $havingParts[] = 'cnt_not_sent > 0';
+        }
+        if (!empty($filters['has_errors'])) {
+            $havingParts[] = 'cnt_errors > 0';
+        }
+        if (!empty($filters['has_in_progress'])) {
+            $havingParts[] = 'cnt_in_progress > 0';
+        }
+        if (!empty($filters['has_invalid'])) {
+            $havingParts[] = 'cnt_invalid > 0';
+        }
+        if (!empty($filters['only_issues'])) {
+            $havingParts[] = '(cnt_queued > 0 OR cnt_not_sent > 0 OR cnt_errors > 0 OR cnt_in_progress > 0 OR cnt_invalid > 0)';
+        }
+
+        $sortMap = [
+            'total' => 'total',
+            'name' => 'category_name',
+            'synced_ok' => 'cnt_synced_ok',
+            'queued' => 'cnt_queued',
+            'not_sent' => 'cnt_not_sent',
+            'pending' => 'cnt_queued',
+            'errors' => 'cnt_errors',
+            'in_progress' => 'cnt_in_progress',
+            'invalid' => 'cnt_invalid',
+            'orphan' => 'cnt_not_sent',
+            'mapped' => 'mapped_yuju',
+        ];
+        $sortKey = isset($filters['sort']) ? (string) $filters['sort'] : 'total';
+        if (!isset($sortMap[$sortKey])) {
+            $sortKey = 'total';
+        }
+        $dir = (isset($filters['dir']) && strtolower((string) $filters['dir']) === 'asc') ? 'ASC' : 'DESC';
+        $orderSql = $sortMap[$sortKey] . ' ' . $dir . ', total DESC, category_name ASC';
+
+        // Si filtramos por mapeo (incluye herencia), necesitamos más filas antes del corte
+        $mapping = isset($filters['mapping']) ? (string) $filters['mapping'] : 'all';
+        $needsPhpMappingFilter = in_array($mapping, ['mapped', 'own', 'ancestor', 'unmapped'], true);
+        $fetchLimit = $needsPhpMappingFilter ? 2000 : 400;
 
         $ypsJoin = $this->getYpsJoinSql();
         $inv = $this->sqlInvalidCatalog();
@@ -941,15 +1678,22 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         $sql = 'SELECT 
                 cp.id_category,
                 MAX(cl.name) AS category_name,
+                MAX(IF(ycm.id IS NOT NULL, 1, 0)) AS mapped_own,
                 MAX(IF(ycm.id IS NOT NULL, 1, 0)) AS mapped_yuju,
+                MAX(IF(ycm.id IS NOT NULL AND IFNULL(ycm.sync_enabled, 1) = 1, 1, 0)) AS mapped_sync_on,
                 COUNT(DISTINCT p.id_product) AS total,
                 SUM(IF(' . $inv . ', 1, 0)) AS cnt_invalid,
                 SUM(IF(NOT ' . $inv . ' AND ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings"), 1, 0)) AS cnt_synced_ok,
-                SUM(IF(NOT ' . $inv . ' AND yps.sync_status IN ("error","synced_with_errors"), 1, 0)) AS cnt_errors,
+                SUM(IF(NOT ' . $inv . ' AND (
+                    yps.sync_status = "error"
+                    OR (yps.sync_status = "synced_with_errors" AND ' . $vy . ')
+                ), 1, 0)) AS cnt_errors,
                 SUM(IF(NOT ' . $inv . ' AND yps.sync_status IN ("syncing","creating_in_yuju","updating_in_yuju","deleting_in_yuju"), 1, 0)) AS cnt_in_progress,
-                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","queued")), 1, 0)) AS cnt_pending,
+                SUM(IF(NOT ' . $inv . ' AND yps.sync_status = "queued", 1, 0)) AS cnt_queued,
+                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","synced","synced_with_warnings","synced_with_errors")), 1, 0)) AS cnt_not_sent,
+                SUM(IF(NOT ' . $inv . ' AND yps.sync_status = "queued", 1, 0)) AS cnt_pending,
                 SUM(IF(yps.sync_status = "disabled", 1, 0)) AS cnt_disabled,
-                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings","synced_with_errors"), 1, 0)) AS cnt_orphan_state
+                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","synced","synced_with_warnings","synced_with_errors")), 1, 0)) AS cnt_orphan_state
             FROM ' . _DB_PREFIX_ . 'category_product cp
             INNER JOIN ' . _DB_PREFIX_ . 'product p ON p.id_product = cp.id_product AND p.active = 1
             INNER JOIN ' . _DB_PREFIX_ . 'category c ON c.id_category = cp.id_category AND c.active = 1
@@ -957,18 +1701,110 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 ON c.id_category = cl.id_category AND cl.id_lang = ' . $idLang . ' AND cl.id_shop = ' . $idShop . '
             LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl 
                 ON p.id_product = pl.id_product AND pl.id_lang = ' . $idLang . ' AND pl.id_shop = p.id_shop_default
-            LEFT JOIN ' . _DB_PREFIX_ . 'yuju_category_mapping ycm ON ycm.prestashop_category_id = cp.id_category
+            LEFT JOIN ' . _DB_PREFIX_ . 'yuju_category_mapping ycm
+                ON ycm.prestashop_category_id = cp.id_category
             ' . $ypsJoin . '
             WHERE c.id_category NOT IN (' . (int) Configuration::get('PS_ROOT_CATEGORY') . ', ' . (int) Configuration::get('PS_HOME_CATEGORY') . ')
-            ' . $searchSql . '
+            ' . $whereExtra . '
             GROUP BY cp.id_category
-            HAVING total > 0
-            ORDER BY total DESC
-            LIMIT 400';
+            HAVING ' . implode(' AND ', $havingParts) . '
+            ORDER BY ' . $orderSql . '
+            LIMIT ' . (int) $fetchLimit;
 
         $rows = Db::getInstance()->executeS($sql);
+        if (!is_array($rows)) {
+            return [];
+        }
 
-        return is_array($rows) ? $rows : [];
+        // Marcar como mapeada también si hereda del padre (misma regla de envío)
+        foreach ($rows as &$row) {
+            $row['mapped_own'] = !empty($row['mapped_own']) ? 1 : 0;
+            $row['mapped_via_ancestor'] = 0;
+            if (!empty($row['mapped_yuju'])) {
+                $row['mapped_yuju'] = 1;
+                continue;
+            }
+            $coverage = $this->getCategoryOrAncestorMappingCoverage((int) $row['id_category']);
+            if (!empty($coverage['covered'])) {
+                $row['mapped_yuju'] = 1;
+                $row['mapped_via_ancestor'] = !empty($coverage['from_ancestor']) ? 1 : 0;
+            } else {
+                $row['mapped_yuju'] = 0;
+            }
+        }
+        unset($row);
+
+        // Tras resolver herencia de mapeo, reordenar si el criterio depende de mapped_yuju
+        if ($sortKey === 'mapped' && !$needsPhpMappingFilter) {
+            usort($rows, function ($a, $b) use ($dir) {
+                $cmp = ((int) $a['mapped_yuju'] < (int) $b['mapped_yuju']) ? -1 : (((int) $a['mapped_yuju'] > (int) $b['mapped_yuju']) ? 1 : 0);
+                if ($cmp === 0) {
+                    $cmp = ((int) $b['total'] - (int) $a['total']);
+                }
+
+                return ($dir === 'ASC') ? $cmp : -$cmp;
+            });
+        }
+
+        if ($needsPhpMappingFilter) {
+            $filtered = [];
+            foreach ($rows as $row) {
+                $isMapped = !empty($row['mapped_yuju']);
+                $viaAncestor = !empty($row['mapped_via_ancestor']);
+                $isOwn = !empty($row['mapped_own']);
+                $keep = false;
+                switch ($mapping) {
+                    case 'mapped':
+                        $keep = $isMapped;
+                        break;
+                    case 'own':
+                        $keep = $isOwn;
+                        break;
+                    case 'ancestor':
+                        $keep = $isMapped && $viaAncestor && !$isOwn;
+                        break;
+                    case 'unmapped':
+                        $keep = !$isMapped;
+                        break;
+                }
+                if ($keep) {
+                    $filtered[] = $row;
+                }
+            }
+            $rows = $filtered;
+
+            // Reordenar en PHP tras el filtro de mapeo
+            usort($rows, function ($a, $b) use ($sortKey, $dir) {
+                $map = [
+                    'total' => 'total',
+                    'name' => 'category_name',
+                    'synced_ok' => 'cnt_synced_ok',
+                    'queued' => 'cnt_queued',
+                    'not_sent' => 'cnt_not_sent',
+                    'pending' => 'cnt_queued',
+                    'errors' => 'cnt_errors',
+                    'in_progress' => 'cnt_in_progress',
+                    'invalid' => 'cnt_invalid',
+                    'orphan' => 'cnt_not_sent',
+                    'mapped' => 'mapped_yuju',
+                ];
+                $field = isset($map[$sortKey]) ? $map[$sortKey] : 'total';
+                $va = isset($a[$field]) ? $a[$field] : 0;
+                $vb = isset($b[$field]) ? $b[$field] : 0;
+                if ($field === 'category_name') {
+                    $cmp = strcasecmp((string) $va, (string) $vb);
+                } else {
+                    $cmp = ((int) $va < (int) $vb) ? -1 : (((int) $va > (int) $vb) ? 1 : 0);
+                }
+                if ($cmp === 0) {
+                    $cmp = ((int) $b['total'] - (int) $a['total']);
+                }
+
+                return ($dir === 'ASC') ? $cmp : -$cmp;
+            });
+        }
+
+        return array_slice($rows, 0, 400);
     }
 
     /**
@@ -993,11 +1829,16 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 COUNT(DISTINCT p.id_product) AS total,
                 SUM(IF(' . $inv . ', 1, 0)) AS cnt_invalid,
                 SUM(IF(NOT ' . $inv . ' AND ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings"), 1, 0)) AS cnt_synced_ok,
-                SUM(IF(NOT ' . $inv . ' AND yps.sync_status IN ("error","synced_with_errors"), 1, 0)) AS cnt_errors,
+                SUM(IF(NOT ' . $inv . ' AND (
+                    yps.sync_status = "error"
+                    OR (yps.sync_status = "synced_with_errors" AND ' . $vy . ')
+                ), 1, 0)) AS cnt_errors,
                 SUM(IF(NOT ' . $inv . ' AND yps.sync_status IN ("syncing","creating_in_yuju","updating_in_yuju","deleting_in_yuju"), 1, 0)) AS cnt_in_progress,
-                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","queued")), 1, 0)) AS cnt_pending,
+                SUM(IF(NOT ' . $inv . ' AND yps.sync_status = "queued", 1, 0)) AS cnt_queued,
+                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","synced","synced_with_warnings","synced_with_errors")), 1, 0)) AS cnt_not_sent,
+                SUM(IF(NOT ' . $inv . ' AND yps.sync_status = "queued", 1, 0)) AS cnt_pending,
                 SUM(IF(yps.sync_status = "disabled", 1, 0)) AS cnt_disabled,
-                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND yps.sync_status IN ("synced","synced_with_warnings","synced_with_errors"), 1, 0)) AS cnt_orphan_state
+                SUM(IF(NOT ' . $inv . ' AND NOT ' . $vy . ' AND (yps.sync_status IS NULL OR yps.sync_status IN ("pending","synced","synced_with_warnings","synced_with_errors")), 1, 0)) AS cnt_orphan_state
             FROM ' . _DB_PREFIX_ . 'category_product cp
             INNER JOIN ' . _DB_PREFIX_ . 'product p ON p.id_product = cp.id_product AND p.active = 1
             LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl 
@@ -1020,13 +1861,15 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         $cntOk = (int) $row['cnt_synced_ok'];
         $cntInv = (int) $row['cnt_invalid'];
         $cntErr = (int) $row['cnt_errors'];
-        $cntPend = (int) $row['cnt_pending'];
+        $cntQueued = (int) $row['cnt_queued'];
+        $cntNotSent = (int) $row['cnt_not_sent'];
         $cntProg = (int) $row['cnt_in_progress'];
         $pct = $total > 0 ? round(100 * $cntOk / $total) : 0;
-        $bar = ['ok' => 0.0, 'pending' => 0.0, 'err' => 0.0, 'prog' => 0.0, 'inv' => 0.0];
+        $bar = ['ok' => 0.0, 'queued' => 0.0, 'not_sent' => 0.0, 'err' => 0.0, 'prog' => 0.0, 'inv' => 0.0];
         if ($total > 0) {
             $bar['ok'] = round(100 * $cntOk / $total, 2);
-            $bar['pending'] = round(100 * $cntPend / $total, 2);
+            $bar['queued'] = round(100 * $cntQueued / $total, 2);
+            $bar['not_sent'] = round(100 * $cntNotSent / $total, 2);
             $bar['err'] = round(100 * $cntErr / $total, 2);
             $bar['prog'] = round(100 * $cntProg / $total, 2);
             $bar['inv'] = round(100 * $cntInv / $total, 2);
@@ -1041,9 +1884,11 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 'cnt_synced_ok' => $cntOk,
                 'cnt_errors' => $cntErr,
                 'cnt_in_progress' => $cntProg,
-                'cnt_pending' => $cntPend,
+                'cnt_queued' => $cntQueued,
+                'cnt_not_sent' => $cntNotSent,
+                'cnt_pending' => $cntQueued,
                 'cnt_disabled' => (int) $row['cnt_disabled'],
-                'cnt_orphan_state' => (int) $row['cnt_orphan_state'],
+                'cnt_orphan_state' => $cntNotSent,
                 'pct_uploaded_ok' => $pct,
             ],
             'bar_pct' => $bar,
@@ -1074,9 +1919,10 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         }
 
         $rows = Db::getInstance()->executeS(
-            'SELECT prestashop_category_id
+            'SELECT prestashop_category_id, sync_enabled
              FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-             WHERE prestashop_category_id IN (' . implode(',', array_map('intval', $lineage)) . ')
+             WHERE sync_enabled = 1
+               AND prestashop_category_id IN (' . implode(',', array_map('intval', $lineage)) . ')
              LIMIT ' . (int) count($lineage)
         );
         if (!is_array($rows) || $rows === []) {
@@ -1165,10 +2011,14 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         $page = max(1, min($page, $totalPages));
         $offset = ($page - 1) * $perPage;
 
+        $coverImgSub = '(SELECT MIN(img.`id_image`) FROM `' . _DB_PREFIX_ . 'image` img WHERE img.`id_product` = p.`id_product` AND img.`cover` = 1)';
+
         $listSql = 'SELECT DISTINCT p.id_product, p.reference, pl.name,
+                ' . $coverImgSub . ' AS id_image,
                 yps.sync_status AS yuju_status,
                 yps.yuju_product_id,
                 yps.last_sync_at,
+                yps.updated_at,
                 yps.last_error
             ' . $baseFrom . '
             ORDER BY p.id_product DESC

@@ -60,6 +60,71 @@
         </div>
     </div>
 
+    <div class="panel panel-default yuju-dashboard-panel" id="yuju-account-panel">
+        <div class="panel-heading">
+            <i class="icon-building"></i>
+            Información de Yuju
+            <span class="panel-heading-action">
+                <button type="button" class="btn btn-default btn-sm" id="yuju-refresh-account-btn">
+                    <i class="icon-refresh"></i> Actualizar
+                </button>
+            </span>
+        </div>
+        <div class="panel-body">
+            <div id="yuju-account-alert" class="alert" style="display:none; margin-bottom:12px;"></div>
+
+            <div class="yuju-account-meta" id="yuju-account-meta">
+                <div class="yuju-account-meta__item">
+                    <span class="yuju-account-meta__label">Cuenta</span>
+                    <span class="yuju-account-meta__value" id="yuju-acc-account-name">{if $yuju_account_info.account_name}{$yuju_account_info.account_name|escape:'html':'UTF-8'}{else}<span class="text-muted">—</span>{/if}</span>
+                    <span class="yuju-account-meta__id" id="yuju-acc-id-account">{if $yuju_account_info.id_account}ID {$yuju_account_info.id_account|escape:'html':'UTF-8'}{else}&nbsp;{/if}</span>
+                </div>
+                <div class="yuju-account-meta__item">
+                    <span class="yuju-account-meta__label">Tienda</span>
+                    <span class="yuju-account-meta__value" id="yuju-acc-shop-name">{if $yuju_account_info.shop_name}{$yuju_account_info.shop_name|escape:'html':'UTF-8'}{else}<span class="text-muted">—</span>{/if}</span>
+                    <span class="yuju-account-meta__id" id="yuju-acc-id-shop">{if $yuju_account_info.id_shop}ID {$yuju_account_info.id_shop|escape:'html':'UTF-8'}{else}&nbsp;{/if}</span>
+                </div>
+                <div class="yuju-account-meta__item yuju-account-meta__item--muted">
+                    <span class="yuju-account-meta__label">Actualizado</span>
+                    <span class="yuju-account-meta__value yuju-account-meta__value--sm" id="yuju-acc-updated-at">{if $yuju_account_info.updated_at}{$yuju_account_info.updated_at|escape:'html':'UTF-8'}{else}<span class="text-muted">Nunca</span>{/if}</span>
+                </div>
+            </div>
+
+            <p class="yuju-account-meta__hint">
+                Canales conectados según <code>GET /account</code>
+            </p>
+
+            <div class="table-responsive">
+                <table class="table table-striped" id="yuju-channels-table">
+                    <thead>
+                        <tr>
+                            <th style="width:120px;">ID canal</th>
+                            <th>Nombre</th>
+                            <th>Canal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="yuju-channels-tbody">
+                        {if $yuju_account_info.channels && count($yuju_account_info.channels) > 0}
+                            {foreach from=$yuju_account_info.channels item=channel}
+                                <tr>
+                                    <td><code>{$channel.id_channel|escape:'html':'UTF-8'}</code></td>
+                                    <td>{$channel.name|escape:'html':'UTF-8'}</td>
+                                    <td>{$channel.generic_name|escape:'html':'UTF-8'}</td>
+                                </tr>
+                            {/foreach}
+                        {else}
+                            <tr class="yuju-channels-empty">
+                                <td colspan="3" class="text-center text-muted">
+                                    Sin datos. Pulse «Actualizar» para cargar la información de Yuju.
+                                </td>
+                            </tr>
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="row yuju-kpi-row">
         <div class="col-md-3 col-sm-6">
             <div class="yuju-kpi-card kpi-info">
@@ -187,4 +252,105 @@
         </div>
     </div>
 </div>
+
+<script type="text/javascript">
+(function ($) {
+    function escapeHtml(v) {
+        return $('<div/>').text(v == null ? '' : String(v)).html();
+    }
+
+    function showAlert(type, msg) {
+        var $a = $('#yuju-account-alert');
+        $a.removeClass('alert-success alert-danger alert-info alert-warning')
+            .addClass('alert-' + (type || 'info'))
+            .html(msg)
+            .show();
+    }
+
+    function fillValue($el, value, emptyHtml) {
+        emptyHtml = emptyHtml || '<span class="text-muted">—</span>';
+        if (value === null || value === undefined || value === '') {
+            $el.html(emptyHtml);
+        } else {
+            $el.text(String(value));
+        }
+    }
+
+    function fillId($el, value, prefix) {
+        prefix = prefix || 'ID ';
+        if (value === null || value === undefined || value === '') {
+            $el.html('&nbsp;');
+        } else {
+            $el.text(prefix + String(value));
+        }
+    }
+
+    function renderAccount(account) {
+        if (!account) return;
+        fillValue($('#yuju-acc-account-name'), account.account_name);
+        fillId($('#yuju-acc-id-account'), account.id_account);
+        fillValue($('#yuju-acc-shop-name'), account.shop_name);
+        fillId($('#yuju-acc-id-shop'), account.id_shop);
+        fillValue($('#yuju-acc-updated-at'), account.updated_at, '<span class="text-muted">Nunca</span>');
+
+        var channels = account.channels || [];
+        var $tbody = $('#yuju-channels-tbody');
+        if (!channels.length) {
+            $tbody.html(
+                '<tr class="yuju-channels-empty"><td colspan="3" class="text-center text-muted">' +
+                'Sin canales en la respuesta.</td></tr>'
+            );
+            return;
+        }
+        var html = '';
+        channels.forEach(function (ch) {
+            html += '<tr>'
+                + '<td><code>' + escapeHtml(ch.id_channel) + '</code></td>'
+                + '<td>' + escapeHtml(ch.name) + '</td>'
+                + '<td>' + escapeHtml(ch.generic_name) + '</td>'
+                + '</tr>';
+        });
+        $tbody.html(html);
+    }
+
+    $(function () {
+        var ajaxUrl = '{$ajax_url|escape:'javascript':'UTF-8'}';
+        var token = '{$token|escape:'javascript':'UTF-8'}';
+
+        $('#yuju-refresh-account-btn').on('click', function () {
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Actualizando…');
+            showAlert('info', 'Consultando <code>GET /account</code>…');
+
+            $.ajax({
+                url: ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                timeout: 60000,
+                data: {
+                    ajax: 1,
+                    action: 'refreshAccountInfo',
+                    token: token
+                }
+            }).done(function (resp) {
+                if (resp && resp.success) {
+                    renderAccount(resp.account);
+                    showAlert('success', resp.message || 'Información actualizada.');
+                } else {
+                    showAlert('danger', (resp && resp.message) ? resp.message : 'No se pudo actualizar.');
+                    if (resp && resp.account) {
+                        renderAccount(resp.account);
+                    }
+                }
+            }).fail(function (xhr) {
+                var msg = 'Error de comunicación';
+                if (xhr && xhr.status) msg += ' (HTTP ' + xhr.status + ')';
+                showAlert('danger', msg);
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="icon-refresh"></i> Actualizar');
+            });
+        });
+    });
+})(window.jQuery);
+</script>
 {/block}

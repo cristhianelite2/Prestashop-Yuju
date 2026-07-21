@@ -204,7 +204,7 @@
                     <div class="col-lg-9">
                         <input type="number" name="batch_size" value="{Configuration::get('YUJU_BATCH_SIZE')|default:100|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
                         <p class="help-block">
-                            <i class="icon-cubes"></i> {l s='Cantidad de productos a procesar por lote (ej: 100 productos por envío)' mod='prestashopyuju'}
+                            <i class="icon-cubes"></i> Máximo de envíos reales a Yuju por ejecución (no el tamaño del encolado). Tope 500.
                         </p>
                     </div>
                 </div>

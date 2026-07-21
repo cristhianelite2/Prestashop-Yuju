@@ -43,6 +43,10 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         parent::__construct();
 
+        // Más recientes primero (id / received_at)
+        $this->_defaultOrderBy = 'id';
+        $this->_defaultOrderWay = 'DESC';
+
         $this->fields_list = [
         'id' => [
         'title' => $this->trans('ID', array(), 'Modules.Prestashopyuju.Admin'),
@@ -52,10 +56,12 @@ class AdminYujuWebhookController extends ModuleAdminController
         'event_type' => [
         'title' => $this->trans('Event Type', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 140,
+        'filter_key' => 'a!event_type',
         ],
         'entity_id' => [
         'title' => $this->trans('Entity ID', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 100,
+        'filter_key' => 'a!entity_id',
         ],
         'status' => [
         'title' => $this->trans('Status', array(), 'Modules.Prestashopyuju.Admin'),
@@ -66,7 +72,7 @@ class AdminYujuWebhookController extends ModuleAdminController
         'processed' => $this->trans('Processed', array(), 'Modules.Prestashopyuju.Admin'),
         'failed' => $this->trans('Failed', array(), 'Modules.Prestashopyuju.Admin'),
         ],
-        'filter_key' => 'status',
+        'filter_key' => 'a!status',
         'callback' => 'displayStatus',
         ],
         'received_at' => [
@@ -96,6 +102,27 @@ class AdminYujuWebhookController extends ModuleAdminController
     public function initContent()
     {
         $this->context->smarty->assign('current_controller', 'AdminYujuWebhook');
+
+        // Búsqueda rápida de órdenes Yuju
+        $order_search = trim((string) Tools::getValue('yuju_order_search', ''));
+        $orders_only = (int) Tools::getValue('yuju_orders_only', 0);
+        if (!isset($this->_filter)) {
+            $this->_filter = '';
+        }
+        if ($order_search !== '') {
+            $this->_filter .= ' AND a.`entity_id` LIKE "%' . pSQL($order_search) . '%"';
+        }
+        if ($orders_only) {
+            $this->_filter .= ' AND a.`event_type` LIKE "%order%"';
+        }
+
+        $this->context->smarty->assign([
+            'yuju_order_search' => $order_search,
+            'yuju_orders_only' => $orders_only,
+            'yuju_webhook_list_url' => $this->context->link->getAdminLink('AdminYujuWebhook'),
+            'token' => $this->token,
+        ]);
+
         parent::initContent();
         
         $this->setTemplate('webhook.tpl');
@@ -105,6 +132,19 @@ class AdminYujuWebhookController extends ModuleAdminController
     {
         // Toolbar oculto a pedido: se usará la alerta con botón "Habilitar webhooks".
         $this->page_header_toolbar_btn = [];
+    }
+
+    public function getList($id_lang, $order_by = null, $order_way = null, $start = 0, $limit = null, $id_lang_shop = false)
+    {
+        // Sin orden explícito en la URL → más nuevos primero (evita cookie ASC antigua)
+        if ($order_by === null && !Tools::getValue($this->list_id . 'Orderby')) {
+            $order_by = 'id';
+        }
+        if ($order_way === null && !Tools::getValue($this->list_id . 'Orderway')) {
+            $order_way = 'DESC';
+        }
+
+        return parent::getList($id_lang, $order_by, $order_way, $start, $limit, $id_lang_shop);
     }
 
     public function renderList()
@@ -164,7 +204,31 @@ class AdminYujuWebhookController extends ModuleAdminController
                 . '</div>';
         }
 
-        return $status_alert_html . $stats_html . parent::renderList();
+        return $status_alert_html . $stats_html . $this->renderOrderSearchBar() . parent::renderList();
+    }
+
+    /**
+     * Barra compacta de búsqueda de órdenes, justo encima del HelperList.
+     *
+     * @return string
+     */
+    protected function renderOrderSearchBar()
+    {
+        $list_url = htmlspecialchars($this->context->link->getAdminLink('AdminYujuWebhook'), ENT_QUOTES, 'UTF-8');
+        $order_search = htmlspecialchars(trim((string) Tools::getValue('yuju_order_search', '')), ENT_QUOTES, 'UTF-8');
+        $orders_only = (int) Tools::getValue('yuju_orders_only', 0);
+
+        return '<form method="get" action="' . $list_url . '" class="yuju-order-search-bar">'
+            . '<label for="yuju_order_search"><i class="icon-search"></i> Órdenes</label>'
+            . '<input type="text" class="form-control" id="yuju_order_search" name="yuju_order_search"'
+            . ' value="' . $order_search . '" placeholder="ID orden Yuju">'
+            . '<label class="checkbox-inline">'
+            . '<input type="checkbox" name="yuju_orders_only" value="1"' . ($orders_only ? ' checked="checked"' : '') . '>'
+            . ' Solo órdenes'
+            . '</label>'
+            . '<button type="submit" class="btn btn-default btn-sm"><i class="icon-search"></i> Buscar</button>'
+            . '<a href="' . $list_url . '" class="btn btn-link btn-sm">Limpiar</a>'
+            . '</form>';
     }
 
     /**
@@ -294,11 +358,104 @@ class AdminYujuWebhookController extends ModuleAdminController
         $webhook_log['payload_pretty'] = $this->formatJsonForWebhookView($webhook_log['payload']);
         $webhook_log['response_pretty'] = $this->formatJsonForWebhookView($webhook_log['response']);
 
+        $order_process = $this->buildOrderProcessSteps($webhook_log);
+        $ps_order_link = null;
+        if (!empty($order_process['prestashop_order_id'])) {
+            $ps_order_link = $this->context->link->getAdminLink('AdminOrders')
+                . '&id_order=' . (int) $order_process['prestashop_order_id']
+                . '&vieworder=1';
+        }
+
         $this->context->smarty->assign([
-        'webhook_log' => $webhook_log,
+            'webhook_log' => $webhook_log,
+            'order_process' => $order_process,
+            'ps_order_link' => $ps_order_link,
+            'is_order_webhook' => $this->isOrderWebhookEvent($webhook_log['event_type'] ?? ''),
         ]);
 
         return $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/webhook_view.tpl');
+    }
+
+    /**
+     * @param string $event_type
+     * @return bool
+     */
+    protected function isOrderWebhookEvent($event_type)
+    {
+        $event_type = strtolower((string) $event_type);
+
+        return strpos($event_type, 'order') !== false;
+    }
+
+    /**
+     * Construye checklist de pasos de creación de orden desde response del webhook.
+     *
+     * @param array $webhook_log
+     * @return array
+     */
+    protected function buildOrderProcessSteps($webhook_log)
+    {
+        $response = isset($webhook_log['response_decoded']) && is_array($webhook_log['response_decoded'])
+            ? $webhook_log['response_decoded']
+            : [];
+        $details = isset($response['details']) && is_array($response['details'])
+            ? $response['details']
+            : [];
+
+        $ps_order_id = $details['order_id']
+            ?? $response['prestashop_order_id']
+            ?? null;
+        $ps_order_id = $ps_order_id ? (int) $ps_order_id : null;
+
+        $steps = [
+            'customer' => [
+                'label' => 'Cliente',
+                'ok' => !empty($details['customer_id']),
+                'id' => $details['customer_id'] ?? null,
+                'status' => $details['customer_status'] ?? null,
+                'error' => $details['customer_error'] ?? null,
+                'extra' => $details['customer_email'] ?? null,
+            ],
+            'address' => [
+                'label' => 'Dirección',
+                'ok' => !empty($details['shipping_address_id']),
+                'id' => $details['shipping_address_id'] ?? null,
+                'status' => $details['address_status'] ?? null,
+                'error' => $details['shipping_address_error'] ?? null,
+                'extra' => !empty($details['billing_address_id'])
+                    ? 'Facturación ID ' . $details['billing_address_id']
+                    : null,
+            ],
+            'cart' => [
+                'label' => 'Carrito',
+                'ok' => !empty($details['cart_id']),
+                'id' => $details['cart_id'] ?? null,
+                'status' => $details['cart_status'] ?? null,
+                'error' => $details['cart_error'] ?? null,
+                'extra' => null,
+            ],
+            'order' => [
+                'label' => 'Orden',
+                'ok' => !empty($ps_order_id),
+                'id' => $ps_order_id,
+                'status' => $details['order_status'] ?? null,
+                'error' => $details['order_error'] ?? null,
+                'extra' => !empty($response['yuju_order_id'])
+                    ? 'Yuju #' . $response['yuju_order_id']
+                    : null,
+            ],
+        ];
+
+        return [
+            'steps' => $steps,
+            'success' => !empty($response['success']),
+            'message' => $response['message'] ?? null,
+            'prestashop_order_id' => $ps_order_id,
+            'yuju_order_id' => $response['yuju_order_id'] ?? ($webhook_log['entity_id'] ?? null),
+            'carrier_id' => $details['carrier_id'] ?? null,
+            'marketplace_slug' => $details['marketplace_slug'] ?? null,
+            'has_details' => !empty($details),
+        ];
     }
 
     public function processRegisterWebhooks()

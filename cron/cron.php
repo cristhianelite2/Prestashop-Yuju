@@ -314,7 +314,94 @@ try {
     }
     
     // =============================================
-    // TAREA 2: Aquí puedes agregar más tareas futuras
+    // TAREA 2: Auditoría programada de ofertas (PS → Yuju)
+    // =============================================
+    try {
+        require_once dirname(__FILE__) . '/../classes/YujuOfferAuditor.php';
+        if (class_exists('Module')) {
+            $yuju_mod = Module::getInstanceByName('prestashopyuju');
+            if ($yuju_mod && method_exists($yuju_mod, 'ensureAuditTables')) {
+                $yuju_mod->ensureAuditTables();
+            }
+        }
+
+        if (YujuOfferAuditor::isDue()
+            || (int) Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_audit_runs` WHERE `status` = \'running\' AND `trigger` = \'scheduled\''
+            ) > 0
+        ) {
+            if ($is_web) {
+                echo '<div class="bg-white rounded-lg shadow-lg p-6 mb-6">';
+                echo '<h2 class="text-xl font-bold text-gray-800 mb-4">Auditoría de Ofertas</h2>';
+            } else {
+                echo "[TAREA] Auditoría de Ofertas (programada)\n";
+                echo "----------------------------------------\n";
+            }
+            require_once dirname(__FILE__) . '/audit_offers.php';
+            if ($is_web) {
+                echo '</div>';
+            } else {
+                echo "\n";
+            }
+        } else {
+            if (!$is_web) {
+                echo "[OMITIDO] Auditoría de Ofertas (no corresponde por programación)\n\n";
+            }
+        }
+    } catch (Exception $e) {
+        if ($is_web) {
+            echo '<p class="text-red-600">Error auditoría: ' . htmlspecialchars($e->getMessage()) . '</p>';
+        } else {
+            echo "[ERROR] Auditoría de Ofertas: " . $e->getMessage() . "\n\n";
+        }
+    }
+
+    // =============================================
+    // TAREA 3: Reporte general de productos (products-gral-report)
+    // =============================================
+    try {
+        require_once dirname(__FILE__) . '/../classes/YujuProductGralReport.php';
+        if (class_exists('Module')) {
+            $yuju_mod = Module::getInstanceByName('prestashopyuju');
+            if ($yuju_mod && method_exists($yuju_mod, 'ensureProductReportsTable')) {
+                $yuju_mod->ensureProductReportsTable();
+            }
+        }
+
+        $hasPendingGral = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
+             WHERE report_type = \'gral\' AND status IN (\'pending\',\'processing\')'
+        ) > 0;
+
+        if (YujuProductGralReport::isDue() || $hasPendingGral) {
+            if ($is_web) {
+                echo '<div class="bg-white rounded-lg shadow-lg p-6 mb-6">';
+                echo '<h2 class="text-xl font-bold text-gray-800 mb-4">Reporte general de productos</h2>';
+            } else {
+                echo "[TAREA] Reporte general de productos (products-gral-report)\n";
+                echo "----------------------------------------\n";
+            }
+            require_once dirname(__FILE__) . '/gral_report.php';
+            if ($is_web) {
+                echo '</div>';
+            } else {
+                echo "\n";
+            }
+        } else {
+            if (!$is_web) {
+                echo "[OMITIDO] Reporte general de productos (no corresponde / sin pendientes)\n\n";
+            }
+        }
+    } catch (Exception $e) {
+        if ($is_web) {
+            echo '<p class="text-red-600">Error reporte general: ' . htmlspecialchars($e->getMessage()) . '</p>';
+        } else {
+            echo "[ERROR] Reporte general: " . $e->getMessage() . "\n\n";
+        }
+    }
+
+    // =============================================
+    // TAREA 4: Aquí puedes agregar más tareas futuras
     // =============================================
     // Por ejemplo:
     // - Sincronización de productos (cada X minutos)
@@ -1610,8 +1697,8 @@ try {
                             <div class="flex items-center">
                                 <i class="fas fa-layer-group text-2xl text-purple-600 mr-3"></i>
                                 <div>
-                                    <p class="text-sm text-gray-600">Tamaño de lote configurado</p>
-                                    <p class="text-lg font-bold text-gray-800"><?php echo $batch_size; ?> productos por ejecución</p>
+                                    <p class="text-sm text-gray-600">Tope de envíos a Yuju por ejecución</p>
+                                    <p class="text-lg font-bold text-gray-800"><?php echo $batch_size; ?> (YUJU_BATCH_SIZE)</p>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -1628,7 +1715,8 @@ try {
                         <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg mb-4">
                             <p class="text-sm text-gray-700">
                                 <i class="fas fa-info-circle mr-2"></i>
-                                Procesando lote de <strong><?php echo $batch_size; ?></strong> productos...
+                                Procesando hasta <strong><?php echo $batch_size; ?></strong> envíos reales a Yuju
+                                (carriles delete → create → update; los update sin cambios no consumen el cupo)...
                             </p>
                         </div>
                         
@@ -1675,6 +1763,82 @@ try {
                                     </div>
                                 </div>
                             </div>
+                            <?php if (!empty($batch_stats['api_budget']) || !empty($batch_stats['api_calls']) || !empty($batch_stats['skipped_no_diff'])): ?>
+                                <p class="text-xs text-gray-600 mt-3 mb-0">
+                                    Cupo API: <strong><?php echo (int) ($batch_stats['api_budget'] ?? $batch_size); ?></strong>
+                                    · Envíos a Yuju: <strong><?php echo (int) ($batch_stats['api_calls'] ?? 0); ?></strong>
+                                    · Skip sin cambios: <strong><?php echo (int) ($batch_stats['skipped_no_diff'] ?? 0); ?></strong>
+                                    <?php if (!empty($batch_stats['stopped_at_budget'])): ?>
+                                        · <span class="text-orange-600">Tope alcanzado; el resto queda para la próxima corrida</span>
+                                    <?php endif; ?>
+                                </p>
+                            <?php endif; ?>
+                            <?php if (!empty($batch_stats['phase_totals_ms']) && is_array($batch_stats['phase_totals_ms'])): ?>
+                                <?php
+                                $phaseLabelsUi = [
+                                    'api_ms' => 'API Yuju (HTTP)',
+                                    'prepare_ms' => 'Preparar payload',
+                                    'persist_ms' => 'Guardar historial',
+                                    'diff_ms' => 'Calcular diff',
+                                    'resolve_id_ms' => 'Resolver ID',
+                                    'dup_check_ms' => 'SKU duplicados',
+                                    'validate_ms' => 'Validar create',
+                                ];
+                                $phaseRowsUi = [];
+                                foreach ($phaseLabelsUi as $pk => $plabel) {
+                                    $pms = isset($batch_stats['phase_totals_ms'][$pk]) ? (float) $batch_stats['phase_totals_ms'][$pk] : 0.0;
+                                    $phaseRowsUi[] = ['label' => $plabel, 'ms' => $pms];
+                                }
+                                usort($phaseRowsUi, static function ($a, $b) { return $b['ms'] <=> $a['ms']; });
+                                ?>
+                                <div class="mt-4 bg-white border border-gray-200 rounded-lg p-4">
+                                    <p class="text-sm font-semibold text-gray-700 mb-2">Embudo por fase (suma del lote)</p>
+                                    <p class="text-xs text-gray-500 mb-3">
+                                        API calls: <?php echo (int) ($batch_stats['api_calls'] ?? 0); ?> ·
+                                        Sin cambios: <?php echo (int) ($batch_stats['skipped_no_diff'] ?? 0); ?>
+                                    </p>
+                                    <ul class="text-sm text-gray-700 space-y-1">
+                                        <?php foreach ($phaseRowsUi as $prow): ?>
+                                            <?php if ($prow['ms'] <= 0) { continue; } ?>
+                                            <li class="flex justify-between border-b border-gray-100 py-1">
+                                                <span><?php echo htmlspecialchars($prow['label']); ?></span>
+                                                <span class="font-mono"><?php echo round($prow['ms'] / 1000, 2); ?>s</span>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($batch_stats['items']) && is_array($batch_stats['items'])): ?>
+                                <div class="mt-4 overflow-x-auto bg-white border border-gray-200 rounded-lg">
+                                    <table class="min-w-full text-xs">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-2 py-2 text-left">PS ID</th>
+                                                <th class="px-2 py-2 text-left">Acción</th>
+                                                <th class="px-2 py-2 text-right">Total s</th>
+                                                <th class="px-2 py-2 text-right">API ms</th>
+                                                <th class="px-2 py-2 text-right">Prepare ms</th>
+                                                <th class="px-2 py-2 text-right">Diff ms</th>
+                                                <th class="px-2 py-2 text-center">Skip</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($batch_stats['items'] as $it): ?>
+                                                <?php $tm = isset($it['timings']) && is_array($it['timings']) ? $it['timings'] : []; ?>
+                                                <tr class="border-t border-gray-100 <?php echo empty($it['ok']) ? 'bg-red-50' : ''; ?>">
+                                                    <td class="px-2 py-1"><?php echo (int) ($it['product_id'] ?? 0); ?></td>
+                                                    <td class="px-2 py-1"><?php echo htmlspecialchars((string) ($it['api_action'] ?? '')); ?></td>
+                                                    <td class="px-2 py-1 text-right font-mono"><?php echo number_format((float) ($it['duration_s'] ?? 0), 2); ?></td>
+                                                    <td class="px-2 py-1 text-right font-mono"><?php echo number_format((float) ($tm['api_ms'] ?? 0), 0); ?></td>
+                                                    <td class="px-2 py-1 text-right font-mono"><?php echo number_format((float) ($tm['prepare_ms'] ?? 0), 0); ?></td>
+                                                    <td class="px-2 py-1 text-right font-mono"><?php echo number_format((float) ($tm['diff_ms'] ?? 0), 0); ?></td>
+                                                    <td class="px-2 py-1 text-center"><?php echo !empty($it['skipped_no_diff']) ? 'sí' : 'no'; ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php else: ?>
                         <div class="bg-gray-50 border-l-4 border-gray-400 p-4 rounded-r-lg text-center">
@@ -3986,12 +4150,15 @@ try {
             echo "\n[COLA] Estadísticas de sincronización\n";
             echo "  Total: " . $queue_stats['total'] . "\n";
             echo "  Pendientes: " . $queue_stats['pending'] . "\n";
+            echo "    - create: " . (int) ($queue_stats['pending_create'] ?? 0) . "\n";
+            echo "    - update: " . (int) ($queue_stats['pending_update'] ?? 0) . "\n";
+            echo "    - delete: " . (int) ($queue_stats['pending_delete'] ?? 0) . "\n";
             echo "  Procesando: " . $queue_stats['processing'] . "\n";
             echo "  Completados: " . $queue_stats['completed'] . "\n";
             echo "  Fallidos: " . $queue_stats['failed'] . "\n";
             
             if ($queue_stats['pending'] > 0) {
-                echo "\n[COLA] Procesando lote de $batch_size productos...\n";
+                echo "\n[COLA] Procesando hasta $batch_size envíos reales a Yuju (carriles delete→create→update)...\n";
                 
                 $process_start = microtime(true);
                 $batch_stats = $sync_queue->processBatch($batch_size);
@@ -4004,10 +4171,108 @@ try {
                 ]);
                 
                 echo "\n[COLA] Resultados del procesamiento:\n";
-                echo "  Procesados: " . $batch_stats['processed'] . "\n";
+                echo "  Procesados (cola): " . $batch_stats['processed'] . "\n";
                 echo "  Exitosos: " . $batch_stats['success'] . "\n";
                 echo "  Fallidos: " . $batch_stats['failed'] . "\n";
                 echo "  Duración: " . round($process_duration, 2) . " segundos\n";
+                if (!empty($batch_stats['api_calls']) || !empty($batch_stats['skipped_no_diff']) || isset($batch_stats['api_budget'])) {
+                    echo "  Cupo API (YUJU_BATCH_SIZE): " . (int) ($batch_stats['api_budget'] ?? $batch_size) . "\n";
+                    echo "  Llamadas API: " . (int) ($batch_stats['api_calls'] ?? 0) . "\n";
+                    echo "  Sin cambios (skip): " . (int) ($batch_stats['skipped_no_diff'] ?? 0) . "\n";
+                    if (!empty($batch_stats['stopped_at_budget'])) {
+                        echo "  Detenido al alcanzar el tope de envíos (quedan pendientes para la próxima corrida)\n";
+                    }
+                }
+                if (!empty($batch_stats['by_action']) && is_array($batch_stats['by_action'])) {
+                    echo "\n[COLA] Por carril:\n";
+                    foreach (['delete', 'create', 'update'] as $lane) {
+                        $laneStats = $batch_stats['by_action'][$lane] ?? null;
+                        if (!$laneStats || empty($laneStats['processed'])) {
+                            continue;
+                        }
+                        $skipInfo = isset($laneStats['skipped_no_diff'])
+                            ? ', skip=' . (int) $laneStats['skipped_no_diff']
+                            : '';
+                        echo sprintf(
+                            "  - %-6s procesados=%d ok=%d fail=%d api=%d%s\n",
+                            $lane,
+                            (int) $laneStats['processed'],
+                            (int) $laneStats['success'],
+                            (int) $laneStats['failed'],
+                            (int) $laneStats['api_calls'],
+                            $skipInfo
+                        );
+                    }
+                }
+                if (!empty($batch_stats['phase_totals_ms']) && is_array($batch_stats['phase_totals_ms'])) {
+                    echo "\n[COLA] Embudo por fase (suma del lote):\n";
+                    $phaseLabels = [
+                        'resolve_id_ms' => 'Resolver ID Yuju',
+                        'dup_check_ms' => 'Check SKU duplicados',
+                        'prepare_ms' => 'Preparar payload',
+                        'validate_ms' => 'Validar create',
+                        'diff_ms' => 'Calcular diff',
+                        'api_ms' => 'API Yuju (HTTP)',
+                        'persist_ms' => 'Guardar estado/historial',
+                    ];
+                    $phaseRows = [];
+                    foreach ($phaseLabels as $k => $label) {
+                        $ms = isset($batch_stats['phase_totals_ms'][$k]) ? (float) $batch_stats['phase_totals_ms'][$k] : 0.0;
+                        $phaseRows[] = ['key' => $k, 'label' => $label, 'ms' => $ms];
+                    }
+                    usort($phaseRows, static function ($a, $b) {
+                        return $b['ms'] <=> $a['ms'];
+                    });
+                    foreach ($phaseRows as $row) {
+                        $sec = round($row['ms'] / 1000, 2);
+                        $pct = $process_duration > 0 ? round(($row['ms'] / 1000) / $process_duration * 100, 1) : 0;
+                        echo sprintf("  - %-24s %7.2fs  (%4.1f%%)\n", $row['label'] . ':', $sec, $pct);
+                    }
+                }
+                if (!empty($batch_stats['items']) && is_array($batch_stats['items'])) {
+                    echo "\n[COLA] Detalle por producto:\n";
+                    echo "  PS_ID   | cola     | real     | total_s | api_ms | prepare | diff | skip | campos\n";
+                    echo "  --------+----------+----------+---------+--------+---------+------+------+--------\n";
+                    foreach ($batch_stats['items'] as $it) {
+                        $tm = isset($it['timings']) && is_array($it['timings']) ? $it['timings'] : [];
+                        $skip = !empty($it['skipped_no_diff']) ? 'sí' : 'no';
+                        $diffFields = isset($it['diff_fields']) && $it['diff_fields'] !== null ? (string) $it['diff_fields'] : '-';
+                        $statusMark = !empty($it['ok']) ? 'OK' : 'ERR';
+                        echo sprintf(
+                            "  %-6s | %-8s | %-8s | %7.2f | %6.0f | %7.0f | %4.0f | %-4s | %s %s\n",
+                            (string) ($it['product_id'] ?? ''),
+                            (string) ($it['queue_action'] ?? ''),
+                            (string) ($it['api_action'] ?? ''),
+                            (float) ($it['duration_s'] ?? 0),
+                            (float) ($tm['api_ms'] ?? 0),
+                            (float) ($tm['prepare_ms'] ?? 0),
+                            (float) ($tm['diff_ms'] ?? 0),
+                            $skip,
+                            $diffFields,
+                            $statusMark
+                        );
+                        if (empty($it['ok']) && !empty($it['error'])) {
+                            echo "           error: " . $it['error'] . "\n";
+                        }
+                    }
+                    // Top 5 más lentos
+                    $sorted = $batch_stats['items'];
+                    usort($sorted, static function ($a, $b) {
+                        return ((float) ($b['duration_s'] ?? 0) <=> (float) ($a['duration_s'] ?? 0));
+                    });
+                    echo "\n[COLA] Top 5 más lentos:\n";
+                    foreach (array_slice($sorted, 0, 5) as $slow) {
+                        $tm = isset($slow['timings']) && is_array($slow['timings']) ? $slow['timings'] : [];
+                        echo sprintf(
+                            "  PS %s → %.2fs (API %.0fms, prepare %.0fms, %s)\n",
+                            (string) ($slow['product_id'] ?? '?'),
+                            (float) ($slow['duration_s'] ?? 0),
+                            (float) ($tm['api_ms'] ?? 0),
+                            (float) ($tm['prepare_ms'] ?? 0),
+                            !empty($slow['skipped_no_diff']) ? 'skip-diff' : ((string) ($slow['api_action'] ?? ''))
+                        );
+                    }
+                }
             } else {
                 echo "\n[COLA] No hay productos pendientes en la cola\n";
             }

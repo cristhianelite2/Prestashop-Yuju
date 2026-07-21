@@ -188,7 +188,8 @@
         <div class="alert alert-info">
             <i class="icon-info-circle"></i>
             <strong>Información:</strong>
-            Las categorías mapeadas aparecen en la tabla. Las categorías con <i class="icon-exchange" style="color: #4caf50;"></i> ya están mapeadas y no se pueden volver a mapear.
+            Las categorías PrestaShop con <i class="icon-exchange" style="color: #4caf50;"></i> ya tienen mapeo (cada categoría PS solo puede mapearse una vez).
+            Varias categorías de PrestaShop <strong>sí pueden</strong> apuntar a la misma categoría de Yuju.
         </div>
         
         <!-- Tabla de mapeos -->
@@ -269,8 +270,8 @@
                         <ol style="margin: 0 0 0 18px; padding: 0;">
                             <li>Selecciona una categoría de PrestaShop del árbol (izquierda)</li>
                             <li>Selecciona la categoría correspondiente de Yuju (derecha)</li>
-                            <li>Las categorías con <i class="icon-exchange" style="color: #4caf50;"></i> ya están mapeadas</li>
-                            <li>No se pueden mapear categorías ya mapeadas ni sus hijas</li>
+                            <li>Las categorías PrestaShop con <i class="icon-exchange" style="color: #4caf50;"></i> ya están mapeadas (una sola vez cada una)</li>
+                            <li>Varias categorías PrestaShop pueden compartir la misma categoría Yuju</li>
                         </ol>
                     </div>
                 </div>

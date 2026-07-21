@@ -44,6 +44,24 @@ class YujuProductManager
      */
     protected function loadFieldMappings()
     {
+        // Una sola vez por tienda: desactivar mapeos que la API Yuju rechaza en create/update.
+        if (!(int) Configuration::get('YUJU_INVALID_PRODUCT_MAPPINGS_DISABLED')) {
+            try {
+                Db::getInstance()->execute(
+                    'UPDATE `' . _DB_PREFIX_ . 'yuju_product_mapping`
+                     SET `is_active` = 0, `updated_at` = NOW()
+                     WHERE `is_active` = 1
+                       AND `yuju_field` IN (
+                           \'cost_price\',\'active\',\'stock_quantity\',\'short_description\',
+                           \'width\',\'height\',\'depth\'
+                       )'
+                );
+                Configuration::updateValue('YUJU_INVALID_PRODUCT_MAPPINGS_DISABLED', 1);
+            } catch (Exception $e) {
+                // Continuar: sanitizeYujuProductPayload sigue protegiendo el envío.
+            }
+        }
+
         $this->field_mappings = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
             WHERE is_active = 1
@@ -565,6 +583,51 @@ class YujuProductManager
             return $value !== '' && $value !== null && $value !== [];
         });
 
+        // Respetar API Yuju create/update: no enviar campos que no existen
+        // https://api-docs.yuju.io/docs/crear-un-producto-único
+        // https://api-docs.yuju.io/docs/crear-un-producto-con-variaciones
+        return $this->sanitizeYujuProductPayload($data);
+    }
+
+    /**
+     * Quita del payload campos que la API de productos Yuju no acepta.
+     * El stock correcto es `stock` (no stock_quantity); no existen active ni cost_price.
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    protected function sanitizeYujuProductPayload(array $data)
+    {
+        $forbidden = [
+            'active',
+            'cost_price',
+            'stock_quantity',
+            'quantity',
+            'wholesale_price',
+            'short_description',
+            'description_short',
+            // Dimensiones PS crudas: Yuju usa shipping_width/height/depth
+            'width',
+            'height',
+            'depth',
+            'meta_title',
+            'meta_description',
+            'meta_keywords',
+            'link_rewrite',
+            'id_product',
+            'prestashop_product_id',
+        ];
+
+        foreach ($forbidden as $key) {
+            unset($data[$key]);
+        }
+
+        // Asegurar stock canónico
+        if (isset($data['stock'])) {
+            $data['stock'] = (int) $data['stock'];
+        }
+
         return $data;
     }
 
@@ -638,12 +701,346 @@ class YujuProductManager
      */
     protected function getYujuProductId($prestashop_product_id)
     {
-        $result = Db::getInstance()->getRow('
-            SELECT yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status
-            WHERE prestashop_product_id = ' . (int) $prestashop_product_id . '
-        ');
+        $resolved = $this->resolveExistingYujuProductId((int) $prestashop_product_id);
 
-        return $result ? $result['yuju_product_id'] : null;
+        return $resolved !== '' ? $resolved : null;
+    }
+
+    /**
+     * Normaliza un ID Yuju (rechaza vacío / null / 0).
+     *
+     * @param mixed $id
+     *
+     * @return string
+     */
+    public function normalizeYujuProductId($id)
+    {
+        $id = trim((string) $id);
+        if ($id === '' || strtolower($id) === 'null' || $id === '0') {
+            return '';
+        }
+
+        return $id;
+    }
+
+    /**
+     * Extrae ID Yuju de un response success de la API (varias claves posibles).
+     *
+     * @param array|mixed $successItem
+     * @param array|mixed $responseData
+     *
+     * @return string
+     */
+    public function extractYujuIdFromApiSuccess($successItem, $responseData = null)
+    {
+        if (is_array($successItem)) {
+            foreach (['id_product', 'id', 'product_id', 'yuju_product_id'] as $key) {
+                $id = $this->normalizeYujuProductId($successItem[$key] ?? '');
+                if ($id !== '') {
+                    return $id;
+                }
+            }
+        }
+        if (is_array($responseData)) {
+            foreach (['id_product', 'id', 'product_id'] as $key) {
+                $id = $this->normalizeYujuProductId($responseData[$key] ?? '');
+                if ($id !== '') {
+                    return $id;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resuelve el ID Yuju ya existente (local, meta, historial). NUNCA debe re-crearse si hay ID.
+     * Si lo recupera de meta/historial, lo re-persiste en yuju_product_status.
+     *
+     * @param int $prestashop_product_id
+     *
+     * @return string ID o '' si no hay evidencia de producto ya creado
+     */
+    public function resolveExistingYujuProductId($prestashop_product_id)
+    {
+        $prestashop_product_id = (int) $prestashop_product_id;
+        if ($prestashop_product_id <= 0) {
+            return '';
+        }
+
+        $status_row = $this->getProductYujuStatusRow($prestashop_product_id);
+        $found = '';
+
+        if ($status_row) {
+            $found = $this->normalizeYujuProductId($status_row['yuju_product_id'] ?? '');
+            if ($found === '' && !empty($status_row['last_sync_data'])) {
+                $meta = json_decode((string) $status_row['last_sync_data'], true);
+                if (is_array($meta)) {
+                    $inner = (isset($meta['_meta']) && is_array($meta['_meta'])) ? $meta['_meta'] : $meta;
+                    $found = $this->normalizeYujuProductId($inner['api_yuju_id'] ?? ($meta['api_yuju_id'] ?? ''));
+                }
+            }
+        }
+
+        if ($found === '' && $this->isProductSyncHistoryTablePresent()) {
+            // getRow() ya añade LIMIT 1 en PrestaShop — no duplicarlo
+            $row = Db::getInstance()->getRow(
+                'SELECT `yuju_product_id`, `response_data`
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+                 WHERE `prestashop_product_id` = ' . $prestashop_product_id . '
+                   AND `status` = \'success\'
+                   AND TRIM(IFNULL(`yuju_product_id`, \'\')) NOT IN (\'\', \'0\', \'null\', \'NULL\')
+                 ORDER BY `id` DESC'
+            );
+            if ($row) {
+                $found = $this->normalizeYujuProductId($row['yuju_product_id'] ?? '');
+            }
+            if ($found === '') {
+                $hist = $this->getLastValidCreateHistory($prestashop_product_id);
+                if ($hist) {
+                    $found = $this->normalizeYujuProductId($hist['yuju_product_id'] ?? '');
+                    if ($found === '' && !empty($hist['response_data'])) {
+                        $resp = json_decode((string) $hist['response_data'], true);
+                        $first = null;
+                        if (is_array($resp) && !empty($resp['success'][0]) && is_array($resp['success'][0])) {
+                            $first = $resp['success'][0];
+                        }
+                        $found = $this->extractYujuIdFromApiSuccess($first, is_array($resp) ? $resp : null);
+                    }
+                }
+            }
+        }
+
+        // Re-persistir si el status local no lo tenía
+        if ($found !== '' && $status_row) {
+            $current = $this->normalizeYujuProductId($status_row['yuju_product_id'] ?? '');
+            if ($current === '') {
+                Db::getInstance()->update(
+                    'yuju_product_status',
+                    [
+                        'yuju_product_id' => pSQL($found),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ],
+                    'prestashop_product_id = ' . $prestashop_product_id
+                );
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * True si ya hubo un create exitoso / pendiente real: NO se debe volver a CREAR.
+     *
+     * @param int $product_id
+     * @param array|null $status_row
+     *
+     * @return bool
+     */
+    public function productAlreadyExistsInYuju($product_id, $status_row = null)
+    {
+        if ($this->resolveExistingYujuProductId((int) $product_id) !== '') {
+            return true;
+        }
+        if ($status_row === null) {
+            $status_row = $this->getProductYujuStatusRow((int) $product_id);
+        }
+        if ($status_row) {
+            $st = (string) ($status_row['sync_status'] ?? '');
+            if (in_array($st, ['synced', 'synced_with_warnings', 'updating_in_yuju', 'creating_in_yuju'], true)) {
+                if ($st === 'creating_in_yuju' && $this->hasValidPendingCreateEvidence((int) $product_id, $status_row)) {
+                    return true;
+                }
+                if (in_array($st, ['synced', 'synced_with_warnings', 'updating_in_yuju'], true)) {
+                    // Sin ID es inconsistente, pero no recrear a ciegas
+                    return $this->getLastValidCreateHistory((int) $product_id) !== null;
+                }
+            }
+        }
+
+        return $this->getLastValidCreateHistory((int) $product_id) !== null;
+    }
+
+    /**
+     * Último payload enviado con éxito (last_sync_data o historial).
+     * Prefiere un snapshot “completo” (create / last_sync_data) frente a diffs parciales de update.
+     *
+     * @param int $product_id
+     *
+     * @return array<string, mixed>
+     */
+    public function getLastSuccessfulSyncPayload($product_id)
+    {
+        $product_id = (int) $product_id;
+        $status_row = $this->getProductYujuStatusRow($product_id);
+        if ($status_row && !empty($status_row['last_sync_data'])) {
+            $decoded = json_decode((string) $status_row['last_sync_data'], true);
+            if (is_array($decoded)) {
+                if (isset($decoded['_meta'])) {
+                    unset($decoded['_meta']);
+                }
+                // Meta-only viejo (webhook_pending sin payload de producto)
+                $looksLikeMetaOnly = !empty($decoded['webhook_pending'])
+                    && !isset($decoded['sku'])
+                    && !isset($decoded['name'])
+                    && !isset($decoded['price'])
+                    && !isset($decoded['stock']);
+                if (!$looksLikeMetaOnly && count($decoded) > 0) {
+                    return $decoded;
+                }
+            }
+        }
+
+        if (!$this->isProductSyncHistoryTablePresent()) {
+            return [];
+        }
+
+        $rows = Db::getInstance()->executeS(
+            'SELECT `action`, `request_data`
+             FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+             WHERE `prestashop_product_id` = ' . $product_id . '
+               AND `status` = \'success\'
+               AND `action` IN (\'create\', \'update\')
+               AND `request_data` IS NOT NULL
+               AND TRIM(`request_data`) NOT IN (\'\', \'[]\', \'{}\', \'null\')
+             ORDER BY `id` DESC
+             LIMIT 25'
+        );
+        if (!is_array($rows) || !$rows) {
+            return [];
+        }
+
+        $fallback = [];
+        foreach ($rows as $row) {
+            $req = json_decode((string) ($row['request_data'] ?? ''), true);
+            if (!is_array($req) || count($req) === 0) {
+                continue;
+            }
+            if (isset($req['_meta'])) {
+                unset($req['_meta']);
+            }
+            // Ignorar registros que solo tenían sku (errores/reinyecciones viejas)
+            $keys = array_keys($req);
+            if (empty(array_diff($keys, ['sku', 'sku_simple']))) {
+                continue;
+            }
+            if ($fallback === []) {
+                $fallback = $req;
+            }
+            // Preferir payload “rico” (create o update con varios campos de producto)
+            if ($this->payloadLooksLikeFullProductSnapshot($req)
+                || (isset($row['action']) && $row['action'] === 'create')
+            ) {
+                return $req;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return bool
+     */
+    protected function payloadLooksLikeFullProductSnapshot(array $payload)
+    {
+        $markers = ['name', 'price', 'stock', 'description', 'id_category', 'images', 'sku'];
+        $hits = 0;
+        foreach ($markers as $key) {
+            if (array_key_exists($key, $payload)) {
+                ++$hits;
+            }
+        }
+
+        return $hits >= 3;
+    }
+
+    /**
+     * Diff de payload Yuju: solo claves cuyo valor cambió vs el último envío.
+     *
+     * @param array $newPayload
+     * @param array $oldPayload
+     *
+     * @return array
+     */
+    public function buildYujuPayloadDiff(array $newPayload, array $oldPayload)
+    {
+        $newN = $this->normalizePayloadForDiffCompare($newPayload);
+        $oldN = $this->normalizePayloadForDiffCompare($oldPayload);
+        $diff = [];
+        foreach ($newPayload as $key => $value) {
+            if ($key === '_meta') {
+                continue;
+            }
+            $newCmp = array_key_exists($key, $newN) ? $newN[$key] : $value;
+            if (!array_key_exists($key, $oldN) && !array_key_exists($key, $oldPayload)) {
+                $diff[$key] = $value;
+                continue;
+            }
+            $oldCmp = array_key_exists($key, $oldN) ? $oldN[$key] : $oldPayload[$key];
+            if (json_encode($oldCmp) !== json_encode($newCmp)) {
+                $diff[$key] = $value;
+            }
+        }
+
+        return $diff;
+    }
+
+    /**
+     * Normaliza campos volátiles (URLs de imagen, floats) para no forzar update falso.
+     *
+     * @param array $payload
+     *
+     * @return array
+     */
+    protected function normalizePayloadForDiffCompare(array $payload)
+    {
+        unset($payload['_meta']);
+        if (isset($payload['images']) && is_array($payload['images'])) {
+            $norm = [];
+            foreach ($payload['images'] as $url) {
+                $url = (string) $url;
+                $path = parse_url($url, PHP_URL_PATH);
+                $norm[] = $path !== null && $path !== '' ? $path : preg_replace('/\?.*$/', '', $url);
+            }
+            sort($norm);
+            $payload['images'] = $norm;
+        }
+        foreach (['price', 'weight', 'shipping_width', 'shipping_height', 'shipping_depth', 'stock'] as $numKey) {
+            if (isset($payload[$numKey]) && is_numeric($payload[$numKey])) {
+                $payload[$numKey] = $numKey === 'stock'
+                    ? (int) $payload[$numKey]
+                    : round((float) $payload[$numKey], 4);
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Guarda snapshot del último payload enviado (para diffs futuros) + meta opcional.
+     *
+     * @param int $product_id
+     * @param array $payload
+     * @param array $meta
+     */
+    protected function persistLastSyncPayload($product_id, array $payload, array $meta = [])
+    {
+        $store = $payload;
+        unset($store['_meta']);
+        if (!empty($meta)) {
+            $store['_meta'] = $meta;
+        }
+        $json = json_encode($store, JSON_UNESCAPED_UNICODE);
+        Db::getInstance()->update(
+            'yuju_product_status',
+            [
+                'last_sync_data' => pSQL($json, true),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ],
+            'prestashop_product_id = ' . (int) $product_id
+        );
     }
 
     /**
@@ -716,6 +1113,107 @@ class YujuProductManager
         );
 
         return $row ?: null;
+    }
+
+    /**
+     * True si el JSON de request/response del historial trae datos útiles (no [] / {}).
+     *
+     * @param mixed $json
+     *
+     * @return bool
+     */
+    public function isNonEmptyJsonPayload($json)
+    {
+        $raw = trim((string) $json);
+        if ($raw === '' || $raw === '[]' || $raw === '{}' || $raw === 'null' || strtolower($raw) === 'null') {
+            return false;
+        }
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            return count($decoded) > 0;
+        }
+
+        return strlen($raw) > 2;
+    }
+
+    /**
+     * Último create del historial con payload real enviado a Yuju.
+     *
+     * @param int $product_id
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getLastValidCreateHistory($product_id)
+    {
+        if (!$this->isProductSyncHistoryTablePresent()) {
+            return null;
+        }
+        $product_id = (int) $product_id;
+        $rows = Db::getInstance()->executeS(
+            'SELECT `id`, `yuju_product_id`, `http_status_code`, `request_data`, `response_data`,
+                    `error_message`, `status`, `created_at`, `sync_duration`
+             FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+             WHERE `prestashop_product_id` = ' . $product_id . '
+               AND `action` = \'create\'
+             ORDER BY `id` DESC
+             LIMIT 20'
+        );
+        if (!is_array($rows)) {
+            return null;
+        }
+        // Preferir success con request/response con datos
+        foreach ($rows as $row) {
+            if (($row['status'] ?? '') !== 'success') {
+                continue;
+            }
+            if ($this->isNonEmptyJsonPayload($row['request_data'] ?? '')
+                || $this->isNonEmptyJsonPayload($row['response_data'] ?? '')) {
+                return $row;
+            }
+        }
+        foreach ($rows as $row) {
+            if ($this->isNonEmptyJsonPayload($row['request_data'] ?? '')
+                || $this->isNonEmptyJsonPayload($row['response_data'] ?? '')) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ¿Hay evidencia de que el producto sí se envió y está a la espera del webhook?
+     *
+     * @param int $product_id
+     * @param array|null $status_row
+     *
+     * @return bool
+     */
+    public function hasValidPendingCreateEvidence($product_id, $status_row = null)
+    {
+        if ($status_row === null) {
+            $status_row = $this->getProductYujuStatusRow($product_id);
+        }
+        if (!$status_row || ($status_row['sync_status'] ?? '') !== 'creating_in_yuju') {
+            return false;
+        }
+        if (!empty($status_row['yuju_product_id'])) {
+            return true;
+        }
+        if (!empty($status_row['last_sync_data'])) {
+            $meta = json_decode((string) $status_row['last_sync_data'], true);
+            if (is_array($meta)) {
+                $inner = (isset($meta['_meta']) && is_array($meta['_meta'])) ? $meta['_meta'] : $meta;
+                if (!empty($inner['api_yuju_id']) || !empty($inner['webhook_pending'])
+                    || !empty($meta['api_yuju_id']) || !empty($meta['webhook_pending'])) {
+                    if (!empty($inner['api_yuju_id']) || !empty($meta['api_yuju_id'])) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return $this->getLastValidCreateHistory((int) $product_id) !== null;
     }
 
     /**
@@ -809,7 +1307,8 @@ class YujuProductManager
         if (!$matched) {
             foreach ($candidates as $c) {
                 $meta = json_decode($c['last_sync_data'] ?? '{}', true) ?: [];
-                $meta_id = $this->normalizeWebhookResourceId((string) ($meta['api_yuju_id'] ?? ''));
+                $inner = (isset($meta['_meta']) && is_array($meta['_meta'])) ? $meta['_meta'] : $meta;
+                $meta_id = $this->normalizeWebhookResourceId((string) ($inner['api_yuju_id'] ?? ($meta['api_yuju_id'] ?? '')));
                 if ($meta_id !== '' && $meta_id === $resource_id) {
                     $matched = $c;
                     break;
@@ -831,7 +1330,8 @@ class YujuProductManager
         if (!$matched && $sku !== '' && !empty($candidates)) {
             foreach ($candidates as $c) {
                 $meta = json_decode($c['last_sync_data'] ?? '{}', true) ?: [];
-                $meta_sku = trim((string) ($meta['sku'] ?? ''));
+                $inner = (isset($meta['_meta']) && is_array($meta['_meta'])) ? $meta['_meta'] : $meta;
+                $meta_sku = trim((string) ($inner['sku'] ?? ($meta['sku'] ?? '')));
                 if ($meta_sku !== '' && strcasecmp($meta_sku, $sku) === 0) {
                     $matched = $c;
                     break;
@@ -882,12 +1382,452 @@ class YujuProductManager
         }
 
         $pid = (int) $matched['prestashop_product_id'];
-        // Limpiar también last_sync_data para quitar bandera webhook_pending.
+        // Confirmación definitiva: webhook product-created → creado/sincronizado.
+        // No guardar el mensaje de éxito en last_error (esa columna es para errores reales).
         $this->updateProductStatus($pid, 'synced', null, $resource_id, null);
+        $this->confirmPendingCreateHistory(
+            $pid,
+            $resource_id,
+            'Creado en Yuju (confirmado por webhook).'
+        );
 
         $this->logger->log('Webhook product-created confirmado: PS ' . $pid . ' -> Yuju ' . $resource_id, 'info');
 
         return ['success' => true, 'prestashop_product_id' => $pid, 'yuju_product_id' => $resource_id];
+    }
+
+    /**
+     * Actualiza el último historial de create pendiente al confirmar el webhook.
+     *
+     * @param int $productId
+     * @param string $yujuProductId
+     * @param string $message
+     *
+     * @return void
+     */
+    protected function confirmPendingCreateHistory($productId, $yujuProductId, $message)
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0 || !$this->isProductSyncHistoryTablePresent()) {
+            return;
+        }
+
+        $row = Db::getInstance()->getRow(
+            'SELECT `id`
+             FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+             WHERE `prestashop_product_id` = ' . (int) $productId . '
+               AND `action` = "create"
+               AND `status` = "success"
+               AND (
+                    `error_message` LIKE "%Pendiente confirmaci%"
+                 OR `error_message` LIKE "%webhook product-created%"
+                 OR `error_message` LIKE "%Esperando confirmaci%"
+                 OR TRIM(IFNULL(`error_message`, "")) = ""
+               )
+             ORDER BY `id` DESC'
+        );
+        if (empty($row['id'])) {
+            // Fallback: último create exitoso del producto
+            $row = Db::getInstance()->getRow(
+                'SELECT `id`
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+                 WHERE `prestashop_product_id` = ' . (int) $productId . '
+                   AND `action` = "create"
+                   AND `status` = "success"
+                 ORDER BY `id` DESC'
+            );
+        }
+        if (empty($row['id'])) {
+            return;
+        }
+
+        $data = [
+            'error_message' => pSQL((string) $message),
+        ];
+        $yujuProductId = trim((string) $yujuProductId);
+        if ($yujuProductId !== '') {
+            $data['yuju_product_id'] = pSQL($yujuProductId);
+        }
+
+        Db::getInstance()->update(
+            'yuju_product_sync_history',
+            $data,
+            'id = ' . (int) $row['id']
+        );
+    }
+
+    /**
+     * Busca webhooks product-created posteriores al último create del producto (por SKU)
+     * y, si hay match, vincula el ID Yuju (pasa a synced).
+     *
+     * @param int $productId
+     * @param bool $autoApply
+     *
+     * @return array<string, mixed>
+     */
+    public function findAndLinkProductCreatedWebhook($productId, $autoApply = true)
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'Producto inválido.'];
+        }
+
+        $status = $this->getProductYujuStatusRow($productId);
+        if (!$status || (string) ($status['sync_status'] ?? '') !== 'creating_in_yuju') {
+            return [
+                'success' => false,
+                'message' => 'El producto no está en «En espera de respuesta». Solo aplica a ese estado.',
+            ];
+        }
+
+        $existingId = trim((string) ($status['yuju_product_id'] ?? ''));
+        if ($existingId !== '' && strtolower($existingId) !== 'null' && $existingId !== '0') {
+            return [
+                'success' => true,
+                'already_linked' => true,
+                'message' => 'El producto ya tiene ID Yuju vinculado: ' . $existingId,
+                'yuju_product_id' => $existingId,
+            ];
+        }
+
+        $sentSkus = [];
+        $createAfter = null;
+        $lastCreate = null;
+
+        if ($this->isProductSyncHistoryTablePresent()) {
+            $lastCreate = Db::getInstance()->getRow(
+                'SELECT `id`, `created_at`, `request_data`, `response_data`, `status`, `http_status_code`, `yuju_product_id`
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+                 WHERE `prestashop_product_id` = ' . (int) $productId . '
+                   AND `action` = "create"
+                 ORDER BY `id` DESC'
+            );
+        }
+
+        if ($lastCreate && !empty($lastCreate['created_at'])) {
+            $createAfter = (string) $lastCreate['created_at'];
+        } elseif (!empty($status['updated_at'])) {
+            $createAfter = (string) $status['updated_at'];
+        } elseif (!empty($status['last_sync_at'])) {
+            $createAfter = (string) $status['last_sync_at'];
+        }
+
+        if ($lastCreate && $this->isNonEmptyJsonPayload($lastCreate['request_data'] ?? '')) {
+            $req = json_decode((string) $lastCreate['request_data'], true);
+            if (is_array($req)) {
+                foreach (['sku', 'sku_simple', 'reference'] as $k) {
+                    $v = isset($req[$k]) ? trim((string) $req[$k]) : '';
+                    if ($v !== '') {
+                        $sentSkus[$v] = true;
+                    }
+                }
+            }
+        }
+
+        if (!empty($status['last_sync_data'])) {
+            $meta = json_decode((string) $status['last_sync_data'], true);
+            if (is_array($meta)) {
+                $inner = (isset($meta['_meta']) && is_array($meta['_meta'])) ? $meta['_meta'] : $meta;
+                foreach (['sku', 'sku_simple'] as $k) {
+                    $v = isset($inner[$k]) ? trim((string) $inner[$k]) : '';
+                    if ($v !== '') {
+                        $sentSkus[$v] = true;
+                    }
+                }
+            }
+        }
+
+        $product = new Product($productId);
+        if (Validate::isLoadedObject($product) && trim((string) $product->reference) !== '') {
+            $sentSkus[trim((string) $product->reference)] = true;
+        }
+
+        $sentSkuList = array_keys($sentSkus);
+        if ($sentSkuList === []) {
+            return [
+                'success' => false,
+                'message' => 'No se encontró el SKU enviado (historial/referencia) para buscar en webhooks.',
+            ];
+        }
+
+        // Margen amplio: en algunos logs received_at llega desfasado respecto a sent_at
+        $fromSql = $createAfter
+            ? date('Y-m-d H:i:s', max(0, strtotime($createAfter) - 3600))
+            : date('Y-m-d H:i:s', time() - 86400 * 7);
+
+        $likeParts = [];
+        foreach ($sentSkuList as $sku) {
+            $likeParts[] = 'payload LIKE "%' . pSQL($sku) . '%"';
+            $likeParts[] = 'entity_id = "' . pSQL($sku) . '"';
+        }
+
+        $sql = 'SELECT `id`, `event_type`, `entity_id`, `payload`, `status`, `received_at`, `processed_at`, `error_message`
+                FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs`
+                WHERE `event_type` IN ("product-created", "product_created")
+                  AND `received_at` >= "' . pSQL($fromSql) . '"
+                  AND (' . implode(' OR ', $likeParts) . ')
+                ORDER BY `received_at` ASC
+                LIMIT 50';
+        $rows = Db::getInstance()->executeS($sql);
+        if (!is_array($rows)) {
+            $rows = [];
+        }
+
+        $matches = [];
+        foreach ($rows as $row) {
+            $payload = json_decode((string) ($row['payload'] ?? ''), true);
+            if (!is_array($payload)) {
+                continue;
+            }
+            // Algunos wrappers guardan el body en data/payload
+            if (isset($payload['data']) && is_array($payload['data']) && !isset($payload['sku']) && !isset($payload['resource_id'])) {
+                $payload = $payload['data'];
+            }
+
+            $whSku = trim((string) ($payload['sku'] ?? ''));
+            $whSkuSimple = trim((string) ($payload['sku_simple'] ?? ''));
+            $resourceId = $this->normalizeWebhookResourceId(
+                (string) ($payload['resource_id'] ?? ($payload['id'] ?? ($row['entity_id'] ?? '')))
+            );
+
+            $matchedSku = '';
+            foreach ($sentSkuList as $sent) {
+                if ($whSku !== '' && strcasecmp($whSku, $sent) === 0) {
+                    $matchedSku = $sent;
+                    break;
+                }
+                if ($whSkuSimple !== '' && strcasecmp($whSkuSimple, $sent) === 0) {
+                    $matchedSku = $sent;
+                    break;
+                }
+            }
+            if ($matchedSku === '') {
+                continue;
+            }
+
+            $matches[] = [
+                'webhook_log_id' => (int) ($row['id'] ?? 0),
+                'received_at' => (string) ($row['received_at'] ?? ''),
+                'webhook_status' => (string) ($row['status'] ?? ''),
+                'resource_id' => $resourceId,
+                'sku' => $whSku,
+                'sku_simple' => $whSkuSimple,
+                'matched_sent_sku' => $matchedSku,
+                'event' => (string) ($payload['event'] ?? ($payload['topic'] ?? 'product-created')),
+                'shop_id' => isset($payload['shop_id']) ? (string) $payload['shop_id'] : '',
+                'webhook_id' => isset($payload['webhook_id']) ? (string) $payload['webhook_id'] : '',
+                'payload' => $payload,
+            ];
+        }
+
+        if ($matches === []) {
+            return [
+                'success' => true,
+                'found' => false,
+                'message' => 'No se encontró un webhook product-created con el SKU enviado ('
+                    . implode(', ', $sentSkuList) . ') después de '
+                    . ($createAfter ?: $fromSql) . '.',
+                'sent_skus' => $sentSkuList,
+                'search_from' => $fromSql,
+                'last_create_at' => $createAfter,
+                'matches' => [],
+            ];
+        }
+
+        // Preferir el más cercano después del create; si todos son anteriores, el más reciente
+        $best = $matches[0];
+        $createTs = $createAfter ? strtotime($createAfter) : 0;
+        $bestScore = PHP_INT_MAX;
+        foreach ($matches as $m) {
+            $ts = !empty($m['received_at']) ? strtotime($m['received_at']) : 0;
+            $delta = $createTs > 0 ? abs($ts - $createTs) : (time() - $ts);
+            if ($m['resource_id'] === '') {
+                $delta += 100000;
+            }
+            if ($delta < $bestScore) {
+                $bestScore = $delta;
+                $best = $m;
+            }
+        }
+
+        $result = [
+            'success' => true,
+            'found' => true,
+            'sent_skus' => $sentSkuList,
+            'search_from' => $fromSql,
+            'last_create_at' => $createAfter,
+            'match' => $best,
+            'matches_count' => count($matches),
+            'matches' => $matches,
+            'applied' => false,
+            'message' => 'Webhook encontrado. SKU enviado: ' . $best['matched_sent_sku']
+                . ' | SKU webhook: ' . ($best['sku'] ?: $best['sku_simple'])
+                . ' | ID Yuju: ' . ($best['resource_id'] ?: '—'),
+        ];
+
+        if (!$autoApply) {
+            return $result;
+        }
+
+        if ($best['resource_id'] === '') {
+            $result['success'] = false;
+            $result['message'] = 'Se encontró webhook con el SKU, pero sin resource_id/id para vincular.';
+
+            return $result;
+        }
+
+        $apply = $this->confirmProductCreatedFromWebhook(
+            $best['resource_id'],
+            $best['sku'] !== '' ? $best['sku'] : $best['matched_sent_sku'],
+            $best['sku_simple'],
+            null
+        );
+
+        if (!empty($apply['success']) && !empty($apply['prestashop_product_id'])) {
+            $result['applied'] = true;
+            $result['yuju_product_id'] = $best['resource_id'];
+            $result['message'] = 'Webhook encontrado y vinculado. SKU coincidente: '
+                . $best['matched_sent_sku'] . ' → ID Yuju ' . $best['resource_id'] . '. Estado: Sincronizado.';
+        } elseif (!empty($apply['success'])) {
+            // confirm no encontró fila (raro): forzar vínculo local
+            $this->updateProductStatus(
+                $productId,
+                'synced',
+                null,
+                $best['resource_id'],
+                null
+            );
+            $this->confirmPendingCreateHistory(
+                $productId,
+                $best['resource_id'],
+                'Creado en Yuju (vinculado manualmente desde búsqueda de webhook).'
+            );
+            $result['applied'] = true;
+            $result['yuju_product_id'] = $best['resource_id'];
+            $result['message'] = 'Webhook encontrado. Se vinculó localmente el ID Yuju '
+                . $best['resource_id'] . ' por coincidencia de SKU.';
+        } else {
+            $result['success'] = false;
+            $result['message'] = 'Webhook encontrado pero no se pudo vincular: '
+                . (string) ($apply['message'] ?? 'error desconocido');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Segundos en espera desde el último create / updated_at (estado creating_in_yuju).
+     *
+     * @param int $productId
+     * @param array|null $status
+     *
+     * @return array{seconds:int, since:string|null, can_resend:bool}
+     */
+    public function getPendingCreateWaitInfo($productId, $status = null)
+    {
+        $productId = (int) $productId;
+        if ($status === null) {
+            $status = $this->getProductYujuStatusRow($productId);
+        }
+        $since = null;
+        if ($this->isProductSyncHistoryTablePresent()) {
+            $lastCreate = Db::getInstance()->getRow(
+                'SELECT `created_at`
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+                 WHERE `prestashop_product_id` = ' . (int) $productId . '
+                   AND `action` = "create"
+                 ORDER BY `id` DESC'
+            );
+            if ($lastCreate && !empty($lastCreate['created_at'])) {
+                $since = (string) $lastCreate['created_at'];
+            }
+        }
+        if ($since === null && is_array($status)) {
+            if (!empty($status['updated_at'])) {
+                $since = (string) $status['updated_at'];
+            } elseif (!empty($status['last_sync_at'])) {
+                $since = (string) $status['last_sync_at'];
+            }
+        }
+        $ts = $since ? strtotime($since) : 0;
+        $seconds = $ts > 0 ? max(0, time() - $ts) : 0;
+
+        return [
+            'seconds' => $seconds,
+            'since' => $since,
+            'can_resend' => ($ts > 0 && $seconds >= 3600),
+        ];
+    }
+
+    /**
+     * Reenvía un producto en «En espera de respuesta» si lleva ≥1h sin webhook.
+     *
+     * @param int $productId
+     *
+     * @return array<string, mixed>
+     */
+    public function resendPendingCreate($productId)
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'Producto inválido.'];
+        }
+
+        $status = $this->getProductYujuStatusRow($productId);
+        if (!$status || (string) ($status['sync_status'] ?? '') !== 'creating_in_yuju') {
+            return [
+                'success' => false,
+                'message' => 'El producto no está en «En espera de respuesta».',
+            ];
+        }
+
+        $existingId = trim((string) ($status['yuju_product_id'] ?? ''));
+        if ($existingId !== '' && strtolower($existingId) !== 'null' && $existingId !== '0') {
+            return [
+                'success' => false,
+                'message' => 'El producto ya tiene ID Yuju (' . $existingId . '). Use actualizar, no reenviar creación.',
+                'yuju_product_id' => $existingId,
+            ];
+        }
+
+        $wait = $this->getPendingCreateWaitInfo($productId, $status);
+        if (empty($wait['can_resend'])) {
+            $mins = (int) floor(($wait['seconds'] ?: 0) / 60);
+            $left = max(0, 60 - $mins);
+
+            return [
+                'success' => false,
+                'too_early' => true,
+                'wait_seconds' => $wait['seconds'],
+                'wait_since' => $wait['since'],
+                'message' => 'Aún no ha pasado 1 hora desde el último envío'
+                    . ($wait['since'] ? ' (' . $wait['since'] . ')' : '')
+                    . '. Quedan ~' . $left . ' min. Primero pruebe «Buscar webhook».',
+            ];
+        }
+
+        // Liberar el bloqueo de espera para permitir un CREATE forzado.
+        $this->updateProductStatus(
+            $productId,
+            'pending',
+            'Reenvío manual tras >1h sin webhook product-created.',
+            null,
+            null
+        );
+
+        $result = $this->sendProductToYuju($productId, ['force_resend_create' => true]);
+        if (!is_array($result)) {
+            $result = ['success' => false, 'message' => 'Error al reenviar el producto.'];
+        }
+        $result['resent'] = true;
+        $result['wait_since'] = $wait['since'];
+        if (empty($result['message'])) {
+            $result['message'] = !empty($result['success'])
+                ? 'Producto reenviado a Yuju. Queda en espera del webhook product-created.'
+                : 'No se pudo reenviar el producto.';
+        }
+
+        return $result;
     }
 
     /**
@@ -979,13 +1919,85 @@ class YujuProductManager
 
     /**
      * Get category mapping by PrestaShop ID.
+     * Solo mapeos con sync_enabled=1 (los deshabilitados no deben enviar id_category viejo).
      */
     protected function getCategoryMappingByPrestashopId($prestashop_category_id)
     {
+        $prestashop_category_id = (int) $prestashop_category_id;
+        if ($prestashop_category_id <= 0) {
+            return false;
+        }
+
         return Db::getInstance()->getRow('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-            WHERE prestashop_category_id = ' . (int) $prestashop_category_id . ' AND sync_enabled = 1
+            WHERE prestashop_category_id = ' . $prestashop_category_id . '
+              AND sync_enabled = 1
         ');
+    }
+
+    /**
+     * Cadena categoría → padres (la propia primero).
+     *
+     * @param int $idCategory
+     *
+     * @return int[]
+     */
+    protected function getCategoryLineageIds($idCategory)
+    {
+        $out = [];
+        $seen = [];
+        $current = (int) $idCategory;
+        $safety = 0;
+
+        while ($current > 0 && $safety < 20) {
+            if (isset($seen[$current])) {
+                break;
+            }
+            $seen[$current] = true;
+            $out[] = $current;
+
+            $parent = (int) Db::getInstance()->getValue(
+                'SELECT id_parent FROM ' . _DB_PREFIX_ . 'category WHERE id_category = ' . (int) $current
+            );
+            if ($parent <= 0 || $parent === $current) {
+                break;
+            }
+            $current = $parent;
+            ++$safety;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Primer mapeo Yuju válido en la categoría o en algún ancestro (misma regla que Category Bulk).
+     *
+     * @param int $prestashop_category_id
+     *
+     * @return array{prestashop_category_id:int, yuju_category_id:string, from_ancestor:bool}|array{}
+     */
+    protected function resolveMappedYujuCategoryAlongLineage($prestashop_category_id)
+    {
+        $lineage = $this->getCategoryLineageIds((int) $prestashop_category_id);
+        foreach ($lineage as $idx => $cid) {
+            $map = $this->getCategoryMappingByPrestashopId((int) $cid);
+            if (!$map || empty($map['yuju_category_id'])) {
+                continue;
+            }
+            $yuju_cat_id = trim((string) $map['yuju_category_id']);
+            if (!is_numeric($yuju_cat_id) || (int) $yuju_cat_id <= 0) {
+                continue;
+            }
+
+            return [
+                'prestashop_category_id' => (int) $cid,
+                'yuju_category_id' => (string) ((int) $yuju_cat_id),
+                'from_ancestor' => $idx > 0,
+                'source_category_id' => (int) $prestashop_category_id,
+            ];
+        }
+
+        return [];
     }
 
     /**
@@ -1157,18 +2169,17 @@ class YujuProductManager
             }
         }
 
-        // 3) SKU efectivo (mapeo): mismo criterio que validateProductForYujuCreate / envío real
+        // 3) SKU efectivo: usar reference PS (sin re-preparar payload completo; eso era muy lento en cola)
         foreach ($product_ids as $pid) {
-            $product = new Product((int) $pid);
+            $product = new Product((int) $pid, false, $id_lang);
             if (!Validate::isLoadedObject($product)) {
                 continue;
             }
-            $yuju_data = $this->prepareProductDataForYuju($product);
-            $sku = trim((string) ($yuju_data['sku'] ?? ''));
+            $sku = trim((string) ($product->reference ?? ''));
             if ($sku === '') {
                 continue;
             }
-            $skip_eff = $sku !== '' && preg_match('/^PS-(\d+)$/', $sku, $m_eff) && (int) $m_eff[1] === (int) $pid;
+            $skip_eff = preg_match('/^PS-(\d+)$/', $sku, $m_eff) && (int) $m_eff[1] === (int) $pid;
             if ($skip_eff) {
                 continue;
             }
@@ -1322,7 +2333,7 @@ class YujuProductManager
      *
      * @return array{success: bool, errors: array<int,string>}
      */
-    public function validateProductForYujuCreate($product_id, array $options = [])
+    public function validateProductForYujuCreate($product_id, array $options = [], array $preparedPayload = null)
     {
         $product_id = (int) $product_id;
         $errors = [];
@@ -1335,7 +2346,10 @@ class YujuProductManager
             ];
         }
 
-        $yuju_data = $this->prepareProductDataForYuju($product, $options);
+        // Reutilizar payload ya preparado (cola/envío) para no duplicar trabajo pesado
+        $yuju_data = (is_array($preparedPayload) && !empty($preparedPayload))
+            ? $preparedPayload
+            : $this->prepareProductDataForYuju($product, $options);
 
         $sku = trim((string) ($yuju_data['sku'] ?? ''));
         if ($sku === '') {
@@ -1375,13 +2389,16 @@ class YujuProductManager
             $resolved = $this->resolveMappedYujuCategoryForProduct((int) $product->id, (int) $product->id_category_default, $preferredCategoryId);
             if (empty($resolved['yuju_category_id'])) {
                 $candidateIds = $this->getProductCategoryIdsForMappingLookup((int) $product->id, (int) $product->id_category_default);
+                if ($preferredCategoryId > 0 && !in_array($preferredCategoryId, $candidateIds, true)) {
+                    array_unshift($candidateIds, $preferredCategoryId);
+                }
                 $labels = [];
                 foreach ($candidateIds as $cid) {
                     $labels[] = $this->getPrestashopCategoryLabelById((int) $cid);
                 }
-                $errors[] = 'Ninguna de las categorías del producto está mapeada con Yuju. '
+                $errors[] = 'Ninguna de las categorías del producto está mapeada con Yuju (tampoco por herencia de padre). '
                     . 'Categorías revisadas: ' . implode(' | ', $labels)
-                    . '. Configure el Mapeo de Categorías antes de enviar.';
+                    . '. Configure el Mapeo de Categorías antes de enviar (la categoría o un padre debe estar mapeado y con sync habilitado).';
             } else {
                 $yuju_cat_id = trim((string) $resolved['yuju_category_id']);
                 if (!is_numeric($yuju_cat_id) || (int) $yuju_cat_id <= 0) {
@@ -1434,35 +2451,42 @@ class YujuProductManager
     }
 
     /**
-     * Busca el primer mapeo Yuju válido entre las categorías del producto.
+     * Busca el primer mapeo Yuju válido entre las categorías del producto
+     * (directo o heredado por padre/ancestro).
+     * Si hay preferred_ps_category_id (p.ej. Category Bulk), SOLO usa esa categoría
+     * y su lineage — no cae a la categoría default (evita id_category viejo).
      *
      * @param int $product_id
      * @param int $default_category_id
+     * @param int $preferred_category_id
      *
      * @return array{prestashop_category_id:int, yuju_category_id:string}|array{}
      */
     protected function resolveMappedYujuCategoryForProduct($product_id, $default_category_id, $preferred_category_id = 0)
     {
-        $categoryIds = $this->getProductCategoryIdsForMappingLookup((int) $product_id, (int) $default_category_id);
         $preferred_category_id = (int) $preferred_category_id;
-        if ($preferred_category_id > 0 && in_array($preferred_category_id, $categoryIds, true)) {
-            $categoryIds = array_values(array_diff($categoryIds, [$preferred_category_id]));
-            array_unshift($categoryIds, $preferred_category_id);
-        }
-        foreach ($categoryIds as $cid) {
-            $map = $this->getCategoryMappingByPrestashopId((int) $cid);
-            if (!$map || empty($map['yuju_category_id'])) {
-                continue;
-            }
-            $yuju_cat_id = trim((string) $map['yuju_category_id']);
-            if (!is_numeric($yuju_cat_id) || (int) $yuju_cat_id <= 0) {
-                continue;
+        if ($preferred_category_id > 0) {
+            $resolved = $this->resolveMappedYujuCategoryAlongLineage($preferred_category_id);
+            if ($resolved !== []) {
+                return [
+                    'prestashop_category_id' => (int) $resolved['prestashop_category_id'],
+                    'yuju_category_id' => (string) $resolved['yuju_category_id'],
+                ];
             }
 
-            return [
-                'prestashop_category_id' => (int) $cid,
-                'yuju_category_id' => (string) ((int) $yuju_cat_id),
-            ];
+            // Contexto Bulk/preferido sin mapeo activo: no usar otra categoría del producto
+            return [];
+        }
+
+        $categoryIds = $this->getProductCategoryIdsForMappingLookup((int) $product_id, (int) $default_category_id);
+        foreach ($categoryIds as $cid) {
+            $resolved = $this->resolveMappedYujuCategoryAlongLineage((int) $cid);
+            if ($resolved !== []) {
+                return [
+                    'prestashop_category_id' => (int) $resolved['prestashop_category_id'],
+                    'yuju_category_id' => (string) $resolved['yuju_category_id'],
+                ];
+            }
         }
 
         return [];
@@ -1541,6 +2565,24 @@ class YujuProductManager
     public function sendProductToYuju($product_id, array $options = [])
     {
         $start_time = microtime(true);
+        $tNow = static function () {
+            return microtime(true);
+        };
+        $markMs = static function (array &$timings, $key, $from) use ($tNow) {
+            $timings[$key] = round(($tNow() - $from) * 1000, 1);
+        };
+        $timings = [
+            'resolve_id_ms' => 0.0,
+            'dup_check_ms' => 0.0,
+            'prepare_ms' => 0.0,
+            'validate_ms' => 0.0,
+            'diff_ms' => 0.0,
+            'api_ms' => 0.0,
+            'persist_ms' => 0.0,
+            'total_ms' => 0.0,
+        ];
+        $diff_field_count = 0;
+        $had_baseline = false;
         $product_id = (int) $product_id;
         $existing_yuju_id = null;
         $action = 'create';
@@ -1562,61 +2604,201 @@ class YujuProductManager
             }
 
             $status_row = $this->getProductYujuStatusRow($product_id);
-            if ($status_row && !empty($status_row['sync_status'])
-                && in_array($status_row['sync_status'], ['creating_in_yuju', 'updating_in_yuju', 'deleting_in_yuju'], true)) {
-                throw new Exception(
-                    'Hay una operación pendiente con Yuju (estado: ' . $status_row['sync_status'] . '). Espere el webhook o el cierre de la operación.'
-                );
-            }
+            $forceResendCreate = !empty($options['force_resend_create']);
+            if ($status_row && !empty($status_row['sync_status'])) {
+                $pendingStatus = (string) $status_row['sync_status'];
+                // Solo bloquear reenvío en create/delete (esperan webhook).
+                // updating_in_yuju se confirma en ESTE mismo request por respuesta API;
+                // no soft-return (la cola marca updating justo antes de llamar aquí).
+                if (!$forceResendCreate && in_array($pendingStatus, ['creating_in_yuju', 'deleting_in_yuju'], true)) {
+                    $updatedAt = strtotime((string) ($status_row['updated_at'] ?? ''));
+                    $isStale = !$updatedAt || (time() - $updatedAt) > 900; // 15 min
+                    $hasValidCreate = ($pendingStatus !== 'creating_in_yuju')
+                        || $this->hasValidPendingCreateEvidence((int) $product_id, $status_row);
 
-            $ref_dup = $this->getDuplicateSkuConflictsForProductIds([$product_id]);
-            if (!empty($ref_dup)) {
-                throw new Exception($this->formatDuplicateSkuExceptionMessage($ref_dup));
-            }
+                    if (!$isStale && $hasValidCreate) {
+                        $yujuIdPending = !empty($status_row['yuju_product_id'])
+                            ? (string) $status_row['yuju_product_id']
+                            : null;
+                        $waitLabels = [
+                            'creating_in_yuju' => 'En espera de respuesta de Yuju. El producto ya fue enviado; no se puede volver a crear hasta que llegue el webhook de confirmación.',
+                            'deleting_in_yuju' => 'En espera de respuesta de Yuju. Eliminación en curso; esperando webhook de confirmación.',
+                        ];
+                        $waitMsg = $waitLabels[$pendingStatus] ?? 'Operación en espera de confirmación de Yuju.';
+                        if ($pendingStatus === 'creating_in_yuju') {
+                            $this->updateProductStatus(
+                                $product_id,
+                                'creating_in_yuju',
+                                $waitMsg,
+                                $yujuIdPending,
+                                false
+                            );
+                        }
 
-            $yuju_data = $this->prepareProductDataForYuju($product, $options);
+                        $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
-            $eff = trim((string) ($yuju_data['sku'] ?? ''));
-            $skip_eff = ($eff !== '' && preg_match('/^PS-(\d+)$/', $eff, $m_eff) && (int) $m_eff[1] === (int) $product_id);
-            if ($eff !== '' && !$skip_eff) {
-                $eff_dup = $this->getDuplicateSkuConflictsForEffectiveSku($eff);
-                if (!empty($eff_dup)) {
-                    throw new Exception($this->formatDuplicateSkuExceptionMessage($eff_dup));
+                        return [
+                            'success' => true,
+                            'message' => $waitMsg,
+                            'yuju_product_id' => $yujuIdPending,
+                            'action' => $pendingStatus === 'creating_in_yuju' ? 'create' : 'delete',
+                            'awaiting_webhook' => true,
+                            'already_pending' => true,
+                            'timings' => $timings,
+                        ];
+                    }
                 }
             }
 
-            $existing_yuju_id = $this->getYujuProductId($product_id);
-            $action = $existing_yuju_id ? 'update' : 'create';
+            // Resolver ID Yuju UNA sola vez (antes del prepare / validaciones)
+            $t0 = $tNow();
+            $existing_yuju_id = $this->resolveExistingYujuProductId($product_id);
+            $action = $existing_yuju_id !== '' ? 'update' : 'create';
 
+            if ($action === 'create' && !$forceResendCreate && $this->productAlreadyExistsInYuju($product_id, $status_row)) {
+                $existing_yuju_id = $this->resolveExistingYujuProductId($product_id);
+                if ($existing_yuju_id !== '') {
+                    $action = 'update';
+                } else {
+                    // Ya se envió / hay evidencia de create: no recrear ni marcar error.
+                    // Queda en espera del webhook de Yuju.
+                    $waitMsg = 'En espera de respuesta de Yuju. No se puede volver a enviar '
+                        . 'porque el producto ya fue enviado/creado y estamos esperando la confirmación (webhook).';
+                    $this->updateProductStatus(
+                        $product_id,
+                        'creating_in_yuju',
+                        $waitMsg,
+                        null,
+                        false
+                    );
+                    $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
+
+                    return [
+                        'success' => true,
+                        'message' => $waitMsg,
+                        'yuju_product_id' => null,
+                        'action' => 'create',
+                        'awaiting_webhook' => true,
+                        'already_pending' => true,
+                        'timings' => $timings,
+                    ];
+                }
+            }
+            $markMs($timings, 'resolve_id_ms', $t0);
+
+            // Check de SKU duplicados: pesado. Solo en CREATE.
             if ($action === 'create') {
-                $validation = $this->validateProductForYujuCreate($product_id, $options);
+                $t0 = $tNow();
+                $ref_dup = $this->getDuplicateSkuConflictsForProductIds([$product_id]);
+                if (!empty($ref_dup)) {
+                    throw new Exception($this->formatDuplicateSkuExceptionMessage($ref_dup));
+                }
+                $markMs($timings, 'dup_check_ms', $t0);
+            }
+
+            $t0 = $tNow();
+            $yuju_data = $this->prepareProductDataForYuju($product, $options);
+            $markMs($timings, 'prepare_ms', $t0);
+
+            $eff = trim((string) ($yuju_data['sku'] ?? ''));
+            if ($action === 'create') {
+                $t0 = $tNow();
+                $skip_eff = ($eff !== '' && preg_match('/^PS-(\d+)$/', $eff, $m_eff) && (int) $m_eff[1] === (int) $product_id);
+                if ($eff !== '' && !$skip_eff) {
+                    $eff_dup = $this->getDuplicateSkuConflictsForEffectiveSku($eff);
+                    if (!empty($eff_dup)) {
+                        throw new Exception($this->formatDuplicateSkuExceptionMessage($eff_dup));
+                    }
+                }
+                $validation = $this->validateProductForYujuCreate($product_id, $options, $yuju_data);
                 if (empty($validation['success'])) {
                     throw new Exception(implode(' ', $validation['errors']));
                 }
+                $markMs($timings, 'validate_ms', $t0);
             }
 
-            $request_data = json_encode($yuju_data, JSON_PRETTY_PRINT);
+            $full_yuju_data = $yuju_data;
+            $request_data = json_encode($full_yuju_data, JSON_PRETTY_PRINT);
 
-            if ($existing_yuju_id) {
-                // En update, Yuju requiere sku/sku_simple pero sku_simple no es editable.
-                // Se envían siempre ambos, fijándolos al SKU histórico bloqueado para no intentar editarlo.
-                $currentSku = trim((string) ($yuju_data['sku'] ?? ''));
-                $lockedSku = $this->getLockedSkuForExistingYujuProduct($product_id, $currentSku);
-                if ($lockedSku !== '') {
-                    $yuju_data['sku'] = $lockedSku;
-                    $yuju_data['sku_simple'] = $lockedSku;
-                } else {
-                    // Fallback defensivo: mantener ambos sincronizados al valor actual.
-                    $yuju_data['sku_simple'] = $currentSku;
+            if ($existing_yuju_id !== '') {
+                $t0 = $tNow();
+                // Update: solo diferencias vs el último payload enviado (nunca reenviar sku/sku_simple)
+                $currentSku = trim((string) ($full_yuju_data['sku'] ?? ''));
+                $oldPayload = $this->getLastSuccessfulSyncPayload($product_id);
+                $had_baseline = !empty($oldPayload);
+                $lockedSku = '';
+                if (!empty($oldPayload['sku_simple'])) {
+                    $lockedSku = trim((string) $oldPayload['sku_simple']);
+                } elseif (!empty($oldPayload['sku'])) {
+                    $lockedSku = trim((string) $oldPayload['sku']);
                 }
-                $request_data = json_encode($yuju_data, JSON_PRETTY_PRINT);
+                if ($lockedSku === '') {
+                    $lockedSku = $this->getLockedSkuForExistingYujuProduct($product_id, $currentSku);
+                }
+                // Snapshot local: conservar SKU bloqueado (Yuju no permite editar sku_simple)
+                if ($lockedSku !== '') {
+                    $full_yuju_data['sku'] = $lockedSku;
+                    $full_yuju_data['sku_simple'] = $lockedSku;
+                } elseif ($currentSku !== '') {
+                    $full_yuju_data['sku_simple'] = $currentSku;
+                }
+
+                if (!empty($oldPayload)) {
+                    $yuju_data = $this->buildYujuPayloadDiff($full_yuju_data, $oldPayload);
+                } else {
+                    // Sin baseline: update completo salvo identificadores inmutables
+                    $yuju_data = $full_yuju_data;
+                }
+
+                // Nunca enviar sku/sku_simple en UPDATE: Yuju los bloquea y provocan falso error
+                unset($yuju_data['sku'], $yuju_data['sku_simple']);
+
+                $diff_field_count = is_array($yuju_data) ? count($yuju_data) : 0;
+                $markMs($timings, 'diff_ms', $t0);
+
+                // Sin cambios reales (vacío o solo quedaban claves de SKU)
+                if (empty($yuju_data)) {
+                    $t0 = $tNow();
+                    $this->persistLastSyncPayload($product_id, $full_yuju_data);
+                    $this->updateProductStatus(
+                        $product_id,
+                        'synced',
+                        null,
+                        $existing_yuju_id
+                    );
+                    $markMs($timings, 'persist_ms', $t0);
+                    $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
+
+                    return [
+                        'success' => true,
+                        'message' => 'Sin cambios vs el último envío. Estado: Sincronizado.',
+                        'yuju_product_id' => $existing_yuju_id,
+                        'action' => 'update',
+                        'skipped_no_diff' => true,
+                        'awaiting_webhook' => false,
+                        'timings' => $timings,
+                        'diff_fields' => 0,
+                        'had_baseline' => $had_baseline,
+                    ];
+                }
+
+                $request_data = $this->buildHistoryRequestPayload($yuju_data, [
+                    'origin' => $options['origin'] ?? $this->detectSyncOrigin(),
+                    'changed_fields' => array_keys($yuju_data),
+                    'action' => 'update',
+                ]);
                 $this->updateProductStatus(
                     $product_id,
                     'updating_in_yuju',
-                    'Actualizando en Yuju… (la confirmación final es por respuesta API; Yuju no envía webhook de solo actualización.)',
+                    'Actualizando en Yuju… (solo diferencias vs último envío).',
                     $existing_yuju_id
                 );
+                $t0 = $tNow();
                 $result = $this->api_client->updateProduct($existing_yuju_id, $yuju_data);
+                $markMs($timings, 'api_ms', $t0);
+                if (!empty($result['curl_time'])) {
+                    $timings['curl_s'] = round((float) $result['curl_time'], 3);
+                }
             } else {
                 $this->updateProductStatus(
                     $product_id,
@@ -1624,7 +2806,18 @@ class YujuProductManager
                     'Creando en Yuju… Pendiente de confirmación vía webhook (product-created).',
                     null
                 );
-                $result = $this->api_client->createProduct($yuju_data);
+                $t0 = $tNow();
+                $result = $this->api_client->createProduct($full_yuju_data);
+                $markMs($timings, 'api_ms', $t0);
+                if (!empty($result['curl_time'])) {
+                    $timings['curl_s'] = round((float) $result['curl_time'], 3);
+                }
+                $yuju_data = $full_yuju_data;
+                $request_data = $this->buildHistoryRequestPayload($full_yuju_data, [
+                    'origin' => $options['origin'] ?? $this->detectSyncOrigin(),
+                    'changed_fields' => ['create'],
+                    'action' => 'create',
+                ]);
             }
 
             $duration = microtime(true) - $start_time;
@@ -1642,7 +2835,10 @@ class YujuProductManager
 
             if (!empty($successful_products) && count($successful_products) > 0) {
                 $first_success = $successful_products[0];
-                $returned_yuju_id = $first_success['id_product'] ?? null;
+                $returned_yuju_id = $this->extractYujuIdFromApiSuccess($first_success, $response_data);
+                if ($returned_yuju_id === '') {
+                    $returned_yuju_id = null;
+                }
 
                 $warnings = isset($first_success['warning']) && is_array($first_success['warning'])
                     ? $first_success['warning']
@@ -1656,8 +2852,11 @@ class YujuProductManager
                     if (!$final_yuju_id) {
                         throw new Exception('Actualización en Yuju sin ID de producto');
                     }
+                    $t0 = $tNow();
                     $sync_status = $has_warnings ? 'synced_with_warnings' : 'synced';
                     $this->updateProductStatus($product_id, $sync_status, $warning_message, $final_yuju_id);
+                    // Snapshot del payload COMPLETO (no solo el diff) para futuros diffs
+                    $this->persistLastSyncPayload($product_id, isset($full_yuju_data) ? $full_yuju_data : $yuju_data);
 
                     $history_id = $this->logSyncHistory([
                         'prestashop_product_id' => $product_id,
@@ -1670,9 +2869,12 @@ class YujuProductManager
                         'response_data' => json_encode($response_data, JSON_PRETTY_PRINT),
                         'error_message' => $warning_message,
                         'sync_duration' => $duration,
+                        'created_by' => $options['origin'] ?? $this->detectSyncOrigin(),
                     ]);
+                    $markMs($timings, 'persist_ms', $t0);
+                    $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
-                    $message = 'Producto actualizado en Yuju';
+                    $message = 'Producto actualizado en Yuju (solo diferencias)';
                     if ($has_warnings) {
                         $message .= ' con advertencias';
                     }
@@ -1686,6 +2888,9 @@ class YujuProductManager
                         'warnings' => $warnings,
                         'has_warnings' => $has_warnings,
                         'awaiting_webhook' => false,
+                        'timings' => $timings,
+                        'diff_fields' => $diff_field_count,
+                        'had_baseline' => $had_baseline,
                     ];
                 }
 
@@ -1697,26 +2902,19 @@ class YujuProductManager
                         'sku' => $eff,
                         'api_response_at' => date('Y-m-d H:i:s'),
                     ];
-                    // Si la API ya devolvió id_product, dejamos el estado confirmado de inmediato.
-                    // El webhook product-created pasa a ser confirmación adicional (no bloqueante).
-                    if ($returned_yuju_id) {
-                        $sync_status = $has_warnings ? 'synced_with_warnings' : 'synced';
-                        $this->updateProductStatus(
-                            $product_id,
-                            $sync_status,
-                            $warning_message,
-                            (string) $returned_yuju_id,
-                            json_encode($pending_meta, JSON_UNESCAPED_UNICODE)
-                        );
-                    } else {
-                        $this->updateProductStatus(
-                            $product_id,
-                            'creating_in_yuju',
-                            'Solicitud aceptada por Yuju. Esperando webhook product-created para confirmar el alta.',
-                            null,
-                            json_encode($pending_meta, JSON_UNESCAPED_UNICODE)
-                        );
-                    }
+                    // Envío OK → "Creando / en espera". Solo el webhook product-created confirma "creado" (synced).
+                    $t0 = $tNow();
+                    $this->updateProductStatus(
+                        $product_id,
+                        'creating_in_yuju',
+                        'Enviado a Yuju. Creando… Esperando confirmación por webhook (product-created).',
+                        $returned_yuju_id ? (string) $returned_yuju_id : null
+                    );
+                    $this->persistLastSyncPayload(
+                        $product_id,
+                        isset($full_yuju_data) ? $full_yuju_data : $yuju_data,
+                        $pending_meta
+                    );
 
                     $history_id = $this->logSyncHistory([
                         'prestashop_product_id' => $product_id,
@@ -1727,21 +2925,25 @@ class YujuProductManager
                         'http_status_code' => $http_code,
                         'request_data' => $request_data,
                         'response_data' => json_encode($response_data, JSON_PRETTY_PRINT),
-                        'error_message' => $returned_yuju_id ? $warning_message : 'Pendiente webhook product-created',
+                        'error_message' => $has_warnings
+                            ? $warning_message
+                            : 'Enviado. Pendiente confirmación webhook product-created',
                         'sync_duration' => $duration,
+                        'created_by' => $options['origin'] ?? $this->detectSyncOrigin(),
                     ]);
+                    $markMs($timings, 'persist_ms', $t0);
+                    $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
                     return [
                         'success' => true,
-                        'message' => $returned_yuju_id
-                            ? 'Producto creado en Yuju correctamente.'
-                            : 'Solicitud de creación enviada a Yuju. Estado: creando… Confirmación cuando llegue el webhook product-created.',
+                        'message' => 'Producto enviado a Yuju. Estado: Creando… Se marcará como creado cuando llegue el webhook de confirmación.',
                         'yuju_product_id' => $returned_yuju_id ? (string) $returned_yuju_id : null,
                         'action' => $action,
                         'history_id' => $history_id,
                         'warnings' => $warnings,
                         'has_warnings' => $has_warnings,
-                        'awaiting_webhook' => !$returned_yuju_id,
+                        'awaiting_webhook' => true,
+                        'timings' => $timings,
                     ];
                 }
             }
@@ -1766,8 +2968,22 @@ class YujuProductManager
         } catch (Exception $e) {
             $duration = microtime(true) - $start_time;
             $error_message = $e->getMessage();
+            if ($error_message === '' || strtolower(trim($error_message)) === 'error') {
+                $error_message = 'Error desconocido al sincronizar con Yuju';
+            }
 
-            $this->updateProductStatus($product_id, 'error', $error_message, $existing_yuju_id);
+            // Si ya tiene ID Yuju: no ocultar que está en Yuju; el fallo es de la operación (casi siempre update).
+            $persistStatus = 'error';
+            if ($existing_yuju_id !== '') {
+                $persistStatus = 'synced_with_errors';
+                $opLabel = ($action === 'update') ? 'actualizar' : (($action === 'create') ? 'crear' : 'sincronizar');
+                $error_message = 'El producto SÍ está en Yuju (ID ' . $existing_yuju_id
+                    . '). Falló al ' . $opLabel . ': ' . $error_message;
+            } elseif ($action === 'create') {
+                $error_message = 'Error al crear en Yuju: ' . $error_message;
+            }
+
+            $this->updateProductStatus($product_id, $persistStatus, $error_message, $existing_yuju_id);
 
             $history_id = $this->logSyncHistory([
                 'prestashop_product_id' => $product_id,
@@ -1776,19 +2992,30 @@ class YujuProductManager
                 'action' => $action,
                 'status' => 'error',
                 'http_status_code' => isset($result['http_code']) ? $result['http_code'] : 500,
-                'request_data' => $request_data !== '' ? $request_data : json_encode($yuju_data ?? [], JSON_PRETTY_PRINT),
+                'request_data' => $request_data !== ''
+                    ? $request_data
+                    : $this->buildHistoryRequestPayload($yuju_data ?? [], [
+                        'origin' => $options['origin'] ?? $this->detectSyncOrigin(),
+                        'action' => $action,
+                    ]),
                 'response_data' => isset($result['data']) ? json_encode($result['data'], JSON_PRETTY_PRINT) : null,
                 'error_message' => $error_message,
                 'sync_duration' => $duration,
+                'created_by' => $options['origin'] ?? $this->detectSyncOrigin(),
             ]);
 
             $this->logger->log('Failed to send product to Yuju: ' . $product_id . ' - ' . $error_message, 'error');
+            $timings['total_ms'] = round($duration * 1000, 1);
 
             return [
                 'success' => false,
-                'message' => 'Error al enviar producto: ' . $error_message,
+                'message' => $error_message,
                 'error' => $error_message,
                 'history_id' => $history_id,
+                'timings' => $timings,
+                'action' => $action,
+                'yuju_product_id' => $existing_yuju_id !== '' ? (string) $existing_yuju_id : null,
+                'in_yuju' => $existing_yuju_id !== '',
             ];
         }
     }
@@ -1811,6 +3038,7 @@ class YujuProductManager
 
         // 1) Intentar extraer de la última petición exitosa guardada en historial.
         try {
+            // getRow() ya añade LIMIT 1 en PrestaShop — no duplicarlo
             $row = Db::getInstance()->getRow(
                 'SELECT request_data
                  FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
@@ -1818,8 +3046,7 @@ class YujuProductManager
                    AND status = "success"
                    AND request_data IS NOT NULL
                    AND request_data != ""
-                 ORDER BY id DESC
-                 LIMIT 1'
+                 ORDER BY id DESC'
             );
             if ($row && !empty($row['request_data'])) {
                 $req = json_decode((string) $row['request_data'], true);
@@ -1869,24 +3096,24 @@ class YujuProductManager
         return $cache;
     }
 
-    protected function logSyncHistory($data)
+    public function logSyncHistory($data)
     {
         try {
-            $created_by = 'system';
-            if (isset(Context::getContext()->employee->id)) {
-                $created_by = 'employee_' . Context::getContext()->employee->id;
+            $created_by = isset($data['created_by']) ? trim((string) $data['created_by']) : '';
+            if ($created_by === '') {
+                $created_by = $this->detectSyncOrigin();
             }
 
             $insert_data = [
                 'prestashop_product_id' => (int) $data['prestashop_product_id'],
-                'yuju_product_id' => pSQL($data['yuju_product_id']),
-                'sync_direction' => pSQL($data['sync_direction']),
+                'yuju_product_id' => pSQL($data['yuju_product_id'] ?? ''),
+                'sync_direction' => pSQL($data['sync_direction'] ?? 'to_yuju'),
                 'action' => pSQL($data['action']),
                 'status' => pSQL($data['status']),
                 'http_status_code' => (int) ($data['http_status_code'] ?? 0),
-                'request_data' => pSQL($data['request_data'], true),
-                'response_data' => pSQL($data['response_data'], true),
-                'error_message' => pSQL($data['error_message'], true),
+                'request_data' => pSQL($data['request_data'] ?? '', true),
+                'response_data' => pSQL($data['response_data'] ?? '', true),
+                'error_message' => pSQL($data['error_message'] ?? '', true),
                 'sync_duration' => (float) ($data['sync_duration'] ?? 0),
                 'created_at' => date('Y-m-d H:i:s'),
                 'created_by' => pSQL($created_by),
@@ -1914,6 +3141,298 @@ class YujuProductManager
     }
 
     /**
+     * Origen de la sincronización (prestashop, venta, cron, cola, api, excel, etc.).
+     *
+     * @return string
+     */
+    public function detectSyncOrigin()
+    {
+        if (!empty($GLOBALS['yuju_sync_origin'])) {
+            return preg_replace('/[^a-z0-9_\-]/i', '', (string) $GLOBALS['yuju_sync_origin']) ?: 'system';
+        }
+
+        if (PHP_SAPI === 'cli') {
+            return 'cron';
+        }
+
+        $ctx = Context::getContext();
+        if (isset($ctx->employee) && !empty($ctx->employee->id)) {
+            return 'prestashop';
+        }
+
+        return 'system';
+    }
+
+    /**
+     * Etiqueta legible del origen.
+     *
+     * @param string $origin
+     * @return string
+     */
+    public static function getSyncOriginLabel($origin)
+    {
+        $origin = strtolower(trim((string) $origin));
+        if (strpos($origin, 'employee_') === 0) {
+            return 'PrestaShop (empleado)';
+        }
+        $map = [
+            'prestashop' => 'PrestaShop',
+            'bo' => 'PrestaShop',
+            'admin' => 'PrestaShop',
+            'venta' => 'Venta (pedido Yuju)',
+            'order' => 'Venta (pedido Yuju)',
+            'sale' => 'Venta (pedido Yuju)',
+            'cron' => 'Cron',
+            'cola' => 'Cola de sincronización',
+            'queue' => 'Cola de sincronización',
+            'api' => 'API',
+            'excel' => 'Excel / importación',
+            'import' => 'Excel / importación',
+            'category_bulk' => 'Category Bulk',
+            'bulk' => 'Acción masiva',
+            'webhook' => 'Webhook Yuju',
+            'system' => 'Sistema',
+            'auto_stock' => 'Auto-sync stock',
+            'auto_product' => 'Auto-sync producto',
+        ];
+
+        return isset($map[$origin]) ? $map[$origin] : ($origin !== '' ? $origin : 'Sistema');
+    }
+
+    /**
+     * Etiquetas de campos actualizados.
+     *
+     * @param array $fields
+     * @return string[]
+     */
+    public static function getChangedFieldLabels(array $fields)
+    {
+        $map = [
+            'stock' => 'Stock',
+            'quantity' => 'Stock',
+            'price' => 'Precio',
+            'name' => 'Nombre',
+            'description' => 'Descripción',
+            'description_short' => 'Descripción corta',
+            'sku' => 'SKU',
+            'sku_simple' => 'SKU simple',
+            'images' => 'Imágenes',
+            'id_category' => 'Categoría',
+            'brand' => 'Marca',
+            'weight' => 'Peso',
+            'active' => 'Activo',
+            'discount' => 'Descuento',
+            'wholesale_price' => 'Precio de costo',
+            'create' => 'Alta completa',
+        ];
+        $out = [];
+        foreach ($fields as $f) {
+            $key = strtolower((string) $f);
+            $out[] = isset($map[$key]) ? $map[$key] : (string) $f;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Envuelve el payload enviado a Yuju con meta (origen + campos).
+     *
+     * @param array|string|null $body
+     * @param array $meta
+     * @return string JSON
+     */
+    public function buildHistoryRequestPayload($body, array $meta = [])
+    {
+        if (is_string($body)) {
+            $decoded = json_decode($body, true);
+            $body = is_array($decoded) ? $decoded : ['_raw' => $body];
+        }
+        if (!is_array($body)) {
+            $body = [];
+        }
+
+        $changed = [];
+        if (!empty($meta['changed_fields']) && is_array($meta['changed_fields'])) {
+            $changed = $meta['changed_fields'];
+        } else {
+            $changed = array_keys($body);
+        }
+
+        $envelope = [
+            '_meta' => [
+                'origin' => $meta['origin'] ?? $this->detectSyncOrigin(),
+                'changed_fields' => array_values($changed),
+                'action' => $meta['action'] ?? 'update',
+                'old_values' => $meta['old_values'] ?? null,
+                'new_values' => $meta['new_values'] ?? null,
+                'priority' => $meta['priority'] ?? null,
+            ],
+            'body' => $body,
+        ];
+
+        return json_encode($envelope, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Enriquece un registro de historial para la UI del modal.
+     *
+     * @param array $record
+     * @return array
+     */
+    public function enrichSyncHistoryRecordForUi(array $record)
+    {
+        $requestRaw = $record['request_data'] ?? '';
+        $responseRaw = $record['response_data'] ?? '';
+        $req = [];
+        if (is_string($requestRaw) && $requestRaw !== '') {
+            $tmp = json_decode($requestRaw, true);
+            $req = is_array($tmp) ? $tmp : [];
+        } elseif (is_array($requestRaw)) {
+            $req = $requestRaw;
+        }
+
+        $meta = [];
+        $body = $req;
+        if (isset($req['_meta']) && is_array($req['_meta'])) {
+            $meta = $req['_meta'];
+            $body = isset($req['body']) && is_array($req['body']) ? $req['body'] : [];
+        } elseif (isset($req['body']) && is_array($req['body'])) {
+            // saveProductUpdateHistory legacy shape
+            $body = $req['body'];
+            $meta = [
+                'changed_fields' => $req['changed_fields'] ?? array_keys($body),
+                'old_values' => $req['old_values'] ?? null,
+                'new_values' => $req['new_values'] ?? null,
+                'priority' => $req['priority'] ?? null,
+                'origin' => $req['origin'] ?? null,
+            ];
+        }
+
+        $origin = $meta['origin'] ?? ($record['created_by'] ?? 'system');
+        $changedFields = [];
+        if (!empty($meta['changed_fields']) && is_array($meta['changed_fields'])) {
+            $changedFields = $meta['changed_fields'];
+        } elseif (!empty($body) && is_array($body)) {
+            $changedFields = array_keys($body);
+        }
+
+        $resp = null;
+        if (is_string($responseRaw) && $responseRaw !== '') {
+            $tmp = json_decode($responseRaw, true);
+            $resp = is_array($tmp) ? $tmp : $responseRaw;
+        } elseif (is_array($responseRaw)) {
+            $resp = $responseRaw;
+        }
+
+        $responseSummary = $this->summarizeYujuHistoryResponse($resp, $record);
+
+        $record['ui'] = [
+            'origin' => (string) $origin,
+            'origin_label' => self::getSyncOriginLabel($origin),
+            'changed_fields' => $changedFields,
+            'changed_fields_labels' => self::getChangedFieldLabels($changedFields),
+            'sent_body' => $body,
+            'sent_summary' => $this->summarizeSentBody($body, $meta),
+            'response_summary' => $responseSummary,
+            'old_values' => $meta['old_values'] ?? null,
+            'new_values' => $meta['new_values'] ?? null,
+        ];
+
+        return $record;
+    }
+
+    /**
+     * @param array $body
+     * @param array $meta
+     * @return string
+     */
+    protected function summarizeSentBody(array $body, array $meta = [])
+    {
+        if (empty($body)) {
+            return 'Sin payload enviado';
+        }
+        $parts = [];
+        foreach ($body as $k => $v) {
+            if ($k === '_raw') {
+                continue;
+            }
+            if (is_array($v) || is_object($v)) {
+                $parts[] = $k . ': [' . (is_array($v) ? count($v) . ' ítems' : 'objeto') . ']';
+            } else {
+                $sv = (string) $v;
+                if (strlen($sv) > 80) {
+                    $sv = substr($sv, 0, 77) . '…';
+                }
+                $parts[] = $k . ': ' . $sv;
+            }
+            if (count($parts) >= 8) {
+                $parts[] = '…';
+                break;
+            }
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * @param mixed $resp
+     * @param array $record
+     * @return string
+     */
+    protected function summarizeYujuHistoryResponse($resp, array $record)
+    {
+        $status = (string) ($record['status'] ?? '');
+        $http = (int) ($record['http_status_code'] ?? 0);
+        $err = trim((string) ($record['error_message'] ?? ''));
+
+        if ($status === 'error') {
+            return $err !== '' ? ('Error: ' . $err) : ('Error HTTP ' . ($http ?: '?'));
+        }
+
+        if (!is_array($resp)) {
+            if (is_string($resp) && $resp !== '') {
+                return strlen($resp) > 120 ? substr($resp, 0, 117) . '…' : $resp;
+            }
+            return $status === 'success' ? 'OK' : ($status ?: 'Sin respuesta');
+        }
+
+        // Formato API Yuju { success: [...], errors: [...] }
+        if (!empty($resp['errors']) && is_array($resp['errors'])) {
+            $msgs = [];
+            foreach ($resp['errors'] as $e) {
+                if (isset($e['message'])) {
+                    $msgs[] = is_array($e['message']) ? implode('; ', $e['message']) : (string) $e['message'];
+                }
+            }
+            if ($msgs) {
+                return 'Yuju errores: ' . implode(' | ', array_slice($msgs, 0, 3));
+            }
+        }
+
+        if (!empty($resp['success']) && is_array($resp['success'])) {
+            $first = $resp['success'][0];
+            $id = '';
+            if (is_array($first)) {
+                $id = (string) ($first['id_product'] ?? $first['id'] ?? '');
+                if (!empty($first['warning']) && is_array($first['warning'])) {
+                    return 'OK' . ($id !== '' ? ' (ID ' . $id . ')' : '') . ' · avisos: ' . implode('; ', $first['warning']);
+                }
+            }
+            return 'OK — Yuju aceptó la actualización' . ($id !== '' ? ' (ID ' . $id . ')' : '');
+        }
+
+        if (isset($resp['success']) && $resp['success'] === false) {
+            return 'Error: ' . ($resp['message'] ?? $err ?: 'respuesta fallida');
+        }
+
+        if (isset($resp['message']) && is_string($resp['message'])) {
+            return $resp['message'];
+        }
+
+        return $status === 'success' ? 'OK — respuesta recibida de Yuju' : 'Respuesta recibida';
+    }
+
+    /**
      * Registra en historial un error de validación previo al envío a Yuju.
      *
      * @param int $prestashop_product_id
@@ -1937,6 +3456,7 @@ class YujuProductManager
             'response_data' => null,
             'error_message' => (string) $error_message,
             'sync_duration' => 0,
+            'created_by' => $this->detectSyncOrigin(),
         ]);
     }
 
@@ -1964,7 +3484,13 @@ class YujuProductManager
         $query->orderBy('created_at DESC');
         $query->limit($limit, $offset);
 
-        return Db::getInstance()->executeS($query) ?: [];
+        $rows = Db::getInstance()->executeS($query) ?: [];
+        foreach ($rows as &$row) {
+            $row = $this->enrichSyncHistoryRecordForUi($row);
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**
@@ -2043,13 +3569,74 @@ class YujuProductManager
     }
 
     /**
-     * Payload JSON para cola update / API (misma estructura que create).
+     * Indica si un producto CON id Yuju tiene cambios reales vs el último envío.
+     * (Misma lógica que el update en sendProductToYuju: diff sin sku/sku_simple.)
      *
-     * @param int $product_id
+     * @param int   $product_id
+     * @param array $options
+     *
+     * @return bool true = conviene encolar/enviar update; false = sin cambios
+     */
+    public function productNeedsYujuUpdate($product_id, array $options = [])
+    {
+        $product_id = (int) $product_id;
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        $existing_yuju_id = $this->resolveExistingYujuProductId($product_id);
+        if ($existing_yuju_id === '') {
+            return true;
+        }
+
+        try {
+            $full = $this->prepareProductDataForYuju($product_id, $options);
+        } catch (Exception $e) {
+            return true;
+        }
+        if (!is_array($full) || empty($full)) {
+            return true;
+        }
+
+        $currentSku = trim((string) ($full['sku'] ?? ''));
+        $oldPayload = $this->getLastSuccessfulSyncPayload($product_id);
+        $lockedSku = '';
+        if (!empty($oldPayload['sku_simple'])) {
+            $lockedSku = trim((string) $oldPayload['sku_simple']);
+        } elseif (!empty($oldPayload['sku'])) {
+            $lockedSku = trim((string) $oldPayload['sku']);
+        }
+        if ($lockedSku === '') {
+            $lockedSku = $this->getLockedSkuForExistingYujuProduct($product_id, $currentSku);
+        }
+        if ($lockedSku !== '') {
+            $full['sku'] = $lockedSku;
+            $full['sku_simple'] = $lockedSku;
+        } elseif ($currentSku !== '') {
+            $full['sku_simple'] = $currentSku;
+        }
+
+        if (empty($oldPayload)) {
+            // Sin baseline: sí hay que actualizar (payload completo sin sku inmutable)
+            return true;
+        }
+
+        $diff = $this->buildYujuPayloadDiff($full, $oldPayload);
+        unset($diff['sku'], $diff['sku_simple']);
+
+        return !empty($diff);
+    }
+
+    /**
+     * Payload / opciones para cola update / API.
+     * Recalcula categoría Yuju en fresco (no reutiliza id_category viejo).
+     *
+     * @param int   $product_id
+     * @param array $options p.ej. preferred_ps_category_id
      *
      * @return array|null
      */
-    public function buildProductPayloadForYujuQueue($product_id)
+    public function buildProductPayloadForYujuQueue($product_id, array $options = [])
     {
         $product_id = (int) $product_id;
         $product = new Product($product_id, false, (int) Context::getContext()->language->id);
@@ -2057,7 +3644,19 @@ class YujuProductManager
             return null;
         }
 
-        return $this->prepareProductDataForYuju($product);
+        // Solo opciones de contexto (preferred). El payload completo se regenera al procesar la cola.
+        $queueOptions = [];
+        if (!empty($options['preferred_ps_category_id'])) {
+            $queueOptions['preferred_ps_category_id'] = (int) $options['preferred_ps_category_id'];
+        }
+        if (!empty($options['force_resend_create'])) {
+            $queueOptions['force_resend_create'] = true;
+        }
+        if (!empty($options['origin'])) {
+            $queueOptions['origin'] = preg_replace('/[^a-z0-9_\-]/i', '', (string) $options['origin']) ?: 'cola';
+        }
+
+        return $queueOptions;
     }
 
     /**

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_category_mapping` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_prestashop_category` (`prestashop_category_id`),
-    UNIQUE KEY `unique_yuju_category` (`yuju_category_id`),
+    KEY `idx_yuju_category` (`yuju_category_id`),
     KEY `idx_sync_enabled` (`sync_enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -192,6 +192,10 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_order_id` int(11) NOT NULL,
     `yuju_order_id` varchar(255) NOT NULL,
+    `id_channel` varchar(64) DEFAULT NULL,
+    `outbound_external_pk` varchar(64) DEFAULT NULL,
+    `outbound_status` varchar(32) DEFAULT NULL,
+    `outbound_updated_at` datetime DEFAULT NULL,
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
@@ -289,20 +293,103 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_sync_history` (
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_runs` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `trigger` enum('scheduled','manual') NOT NULL DEFAULT 'manual',
+    `mode` enum('silent','visual') NOT NULL DEFAULT 'silent',
+    `audit_stock` tinyint(1) NOT NULL DEFAULT 1,
+    `audit_price` tinyint(1) NOT NULL DEFAULT 1,
+    `audit_images` tinyint(1) NOT NULL DEFAULT 0,
+    `status` enum('pending','running','paused','completed','failed','cancelled') NOT NULL DEFAULT 'pending',
+    `total` int(11) NOT NULL DEFAULT 0,
+    `processed` int(11) NOT NULL DEFAULT 0,
+    `matched` int(11) NOT NULL DEFAULT 0,
+    `diff_found` int(11) NOT NULL DEFAULT 0,
+    `fixed` int(11) NOT NULL DEFAULT 0,
+    `errors` int(11) NOT NULL DEFAULT 0,
+    `not_found` int(11) NOT NULL DEFAULT 0,
+    `started_at` datetime DEFAULT NULL,
+    `finished_at` datetime DEFAULT NULL,
+    `duration_seconds` int(11) DEFAULT NULL,
+    `error_message` text,
+    `summary_json` longtext,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_started_at` (`started_at`),
+    KEY `idx_trigger` (`trigger`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_run_details` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `id_audit_run` int(11) NOT NULL,
+    `prestashop_product_id` int(11) DEFAULT NULL,
+    `yuju_product_id` varchar(255) DEFAULT NULL,
+    `sku` varchar(255) DEFAULT NULL,
+    `product_name` varchar(512) DEFAULT NULL,
+    `ps_stock` int(11) DEFAULT NULL,
+    `yuju_stock` int(11) DEFAULT NULL,
+    `ps_price` decimal(20,6) DEFAULT NULL,
+    `yuju_price` decimal(20,6) DEFAULT NULL,
+    `ps_images_count` int(11) DEFAULT NULL,
+    `yuju_images_count` int(11) DEFAULT NULL,
+    `diffs_json` text,
+    `result` enum('matched','diff_fixed','diff_found','diff_error','not_found') NOT NULL DEFAULT 'matched',
+    `message` text,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_audit_run` (`id_audit_run`),
+    KEY `idx_result` (`result`),
+    KEY `idx_sku` (`sku`),
+    KEY `idx_prestashop_product` (`prestashop_product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_reports` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `id_task` varchar(64) DEFAULT NULL,
+    `report_type` varchar(32) NOT NULL DEFAULT 'gral',
+    `trigger` enum('scheduled','manual','webhook') NOT NULL DEFAULT 'manual',
+    `status` enum('pending','processing','completed','failed','rejected','limit_reached') NOT NULL DEFAULT 'pending',
+    `products_count` int(11) NOT NULL DEFAULT 0,
+    `file_path` varchar(512) DEFAULT NULL,
+    `file_size` int(11) NOT NULL DEFAULT 0,
+    `download_url` text,
+    `error_message` text,
+    `meta_json` longtext,
+    `requested_at` datetime DEFAULT NULL,
+    `completed_at` datetime DEFAULT NULL,
+    `utc_day` char(10) DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_id_task` (`id_task`),
+    KEY `idx_status` (`status`),
+    KEY `idx_utc_day` (`utc_day`),
+    KEY `idx_report_type` (`report_type`),
+    KEY `idx_requested_at` (`requested_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Los datos por defecto ya se insertan arriba después de la creación de la tabla
 
 -- Insert default product field mappings (ignore if already exist)
+-- Solo campos aceptados por POST /products (docs Yuju create único / con variaciones)
 INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_field`, `field_type`, `sync_direction`, `transformation_rule`, `is_required`, `is_active`, `created_at`, `updated_at`) VALUES
 ('name', 'name', 'string', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('description', 'description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('description_short', 'short_description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('price', 'price', 'decimal', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
-('wholesale_price', 'cost_price', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('reference', 'sku', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('ean13', 'ean', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('weight', 'weight', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('width', 'width', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('height', 'height', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('depth', 'depth', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('active', 'active', 'boolean', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
-('quantity', 'stock_quantity', 'integer', 'bidirectional', 'none', 0, 1, NOW(), NOW());
+('width', 'shipping_width', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
+('height', 'shipping_height', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
+('depth', 'shipping_depth', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW());
+
+-- Desactivar mapeos inválidos en instalaciones existentes (API Yuju no acepta estos campos)
+UPDATE `PREFIX_yuju_product_mapping`
+SET `is_active` = 0, `updated_at` = NOW()
+WHERE `yuju_field` IN ('cost_price', 'active', 'stock_quantity', 'short_description', 'width', 'height', 'depth')
+   OR (`prestashop_field` = 'wholesale_price' AND `yuju_field` = 'cost_price')
+   OR (`prestashop_field` = 'quantity' AND `yuju_field` = 'stock_quantity')
+   OR (`prestashop_field` = 'active' AND `yuju_field` = 'active')
+   OR (`prestashop_field` = 'description_short' AND `yuju_field` = 'short_description');

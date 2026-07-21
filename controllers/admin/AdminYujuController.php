@@ -41,6 +41,7 @@ class AdminYujuController extends ModuleAdminController
         $oauthStatus = $this->getOAuthStatus();
         $productStats = $this->getProductStats();
         $webhookStats = $this->getWebhookStats();
+        $accountInfo = $this->getCachedAccountInfo();
 
         $this->context->smarty->assign([
             'module_dir' => $this->module->getPathUri(),
@@ -53,9 +54,181 @@ class AdminYujuController extends ModuleAdminController
             'oauth_status' => $oauthStatus,
             'product_stats' => $productStats,
             'webhook_stats' => $webhookStats,
+            'yuju_account_info' => $accountInfo,
+            'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
+            'token' => $this->token,
         ]);
 
         $this->setTemplate('dashboard.tpl');
+    }
+
+    public function postProcess()
+    {
+        if (Tools::getValue('ajax')) {
+            $action = (string) Tools::getValue('action');
+            if ($action === 'refreshAccountInfo') {
+                $this->ajaxProcessRefreshAccountInfo();
+            } else {
+                die(json_encode(['success' => false, 'message' => 'Acción no reconocida: ' . $action]));
+            }
+            exit;
+        }
+
+        return parent::postProcess();
+    }
+
+    /**
+     * AJAX: refresca GET /account y guarda en cache.
+     */
+    public function ajaxProcessRefreshAccountInfo()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $result = $this->fetchAndStoreAccountInfo();
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * Lee cache local de cuenta/tienda/canales.
+     *
+     * @return array
+     */
+    protected function getCachedAccountInfo()
+    {
+        require_once dirname(__FILE__) . '/../../config/config.php';
+
+        $raw = YujuConfig::get('YUJU_ACCOUNT_INFO_CACHE', '');
+        $updatedAt = (string) YujuConfig::get('YUJU_ACCOUNT_INFO_UPDATED_AT', '');
+        $data = null;
+
+        if (is_array($raw)) {
+            $data = $raw;
+        } elseif (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
+        }
+
+        return [
+            'has_data' => is_array($data) && !empty($data),
+            'updated_at' => $updatedAt !== '' ? $updatedAt : null,
+            'id_account' => $data['id_account'] ?? null,
+            'account_name' => $data['account_name'] ?? null,
+            'id_shop' => $data['id_shop'] ?? null,
+            'shop_name' => $data['shop_name'] ?? null,
+            'channels' => (isset($data['channels']) && is_array($data['channels'])) ? $data['channels'] : [],
+            'raw' => $data,
+        ];
+    }
+
+    /**
+     * Llama a GET /account, normaliza, cachea y actualiza mapa de marketplaces.
+     *
+     * @return array
+     */
+    protected function fetchAndStoreAccountInfo()
+    {
+        require_once dirname(__FILE__) . '/../../config/config.php';
+        require_once dirname(__FILE__) . '/../../classes/YujuApiClient.php';
+
+        $api = new YujuApiClient();
+        $response = $api->getAccount();
+
+        if (empty($response['success']) && !isset($response['id_account']) && !isset($response['data']['id_account'])) {
+            $msg = $response['message'] ?? 'No se pudo obtener la información de la cuenta Yuju.';
+
+            return [
+                'success' => false,
+                'message' => $msg,
+                'account' => $this->getCachedAccountInfo(),
+            ];
+        }
+
+        $payload = $response;
+        if (isset($response['data']) && is_array($response['data'])) {
+            $payload = $response['data'];
+        }
+
+        $normalized = [
+            'id_account' => $payload['id_account'] ?? null,
+            'account_name' => $payload['account_name'] ?? null,
+            'id_shop' => $payload['id_shop'] ?? null,
+            'shop_name' => $payload['shop_name'] ?? null,
+            'channels' => [],
+        ];
+
+        if (!empty($payload['channels']) && is_array($payload['channels'])) {
+            foreach ($payload['channels'] as $ch) {
+                if (!is_array($ch)) {
+                    continue;
+                }
+                $normalized['channels'][] = [
+                    'id_channel' => $ch['id_channel'] ?? null,
+                    'name' => $ch['name'] ?? '',
+                    'generic_name' => $ch['generic_name'] ?? '',
+                ];
+            }
+        }
+
+        $now = date('Y-m-d H:i:s');
+        YujuConfig::set('YUJU_ACCOUNT_INFO_CACHE', $normalized, 'json');
+        YujuConfig::set('YUJU_ACCOUNT_INFO_UPDATED_AT', $now, 'string');
+
+        $this->syncChannelMarketplaceMap($normalized['channels']);
+
+        $account = $this->getCachedAccountInfo();
+
+        return [
+            'success' => true,
+            'message' => 'Información de Yuju actualizada (' . count($normalized['channels']) . ' canales).',
+            'account' => $account,
+        ];
+    }
+
+    /**
+     * Completa YUJU_CHANNEL_MARKETPLACE_MAP con generic_name de cada id_channel.
+     *
+     * @param array $channels
+     */
+    protected function syncChannelMarketplaceMap(array $channels)
+    {
+        if (empty($channels)) {
+            return;
+        }
+
+        $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
+        if (is_string($map)) {
+            $decoded = json_decode($map, true);
+            $map = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($map)) {
+            $map = [];
+        }
+
+        foreach ($channels as $ch) {
+            $id = isset($ch['id_channel']) ? (string) $ch['id_channel'] : '';
+            if ($id === '') {
+                continue;
+            }
+            $generic = isset($ch['generic_name']) ? (string) $ch['generic_name'] : '';
+            $slug = preg_replace('/[^a-z0-9]/', '', strtolower($generic));
+            if ($slug === '') {
+                continue;
+            }
+            // No pisar overrides manuales existentes
+            if (!isset($map[$id]) || $map[$id] === '' || strpos((string) $map[$id], 'channel') === 0) {
+                $map[$id] = $slug;
+            }
+        }
+
+        YujuConfig::set('YUJU_CHANNEL_MARKETPLACE_MAP', $map, 'json');
     }
 
     /**

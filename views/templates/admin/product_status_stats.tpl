@@ -17,7 +17,24 @@
 *}
 
 <script type="text/javascript">
-function showProductInfo(id, reference, name, category, idImage, openHistoryTab, yujuProductId, processHint) {
+{literal}
+function showProductInfo(id, reference, name, category, idImage, openHistoryTab, yujuProductId, processHint, lastError, syncStatus) {
+    if (window.YujuProductInfoModal && typeof window.YujuProductInfoModal.open === 'function') {
+        window.YujuProductInfoModal.open({
+            id_product: id,
+            reference: reference,
+            name: name,
+            category: category,
+            id_image: idImage,
+            yuju_product_id: yujuProductId,
+            processHint: processHint,
+            last_error: (typeof lastError !== 'undefined' && lastError !== null) ? String(lastError) : '',
+            sync_status: (typeof syncStatus !== 'undefined' && syncStatus !== null) ? String(syncStatus) : ''
+        }, {
+            focusHistory: openHistoryTab === true
+        });
+        return;
+    }
     console.log('showProductInfo llamada con:', id, reference, name, category, idImage, openHistoryTab, yujuProductId, processHint);
     jQuery('#modal-product-id').text(id);
     jQuery('#modal-product-reference').text(reference);
@@ -38,9 +55,36 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
         jQuery('#modal-sync-process-banner').hide();
     }
     
-    // Generar link al producto en Back Office (con token válido)
-    var productAdminBase = '{$link->getAdminLink('AdminProducts', true)|escape:'javascript':'UTF-8'}';
-    var productUrl = productAdminBase + '&id_product=' + encodeURIComponent(String(id)) + '&updateproduct=1';
+    // Generar link al producto en Back Office (PS 8 products-v2 + legacy)
+    var productAdminBase = '{/literal}{$link->getAdminLink('AdminProducts', true)|escape:'javascript':'UTF-8'}{literal}';
+    var productUrl = (function (productId, base) {
+        productId = parseInt(productId, 10) || 0;
+        base = String(base || '');
+        if (!productId || !base) {
+            return '#';
+        }
+        var qIndex = base.indexOf('?');
+        var qs = qIndex >= 0 ? base.substring(qIndex) : '';
+        qs = qs
+            .replace(/([?&])(id_product|updateproduct)=[^&]*/g, '$1')
+            .replace(/[?&]$/, '')
+            .replace(/[?&]{2,}/g, '?')
+            .replace(/\?&/, '?');
+        if (qs === '?' || qs === '&') {
+            qs = '';
+        }
+        var v2Idx = base.indexOf('/sell/catalog/products-v2');
+        if (v2Idx !== -1) {
+            var v2Base = base.substring(0, v2Idx + '/sell/catalog/products-v2'.length).replace(/\/$/, '');
+            return v2Base + '/' + productId + '/edit' + qs;
+        }
+        var v1Idx = base.indexOf('/sell/catalog/products');
+        if (v1Idx !== -1) {
+            return base.substring(0, v1Idx) + '/sell/catalog/products-v2/' + productId + '/edit' + qs;
+        }
+        var sep = base.indexOf('?') >= 0 ? '&' : '?';
+        return base + sep + 'id_product=' + encodeURIComponent(String(productId)) + '&updateproduct=1';
+    })(id, productAdminBase);
     jQuery('#modal-product-link').attr('href', productUrl);
     
     // Mostrar imagen del producto (idImage puede venir como número o texto)
@@ -77,6 +121,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
         jQuery('#productInfoModal').modal('show');
     }
 }
+{/literal}
 </script>
 
 {block name="content"}
@@ -208,8 +253,8 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                     <option value="pending" {if isset($smarty.get.status) && $smarty.get.status == 'pending'}selected{/if}>Pendiente</option>
                                     <option value="syncing" {if isset($smarty.get.status) && $smarty.get.status == 'syncing'}selected{/if}>Sincronizando</option>
                                     <option value="queued" {if isset($smarty.get.status) && $smarty.get.status == 'queued'}selected{/if}>En cola</option>
-                                    <option value="creating_in_yuju" {if isset($smarty.get.status) && $smarty.get.status == 'creating_in_yuju'}selected{/if}>Creando en Yuju…</option>
-                                    <option value="updating_in_yuju" {if isset($smarty.get.status) && $smarty.get.status == 'updating_in_yuju'}selected{/if}>Actualizando en Yuju…</option>
+                                    <option value="creating_in_yuju" {if isset($smarty.get.status) && $smarty.get.status == 'creating_in_yuju'}selected{/if}>En espera de respuesta</option>
+                                    <option value="updating_in_yuju" {if isset($smarty.get.status) && $smarty.get.status == 'updating_in_yuju'}selected{/if}>Actualizando</option>
                                     <option value="deleting_in_yuju" {if isset($smarty.get.status) && $smarty.get.status == 'deleting_in_yuju'}selected{/if}>Eliminando en Yuju…</option>
                                     <option value="error" {if isset($smarty.get.status) && $smarty.get.status == 'error'}selected{/if}>Error</option>
                                     <option value="disabled" {if isset($smarty.get.status) && $smarty.get.status == 'disabled'}selected{/if}>Deshabilitado</option>
@@ -423,23 +468,51 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                                title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Error en última operación{/if}"
                                                onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});"></i>
                                         {elseif $product.yuju_status == 'error'}
+                                            {if $yuju_link_ok}
+                                            <span class="label label-warning" style="cursor: pointer;"
+                                                  title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}El producto ya está en Yuju; la última operación falló{/if}"
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}, 'Este producto SÍ está en Yuju, pero la última operación falló. Revise el historial.', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'error');">
+                                                <i class="icon-cloud"></i> En Yuju · Error
+                                            </span>
+                                            {else}
                                             <span class="label label-danger" style="cursor: pointer;" 
                                                   title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Error en sincronización{/if}"
-                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true);">
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, null, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'error');">
                                                 <i class="icon-remove"></i> Error
                                             </span>
+                                            {/if}
                                         {elseif $product.yuju_status == 'queued'}
                                             <span class="label label-info" style="cursor: pointer;" title="Ver detalle de proceso en cola"
                                                   onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, false{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if}, {if isset($product.queue_action) && $product.queue_action == 'delete'}'eliminación'{elseif isset($product.queue_action) && $product.queue_action == 'update'}'actualización'{else}'creación'{/if});">
                                                 <i class="icon-list"></i> En Cola
                                             </span>
                                         {elseif $product.yuju_status == 'creating_in_yuju'}
-                                            <span class="label label-warning" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Esperando webhook product-created{/if}">
-                                                <i class="icon-time"></i> Creando…
+                                            <span class="label label-info" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Enviado a Yuju; en espera de respuesta (webhook){/if}">
+                                                <i class="icon-time"></i> En espera de respuesta
                                             </span>
+                                            <button type="button"
+                                                    class="btn btn-xs btn-default yuju-find-created-webhook"
+                                                    style="margin-left:6px;vertical-align:middle;"
+                                                    data-product-id="{$product.id_product|intval}"
+                                                    title="Buscar webhook product-created por SKU y vincular ID Yuju">
+                                                <i class="icon-search"></i> Buscar webhook
+                                            </button>
+                                            {assign var=yuju_wait_ts value=0}
+                                            {if isset($product.last_sync_at) && $product.last_sync_at}
+                                                {assign var=yuju_wait_ts value=$product.last_sync_at|strtotime}
+                                            {/if}
+                                            {if $yuju_wait_ts && $smarty.now - $yuju_wait_ts >= 3600}
+                                                <button type="button"
+                                                        class="btn btn-xs btn-warning yuju-resend-pending-create"
+                                                        style="margin-left:4px;vertical-align:middle;"
+                                                        data-product-id="{$product.id_product|intval}"
+                                                        title="Más de 1 hora sin webhook; reenviar creación">
+                                                    <i class="icon-refresh"></i> Mandar de nuevo
+                                                </button>
+                                            {/if}
                                         {elseif $product.yuju_status == 'updating_in_yuju'}
-                                            <span class="label label-warning" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Actualización en curso{/if}">
-                                                <i class="icon-refresh"></i> Actualizando…
+                                            <span class="label label-warning" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Actualizando diferencias en Yuju{/if}">
+                                                <i class="icon-refresh"></i> Actualizando
                                             </span>
                                         {elseif $product.yuju_status == 'deleting_in_yuju'}
                                             <span class="label label-warning" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Esperando webhook product-deleted{/if}">
@@ -536,123 +609,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     </div>
 </div>
 
-<!-- Modal de Información del Producto -->
-<div class="modal fade" id="productInfoModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">
-                    <i class="icon-info-sign"></i> Información del Producto
-                </h4>
-            </div>
-            <div class="modal-body">
-                <div id="modal-sync-process-banner" class="alert alert-warning" style="display:none;margin-bottom:12px;">
-                    <i class="icon-time"></i>
-                    <strong>En proceso:</strong>
-                    <span id="modal-sync-process-text"></span>
-                </div>
-                <!-- Tabs de navegación -->
-                <ul class="nav nav-tabs" role="tablist">
-                    <li class="active">
-                        <a href="#tab-product-info" role="tab" data-toggle="tab">
-                            <i class="icon-info"></i> Información
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#tab-sync-history" role="tab" data-toggle="tab" id="tab-history-link">
-                            <i class="icon-time"></i> Historial de Sincronización
-                        </a>
-                    </li>
-                </ul>
-                
-                <!-- Contenido de los tabs -->
-                <div class="tab-content" style="margin-top: 15px;">
-                    <!-- Tab: Información del Producto -->
-                    <div class="tab-pane active" id="tab-product-info">
-                        <div class="row">
-                            <div class="col-md-4 text-center">
-                                <img id="modal-product-image" src="" alt="Imagen del producto" class="img-thumbnail" style="max-width: 100%; max-height: 200px;">
-                            </div>
-                            <div class="col-md-8">
-                                <table class="table table-bordered">
-                                    <tbody>
-                                        <tr>
-                                            <td width="150"><strong>ID del Producto:</strong></td>
-                                            <td id="modal-product-id"></td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Referencia:</strong></td>
-                                            <td id="modal-product-reference"></td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Nombre:</strong></td>
-                                            <td id="modal-product-name"></td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Categoría:</strong></td>
-                                            <td id="modal-product-category"></td>
-                                        </tr>
-                                        <tr id="modal-yuju-product-row">
-                                            <td><strong>ID producto Yuju:</strong></td>
-                                            <td id="modal-yuju-product-id">—</td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Ver en PrestaShop:</strong></td>
-                                            <td>
-                                                <a id="modal-product-link" href="#" target="_blank" class="btn btn-sm btn-primary">
-                                                    <i class="icon-external-link"></i> Abrir Producto
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Tab: Historial de Sincronización -->
-                    <div class="tab-pane" id="tab-sync-history">
-                        <div id="sync-history-loading" style="text-align: center; padding: 20px;">
-                            <i class="icon-spinner icon-spin" style="font-size: 24px;"></i>
-                            <p>Cargando historial...</p>
-                        </div>
-                        
-                        <div id="sync-history-content" style="display: none;">
-                            <div id="sync-history-info" class="alert alert-info" style="display: none;"></div>
-                            <!-- Tabla de historial -->
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-striped table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th width="160">Fecha</th>
-                                            <th width="80">Acción</th>
-                                            <th width="80">Estado</th>
-                                            <th width="80">Duración</th>
-                                            <th>Detalles</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="sync-history-tbody">
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div id="sync-history-error" class="alert alert-warning" style="display: none;">
-                            <i class="icon-warning-sign"></i>
-                            <span id="sync-history-error-message"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">
-                    <i class="icon-remove"></i> Cerrar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{include file='module:prestashopyuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
 
 <!-- Confirmación eliminación masiva en Yuju -->
 <div class="modal fade" id="yuju-bulk-delete-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-bulk-delete-modal-title">
@@ -797,59 +754,6 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     </div>
 </div>
 
-<!-- Modal de Detalles de Sincronización -->
-<div class="modal fade" id="syncDetailsModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">
-                    <i class="icon-file-text"></i> Detalles de Sincronización
-                </h4>
-            </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5><i class="icon-upload"></i> Request (Enviado a Yuju)</h5>
-                        <pre id="sync-detail-request" style="max-height: 400px; overflow: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; font-size: 11px;"></pre>
-                    </div>
-                    <div class="col-md-6">
-                        <h5><i class="icon-download"></i> Response (Respuesta de Yuju)</h5>
-                        <pre id="sync-detail-response" style="max-height: 400px; overflow: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; font-size: 11px;"></pre>
-                    </div>
-                </div>
-                <div class="row" style="margin-top: 15px;">
-                    <div class="col-md-12">
-                        <h5><i class="icon-info"></i> Información Adicional</h5>
-                        <table class="table table-bordered">
-                            <tr>
-                                <td width="150"><strong>HTTP Status:</strong></td>
-                                <td id="sync-detail-http-status"></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Duración:</strong></td>
-                                <td id="sync-detail-duration"></td>
-                            </tr>
-                            <tr id="sync-detail-error-row" style="display: none;">
-                                <td><strong id="sync-detail-error-label">Error:</strong></td>
-                                <td>
-                                    <div id="sync-detail-error-user"></div>
-                                    <div id="sync-detail-error-technical" class="text-muted small" style="display: none; margin-top: 8px;"></div>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">
-                    <i class="icon-remove"></i> Cerrar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
 {literal}
 var YUJU_PS_AJAX_URL = '{/literal}{$ajax_url|default:''|escape:'javascript':'UTF-8'}{literal}';
@@ -962,9 +866,9 @@ $(document).ready(function() {
             'pending': 'Pendiente',
             'syncing': 'Sincronizando',
             'queued': 'En cola',
-            'creating_in_yuju': 'Creando en Yuju',
-            'updating_in_yuju': 'Actualizando en Yuju',
-            'deleting_in_yuju': 'Eliminando en Yuju',
+            'creating_in_yuju': 'En espera de respuesta',
+            'updating_in_yuju': 'Actualizando',
+            'deleting_in_yuju': 'Eliminando',
             'error': 'Error',
             'disabled': 'Deshabilitado',
             'not_synced': 'No sincronizado',
@@ -2045,6 +1949,7 @@ $(document).ready(function() {
 
         var detailBody = opts.detailBody || '';
         var $pre = null;
+        var $btnDet = null;
         var $actions = $('<div>').css({ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' });
 
         if (detailBody) {
@@ -2064,7 +1969,7 @@ $(document).ready(function() {
                     wordBreak: 'break-word'
                 })
                 .text(detailBody);
-            var $btnDet = $('<button type="button" class="btn btn-default btn-sm"></button>').text('Ver detalles');
+            $btnDet = $('<button type="button" class="btn btn-default btn-sm"></button>').text('Ver detalles');
             $btnDet.on('click', function() {
                 var wasVisible = $pre.is(':visible');
                 $pre.slideToggle(120);
@@ -2073,15 +1978,29 @@ $(document).ready(function() {
             $actions.append($btnDet);
         }
 
-        if (logsUrl && type === 'error') {
+        if (logsUrl && type === 'error' && !detailBody) {
+            // Sin detalle embebido: solo entonces ofrecer ir a logs del módulo
             $actions.append(
                 $('<a>')
                     .attr('href', logsUrl)
                     .attr('target', '_blank')
                     .attr('rel', 'noopener noreferrer')
-                    .addClass('btn btn-default btn-sm')
-                    .text('Abrir logs Yuju')
+                    .addClass('btn btn-warning btn-sm')
+                    .html('<i class="icon-list-alt"></i> Ver logs')
             );
+        } else if (type === 'error' && detailBody) {
+            // El detalle del error ya viene en el toast
+            var $btnErr = $('<button type="button" class="btn btn-warning btn-sm"></button>')
+                .html('<i class="icon-warning-sign"></i> Ver error guardado');
+            $btnErr.on('click', function () {
+                if ($pre) {
+                    $pre.slideDown(120);
+                    if ($btnDet) {
+                        $btnDet.text('Ocultar detalles');
+                    }
+                }
+            });
+            $actions.append($btnErr);
         }
 
         if ($actions.children().length) {
@@ -2114,8 +2033,8 @@ $(document).ready(function() {
         }
         if (e.indexOf('sku simple is not editable') !== -1) {
             return {
-                meaning: 'Este producto ya existe en Yuju y su campo «SKU simple» quedó bloqueado por el marketplace. Por eso la actualización fue rechazada aunque el HTTP sea 200.',
-                fix: 'Qué hacer: 1) No cambie SKU/referencia de este producto después de creado. 2) Reintente la actualización solo con precio, stock o descripción. 3) Si necesita cambiar el SKU, elimine el producto en Yuju y créelo de nuevo con el SKU correcto.'
+                meaning: 'El SKU simple no se modifica en actualizaciones (producto ya existente en Yuju). Este aviso es histórico; los nuevos envíos solo actualizan campos distintos.',
+                fix: 'No hace falta recrear el producto. Vuelva a sincronizar: solo se enviarán precio, stock, descripción u otros campos que hayan cambiado.'
             };
         }
         if (e.indexOf('duplic') !== -1 && (e.indexOf('sku') !== -1 || e.indexOf('reference') !== -1)) {
@@ -2144,7 +2063,7 @@ $(document).ready(function() {
         }
         return {
             meaning: 'Se produjo un error durante la sincronización con Yuju.',
-            fix: 'Revise el detalle técnico y los logs, corrija el dato del producto y vuelva a intentar.'
+            fix: 'Revise el detalle técnico y pulse «Ver error guardado» para ver la respuesta de Yuju. Corrija el dato del producto y vuelva a intentar.'
         };
     }
 
@@ -2155,10 +2074,290 @@ $(document).ready(function() {
     /** Una línea para la tabla de historial (evita mostrar inglés en mensajes conocidos). */
     function yujuHistoryErrorOneLine(raw) {
         if (isSkuSimpleNotEditableMessage(raw)) {
-            return 'El «SKU simple» en Yuju no admite cambios (producto ya existente). Pulse «Ver detalles» para la guía completa.';
+            return '';
         }
         return String(raw || '');
     }
+
+    function parseMaybeJson(value) {
+        if (value == null || value === '') {
+            return null;
+        }
+        if (typeof value === 'object') {
+            return value;
+        }
+        try {
+            return JSON.parse(String(value));
+        } catch (e) {
+            return String(value);
+        }
+    }
+
+    function formatYujuResponsePreview(responseData) {
+        var obj = parseMaybeJson(responseData);
+        if (!obj || typeof obj !== 'object') {
+            return '<small class="text-muted">Sin respuesta estructurada de Yuju.</small>';
+        }
+        var lines = [];
+        if (obj.success && Array.isArray(obj.success) && obj.success.length) {
+            var s0 = obj.success[0] || {};
+            if (s0.id_product) {
+                lines.push('<strong>ID Yuju (API):</strong> ' + escapeHtml(String(s0.id_product)));
+            }
+            if (s0.id_shop) {
+                lines.push('<strong>ID Shop:</strong> ' + escapeHtml(String(s0.id_shop)));
+            }
+            if (s0.warning) {
+                var warns = Array.isArray(s0.warning) ? s0.warning : [s0.warning];
+                lines.push('<strong>Warnings:</strong> ' + escapeHtml(warns.join('; ')));
+            }
+            lines.push('<span class="text-success"><i class="icon-ok"></i> Yuju aceptó el alta (success)</span>');
+        }
+        if (obj.errors && Array.isArray(obj.errors) && obj.errors.length) {
+            lines.push('<span class="text-danger"><i class="icon-remove"></i> La respuesta incluye errores</span>');
+        }
+        if (!lines.length) {
+            lines.push('<small class="text-muted">Respuesta recibida (abra «Ver detalles» para el JSON completo).</small>');
+        }
+        return '<div class="yuju-history-reply-preview" style="margin-top:6px; padding:6px 8px; background:#f7fbff; border:1px solid #d9edf7; border-radius:3px;">'
+            + lines.join('<br>')
+            + '</div>';
+    }
+
+    function renderPendingCreatePanel(pc) {
+        if (!pc) {
+            return '';
+        }
+        var broken = !!pc.broken;
+        var panelClass = broken ? 'panel-danger' : 'panel-info';
+        var title = broken
+            ? 'Estado inconsistente: no se envió el producto a Yuju'
+            : 'Estado actual: Creando… (en espera de confirmación de Yuju)';
+        var html = '<div class="panel ' + panelClass + '" style="margin-bottom:0;">';
+        html += '<div class="panel-heading"><i class="icon-' + (broken ? 'warning-sign' : 'time') + '"></i> <strong>'
+            + escapeHtml(title) + '</strong></div>';
+        html += '<div class="panel-body">';
+        html += '<p style="margin-top:0;">' + escapeHtml(pc.message || '') + '</p>';
+        if (pc.last_error_message && broken) {
+            html += '<p class="text-danger"><strong>Último registro en historial:</strong> '
+                + escapeHtml(String(pc.last_error_message)) + '</p>';
+        }
+        html += '<p><strong>ID Yuju:</strong> ' + escapeHtml(pc.yuju_product_id || 'N/A');
+        if (pc.http_status_code) {
+            html += ' &nbsp;|&nbsp; <strong>HTTP:</strong> ' + escapeHtml(String(pc.http_status_code));
+        }
+        if (pc.last_create_at) {
+            html += ' &nbsp;|&nbsp; <strong>Último intento:</strong> ' + escapeHtml(String(pc.last_create_at));
+        }
+        html += '</p>';
+
+        if (broken) {
+            html += '<div class="alert alert-warning" style="margin-bottom:10px;">'
+                + 'El historial muestra un intento <strong>bloqueado/fallido</strong> (payload vacío). '
+                + 'Eso <strong>no</strong> significa que Yuju haya recibido el producto. '
+                + 'El estado ya se liberó: <strong>vuelva a sincronizar</strong> este producto.'
+                + '</div>';
+        }
+
+        html += '<div class="row">';
+        html += '<div class="col-md-6">';
+        html += '<h5 style="margin-top:0;"><i class="icon-download"></i> Lo que respondió Yuju</h5>';
+        if (pc.yuju_response) {
+            html += formatYujuResponsePreview(pc.yuju_response);
+            html += '<pre style="max-height:220px; overflow:auto; background:#f5f5f5; padding:8px; font-size:11px; margin-top:8px;">'
+                + escapeHtml(JSON.stringify(pc.yuju_response, null, 2))
+                + '</pre>';
+        } else {
+            html += '<p class="text-muted">' + (broken
+                ? 'No hay respuesta de Yuju porque el producto no llegó a enviarse.'
+                : 'Aún no hay respuesta de Yuju guardada en el historial.') + '</p>';
+        }
+        html += '</div>';
+        html += '<div class="col-md-6">';
+        html += '<h5 style="margin-top:0;"><i class="icon-upload"></i> Lo que se envió</h5>';
+        if (pc.sent_payload) {
+            var payload = pc.sent_payload;
+            var summary = [];
+            if (payload.sku) summary.push('<strong>SKU:</strong> ' + escapeHtml(String(payload.sku)));
+            if (payload.sku_simple) summary.push('<strong>SKU simple:</strong> ' + escapeHtml(String(payload.sku_simple)));
+            if (payload.name) summary.push('<strong>Nombre:</strong> ' + escapeHtml(String(payload.name)));
+            if (payload.price != null) summary.push('<strong>Precio:</strong> ' + escapeHtml(String(payload.price)));
+            if (payload.stock != null) summary.push('<strong>Stock:</strong> ' + escapeHtml(String(payload.stock)));
+            if (summary.length) {
+                html += '<p>' + summary.join('<br>') + '</p>';
+            }
+            html += '<pre style="max-height:220px; overflow:auto; background:#f5f5f5; padding:8px; font-size:11px;">'
+                + escapeHtml(JSON.stringify(payload, null, 2))
+                + '</pre>';
+        } else {
+            html += '<p class="text-muted">' + (broken
+                ? 'No hay payload: el intento anterior falló antes de armar/enviar el producto.'
+                : 'No hay payload de envío en el historial.') + '</p>';
+        }
+        html += '</div></div>';
+        if (!broken) {
+            html += '<p class="help-block">Cuando llegue el webhook <code>product-created</code>, el estado pasará a <strong>Sincronizado / Creado</strong>.</p>';
+            var pid = escapeHtml(String(pc.product_id || $('#modal-product-id').text() || ''));
+            html += '<button type="button" class="btn btn-sm btn-primary yuju-find-created-webhook" data-product-id="'
+                + pid + '"><i class="icon-search"></i> Buscar webhook</button> ';
+            var canResend = !!(pc.wait && pc.wait.can_resend);
+            if (canResend) {
+                html += '<button type="button" class="btn btn-sm btn-warning yuju-resend-pending-create" data-product-id="'
+                    + pid + '" title="Han pasado más de 1 hora sin webhook"><i class="icon-refresh"></i> Mandar de nuevo</button>';
+            }
+            html += '<div class="yuju-find-webhook-result" style="margin-top:10px;"></div>';
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    /**
+     * Busca en logs de webhooks un product-created cuyo sku/sku_simple coincida
+     * con el SKU enviado tras la última creación, y vincula el ID Yuju.
+     */
+    function findProductCreatedWebhook(productId, $btn) {
+        productId = parseInt(productId, 10) || 0;
+        if (!productId) {
+            alert('ID de producto no válido');
+            return;
+        }
+        var $btnEl = $btn && $btn.jquery ? $btn : $($btn);
+        var $resultBox = $btnEl.closest('.panel-body, td, .modal-body').find('.yuju-find-webhook-result').first();
+        if (!$resultBox.length && $('#sync-history-pending-create').is(':visible')) {
+            $resultBox = $('#sync-history-pending-create .yuju-find-webhook-result').first();
+        }
+
+        var originalHtml = $btnEl.html();
+        $btnEl.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Buscando…');
+        if ($resultBox.length) {
+            $resultBox.html('<p class="text-muted"><i class="icon-spinner icon-spin"></i> Buscando webhooks product-created por SKU…</p>');
+        }
+
+        $.ajax({
+            url: YUJU_PS_AJAX_URL,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'findProductCreatedWebhook',
+                token: YUJU_PS_TOKEN,
+                product_id: productId
+            },
+            success: function(response) {
+                $btnEl.prop('disabled', false).html(originalHtml);
+                if (!response) {
+                    alert('Respuesta vacía del servidor');
+                    return;
+                }
+
+                var msg = response.message || 'Sin mensaje';
+                var applied = !!(response.applied || response.already_linked);
+
+                if ($resultBox.length) {
+                    var cls = (!response.success) ? 'alert-danger'
+                        : (applied ? 'alert-success'
+                            : (response.found ? 'alert-warning' : 'alert-info'));
+                    var detail = '';
+                    if (response.match) {
+                        detail = '<br><small><strong>SKU enviado:</strong> '
+                            + escapeHtml(String(response.match.matched_sent_sku || ''))
+                            + ' &nbsp;|&nbsp; <strong>SKU webhook:</strong> '
+                            + escapeHtml(String(response.match.sku || response.match.sku_simple || ''))
+                            + ' &nbsp;|&nbsp; <strong>ID Yuju:</strong> '
+                            + escapeHtml(String(response.match.resource_id || ''))
+                            + ' &nbsp;|&nbsp; <strong>Recibido:</strong> '
+                            + escapeHtml(String(response.match.received_at || ''))
+                            + '</small>';
+                    } else if (response.sent_skus && response.sent_skus.length) {
+                        detail = '<br><small>SKUs buscados: ' + escapeHtml(response.sent_skus.join(', '))
+                            + ' (desde ' + escapeHtml(String(response.search_from || '')) + ')</small>';
+                    }
+                    $resultBox.html('<div class="alert ' + cls + '" style="margin-bottom:0;">'
+                        + escapeHtml(msg) + detail + '</div>');
+                } else {
+                    alert(msg);
+                }
+
+                if (applied) {
+                    setTimeout(function() {
+                        window.location.reload(true);
+                    }, 1200);
+                }
+            },
+            error: function() {
+                $btnEl.prop('disabled', false).html(originalHtml);
+                if ($resultBox.length) {
+                    $resultBox.html('<div class="alert alert-danger" style="margin-bottom:0;">Error de conexión al buscar el webhook.</div>');
+                } else {
+                    alert('Error de conexión al buscar el webhook');
+                }
+            }
+        });
+    }
+
+    $(document).on('click', '.yuju-find-created-webhook', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $btn = $(this);
+        findProductCreatedWebhook($btn.data('product-id') || $btn.attr('data-product-id'), $btn);
+        return false;
+    });
+
+    function resendPendingCreate(productId, $btn) {
+        productId = parseInt(productId, 10) || 0;
+        if (!productId) {
+            alert('ID de producto no válido');
+            return;
+        }
+        if (!window.confirm('¿Reenviar este producto a Yuju?\n\nSolo si pasó más de 1 hora sin recibir el webhook product-created.')) {
+            return;
+        }
+        var $btnEl = $btn && $btn.jquery ? $btn : $($btn);
+        var $resultBox = $btnEl.closest('.panel-body, td, .modal-body').find('.yuju-find-webhook-result').first();
+        if (!$resultBox.length && $('#sync-history-pending-create').is(':visible')) {
+            $resultBox = $('#sync-history-pending-create .yuju-find-webhook-result').first();
+        }
+        var originalHtml = $btnEl.html();
+        $btnEl.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Enviando…');
+
+        $.ajax({
+            url: YUJU_PS_AJAX_URL,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'resendPendingCreate',
+                token: YUJU_PS_TOKEN,
+                product_id: productId
+            },
+            success: function(response) {
+                $btnEl.prop('disabled', false).html(originalHtml);
+                var msg = (response && response.message) ? response.message : 'Sin respuesta';
+                var ok = !!(response && response.success);
+                if ($resultBox.length) {
+                    $resultBox.html('<div class="alert ' + (ok ? 'alert-success' : 'alert-danger') + '" style="margin-bottom:0;">'
+                        + escapeHtml(msg) + '</div>');
+                } else {
+                    alert(msg);
+                }
+                if (ok) {
+                    setTimeout(function() { window.location.reload(true); }, 1200);
+                }
+            },
+            error: function() {
+                $btnEl.prop('disabled', false).html(originalHtml);
+                alert('Error de conexión al reenviar el producto');
+            }
+        });
+    }
+
+    $(document).on('click', '.yuju-resend-pending-create', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $btn = $(this);
+        resendPendingCreate($btn.data('product-id') || $btn.attr('data-product-id'), $btn);
+        return false;
+    });
 
     /** Mensajes de error unidos (columna guardada + cuerpo errors[] de la respuesta). */
     function collectYujuErrorStrings(errorAttr, responseStr) {
@@ -2191,15 +2390,32 @@ $(document).ready(function() {
 
     // Variable global para la página actual del historial
     var currentHistoryPage = 1;
+
+    // Si existe el modal compartido, NO usar el loader legacy:
+    // rellenaba solo #sync-history-tbody (dentro de un panel colapsado oculto)
+    // y dejaba el historial en blanco de forma intermitente.
+    if (window.YujuProductInfoModal && typeof window.YujuProductInfoModal.loadHistory === 'function') {
+        if (typeof window.YujuProductInfoModal.bind === 'function') {
+            window.YujuProductInfoModal.bind();
+        }
+        // Compat: código viejo que aún llama loadProductHistory(...)
+        window.loadProductHistory = function (page) {
+            window.YujuProductInfoModal.loadHistory(page || 1);
+        };
+    } else {
+        // Cargar historial de sincronización cuando se abre el tab (fallback legacy)
+        $('#tab-history-link').on('shown.bs.tab', function() {
+            currentHistoryPage = 1;
+            loadProductHistory(1);
+        });
+    }
     
-    // Cargar historial de sincronización cuando se abre el tab
-    $('#tab-history-link').on('shown.bs.tab', function() {
-        currentHistoryPage = 1; // Reset a la primera página
-        loadProductHistory(1);
-    });
-    
-    // Función para cargar historial con paginación
+    // Función para cargar historial con paginación (solo si no hay modal compartido)
     function loadProductHistory(page) {
+        if (window.YujuProductInfoModal && typeof window.YujuProductInfoModal.loadHistory === 'function') {
+            window.YujuProductInfoModal.loadHistory(page || 1);
+            return;
+        }
         var productId = $('#modal-product-id').text();
         
         if (!productId) {
@@ -2210,6 +2426,10 @@ $(document).ready(function() {
         $('#sync-history-content').hide();
         $('#sync-history-error').hide();
         $('#sync-history-info').hide().empty();
+        $('#sync-history-pending-create').hide().empty();
+        $('#sync-history-latest').hide().empty();
+        $('#sync-history-older-wrap').hide();
+        $('#sync-history-empty').hide();
 
         $.ajax({
             url: YUJU_PS_AJAX_URL,
@@ -2234,21 +2454,48 @@ $(document).ready(function() {
                         $('#sync-history-info').text(response.history_info).show();
                     }
 
+                    if (response.pending_create) {
+                        $('#sync-history-pending-create').html(renderPendingCreatePanel(response.pending_create)).show();
+                    }
+
                     if (response.history && response.history.length > 0) {
+                        // Mostrar el primero como "último" en texto simple si no hay modal nuevo
+                        $('#sync-history-latest').html(
+                            '<div class="alert alert-info" style="margin-bottom:10px;"><strong>Último registro</strong> · '
+                            + escapeHtml(String(response.history[0].created_at || '')) + '</div>'
+                        ).show();
                         $.each(response.history, function(index, record) {
-                            var statusClass = record.status === 'success' ? 'success' : 
-                                            record.status === 'error' ? 'danger' : 'warning';
-                            var statusIcon = record.status === 'success' ? 'icon-check' : 'icon-remove';
+                            var isPendingCreate = record.action === 'create'
+                                && record.status === 'success'
+                                && String(record.error_message || '').toLowerCase().indexOf('pendiente') !== -1;
+                            var statusClass = record.status === 'success'
+                                ? (isPendingCreate ? 'info' : 'success')
+                                : (record.status === 'error' ? 'danger' : 'warning');
+                            var statusIcon = record.status === 'success'
+                                ? (isPendingCreate ? 'icon-time' : 'icon-check')
+                                : 'icon-remove';
                             var actionLabel = record.action === 'create' ? 'Crear' : 
                                             record.action === 'update' ? 'Actualizar' : 'Eliminar';
                             
                             // Parsear errores/warnings de Yuju si existen
                             var errorMsg = '';
                             if (record.error_message) {
-                                var messageLabel = record.status === 'success' ? 'Advertencia' : 'Error';
-                                var messageClass = record.status === 'success' ? 'text-warning' : 'text-danger';
-                                errorMsg = '<br><small class="' + messageClass + '"><strong>' + messageLabel + ':</strong> ' + 
-                                    escapeHtml(yujuHistoryErrorOneLine(record.error_message)) + '</small>';
+                                var oneLine = yujuHistoryErrorOneLine(record.error_message);
+                                if (oneLine) {
+                                    var messageLabel = isPendingCreate
+                                        ? 'Estado'
+                                        : (record.status === 'success' ? 'Advertencia' : 'Error');
+                                    var messageClass = isPendingCreate
+                                        ? 'text-info'
+                                        : (record.status === 'success' ? 'text-warning' : 'text-danger');
+                                    errorMsg = '<br><small class="' + messageClass + '"><strong>' + messageLabel + ':</strong> ' +
+                                        escapeHtml(oneLine) + '</small>';
+                                }
+                            }
+
+                            var yujuReplyPreview = '';
+                            if (isPendingCreate && record.response_data) {
+                                yujuReplyPreview = '<br>' + formatYujuResponsePreview(record.response_data);
                             }
                             
                             // Intentar extraer errores adicionales del response_data
@@ -2283,22 +2530,38 @@ $(document).ready(function() {
                                 'style="margin-top: 5px;">' +
                                 '<i class="icon-search"></i> Ver detalles' +
                                 '</button>';
+                            if (record.status === 'error') {
+                                detailsBtn += ' <button type="button" class="btn btn-xs btn-warning view-sync-details" ' +
+                                    'data-request="' + escapeHtml(record.request_data || '') + '" ' +
+                                    'data-response="' + escapeHtml(record.response_data || '') + '" ' +
+                                    'data-http-status="' + (record.http_status_code || 'N/A') + '" ' +
+                                    'data-duration="' + parseFloat(record.sync_duration).toFixed(3) + 's" ' +
+                                    'data-error="' + escapeHtml(record.error_message || '') + '" ' +
+                                    'data-focus-error="1" ' +
+                                    'style="margin-top:5px;" title="Abrir el error guardado de esta sincronización">' +
+                                    '<i class="icon-warning-sign"></i> Ver error</button>';
+                            }
                             
                             var row = '<tr>' +
                                 '<td><small>' + record.created_at + '</small></td>' +
                                 '<td><span class="label label-info">' + actionLabel + '</span></td>' +
-                                '<td><span class="label label-' + statusClass + '"><i class="' + statusIcon + '"></i></span></td>' +
+                                '<td><span class="label label-' + statusClass + '"><i class="' + statusIcon + '"></i>' +
+                                    (isPendingCreate ? ' Creando' : '') +
+                                '</span></td>' +
                                 '<td>' + parseFloat(record.sync_duration).toFixed(3) + 's</td>' +
                                 '<td>' +
                                     '<strong>ID Yuju:</strong> ' + (record.yuju_product_id || 'N/A') + '<br>' +
                                     '<strong>HTTP:</strong> ' + (record.http_status_code || 'N/A') +
                                     errorMsg +
+                                    yujuReplyPreview +
                                     '<br>' + detailsBtn +
                                 '</td>' +
                                 '</tr>';
                             
                             tbody.append(row);
                         });
+                        $('#sync-history-older-count').text(String(response.history.length));
+                        $('#sync-history-older-wrap').show();
                         
                         // Renderizar paginación
                         if (response.pagination) {
@@ -2336,7 +2599,7 @@ $(document).ready(function() {
                         
                         $('#sync-history-content').show();
                     } else {
-                        if (!response.history_info) {
+                        if (!response.history_info && !response.pending_create) {
                             tbody.append('<tr><td colspan="5" class="text-center text-muted">' +
                                 'No hay historial de sincronización para este producto</td></tr>');
                         }
@@ -2400,9 +2663,32 @@ $(document).ready(function() {
 
         $('#sync-detail-error-technical').hide().empty();
         $('#sync-detail-error-user').empty().css('color', '');
+        $('#sync-detail-error-actions').hide();
+        $('#sync-detail-goto-error-btn-footer').hide();
+        $('#sync-detail-response').css({ outline: '', boxShadow: '' });
+        $('#sync-detail-error-technical').css({ outline: '', boxShadow: '' });
 
         var errStrings = collectYujuErrorStrings(error, response);
+        // Sync OK: no mostrar bloque de error aunque data-error traiga texto basura
+        try {
+            var httpOk = (httpStatus == 200 || httpStatus == '200' || httpStatus == 201 || httpStatus == '201');
+            if (httpOk && response && response !== 'null' && response !== '') {
+                var roCheck = typeof response === 'string' ? JSON.parse(response) : response;
+                var payload = (roCheck && roCheck.data && typeof roCheck.data === 'object') ? roCheck.data : roCheck;
+                var apiOk = roCheck && roCheck.success !== false
+                    && payload
+                    && Array.isArray(payload.success)
+                    && payload.success.length > 0
+                    && (!payload.errors || (Array.isArray(payload.errors) && payload.errors.length === 0));
+                if (apiOk) {
+                    errStrings = [];
+                }
+            }
+        } catch (ignoreOk) {
+            // seguir con errStrings original
+        }
         var rawBundle = errStrings.join(' · ');
+        var focusError = String($btn.data('focus-error') || '') === '1';
 
         if (rawBundle) {
             // Determinar si es warning o error analizando el response JSON
@@ -2450,11 +2736,65 @@ $(document).ready(function() {
             }
 
             $('#sync-detail-error-row').show();
+
+            // En error (no warning): ir al error guardado en este mismo modal
+            if (!isWarning) {
+                $('#sync-detail-error-actions').show();
+                $('#sync-detail-goto-error-btn-footer').show();
+                $('#sync-detail-copy-error-btn').data('copy-text', rawBundle);
+                if (focusError) {
+                    setTimeout(function () {
+                        focusSavedSyncError();
+                    }, 250);
+                }
+            }
         } else {
             $('#sync-detail-error-row').hide();
         }
         
         $('#syncDetailsModal').modal('show');
+    });
+
+    function focusSavedSyncError() {
+        var $target = $('#sync-detail-response');
+        if (!$target.length) {
+            $target = $('#sync-detail-error-technical');
+        }
+        var $modalBody = $('#syncDetailsModal .modal-body');
+        if ($target.length && $modalBody.length) {
+            $modalBody.animate({
+                scrollTop: $modalBody.scrollTop() + $target.position().top - 20
+            }, 200);
+            $target.css({
+                outline: '2px solid #f0ad4e',
+                boxShadow: '0 0 0 3px rgba(240,173,78,0.35)'
+            });
+            if ($('#sync-detail-error-technical').is(':visible')) {
+                $('#sync-detail-error-technical').css({
+                    outline: '2px solid #d9534f',
+                    boxShadow: '0 0 0 3px rgba(217,83,79,0.25)'
+                });
+            }
+        }
+    }
+
+    $(document).on('click', '#sync-detail-goto-error-btn, #sync-detail-goto-error-btn-footer', function (e) {
+        e.preventDefault();
+        focusSavedSyncError();
+    });
+
+    $(document).on('click', '#sync-detail-copy-error-btn', function () {
+        var text = String($(this).data('copy-text') || '');
+        if (!text) {
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+            return;
+        }
+        var $tmp = $('<textarea>').val(text).appendTo('body').select();
+        try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+        $tmp.remove();
     });
     
     // Función auxiliar para escapar HTML

@@ -146,6 +146,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuProductStatus', true),
             'token' => $this->token,
             'yuju_logs_admin_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
+            'yuju_product_info_ajax_url' => $this->context->link->getAdminLink('AdminYujuProductStatus', true),
+            'yuju_product_info_token' => $this->token,
+            'product_admin_url' => $this->context->link->getAdminLink('AdminProducts', true),
         ]);
         parent::initContent();
         
@@ -183,9 +186,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'error' => 'Error',
         'disabled' => 'Deshabilitado',
         'queued' => 'En Cola',
-        'creating_in_yuju' => 'Creando en Yuju (webhook)',
-        'updating_in_yuju' => 'Actualizando en Yuju',
-        'deleting_in_yuju' => 'Eliminando en Yuju (webhook)',
+        'creating_in_yuju' => 'En espera de respuesta',
+        'updating_in_yuju' => 'Actualizando',
+        'deleting_in_yuju' => 'Eliminando',
         ];
 
         // Get PrestaShop stores
@@ -221,6 +224,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'yuju_logs_admin_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
         'current_index' => self::$currentIndex,
         'token' => $this->token,
+        'yuju_product_info_ajax_url' => $ajax_url,
+        'yuju_product_info_token' => $this->token,
+        'product_admin_url' => $this->context->link->getAdminLink('AdminProducts', true),
         'yuju_sync_history_table_missing' => !$this->isYujuProductSyncHistoryTablePresent(),
         'yuju_sync_history_table_name' => _DB_PREFIX_ . 'yuju_product_sync_history',
         ]);
@@ -731,6 +737,22 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 continue;
             }
 
+            // Si ya existe en Yuju → no validar como create; se actualizará (o quedará sincronizado sin cambios)
+            $resolvedYujuId = $this->product_manager->resolveExistingYujuProductId($pid);
+            if ($resolvedYujuId !== '') {
+                $results[] = [
+                    'product_id' => $pid,
+                    'product_name' => $name,
+                    'valid' => true,
+                    'already_in_yuju' => true,
+                    'will_update' => true,
+                    'errors' => [],
+                ];
+                ++$processed;
+
+                continue;
+            }
+
             $validation = $this->product_manager->validateProductForYujuCreate($pid);
             if (!empty($validation['success'])) {
                 $results[] = [
@@ -978,6 +1000,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 case 'getFilteredProductIds':
                     $this->ajaxProcessGetFilteredProductIds();
                     break;
+                case 'findProductCreatedWebhook':
+                    $this->ajaxProcessFindProductCreatedWebhook();
+                    break;
+                case 'resendPendingCreate':
+                    $this->ajaxProcessResendPendingCreate();
+                    break;
             }
             exit;
         }
@@ -1137,7 +1165,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                         'SELECT yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
                         WHERE prestashop_product_id = ' . (int) $product_id
                     );
-                    $has_yuju_link = $this->yujuStatusRowHasProductLink($status);
+                    $resolved_yuju_id = $this->product_manager->resolveExistingYujuProductId((int) $product_id);
+                    $has_yuju_link = $this->yujuStatusRowHasProductLink($status) || ($resolved_yuju_id !== '');
 
                     if ($bulk_action === 'delete') {
                         if (!$has_yuju_link) {
@@ -1145,14 +1174,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
                             continue;
                         }
-                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id)) {
+                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id, false)) {
                             ++$error_count;
                             $errors[] = 'Producto ID ' . (int) $product_id . ': no válido o no encontrado en PrestaShop';
 
                             continue;
                         }
                         $result = $sync_queue->addToQueue((int) $product_id, 'delete', 'normal', []);
-                    } elseif ($bulk_action === 'create') {
+                    } elseif ($bulk_action === 'create' && !$has_yuju_link) {
+                        // Solo CREATE real si nunca existió en Yuju
                         $validation = $this->product_manager->validateProductForYujuCreate((int) $product_id);
                         if (empty($validation['success'])) {
                             $validation_msg = implode(' ', $validation['errors']);
@@ -1163,7 +1193,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
                             continue;
                         }
-                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id)) {
+                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id, true)) {
                             ++$error_count;
                             $errors[] = 'Producto ID ' . (int) $product_id . ': no válido o no encontrado en PrestaShop';
 
@@ -1171,8 +1201,19 @@ class AdminYujuProductStatusController extends ModuleAdminController
                         }
                         $result = $sync_queue->addToQueue((int) $product_id, 'create', 'normal', []);
                     } else {
-                        // update: en cola se usa update con payload; si no hay enlace Yuju, encolar create
-                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id)) {
+                        // update (o "create" de producto YA existente): solo UPDATE con diff
+                        if ($has_yuju_link && !$this->product_manager->productNeedsYujuUpdate((int) $product_id)) {
+                            $this->product_manager->updateProductStatus(
+                                (int) $product_id,
+                                'synced',
+                                null,
+                                $resolved_yuju_id !== '' ? $resolved_yuju_id : null
+                            );
+                            ++$skipped_count;
+
+                            continue;
+                        }
+                        if (!$this->ensureProductQueuedRowForYuju((int) $product_id, !$has_yuju_link)) {
                             ++$error_count;
                             $errors[] = 'Producto ID ' . (int) $product_id . ': no válido o no encontrado en PrestaShop';
 
@@ -1238,6 +1279,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $success_count = 0;
         $error_count = 0;
         $skipped_count = 0;
+        $created_count = 0;
+        $updated_count = 0;
+        $synced_no_diff_count = 0;
         $errors = [];
 
         foreach ($product_ids as $product_id) {
@@ -1246,7 +1290,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     'SELECT yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
                     WHERE prestashop_product_id = ' . (int) $product_id
                 );
-                $has_yuju_link = $this->yujuStatusRowHasProductLink($status);
+                $resolved_yuju_id = $this->product_manager->resolveExistingYujuProductId((int) $product_id);
+                $has_yuju_link = $this->yujuStatusRowHasProductLink($status) || ($resolved_yuju_id !== '');
 
                 if ($bulk_action === 'delete') {
                     if (!$has_yuju_link) {
@@ -1265,8 +1310,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     continue;
                 }
 
-                // create y update: sendProductToYuju crea o actualiza según exista ID en Yuju
-                if ($bulk_action === 'create') {
+                // create solo si NO existe en Yuju; si ya existe → sendProductToYuju hará UPDATE+diff
+                if ($bulk_action === 'create' && !$has_yuju_link) {
                     $validation = $this->product_manager->validateProductForYujuCreate((int) $product_id);
                     if (empty($validation['success'])) {
                         $validation_msg = implode(' ', $validation['errors']);
@@ -1278,10 +1323,18 @@ class AdminYujuProductStatusController extends ModuleAdminController
                         continue;
                     }
                 }
-                $result = $this->product_manager->sendProductToYuju((int) $product_id);
+                $result = $this->product_manager->sendProductToYuju((int) $product_id, ['origin' => 'bulk']);
                 $ok = is_array($result) && !empty($result['success']);
                 if ($ok) {
                     ++$success_count;
+                    $actionDone = isset($result['action']) ? (string) $result['action'] : '';
+                    if (!empty($result['skipped_no_diff'])) {
+                        ++$synced_no_diff_count;
+                    } elseif ($actionDone === 'create') {
+                        ++$created_count;
+                    } elseif ($actionDone === 'update') {
+                        ++$updated_count;
+                    }
                 } else {
                     ++$error_count;
                     $err_detail = is_array($result)
@@ -1295,12 +1348,30 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
         }
 
-        $message = sprintf(
-            '%d producto(s) procesado(s) correctamente. %d omitido(s). %d error(es).',
-            $success_count,
-            $skipped_count,
-            $error_count
-        );
+        $parts = [];
+        if ($created_count > 0) {
+            $parts[] = $created_count . ' creado(s)';
+        }
+        if ($updated_count > 0) {
+            $parts[] = $updated_count . ' actualizado(s)';
+        }
+        if ($synced_no_diff_count > 0) {
+            $parts[] = $synced_no_diff_count . ' ya sincronizado(s) (sin cambios)';
+        }
+        if ($skipped_count > 0) {
+            $parts[] = $skipped_count . ' omitido(s)';
+        }
+        if ($error_count > 0) {
+            $parts[] = $error_count . ' error(es)';
+        }
+        $message = $parts !== []
+            ? implode('. ', $parts) . '.'
+            : sprintf(
+                '%d producto(s) procesado(s) correctamente. %d omitido(s). %d error(es).',
+                $success_count,
+                $skipped_count,
+                $error_count
+            );
         if ($bulk_action === 'delete' && $skipped_count > 0) {
             $message .= ' Omitidos: sin ID Yuju.';
         }
@@ -1310,12 +1381,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         header('Content-Type: application/json');
         echo json_encode([
-            'success' => ($success_count > 0 || $skipped_count > 0) && $error_count == 0,
+            'success' => ($success_count > 0 || $skipped_count > 0 || $synced_no_diff_count > 0) && $error_count == 0,
             'message' => $message,
             'logs_url' => $logs_url,
             'errors' => $errors,
             'details' => [
                 'success' => $success_count,
+                'created' => $created_count,
+                'updated' => $updated_count,
+                'synced_no_diff' => $synced_no_diff_count,
                 'skipped' => $skipped_count,
                 'errors' => $error_count,
                 'error_messages' => $errors,
@@ -1392,11 +1466,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
     }
 
     /**
-     * Garantiza fila en yuju_product_status y estado "queued" antes de encolar.
+     * Garantiza fila en yuju_product_status antes de encolar.
+     * No degrada a queued si el producto ya tiene ID Yuju.
+     *
+     * @param int  $product_id
+     * @param bool $markAsQueued
      *
      * @return bool false si el producto PrestaShop no existe
      */
-    protected function ensureProductQueuedRowForYuju($product_id)
+    protected function ensureProductQueuedRowForYuju($product_id, $markAsQueued = true)
     {
         $product_id = (int) $product_id;
         $product = new Product($product_id, false, (int) $this->context->language->id);
@@ -1404,19 +1482,27 @@ class AdminYujuProductStatusController extends ModuleAdminController
             return false;
         }
 
-        $existing = Db::getInstance()->getValue(
-            'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
+        $row = Db::getInstance()->getRow(
+            'SELECT id, yuju_product_id FROM ' . _DB_PREFIX_ . 'yuju_product_status 
             WHERE prestashop_product_id = ' . $product_id
         );
 
-        if (!$existing) {
+        $hasYujuId = false;
+        if ($row && isset($row['yuju_product_id'])) {
+            $yujuPid = trim((string) $row['yuju_product_id']);
+            $hasYujuId = ($yujuPid !== '' && strtolower($yujuPid) !== 'null' && $yujuPid !== '0');
+        }
+
+        $shouldQueueStatus = $markAsQueued && !$hasYujuId;
+
+        if (!$row) {
             Db::getInstance()->insert('yuju_product_status', [
                 'prestashop_product_id' => $product_id,
-                'sync_status' => pSQL('queued'),
+                'sync_status' => pSQL($shouldQueueStatus ? 'queued' : 'pending'),
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s'),
             ]);
-        } else {
+        } elseif ($shouldQueueStatus) {
             Db::getInstance()->update(
                 'yuju_product_status',
                 [
@@ -1525,7 +1611,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     continue;
                 }
 
-                $result = $this->product_manager->sendProductToYuju((int) $product['id_product']);
+                $result = $this->product_manager->sendProductToYuju((int) $product['id_product'], ['origin' => 'bulk']);
                 $ok = is_array($result) && !empty($result['success']);
                 if ($ok) {
                     ++$success_count;
@@ -2187,6 +2273,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'error' => 'danger',
             'disabled' => 'default',
             'queued' => 'info',
+            'creating_in_yuju' => 'info',
+            'updating_in_yuju' => 'warning',
+            'deleting_in_yuju' => 'warning',
         ];
         
         $status_icons = [
@@ -2197,6 +2286,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'error' => 'icon-exclamation-circle',
             'disabled' => 'icon-ban',
             'queued' => 'icon-list',
+            'creating_in_yuju' => 'icon-time',
+            'updating_in_yuju' => 'icon-refresh',
+            'deleting_in_yuju' => 'icon-trash',
         ];
         
         $status_labels = [
@@ -2207,6 +2299,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'error' => 'Error',
             'disabled' => 'Deshabilitado',
             'queued' => 'En Cola',
+            'creating_in_yuju' => 'En espera de respuesta',
+            'updating_in_yuju' => 'Actualizando',
+            'deleting_in_yuju' => 'Eliminando',
         ];
 
         $color = isset($status_colors[$value]) ? $status_colors[$value] : 'default';
@@ -2401,11 +2496,79 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
             $total_pages = $limit > 0 ? (int) ceil($total_records / $limit) : 0;
 
+            $pending_create = null;
+            $status_row = $this->product_manager->getProductYujuStatusRow($product_id);
+            if ($status_row && ($status_row['sync_status'] ?? '') === 'creating_in_yuju') {
+                $sendOk = $this->product_manager->hasValidPendingCreateEvidence($product_id, $status_row);
+                $lastCreate = $this->product_manager->getLastValidCreateHistory($product_id);
+                // Si no hay create válido, mostrar el último create (aunque esté vacío) para diagnosticar.
+                if (!$lastCreate && $this->product_manager->isProductSyncHistoryTablePresent()) {
+                    $lastCreate = Db::getInstance()->getRow(
+                        'SELECT `yuju_product_id`, `http_status_code`, `request_data`, `response_data`,
+                                `error_message`, `status`, `created_at`, `sync_duration`
+                         FROM `' . _DB_PREFIX_ . 'yuju_product_sync_history`
+                         WHERE `prestashop_product_id` = ' . (int) $product_id . '
+                           AND `action` = \'create\'
+                         ORDER BY `id` DESC'
+                    ) ?: null;
+                }
+                $meta = [];
+                if (!empty($status_row['last_sync_data'])) {
+                    $decodedMeta = json_decode((string) $status_row['last_sync_data'], true);
+                    if (is_array($decodedMeta)) {
+                        $meta = $decodedMeta;
+                    }
+                }
+                $responseParsed = null;
+                $requestParsed = null;
+                if ($lastCreate) {
+                    if ($this->product_manager->isNonEmptyJsonPayload($lastCreate['response_data'] ?? '')) {
+                        $tmp = json_decode((string) $lastCreate['response_data'], true);
+                        $responseParsed = is_array($tmp) ? $tmp : (string) $lastCreate['response_data'];
+                    }
+                    if ($this->product_manager->isNonEmptyJsonPayload($lastCreate['request_data'] ?? '')) {
+                        $tmp = json_decode((string) $lastCreate['request_data'], true);
+                        $requestParsed = is_array($tmp) ? $tmp : (string) $lastCreate['request_data'];
+                    }
+                }
+
+                // Estado inconsistente: "Creando" sin envío real → permitir re-sync y avisar.
+                if (!$sendOk) {
+                    $this->product_manager->updateProductStatus(
+                        $product_id,
+                        'error',
+                        'Estado inconsistente: quedó en «Creando» sin un envío válido a Yuju. Vuelva a sincronizar.',
+                        !empty($status_row['yuju_product_id']) ? (string) $status_row['yuju_product_id'] : null,
+                        null
+                    );
+                }
+
+                $pending_create = [
+                    'product_id' => (int) $product_id,
+                    'sync_status' => $sendOk ? 'creating_in_yuju' : 'error',
+                    'broken' => !$sendOk,
+                    'message' => $sendOk
+                        ? (string) ($status_row['last_error'] ?? 'Creando… Esperando confirmación de Yuju.')
+                        : 'No hubo un envío válido del producto a Yuju (payload vacío / HTTP 500 de un bloqueo anterior). El estado se liberó: vuelva a sincronizar.',
+                    'yuju_product_id' => !empty($status_row['yuju_product_id'])
+                        ? (string) $status_row['yuju_product_id']
+                        : (!empty($meta['api_yuju_id']) ? (string) $meta['api_yuju_id'] : null),
+                    'meta' => $meta,
+                    'last_create_at' => $lastCreate['created_at'] ?? null,
+                    'http_status_code' => isset($lastCreate['http_status_code']) ? (int) $lastCreate['http_status_code'] : null,
+                    'last_error_message' => $lastCreate['error_message'] ?? null,
+                    'yuju_response' => $responseParsed,
+                    'sent_payload' => $requestParsed,
+                    'wait' => $this->product_manager->getPendingCreateWaitInfo((int) $product_id, $status_row),
+                ];
+            }
+
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
                 'history' => $history,
                 'statistics' => $stats,
+                'pending_create' => $pending_create,
                 'pagination' => [
                     'current_page' => $page,
                     'total_pages' => max(1, $total_pages),
@@ -2470,6 +2633,79 @@ class AdminYujuProductStatusController extends ModuleAdminController
             echo json_encode([
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: Buscar webhook product-created por SKU (tras última creación) y vincular ID Yuju.
+     */
+    protected function ajaxProcessFindProductCreatedWebhook()
+    {
+        header('Content-Type: application/json');
+
+        $product_id = (int) Tools::getValue('product_id');
+        if ($product_id <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'ID de producto no proporcionado',
+            ]);
+
+            return;
+        }
+
+        try {
+            $result = $this->product_manager->findAndLinkProductCreatedWebhook($product_id, true);
+            if (!is_array($result)) {
+                $result = ['success' => false, 'message' => 'Respuesta inválida del gestor de productos'];
+            }
+            // No exponer payloads completos al front (pueden ser grandes)
+            if (isset($result['match']['payload'])) {
+                unset($result['match']['payload']);
+            }
+            if (!empty($result['matches']) && is_array($result['matches'])) {
+                foreach ($result['matches'] as $i => $m) {
+                    if (isset($result['matches'][$i]['payload'])) {
+                        unset($result['matches'][$i]['payload']);
+                    }
+                }
+            }
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error al buscar webhook: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: Reenviar create tras >1h sin webhook product-created.
+     */
+    protected function ajaxProcessResendPendingCreate()
+    {
+        header('Content-Type: application/json');
+
+        $product_id = (int) Tools::getValue('product_id');
+        if ($product_id <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'ID de producto no proporcionado',
+            ]);
+
+            return;
+        }
+
+        try {
+            $result = $this->product_manager->resendPendingCreate($product_id);
+            if (!is_array($result)) {
+                $result = ['success' => false, 'message' => 'Respuesta inválida del gestor de productos'];
+            }
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error al reenviar: ' . $e->getMessage(),
             ]);
         }
     }

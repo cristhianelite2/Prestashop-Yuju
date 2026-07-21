@@ -65,6 +65,11 @@
                         <button type="button" class="btn btn-default btn-block" onclick="exportWebhookLog({$webhook_log.id|escape:'javascript':'UTF-8'})">
                             <i class="icon-download"></i> Exportar registro
                         </button>
+                        {if $ps_order_link}
+                            <a href="{$ps_order_link|escape:'html':'UTF-8'}" class="btn btn-success btn-block" target="_blank">
+                                <i class="icon-shopping-cart"></i> Ver pedido en PrestaShop
+                            </a>
+                        {/if}
                         <a href="{$link->getAdminLink('AdminYujuWebhook')|escape:'html':'UTF-8'}" class="btn btn-link btn-block yuju-back-link">
                             <i class="icon-arrow-left"></i> Volver al listado
                         </a>
@@ -72,6 +77,70 @@
                 </div>
             </div>
         </div>
+
+        {if !empty($is_order_webhook) && !empty($order_process)}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="yuju-card yuju-order-process">
+                    <h4 class="yuju-card__title"><i class="icon-check-square-o"></i> Proceso de creación de la orden</h4>
+                    {if $order_process.message}
+                        <p class="text-muted" style="margin-bottom:12px;">{$order_process.message|escape:'html':'UTF-8'}</p>
+                    {/if}
+                    {if !$order_process.has_details}
+                        <div class="alert alert-info" style="margin-bottom:0;">
+                            Este webhook de orden no incluye detalle de pasos en la respuesta (posiblemente actualización o evento no procesado como creación).
+                        </div>
+                    {else}
+                        <div class="row yuju-process-steps">
+                            {foreach from=$order_process.steps key=step_key item=step}
+                                <div class="col-sm-6 col-md-3">
+                                    <div class="yuju-process-step {if $step.ok}yuju-process-step--ok{elseif $step.error}yuju-process-step--error{else}yuju-process-step--pending{/if}">
+                                        <div class="yuju-process-step__icon">
+                                            {if $step.ok}
+                                                <i class="icon-ok"></i>
+                                            {elseif $step.error}
+                                                <i class="icon-remove"></i>
+                                            {else}
+                                                <i class="icon-minus"></i>
+                                            {/if}
+                                        </div>
+                                        <div class="yuju-process-step__body">
+                                            <strong>{$step.label|escape:'html':'UTF-8'}</strong>
+                                            <div class="small">
+                                                {if $step.ok}
+                                                    ID {$step.id|escape:'html':'UTF-8'}
+                                                    {if $step.status} · {$step.status|escape:'html':'UTF-8'}{/if}
+                                                {elseif $step.error}
+                                                    Error
+                                                {else}
+                                                    No creado
+                                                {/if}
+                                            </div>
+                                            {if $step.extra}
+                                                <div class="text-muted small">{$step.extra|escape:'html':'UTF-8'}</div>
+                                            {/if}
+                                            {if $step.error}
+                                                <div class="text-danger small" style="margin-top:4px;">{$step.error|escape:'html':'UTF-8'}</div>
+                                            {/if}
+                                        </div>
+                                    </div>
+                                </div>
+                            {/foreach}
+                        </div>
+                        {if $order_process.carrier_id || $order_process.marketplace_slug}
+                            <p class="help-block" style="margin-top:12px;margin-bottom:0;">
+                                {if $order_process.carrier_id}Carrier Yuju ID: <code>{$order_process.carrier_id|intval}</code>{/if}
+                                {if $order_process.marketplace_slug}
+                                    {if $order_process.carrier_id} · {/if}
+                                    Marketplace: <code>{$order_process.marketplace_slug|escape:'html':'UTF-8'}</code>
+                                {/if}
+                            </p>
+                        {/if}
+                    {/if}
+                </div>
+            </div>
+        </div>
+        {/if}
 
         <div class="row">
             <div class="col-md-6">
@@ -379,5 +448,53 @@ function fallbackCopy(text) {
     color: #ff4d6d;
     font-weight: 600;
     font-style: italic;
+}
+
+.yuju-process-step {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    min-height: 88px;
+    background: #fafafa;
+}
+
+.yuju-process-step__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.yuju-process-step--ok {
+    border-color: #b7e0c2;
+    background: #f3fbf5;
+}
+
+.yuju-process-step--ok .yuju-process-step__icon {
+    background: #dff5e6;
+    color: #1f7a3e;
+}
+
+.yuju-process-step--error {
+    border-color: #f0c2c7;
+    background: #fff7f8;
+}
+
+.yuju-process-step--error .yuju-process-step__icon {
+    background: #fde7e9;
+    color: #a63640;
+}
+
+.yuju-process-step--pending .yuju-process-step__icon {
+    background: #f0f2f5;
+    color: #777;
 }
 </style>
