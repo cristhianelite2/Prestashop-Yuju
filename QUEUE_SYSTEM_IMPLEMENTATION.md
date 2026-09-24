@@ -111,21 +111,21 @@ sync_status enum('pending', 'syncing', 'synced', ..., 'queued')
 📁 `sql/install.sql` - Ya incluye tabla `yuju_sync_queue`
 
 #### Para bases de datos existentes (PRUEBAS):
-📁 `sql/update_add_queue_system.sql`
+📁 `sql/install.sql` (esquema unificado; la cola ya está incluida)
 
 ```bash
-# Ejecutar en MySQL:
-mysql -u root -p prestashop_yuju < sql/update_add_queue_system.sql
+# Reinstalar módulo o usar Schema Repair / ensure* del BO.
+# Para instalación limpia:
+mysql -u root -p prestashop_yuju < sql/install.sql
 ```
 
-**Este script hace:**
-1. Modifica `sync_status` para agregar 'queued'
-2. Crea tabla `ps_yuju_sync_queue`
-3. Agrega configuraciones `YUJU_BATCH_SIZE` y `YUJU_BATCH_FREQUENCY`
-4. Muestra verificación de cambios
+**El install unificado incluye:**
+1. `sync_status` con `queued` y estados intermedios de webhook
+2. Tabla `PREFIX_yuju_sync_queue` (create/update/delete)
+3. Historial, auditoría, reportes, outbound de órdenes, etc.
 
 #### Para desinstalación:
-📁 `sql/uninstall.sql` - Incluye `DROP TABLE ps_yuju_sync_queue`
+📁 `sql/uninstall.sql` - Incluye `DROP TABLE` de cola y resto de tablas del módulo
 
 ---
 
@@ -232,10 +232,12 @@ SELECT COUNT(*) FROM ps_yuju_product_status WHERE sync_status = 'queued';
 
 ## 🧪 Pruebas
 
-### 1. Ejecutar Script de Actualización
+### 1. Esquema unificado
 ```bash
 cd f:\xampp82\htdocs\html\yuju\prestashopyuju
-Get-Content sql\update_add_queue_system.sql | & "f:\xampp82\mysql\bin\mysql.exe" -u root prestashop_yuju
+# Preferible: reinstalar módulo o Schema Repair en BO.
+# Opcional (reemplaza PREFIX_ / ENGINE_TYPE antes):
+# Get-Content sql\install.sql | & "f:\xampp82\mysql\bin\mysql.exe" -u root prestashop_yuju
 ```
 
 ### 2. Verificar Tabla Creada
@@ -311,7 +313,7 @@ SELECT sync_status FROM ps_yuju_product_status WHERE prestashop_product_id = [ID
 
 ## 🎯 Próximos Pasos
 
-1. Ejecutar `update_add_queue_system.sql` en base de datos de pruebas
+1. Asegurar esquema con `sql/install.sql` (o Schema Repair / reinstalación del módulo)
 2. Verificar creación de tabla `ps_yuju_sync_queue`
 3. Editar producto de prueba (cambiar nombre)
 4. Verificar estado `queued` en base de datos

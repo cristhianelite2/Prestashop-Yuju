@@ -170,7 +170,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             'success' => $present,
             'message' => $present
                 ? 'La infraestructura se creó/corrigió correctamente. Recargando…'
-                : ('No se pudo crear la tabla. ' . ($dbErr ?: 'Compruebe permisos MySQL y el archivo sql/add_sync_history.sql.')),
+                : ('No se pudo crear la tabla. ' . ($dbErr ?: 'Compruebe permisos MySQL y el archivo sql/install.sql.')),
         ], JSON_UNESCAPED_UNICODE);
     }
 

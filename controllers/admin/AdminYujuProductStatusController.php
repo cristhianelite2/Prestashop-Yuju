@@ -518,7 +518,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
     }
 
     /**
-     * AJAX: ejecuta sql/add_sync_history.sql vía el módulo y comprueba que la tabla exista.
+     * AJAX: crea yuju_product_sync_history desde sql/install.sql y comprueba que exista.
      */
     protected function ajaxProcessCreateSyncHistoryTable()
     {
@@ -542,7 +542,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'success' => $present,
             'message' => $present
                 ? 'La tabla se creó correctamente. Recargando…'
-                : ('No se pudo crear la tabla. ' . ($dbErr ?: 'Compruebe permisos MySQL y que exista sql/add_sync_history.sql en el módulo.')),
+                : ('No se pudo crear la tabla. ' . ($dbErr ?: 'Compruebe permisos MySQL y que exista sql/install.sql en el módulo.')),
         ]);
     }
 

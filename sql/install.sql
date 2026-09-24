@@ -1,3 +1,10 @@
+-- =============================================================================
+-- prestashopyuju — esquema unificado (instalación limpia)
+-- Incluye todo el historial de migraciones (cola, historial sync, auditoría,
+-- reportes, outbound de órdenes, estados intermedios, etc.).
+-- No hay scripts incrementales: SchemaRepair / ensure* leen este archivo.
+-- =============================================================================
+
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_oauth_tokens` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `client_id` varchar(255) DEFAULT NULL,
@@ -14,6 +21,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_oauth_tokens` (
     PRIMARY KEY (`id`)
 ) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
+-- Varias categorías PS pueden compartir la misma categoría Yuju (sin UNIQUE en yuju_category_id)
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_category_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_category_id` int(11) NOT NULL,
@@ -27,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_category_mapping` (
     UNIQUE KEY `unique_prestashop_category` (`prestashop_category_id`),
     KEY `idx_yuju_category` (`yuju_category_id`),
     KEY `idx_sync_enabled` (`sync_enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_mapping` (
     `id_mapping` int(11) NOT NULL AUTO_INCREMENT,
@@ -45,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_mapping` (
     PRIMARY KEY (`id_mapping`),
     UNIQUE KEY `unique_mapping` (`prestashop_field`, `yuju_field`),
     KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -64,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_mapping` (
     KEY `idx_prestashop_attribute` (`prestashop_attribute_id`),
     KEY `idx_yuju_attribute` (`yuju_attribute_id`),
     KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -84,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -104,7 +112,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
     KEY `status` (`status`),
     KEY `priority` (`priority`),
     KEY `created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_logs` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -127,7 +135,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_logs` (
     KEY `idx_entity_type` (`entity_type`),
     KEY `idx_status` (`status`),
     KEY `idx_start_time` (`start_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_logs` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -141,7 +149,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_logs` (
     PRIMARY KEY (`id`),
     KEY `idx_level` (`level`),
     KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_webhook_logs` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -159,7 +167,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_webhook_logs` (
     KEY `idx_entity_id` (`entity_id`),
     KEY `idx_status` (`status`),
     KEY `idx_received_at` (`received_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_webhook_registrations` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -173,7 +181,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_webhook_registrations` (
     UNIQUE KEY `unique_event_type` (`event_type`),
     KEY `idx_yuju_webhook_id` (`yuju_webhook_id`),
     KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_configuration` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -186,8 +194,9 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_configuration` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_config_key` (`config_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
+-- Claims pendientes usan prestashop_order_id negativo (nunca NULL). Columnas outbound incluidas.
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_order_id` int(11) NOT NULL,
@@ -201,7 +210,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_mapping` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_prestashop_order` (`prestashop_order_id`),
     UNIQUE KEY `unique_yuju_order` (`yuju_order_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_status_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -214,7 +223,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_status_mapping` (
     UNIQUE KEY `unique_status_mapping` (`prestashop_status_id`, `yuju_status_name`),
     KEY `idx_prestashop_status` (`prestashop_status_id`),
     KEY `idx_active` (`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_categories_cache` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -226,7 +235,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_categories_cache` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_yuju_category` (`yuju_category_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attributes_cache` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -238,7 +247,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attributes_cache` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_yuju_attribute` (`yuju_attribute_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_values_cache` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -250,7 +259,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_values_cache` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_yuju_attribute_value` (`yuju_attribute_id`, `yuju_value_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_value_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -270,7 +279,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_value_mapping` (
     KEY `idx_yuju_value` (`yuju_value_id`),
     KEY `idx_active` (`is_active`),
     FOREIGN KEY (`attribute_mapping_id`) REFERENCES `PREFIX_yuju_attribute_mapping` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_sync_history` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -291,7 +300,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_sync_history` (
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_status` (`status`),
     KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_runs` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -319,7 +328,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_runs` (
     KEY `idx_status` (`status`),
     KEY `idx_started_at` (`started_at`),
     KEY `idx_trigger` (`trigger`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_run_details` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -341,9 +350,10 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_audit_run_details` (
     PRIMARY KEY (`id`),
     KEY `idx_audit_run` (`id_audit_run`),
     KEY `idx_result` (`result`),
+    KEY `idx_run_result` (`id_audit_run`, `result`),
     KEY `idx_sku` (`sku`),
     KEY `idx_prestashop_product` (`prestashop_product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_reports` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -368,12 +378,9 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_reports` (
     KEY `idx_utc_day` (`utc_day`),
     KEY `idx_report_type` (`report_type`),
     KEY `idx_requested_at` (`requested_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
--- Los datos por defecto ya se insertan arriba después de la creación de la tabla
-
--- Insert default product field mappings (ignore if already exist)
--- Solo campos aceptados por POST /products (docs Yuju create único / con variaciones)
+-- Mapeos de campos de producto por defecto (POST /products Yuju)
 INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_field`, `field_type`, `sync_direction`, `transformation_rule`, `is_required`, `is_active`, `created_at`, `updated_at`) VALUES
 ('name', 'name', 'string', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('description', 'description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
@@ -385,7 +392,7 @@ INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_fiel
 ('height', 'shipping_height', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('depth', 'shipping_depth', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW());
 
--- Desactivar mapeos inválidos en instalaciones existentes (API Yuju no acepta estos campos)
+-- Desactivar mapeos inválidos en instalaciones existentes
 UPDATE `PREFIX_yuju_product_mapping`
 SET `is_active` = 0, `updated_at` = NOW()
 WHERE `yuju_field` IN ('cost_price', 'active', 'stock_quantity', 'short_description', 'width', 'height', 'depth')

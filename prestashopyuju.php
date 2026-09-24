@@ -190,6 +190,62 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Ejecuta desde sql/install.sql solo los CREATE TABLE de las tablas indicadas
+     * (nombres cortos sin prefijo, ej. yuju_product_sync_history).
+     *
+     * @param string[] $shortTableNames
+     * @return bool
+     */
+    public function executeCreateTablesFromInstall(array $shortTableNames)
+    {
+        $path = dirname(__FILE__) . '/sql/install.sql';
+        if (!is_readable($path)) {
+            return false;
+        }
+
+        $sql = file_get_contents($path);
+        if ($sql === false || $sql === '') {
+            return false;
+        }
+
+        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
+        $wanted = [];
+        foreach ($shortTableNames as $name) {
+            $name = preg_replace('/[^a-z0-9_]/i', '', (string) $name);
+            if ($name !== '') {
+                $wanted[strtolower($name)] = true;
+            }
+        }
+        if (empty($wanted)) {
+            return false;
+        }
+
+        $parts = preg_split("/;\s*[\r\n]+/", $sql);
+        $ok = true;
+        foreach ($parts as $query) {
+            $query = trim($query);
+            if ($query === '' || stripos($query, 'CREATE TABLE') === false) {
+                continue;
+            }
+            $match = null;
+            if (!preg_match('/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+`([^`]+)`/i', $query, $match)) {
+                continue;
+            }
+            $full = $match[1];
+            $prefix = _DB_PREFIX_;
+            $short = (strpos($full, $prefix) === 0) ? substr($full, strlen($prefix)) : $full;
+            if (!isset($wanted[strtolower($short)])) {
+                continue;
+            }
+            if (!Db::getInstance()->execute($query)) {
+                $ok = false;
+            }
+        }
+
+        return $ok;
+    }
+
+    /**
      * Crea la tabla de historial de envíos a Yuju si no existe (instalaciones antiguas / sql omitido).
      */
     public function ensureSyncHistoryTable()
@@ -200,23 +256,7 @@ class Prestashopyuju extends Module
         }
         $done = true;
 
-        $path = dirname(__FILE__) . '/sql/add_sync_history.sql';
-        if (!is_readable($path)) {
-            return false;
-        }
-
-        $sql = file_get_contents($path);
-        $sql = str_replace('PREFIX_', _DB_PREFIX_, $sql);
-        $queries = preg_split("/;\s*$/m", $sql);
-
-        foreach ($queries as $query) {
-            $query = trim($query);
-            if ($query !== '') {
-                Db::getInstance()->execute($query);
-            }
-        }
-
-        return true;
+        return $this->executeCreateTablesFromInstall(['yuju_product_sync_history']);
     }
 
     /**
@@ -239,21 +279,7 @@ class Prestashopyuju extends Module
             return true;
         }
 
-        $path = dirname(__FILE__) . '/sql/add_audit_tables.sql';
-        if (!is_readable($path)) {
-            return false;
-        }
-
-        $sql = file_get_contents($path);
-        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
-        $queries = preg_split("/;\s*$/m", $sql);
-
-        foreach ($queries as $query) {
-            $query = trim($query);
-            if ($query !== '') {
-                Db::getInstance()->execute($query);
-            }
-        }
+        $this->executeCreateTablesFromInstall(['yuju_audit_runs', 'yuju_audit_run_details']);
 
         // result diff_found = solo comparación (sin corregir Yuju)
         try {
@@ -333,23 +359,7 @@ class Prestashopyuju extends Module
         }
         $done = true;
 
-        $path = dirname(__FILE__) . '/sql/add_product_reports_table.sql';
-        if (!is_readable($path)) {
-            return false;
-        }
-
-        $sql = file_get_contents($path);
-        $sql = str_replace(['PREFIX_', 'ENGINE_TYPE'], [_DB_PREFIX_, _MYSQL_ENGINE_], $sql);
-        $queries = preg_split("/;\s*$/m", $sql);
-
-        foreach ($queries as $query) {
-            $query = trim($query);
-            if ($query !== '') {
-                Db::getInstance()->execute($query);
-            }
-        }
-
-        return true;
+        return $this->executeCreateTablesFromInstall(['yuju_product_reports']);
     }
 
     /**
