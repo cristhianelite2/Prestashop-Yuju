@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-09-24
+
+### Corregido
+- Logo del módulo en el listado de PrestaShop: se regenera `logo.png` válido (140x140) y se corrige `config.xml`
+- El logo en el servidor estaba corrupto por transferencia en modo texto (firma PNG `89` convertida a `EF BF BD`)
 ## [1.0.4] - 2026-09-24
 
 ### Añadido
