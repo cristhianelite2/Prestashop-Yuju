@@ -2,7 +2,7 @@
 <module>
     <name>prestashopyuju</name>
     <displayName><![CDATA[Yuju Integration]]></displayName>
-    <version><![CDATA[1.0.5]]></version>
+    <version><![CDATA[1.0.6]]></version>
     <description><![CDATA[Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.]]></description>
     <author><![CDATA[Yuju Integration Team]]></author>
     <tab><![CDATA[market_place]]></tab>

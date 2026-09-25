@@ -5,6 +5,18 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-09-25
+
+### Añadido
+- Compatibilidad con PrestaShop 9 / 9.1 (`ps_versions_compliancy` hasta `9.99.99`)
+
+### Corregido
+- Error de instalación: "The version of your module is not compliant with your PrestaShop version"
+- Nombres de controladores front alineados con convención PrestaShop (`webhook.php`, `oauth.php`)
+
+### Técnico
+- Rango de compatibilidad: PrestaShop 1.7.0.0 – 9.99.99 (incluye PS 8 y PS 9)
+- Referencia: documentación oficial de módulos PS9 y anuncio PrestaShop 9.1.0
 ## [1.0.5] - 2026-09-24
 
 ### Corregido

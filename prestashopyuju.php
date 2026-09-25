@@ -47,12 +47,12 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.5';
+        $this->version = '1.0.6';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
             'min' => '1.7.0.0',
-            'max' => '8.99.99',
+            'max' => '9.99.99',
         ];
         $this->bootstrap = true;
 
