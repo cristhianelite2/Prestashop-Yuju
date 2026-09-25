@@ -27,6 +27,7 @@ require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
 require_once dirname(__FILE__) . '/classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
 require_once dirname(__FILE__) . '/classes/YujuWebhookManager.php';
+require_once dirname(__FILE__) . '/classes/YujuUpdateManager.php';
 
 class Prestashopyuju extends Module
 {
@@ -46,7 +47,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.0';
+        $this->version = '1.0.4';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -701,3 +702,4 @@ class Prestashopyuju extends Module
         ];
     }
 }
+

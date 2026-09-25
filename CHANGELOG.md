@@ -5,6 +5,19 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-09-24
+
+### Añadido
+- Detección automática de actualizaciones desde GitHub (rama `main`) con caché de 24 horas
+- Panel de actualizaciones en el Panel de Control (AdminYuju)
+- Botón **Buscar actualizaciones** para forzar la comprobación
+- Botón **Actualizar módulo** para descargar e instalar la última versión desde el repositorio público
+- Nueva clase `YujuUpdateManager` para consultar commits/versión y aplicar el ZIP de GitHub
+
+### Técnico
+- Comparación por versión semántica y SHA de commit
+- Conserva `logs/`, `cache/` y `exports/` durante la actualización
+- Endpoints AJAX: `CheckUpdate` y `PerformUpdate` en AdminYujuController
 ## [1.0.3] - 2025-01-31
 
 ### Corregido

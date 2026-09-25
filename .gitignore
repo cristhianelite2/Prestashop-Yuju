@@ -119,3 +119,6 @@ access.log
 # Module package
 *.zip
 prestashopyuju.zip
+# Local backups
+/backups/
+

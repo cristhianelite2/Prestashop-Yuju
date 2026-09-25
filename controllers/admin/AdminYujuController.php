@@ -20,6 +20,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuUpdateManager.php';
+
 class AdminYujuController extends ModuleAdminController
 {
     public function __construct()
@@ -34,10 +36,11 @@ class AdminYujuController extends ModuleAdminController
     {
         parent::initContent();
 
-        // Get dashboard statistics
         $stats = $this->getDashboardStats();
         $recentSyncs = $this->getRecentSyncItems();
         $lastSyncDate = $this->getLastSyncDate();
+        $updateManager = new YujuUpdateManager($this->module->version);
+        $updateStatus = $updateManager->getUpdateStatus(false);
 
         $this->context->smarty->assign([
             'module_dir' => $this->module->getPathUri(),
@@ -47,14 +50,66 @@ class AdminYujuController extends ModuleAdminController
             'dashboard_stats' => $stats,
             'recent_syncs' => $recentSyncs,
             'last_sync_date' => $lastSyncDate,
+            'update_status' => $updateStatus,
+            'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
+            'admin_yuju_token' => Tools::getAdminTokenLite('AdminYuju'),
         ]);
 
         $this->setTemplate('dashboard.tpl');
     }
 
     /**
-     * Get dashboard statistics for the last week
+     * Forzar comprobación de actualizaciones en GitHub.
      */
+    public function ajaxProcessCheckUpdate()
+    {
+        try {
+            $updateManager = new YujuUpdateManager($this->module->version);
+            $status = $updateManager->getUpdateStatus(true);
+
+            if (!empty($status['check_error'])) {
+                throw new Exception($status['check_error']);
+            }
+
+            $message = $status['update_available']
+                ? $this->trans('Hay una actualización disponible.', array(), 'Modules.Prestashopyuju.Admin')
+                : $this->trans('El módulo está actualizado.', array(), 'Modules.Prestashopyuju.Admin');
+
+            exit(json_encode([
+                'success' => true,
+                'message' => $message,
+                'data' => $status,
+            ]));
+        } catch (Exception $e) {
+            exit(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * Descargar e instalar la última versión desde la rama main.
+     */
+    public function ajaxProcessPerformUpdate()
+    {
+        try {
+            $updateManager = new YujuUpdateManager($this->module->version);
+            $result = $updateManager->performUpdate();
+
+            exit(json_encode([
+                'success' => true,
+                'message' => $result['message'],
+                'data' => $result,
+            ]));
+        } catch (Exception $e) {
+            exit(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
     private function getDashboardStats()
     {
         $sql = 'SELECT 
@@ -62,18 +117,15 @@ class AdminYujuController extends ModuleAdminController
                     COUNT(CASE WHEN status = "cancelled" THEN 1 END) as warnings_count
                 FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` 
                 WHERE start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
-        
+
         $result = Db::getInstance()->getRow($sql);
-        
+
         return [
-            'errors_last_week' => (int)($result['errors_count'] ?? 0),
-            'warnings_last_week' => (int)($result['warnings_count'] ?? 0)
+            'errors_last_week' => (int) ($result['errors_count'] ?? 0),
+            'warnings_last_week' => (int) ($result['warnings_count'] ?? 0),
         ];
     }
 
-    /**
-     * Get recent synchronized items (last 10)
-     */
     private function getRecentSyncItems()
     {
         $sql = 'SELECT 
@@ -87,35 +139,32 @@ class AdminYujuController extends ModuleAdminController
                 GROUP BY entity_type
                 ORDER BY last_sync DESC
                 LIMIT 10';
-        
+
         $results = Db::getInstance()->executeS($sql);
-        
+
         $syncs = [
             'products' => 0,
             'categories' => 0,
-            'attributes' => 0
+            'attributes' => 0,
         ];
-        
+
         if ($results) {
             foreach ($results as $result) {
-                $syncs[$result['entity_type']] = (int)$result['count'];
+                $syncs[$result['entity_type']] = (int) $result['count'];
             }
         }
-        
+
         return $syncs;
     }
 
-    /**
-     * Get last synchronization date
-     */
     private function getLastSyncDate()
     {
         $sql = 'SELECT MAX(start_time) as last_sync 
                 FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` 
                 WHERE status = "completed"';
-        
+
         $result = Db::getInstance()->getRow($sql);
-        
+
         return $result['last_sync'] ?? null;
     }
 

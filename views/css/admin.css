@@ -545,3 +545,20 @@
     color: #a0aec0;
     font-style: italic;
 }
+
+/* Module update panel */
+#yuju-update-panel .panel-heading h4 {
+    margin: 0;
+    display: inline-block;
+}
+#yuju-update-panel #yuju-update-badge {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+#yuju-update-panel .btn {
+    min-width: 180px;
+}
+.icon-spin {
+    -webkit-animation: yuju-spin 1s infinite linear;
+    animation: yuju-spin 1s infinite linear;
+}
