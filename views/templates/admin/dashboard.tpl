@@ -24,6 +24,12 @@
     <div class="panel-heading">
         <i class="icon-dashboard"></i>
         Panel de Control de Integración Yuju
+        <a href="{$terms_url|escape:'html':'UTF-8'}" target="_blank" rel="noopener noreferrer"
+           class="pull-right" style="font-size: 13px;"
+           title="Términos y condiciones del módulo: solo se monitorea el módulo; la información específica de la tienda no se envía a ningún lugar.">
+            <i class="icon-info-circle"></i>
+            Términos y condiciones
+        </a>
     </div>
     <div class="panel-body">
         <div class="row">

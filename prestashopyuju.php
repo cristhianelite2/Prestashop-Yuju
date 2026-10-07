@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 // Include required files
 require_once dirname(__FILE__) . '/config/config.php';
 require_once dirname(__FILE__) . '/classes/YujuLogger.php';
+require_once dirname(__FILE__) . '/classes/YujuMonitor.php';
 require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
 require_once dirname(__FILE__) . '/classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';
@@ -47,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.6';
+        $this->version = '1.1.0';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [

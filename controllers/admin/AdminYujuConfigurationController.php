@@ -73,6 +73,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_WEBHOOK_SECRET' => Configuration::get('YUJU_WEBHOOK_SECRET'),
             'YUJU_LOG_LEVEL' => Configuration::get('YUJU_LOG_LEVEL', 'info'),
             'YUJU_LOG_RETENTION' => Configuration::get('YUJU_LOG_RETENTION', 30),
+            'YUJU_MONITOR_URL' => Configuration::get('YUJU_MONITOR_URL'),
+            'YUJU_MONITOR_CONNECTED' => (bool) Configuration::get('YUJU_MONITOR_TOKEN'),
         ];
 
         // Generar URLs importantes para la configuración
@@ -578,10 +580,57 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
+     * Prueba la conectividad con el monitor de telemetría.
+     *
+     * Intercambia una llave temporal por un token de instalación: valida que el
+     * monitor sea accesible y guarda automáticamente el token devuelto para que
+     * el módulo pueda enviar su telemetría sin intervención manual.
+     */
+    public function ajaxProcessTestMonitor()
+    {
+        $monitorUrl = trim((string) Tools::getValue('YUJU_MONITOR_URL'));
+
+        if ($monitorUrl === '' || !filter_var($monitorUrl, FILTER_VALIDATE_URL) || parse_url($monitorUrl, PHP_URL_SCHEME) !== 'https') {
+            exit(json_encode([
+                'success' => false,
+                'message' => $this->trans('La URL del monitor debe comenzar con https://', array(), 'Modules.Prestashopyuju.Admin'),
+            ]));
+        }
+
+        $result = YujuMonitor::handshake(
+            $monitorUrl,
+            Tools::getShopDomainSsl(true),
+            (string) Configuration::get('PS_SHOP_NAME'),
+            $this->module->version,
+            _PS_VERSION_
+        );
+
+        if (!empty($result['success']) && !empty($result['token'])) {
+            Configuration::updateValue('YUJU_MONITOR_URL', rtrim($monitorUrl, '/'));
+            Configuration::updateValue('YUJU_MONITOR_TOKEN', $result['token']);
+
+            exit(json_encode([
+                'success' => true,
+                'message' => $this->trans('Conexión establecida con el monitor. El token de instalación se guardó automáticamente.', array(), 'Modules.Prestashopyuju.Admin'),
+                'token_masked' => substr($result['token'], 0, 8) . '…',
+                'installation' => $result['installation'] ?? null,
+            ]));
+        }
+
+        exit(json_encode([
+            'success' => false,
+            'message' => $result['message'] ?? $this->trans('No se pudo conectar con el monitor', array(), 'Modules.Prestashopyuju.Admin'),
+        ]));
+    }
+
+    /**
      * Procesa la configuración principal del módulo.
      */
     private function processMainConfiguration()
     {
+        $monitor_url = trim((string) Tools::getValue('YUJU_MONITOR_URL'));
+        $monitor_token = trim((string) Tools::getValue('YUJU_MONITOR_TOKEN'));
+
         $configs = [
             'YUJU_ENVIRONMENT' => Tools::getValue('YUJU_ENVIRONMENT'),
             'YUJU_CLIENT_ID' => Tools::getValue('YUJU_CLIENT_ID'),
@@ -594,7 +643,21 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_WEBHOOK_SECRET' => Tools::getValue('YUJU_WEBHOOK_SECRET'),
             'YUJU_LOG_LEVEL' => Tools::getValue('YUJU_LOG_LEVEL'),
             'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
+            'YUJU_MONITOR_URL' => $monitor_url,
         ];
+
+        // Validaciones de la conexión con el monitor de telemetría
+        if ($monitor_url !== '' && (!filter_var($monitor_url, FILTER_VALIDATE_URL) || parse_url($monitor_url, PHP_URL_SCHEME) !== 'https')) {
+            $this->errors[] = $this->trans('La URL del monitor debe comenzar con https://', array(), 'Modules.Prestashopyuju.Admin');
+
+            return;
+        }
+
+        if ($monitor_token !== '' && !preg_match('/^yjm_[A-Za-z0-9_-]{40,60}$/', $monitor_token)) {
+            $this->errors[] = $this->trans('El token del monitor no tiene un formato válido', array(), 'Modules.Prestashopyuju.Admin');
+
+            return;
+        }
 
         // Validaciones básicas
         if (empty($configs['YUJU_CLIENT_ID']) || empty($configs['YUJU_CLIENT_SECRET'])) {
@@ -620,6 +683,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
         try {
             foreach ($configs as $key => $value) {
                 Configuration::updateValue($key, $value);
+            }
+
+            // El token se guarda solo si el comerciante escribió uno: así una
+            // reconexión automática ("Probar conectividad") no lo borra al guardar.
+            if ($monitor_token !== '') {
+                Configuration::updateValue('YUJU_MONITOR_TOKEN', $monitor_token);
             }
 
             $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');

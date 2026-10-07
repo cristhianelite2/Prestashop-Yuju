@@ -279,6 +279,54 @@
                 </div>
             </div>
             
+            {* Yuju Monitor bridge settings *}
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="icon-eye"></i> Monitor de telemetría
+                        {if $config.YUJU_MONITOR_CONNECTED}
+                            <span class="label label-success pull-right">Conectado</span>
+                        {else}
+                            <span class="label label-default pull-right">Sin conectar</span>
+                        {/if}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <p class="help-block">
+                        Se monitorea <strong>únicamente el funcionamiento de este módulo</strong> (peticiones,
+                        sincronizaciones, errores y consumo de recursos). La información específica de la tienda
+                        (productos, pedidos, clientes, credenciales) <strong>no se envía a ningún lugar</strong>.
+                        <a href="{$yuju_urls.terms_conditions|escape:'html':'UTF-8'}" target="_blank" rel="noopener noreferrer">
+                            Ver términos y condiciones del módulo
+                        </a>
+                    </p>
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">URL del monitor</label>
+                        <div class="col-lg-9">
+                            <input type="url" name="YUJU_MONITOR_URL" value="{$config.YUJU_MONITOR_URL|escape:'html':'UTF-8'}" class="form-control" placeholder="https://yuju.ceballosleon.com">
+                            <p class="help-block">Dirección HTTPS de su panel de monitorización (yuju.ceballosleon.com).</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Token de instalación</label>
+                        <div class="col-lg-9">
+                            <input type="password" name="YUJU_MONITOR_TOKEN" value="" class="form-control" autocomplete="new-password">
+                            <p class="help-block">Se asigna automáticamente al conectar. Déjelo vacío para conservar el token actual.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">Conexión</label>
+                        <div class="col-lg-9">
+                            <button type="button" id="yuju-test-monitor" class="btn btn-info">
+                                <i class="icon-plug"></i> Probar conectividad
+                            </button>
+                            <p class="help-block">Valida la conexión con el monitor y guarda el token de instalación automáticamente.</p>
+                            <div id="monitor-connect-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {* Logging Settings *}
             <div class="panel panel-default">
                 <div class="panel-heading">

@@ -64,6 +64,12 @@ var YujuAdmin = {
             self.testConnectivity();
         });
 
+        // Monitor connectivity (telemetry handshake) button
+        $(document).on('click', '#yuju-test-monitor', function(e) {
+            e.preventDefault();
+            self.testMonitorConnectivity();
+        });
+
         // OAuth Authorization button
         $(document).on('click', '#yuju-authorize', function(e) {
             e.preventDefault();
@@ -278,6 +284,60 @@ var YujuAdmin = {
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
+            }
+        });
+    },
+
+    /**
+     * Test the connection with the telemetry monitor and obtain the installation token.
+     */
+    testMonitorConnectivity: function() {
+        var self = this;
+        var $button = $('#yuju-test-monitor');
+        var $result = $('#monitor-connect-result');
+        var $urlInput = $('input[name="YUJU_MONITOR_URL"]');
+
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Conectando...');
+        $result.hide();
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'TestMonitor',
+                ajax: true,
+                token: this.config.token,
+                YUJU_MONITOR_URL: $urlInput.val()
+            },
+            dataType: 'json',
+            success: function(response) {
+                $result.show();
+
+                if (response.success) {
+                    var html = '<i class="icon-check"></i> ' + (response.message || 'Conexión establecida con el monitor');
+                    if (response.token_masked) {
+                        html += ' Token: <code>' + response.token_masked + '</code>';
+                    }
+                    $result.removeClass('alert-danger').addClass('alert-success').html(html);
+                    self.showAlert(response.message || 'Conectado al monitor', 'success');
+
+                    // Refrescar para mostrar el estado "Conectado".
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    $result.removeClass('alert-success').addClass('alert-danger')
+                        .html('<i class="icon-remove"></i> ' + (response.message || 'No se pudo conectar con el monitor'));
+                    self.showAlert(response.message || 'No se pudo conectar con el monitor', 'error');
+                }
+            },
+            error: function() {
+                $result.removeClass('alert-success').addClass('alert-danger').show()
+                    .html('<i class="icon-remove"></i> No se pudo contactar al monitor. Verifique la URL e intente de nuevo.');
+                self.showAlert('No se pudo contactar al monitor', 'error');
+            },
+            complete: function() {
+                $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar conectividad');
             }
         });
     },
