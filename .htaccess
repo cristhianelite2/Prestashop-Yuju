@@ -40,3 +40,9 @@ Options -Indexes
     Order allow,deny
     Allow from all
 </FilesMatch>
+
+# Allow direct access to Yuju entry points at /yuju/
+<FilesMatch "^yuju/(oauth|webhook|terms)\.php$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>

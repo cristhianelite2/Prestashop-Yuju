@@ -335,7 +335,15 @@ class YujuOAuth
      */
     public function getRedirectUri()
     {
-        return YujuConfig::getModuleFileUrl('oauth.php');
+        $useAlternative = Configuration::get('YUJU_USE_ALTERNATIVE_OAUTH_ROUTE', false);
+        
+        if ($useAlternative) {
+            // Ruta alternativa: /yuju/oauth.php (archivo directo) o /yuju/oauth (amigable)
+            return Context::getContext()->link->getBaseLink() . 'yuju/oauth';
+        }
+        
+        // Ruta estándar: /module/prestashopyuju/oauth (amigable)
+        return Context::getContext()->link->getModuleLink('prestashopyuju', 'oauth');
     }
 
     /**

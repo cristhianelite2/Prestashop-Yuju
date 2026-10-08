@@ -76,6 +76,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_MONITOR_URL' => Configuration::get('YUJU_MONITOR_URL'),
             'YUJU_ALLOWED_URLS' => Configuration::get('YUJU_ALLOWED_URLS') ?: Tools::getShopDomainSsl(true),
             'YUJU_MONITOR_TOKEN_SET' => (bool) Configuration::get('YUJU_MONITOR_TOKEN'),
+            'YUJU_USE_ALTERNATIVE_OAUTH_ROUTE' => (bool) Configuration::get('YUJU_USE_ALTERNATIVE_OAUTH_ROUTE', false),
         ];
 
         // Generar URLs importantes para la configuración
@@ -618,6 +619,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
             'YUJU_MONITOR_URL' => Tools::getValue('YUJU_MONITOR_URL'),
             'YUJU_ALLOWED_URLS' => $this->normalizeAllowedUrls(Tools::getValue('YUJU_ALLOWED_URLS')),
+            'YUJU_USE_ALTERNATIVE_OAUTH_ROUTE' => (int) Tools::getValue('YUJU_USE_ALTERNATIVE_OAUTH_ROUTE', 0),
         ];
 
         // Validaciones básicas

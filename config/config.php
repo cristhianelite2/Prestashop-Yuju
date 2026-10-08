@@ -88,6 +88,7 @@ class YujuConfig
             'YUJU_CLIENT_SECRET' => '',
             'YUJU_REDIRECT_URI' => '',
             'YUJU_SCOPE' => 'read write',
+            'YUJU_USE_ALTERNATIVE_OAUTH_ROUTE' => false,
 
             // Sync Settings
             'YUJU_SYNC_BATCH_SIZE' => self::DEFAULT_BATCH_SIZE,

@@ -181,6 +181,26 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
+                            Usar ruta alternativa OAuth (/yuju/oauth)
+                        </label>
+                        <div class="col-lg-9">
+                            <span class="switch prestashop-switch fixed-width-lg">
+                                <input type="radio" name="YUJU_USE_ALTERNATIVE_OAUTH_ROUTE" id="alt_oauth_on" value="1" {if $config.YUJU_USE_ALTERNATIVE_OAUTH_ROUTE}checked="checked"{/if}>
+                                <label for="alt_oauth_on">Sí</label>
+                                <input type="radio" name="YUJU_USE_ALTERNATIVE_OAUTH_ROUTE" id="alt_oauth_off" value="0" {if !$config.YUJU_USE_ALTERNATIVE_OAUTH_ROUTE}checked="checked"{/if}>
+                                <label for="alt_oauth_off">No</label>
+                                <a class="slide-button btn"></a>
+                            </span>
+                            <p class="help-block">
+                                <strong>Habilite esto si su servidor bloquea /shop/modules/</strong><br>
+                                Usa la ruta <code>/yuju/oauth</code> (archivo directo en <code>/shop/yuju/oauth.php</code>) en lugar de <code>/module/prestashopyuju/oauth</code>.<br>
+                                <strong>Importante:</strong> Al cambiar esto, actualice la <strong>URL de Autenticación</strong> en su aplicación Yuju a la que se muestra arriba.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
                             Secreto de Webhook
                         </label>
                         <div class="col-lg-9">

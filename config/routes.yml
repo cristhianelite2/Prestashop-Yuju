@@ -3,7 +3,7 @@
 
 # OAuth callback route
 module_prestashopyuju_oauth:
-    path: /module/prestashopyuju/oauth
+    path: /yuju/oauth
     methods: [GET]
     defaults:
         _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
@@ -12,7 +12,7 @@ module_prestashopyuju_oauth:
 
 # Webhook route
 module_prestashopyuju_webhook:
-    path: /module/prestashopyuju/webhook
+    path: /yuju/webhook
     methods: [POST, GET]
     defaults:
         _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
@@ -21,7 +21,7 @@ module_prestashopyuju_webhook:
 
 # Terms route
 module_prestashopyuju_terms:
-    path: /module/prestashopyuju/terms
+    path: /yuju/terms
     methods: [GET]
     defaults:
         _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'

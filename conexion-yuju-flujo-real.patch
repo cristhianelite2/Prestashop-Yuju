@@ -1,0 +1,318 @@
+From 00d43f4968a0f68db06508d26799fcc42080fa41 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 19:41:38 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20flujo=20de=20conexi=C3=B3n=20con=20Yuju?=
+ =?UTF-8?q?=20seg=C3=BAn=20su=20documentaci=C3=B3n=20(callback=20con=20cod?=
+ =?UTF-8?q?e,=20API=20sin=20/v1,=20header=20Authorization,=20/account)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ classes/YujuApiClient.php                     | 15 +++---
+ classes/YujuOAuth.php                         | 53 ++-----------------
+ .../AdminYujuConfigurationController.php      |  6 +--
+ controllers/front/oauth.php                   | 19 ++-----
+ views/templates/admin/configuration.tpl       | 29 +---------
+ 5 files changed, 17 insertions(+), 105 deletions(-)
+
+diff --git a/classes/YujuApiClient.php b/classes/YujuApiClient.php
+index da3eb4b..59d85e8 100644
+--- a/classes/YujuApiClient.php
++++ b/classes/YujuApiClient.php
+@@ -25,7 +25,6 @@ require_once dirname(__FILE__) . '/YujuLogger.php';
+ 
+ class YujuApiClient
+ {
+-    public const API_VERSION = 'v1';
+     public const SANDBOX_BASE_URL = 'https://api.tp.yuju.io';
+     public const PRODUCTION_BASE_URL = 'https://api.tp.yuju.io';
+ 
+@@ -219,7 +218,7 @@ class YujuApiClient
+      */
+     private function buildUrl($endpoint, $params = [])
+     {
+-        $url = rtrim($this->base_url, '/') . '/' . self::API_VERSION . '/' . ltrim($endpoint, '/');
++        $url = rtrim($this->base_url, '/') . '/' . ltrim($endpoint, '/');
+ 
+         if (!empty($params)) {
+             $url .= '?' . http_build_query($params);
+@@ -242,8 +241,8 @@ class YujuApiClient
+         $access_token = $this->oauth->getValidAccessToken();
+ 
+         if ($access_token) {
+-            // Según la documentación de Yuju, el token se envía con el formato 'Token {token}'
+-            $headers[] = 'Authorization: Token ' . $access_token;
++            // Según la documentación de Yuju, el token se envía tal cual en la cabecera Authorization
++            $headers[] = 'Authorization: ' . $access_token;
+         }
+ 
+         return $headers;
+@@ -327,7 +326,7 @@ class YujuApiClient
+      */
+     public function isApiAvailable()
+     {
+-        $response = $this->get('health');
++        $response = $this->get('account');
+ 
+         return $response['success'];
+     }
+@@ -337,7 +336,7 @@ class YujuApiClient
+      */
+     public function getUserInfo()
+     {
+-        return $this->get('user/me');
++        return $this->get('account');
+     }
+ 
+     /**
+@@ -412,14 +411,14 @@ class YujuApiClient
+     public function getStores($params = [])
+     {
+         try {
+-            $url = $this->buildUrl('shops/', $params);
++            $url = $this->buildUrl('account', $params);
+             $this->logger->info('Calling getStores endpoint', [
+                 'url' => $url,
+                 'params' => $params,
+                 'base_url' => $this->base_url
+             ]);
+             
+-            $response = $this->get('shops/', $params);
++            $response = $this->get('account', $params);
+             
+             $this->logger->info('getStores response received', [
+                 'response' => $response,
+diff --git a/classes/YujuOAuth.php b/classes/YujuOAuth.php
+index 867842c..9542ad1 100644
+--- a/classes/YujuOAuth.php
++++ b/classes/YujuOAuth.php
+@@ -31,7 +31,6 @@ class YujuOAuth
+     private $auth_url;
+     private $client_id;
+     private $client_secret;
+-    private $redirect_uri;
+     private $logger;
+ 
+     public function __construct()
+@@ -41,37 +40,9 @@ class YujuOAuth
+ 
+         $this->client_id = Configuration::get('YUJU_CLIENT_ID');
+         $this->client_secret = Configuration::get('YUJU_CLIENT_SECRET');
+-        $this->redirect_uri = $this->getRedirectUri();
+         $this->logger = new YujuLogger();
+     }
+ 
+-    /**
+-     * Genera la URL de autorización para OAuth2.
+-     */
+-    public function getAuthorizationUrl($state = null)
+-    {
+-        if (!$this->client_id) {
+-            throw new Exception('Client ID no configurado');
+-        }
+-
+-        // Generar o usar el estado proporcionado
+-        $oauth_state = $state ?: $this->generateState();
+-        
+-        // Guardar el estado para validación posterior
+-        Configuration::updateValue('YUJU_OAUTH_STATE', $oauth_state);
+-
+-        // Según la documentación de Yuju, la autorización se hace directamente
+-        // redirigiendo a la URL de autorización con los parámetros necesarios
+-        $params = [
+-            'client_id' => $this->client_id,
+-            'redirect_uri' => $this->redirect_uri,
+-            'state' => $oauth_state,
+-        ];
+-
+-        // URL de autorización según documentación de Yuju
+-        return 'https://api.tp.yuju.io/auth-generate-token?' . http_build_query($params);
+-    }
+-
+     /**
+      * Intercambia el código de autorización por un access token usando la API de Yuju.
+      */
+@@ -164,8 +135,9 @@ class YujuOAuth
+      */
+     private function isTokenExpired($oauth_data)
+     {
+-        if (!isset($oauth_data['token_expires'])) {
+-            return true;
++        // Yuju no documenta expiración del token: sin fecha de expiración se considera vigente
++        if (empty($oauth_data['token_expires'])) {
++            return false;
+         }
+ 
+         $expires_at = strtotime($oauth_data['token_expires']);
+@@ -217,9 +189,6 @@ class YujuOAuth
+                     'success' => true,
+                     'data' => [
+                         'access_token' => $response_data['token'],
+-                        'token_type' => 'Bearer',
+-                        'expires_in' => 3600, // Default 1 hour
+-                        'scope' => 'read write',
+                     ],
+                 ];
+             } else {
+@@ -361,14 +330,6 @@ class YujuOAuth
+         }
+     }
+ 
+-    /**
+-     * Genera un estado aleatorio para OAuth.
+-     */
+-    private function generateState()
+-    {
+-        return bin2hex(random_bytes(16));
+-    }
+-
+     /**
+      * Obtiene la URI de redirección.
+      */
+@@ -479,14 +440,6 @@ class YujuOAuth
+         $this->logger->log('info', 'Credenciales OAuth actualizadas');
+     }
+ 
+-    /**
+-     * Valida el estado OAuth recibido.
+-     */
+-    public function validateState($received_state, $expected_state)
+-    {
+-        return hash_equals($expected_state, $received_state);
+-    }
+-
+     /**
+      * Obtiene los scopes disponibles.
+      */
+diff --git a/controllers/admin/AdminYujuConfigurationController.php b/controllers/admin/AdminYujuConfigurationController.php
+index f8c1632..8001e43 100644
+--- a/controllers/admin/AdminYujuConfigurationController.php
++++ b/controllers/admin/AdminYujuConfigurationController.php
+@@ -79,16 +79,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
+         ];
+ 
+         // Generar URLs importantes para la configuración
+-        $redirect_uri = $oauth->getRedirectUri();
++        $auth_url = $oauth->getRedirectUri();
+         $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
+         $terms_url = YujuConfig::getModuleFileUrl('terms.php');
+-        $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
+         
+         $this->context->smarty->assign([
+             'oauth_status' => $oauth_status,
+             'api_stats' => $api_stats,
+-            'oauth_url' => $auth_url,
+-            'oauth_auth_url' => $auth_url,
+             'module_path' => $this->module->getPathUri(),
+             'current_tab' => 'configuration',
+             'current_controller' => get_class($this),
+@@ -100,7 +97,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
+             'yuju_urls' => [
+                 'terms_conditions' => $terms_url,
+                 'auth_url' => $auth_url,
+-                'redirect_uri' => $redirect_uri,
+                 'webhook_url' => $webhook_url,
+             ],
+         ]);
+diff --git a/controllers/front/oauth.php b/controllers/front/oauth.php
+index cb98872..c4a3637 100644
+--- a/controllers/front/oauth.php
++++ b/controllers/front/oauth.php
+@@ -30,7 +30,6 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
+ 
+         try {
+             $code = Tools::getValue('code');
+-            $state = Tools::getValue('state');
+             $error = Tools::getValue('error');
+ 
+             if ($error) {
+@@ -44,20 +43,10 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
+ 
+             $oauth = new YujuOAuth();
+ 
+-            // Validar el state para prevenir ataques CSRF
+-            $expected_state = Configuration::get('YUJU_OAUTH_STATE');
+-            if (!$oauth->validateState($state, $expected_state)) {
+-                throw new Exception('Estado de autorización inválido');
+-            }
+-
+-            // Intercambiar el código por un token
+-            $token_data = $oauth->exchangeCodeForToken($code, $state);
+-
+-            if ($token_data['success']) {
+-                $this->handleAuthSuccess();
+-            } else {
+-                throw new Exception($token_data['message'] ?? 'Error al obtener el token');
+-            }
++            // Yuju redirige solo con `code` (sin `state`); lo cambia por el token con client_id + secret_key.
++            // exchangeCodeForToken() lanza una excepción si falla.
++            $oauth->exchangeCodeForToken($code);
++            $this->handleAuthSuccess();
+         } catch (Exception $e) {
+             $this->handleAuthError($e->getMessage());
+         }
+diff --git a/views/templates/admin/configuration.tpl b/views/templates/admin/configuration.tpl
+index ae7d4d0..ac66670 100644
+--- a/views/templates/admin/configuration.tpl
++++ b/views/templates/admin/configuration.tpl
+@@ -36,7 +36,7 @@
+         {else}
+             <div class="alert alert-warning">
+                 <i class="icon-warning"></i>
+-                No conectado a la API de Yuju. Por favor configure sus credenciales y autorice la conexión.
++                No conectado a la API de Yuju. Registre su aplicación en Yuju (Configuraciones &gt; Aplicaciones) con las URLs de abajo, guarde aquí el Client ID y el Secret Key y pulse &quot;Conectar&quot; desde Yuju.
+             </div>
+         {/if}
+         
+@@ -87,7 +87,6 @@
+                         </div>
+                     </div>
+                     
+-                    {if $yuju_urls.auth_url}
+                     <div class="form-group">
+                         <label class="control-label col-lg-3">
+                             URL de Autenticación
+@@ -101,25 +100,7 @@
+                                     </button>
+                                 </span>
+                             </div>
+-                            <p class="help-block">URL para autenticación OAuth con Yuju</p>
+-                        </div>
+-                    </div>
+-                    {/if}
+-                    
+-                    <div class="form-group">
+-                        <label class="control-label col-lg-3">
+-                            URI de Redirección
+-                        </label>
+-                        <div class="col-lg-9">
+-                            <div class="input-group">
+-                                <input type="text" class="form-control" value="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}" readonly id="redirect_uri">
+-                                <span class="input-group-btn">
+-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}">
+-                                        <i class="icon-copy"></i> Copiar
+-                                    </button>
+-                                </span>
+-                            </div>
+-                            <p class="help-block">URL de callback para autenticación OAuth (configure esto en su aplicación Yuju)</p>
++                            <p class="help-block">URL que Yuju abre con el parámetro code al pulsar "Conectar" (configure esto como URL de Autenticación en su aplicación Yuju)</p>
+                         </div>
+                     </div>
+                     
+@@ -368,12 +349,6 @@
+                     <i class="process-icon-save"></i> Guardar
+                 </button>
+                 
+-                {if isset($oauth_status) && !$oauth_status.is_connected && $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
+-                    <a href="{$oauth_auth_url|escape:'html':'UTF-8'}" class="btn btn-primary">
+-                        <i class="icon-key"></i> Autorizar con Yuju
+-                    </a>
+-                {/if}
+-                
+                 {if $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
+                     <button type="submit" name="testConnection" class="btn btn-info">
+                         <i class="icon-check"></i> Probar Conexión API
+-- 
+2.43.0
+
