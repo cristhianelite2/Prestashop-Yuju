@@ -38,7 +38,10 @@ class AdminYujuLogsController extends ModuleAdminController
     public function initContent()
     {
         parent::initContent();
-        $this->context->smarty->assign('current_controller', 'AdminYujuLogs');
+        $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuLogs',
+            'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
+        ]);
 
         $action = Tools::getValue('action', 'list');
         $filename = Tools::getValue('file');
