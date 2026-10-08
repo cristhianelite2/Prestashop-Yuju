@@ -124,6 +124,14 @@ class YujuApiClient
         // Log de la petición
         $this->logRequest($method, $endpoint, $data, $response, $execution_time);
 
+        YujuMonitor::emit('api.request', [
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'httpStatus' => (int) ($response['http_code'] ?? 0),
+            'status' => !empty($response['success']) ? 'success' : 'error',
+            'durationMs' => (int) round($execution_time * 1000),
+        ]);
+
         return $response;
     }
 

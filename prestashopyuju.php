@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 // Include required files
 require_once dirname(__FILE__) . '/config/config.php';
 require_once dirname(__FILE__) . '/classes/YujuLogger.php';
+require_once dirname(__FILE__) . '/classes/YujuMonitor.php';
 require_once dirname(__FILE__) . '/classes/YujuApiClient.php';
 require_once dirname(__FILE__) . '/classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/classes/YujuSyncManager.php';

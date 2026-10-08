@@ -5,6 +5,18 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-10-08
+
+### Añadido
+- Puente de telemetría nativo `YujuMonitor`: la tienda puede vincularse a un monitor externo y reportar únicamente metadatos
+- Sección **Monitor de telemetría** en la configuración del módulo, con URL del monitor, token de instalación y botón **Probar conectividad** (handshake `POST /api/connect`)
+- Telemetría de peticiones a la API de Yuju (`YujuApiClient::makeRequest`), de sincronización de productos en ambos sentidos y de errores de lote (`YujuProductManager`)
+
+### Técnico
+- Eventos con esquema cerrado, enviados en un único lote best-effort al cierre de la petición, con timeouts de 1 s (conexión) y 2 s (total): nunca interrumpen la sincronización
+- No se envían cuerpos de peticiones, cabeceras, productos, pedidos, datos de clientes ni credenciales
+- El token de instalación se guarda en `Configuration` y no se muestra de vuelta en el panel
+
 ## [1.0.6] - 2026-09-25
 
 ### Añadido

@@ -322,6 +322,56 @@
                 </div>
             </div>
             
+            {* Monitor de telemetría *}
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="icon-dashboard"></i>
+                        Monitor de telemetría
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="alert alert-info">
+                        El monitor registra únicamente metadatos: método, endpoint, estado y duración de las peticiones a la API de Yuju,
+                        contadores de sincronización de productos y errores. No se envían cuerpos de peticiones, productos, pedidos,
+                        datos de clientes ni credenciales.
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            URL del monitor
+                        </label>
+                        <div class="col-lg-9">
+                            <input type="text" name="YUJU_MONITOR_URL" id="YUJU_MONITOR_URL" value="{$config.YUJU_MONITOR_URL|escape:'html':'UTF-8'}" class="form-control" placeholder="https://yuju.ceballosleon.com">
+                            <p class="help-block">Dirección del panel del monitor, accesible desde este servidor.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Token de instalación
+                        </label>
+                        <div class="col-lg-9">
+                            <input type="password" name="YUJU_MONITOR_TOKEN" id="YUJU_MONITOR_TOKEN" value="" class="form-control" autocomplete="new-password" placeholder="{if $config.YUJU_MONITOR_TOKEN_SET}Token guardado. Déjalo vacío para conservarlo{else}Pega aquí el token generado en el monitor{/if}">
+                            <p class="help-block">Se guarda automáticamente al vincular la tienda. El monitor solo lo muestra una vez.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="control-label col-lg-3">
+                            Conexión con el monitor
+                        </label>
+                        <div class="col-lg-9">
+                            <button type="button" id="yuju-test-monitor" class="btn btn-info">
+                                <i class="icon-plug"></i> Probar conectividad
+                            </button>
+                            <p class="help-block">Vincula esta tienda con el monitor y guarda el token de instalación automáticamente.</p>
+                            <div id="monitor-result" class="alert" style="display: none; margin-top: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="panel-footer">
                 <button type="submit" value="1" id="configuration_form_submit_btn" name="submitConfiguration" class="btn btn-default pull-right">
                     <i class="process-icon-save"></i> Guardar

@@ -97,6 +97,13 @@ class YujuProductManager
 
             $this->logger->log('Product synchronization from Yuju completed. Synced: ' . $synced_count . ' (Created: ' . $created_count . ', Updated: ' . $updated_count . '), Errors: ' . count($errors), 'info');
 
+            YujuMonitor::emit('sync.product', [
+                'direction' => 'from_yuju',
+                'status' => empty($errors) ? 'success' : 'warning',
+                'count' => (int) $synced_count,
+                'failedCount' => count($errors),
+            ]);
+
             return [
                 'success' => true,
                 'synced_count' => $synced_count,
@@ -106,6 +113,12 @@ class YujuProductManager
             ];
         } catch (Exception $e) {
             $this->logger->log('Product synchronization from Yuju failed: ' . $e->getMessage(), 'error');
+
+            YujuMonitor::emit('sync.error', [
+                'direction' => 'from_yuju',
+                'level' => 'error',
+                'status' => 'error',
+            ]);
 
             return [
                 'success' => false,
@@ -154,6 +167,13 @@ class YujuProductManager
 
             $this->logger->log('Product synchronization to Yuju completed. Synced: ' . $synced_count . ' (Created: ' . $created_count . ', Updated: ' . $updated_count . '), Errors: ' . count($errors), 'info');
 
+            YujuMonitor::emit('sync.product', [
+                'direction' => 'to_yuju',
+                'status' => empty($errors) ? 'success' : 'warning',
+                'count' => (int) $synced_count,
+                'failedCount' => count($errors),
+            ]);
+
             return [
                 'success' => true,
                 'synced_count' => $synced_count,
@@ -163,6 +183,12 @@ class YujuProductManager
             ];
         } catch (Exception $e) {
             $this->logger->log('Product synchronization to Yuju failed: ' . $e->getMessage(), 'error');
+
+            YujuMonitor::emit('sync.error', [
+                'direction' => 'to_yuju',
+                'level' => 'error',
+                'status' => 'error',
+            ]);
 
             return [
                 'success' => false,
