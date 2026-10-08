@@ -143,6 +143,24 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_logs` (
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_oauth_attempts` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `status` varchar(20) NOT NULL,
+    `client_id` varchar(100) DEFAULT NULL,
+    `url` varchar(500) DEFAULT NULL,
+    `request_data` text,
+    `response_body` longtext,
+    `http_code` int(11) DEFAULT NULL,
+    `curl_error` text,
+    `curl_info` text,
+    `verbose_log` longtext,
+    `message` text,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_webhook_logs` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `event_type` varchar(100) NOT NULL,
