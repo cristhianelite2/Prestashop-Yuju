@@ -145,17 +145,8 @@
                             URLs Permitidas
                         </label>
                         <div class="col-lg-9">
-                            {foreach from=$yuju_urls.allowed_urls item=allowed_url name=allowed_urls}
-                                <div class="input-group" style="margin-bottom: 5px;">
-                                    <input type="text" class="form-control" value="{$allowed_url|escape:'html':'UTF-8'}" readonly id="allowed_url_{$smarty.foreach.allowed_urls.index}">
-                                    <span class="input-group-btn">
-                                        <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$allowed_url|escape:'html':'UTF-8'}">
-                                            <i class="icon-copy"></i> Copiar
-                                        </button>
-                                    </span>
-                                </div>
-                            {/foreach}
-                            <p class="help-block">URLs completas permitidas para la conexión con Yuju, no solo el dominio (regístrelas en las URLs permitidas de su aplicación Yuju)</p>
+                            <input type="text" class="form-control" name="YUJU_ALLOWED_URLS" id="YUJU_ALLOWED_URLS" value="{$config.YUJU_ALLOWED_URLS|escape:'html':'UTF-8'}" placeholder="https://su-tienda.com">
+                            <p class="help-block">Dominio permitido para la conexión con Yuju. Puede agregar más separándolos por comas (configúrelos en las URLs permitidas de su aplicación Yuju)</p>
                         </div>
                     </div>
                 </div>
