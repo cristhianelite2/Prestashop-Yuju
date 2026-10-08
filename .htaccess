@@ -34,3 +34,9 @@ Options -Indexes
     Order allow,deny
     Deny from all
 </FilesMatch>
+
+# Allow direct access to module entry points (OAuth callback, webhook, terms)
+<FilesMatch "^(oauth|webhook|terms)\.php$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>

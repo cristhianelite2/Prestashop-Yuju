@@ -1,0 +1,29 @@
+# Yuju Integration module routes
+# This file enables friendly URLs for module front controllers
+
+# OAuth callback route
+module_prestashopyuju_oauth:
+    path: /module/prestashopyuju/oauth
+    methods: [GET]
+    defaults:
+        _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
+        module: 'prestashopyuju'
+        controller: 'oauth'
+
+# Webhook route
+module_prestashopyuju_webhook:
+    path: /module/prestashopyuju/webhook
+    methods: [POST, GET]
+    defaults:
+        _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
+        module: 'prestashopyuju'
+        controller: 'webhook'
+
+# Terms route
+module_prestashopyuju_terms:
+    path: /module/prestashopyuju/terms
+    methods: [GET]
+    defaults:
+        _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
+        module: 'prestashopyuju'
+        controller: 'terms'
