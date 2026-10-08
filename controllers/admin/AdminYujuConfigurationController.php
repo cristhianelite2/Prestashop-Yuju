@@ -79,16 +79,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
         ];
 
         // Generar URLs importantes para la configuración
-        $redirect_uri = $oauth->getRedirectUri();
+        $auth_url = $oauth->getRedirectUri();
         $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
         $terms_url = YujuConfig::getModuleFileUrl('terms.php');
-        $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
             'api_stats' => $api_stats,
-            'oauth_url' => $auth_url,
-            'oauth_auth_url' => $auth_url,
             'module_path' => $this->module->getPathUri(),
             'current_tab' => 'configuration',
             'current_controller' => get_class($this),
@@ -100,7 +97,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'yuju_urls' => [
                 'terms_conditions' => $terms_url,
                 'auth_url' => $auth_url,
-                'redirect_uri' => $redirect_uri,
                 'webhook_url' => $webhook_url,
             ],
         ]);

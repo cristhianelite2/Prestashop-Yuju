@@ -36,7 +36,7 @@
         {else}
             <div class="alert alert-warning">
                 <i class="icon-warning"></i>
-                No conectado a la API de Yuju. Por favor configure sus credenciales y autorice la conexión.
+                No conectado a la API de Yuju. Registre su aplicación en Yuju (Configuraciones &gt; Aplicaciones) con las URLs de abajo, guarde aquí el Client ID y el Secret Key y pulse &quot;Conectar&quot; desde Yuju.
             </div>
         {/if}
         
@@ -87,7 +87,6 @@
                         </div>
                     </div>
                     
-                    {if $yuju_urls.auth_url}
                     <div class="form-group">
                         <label class="control-label col-lg-3">
                             URL de Autenticación
@@ -101,25 +100,7 @@
                                     </button>
                                 </span>
                             </div>
-                            <p class="help-block">URL para autenticación OAuth con Yuju</p>
-                        </div>
-                    </div>
-                    {/if}
-                    
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">
-                            URI de Redirección
-                        </label>
-                        <div class="col-lg-9">
-                            <div class="input-group">
-                                <input type="text" class="form-control" value="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}" readonly id="redirect_uri">
-                                <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$yuju_urls.redirect_uri|escape:'html':'UTF-8'}">
-                                        <i class="icon-copy"></i> Copiar
-                                    </button>
-                                </span>
-                            </div>
-                            <p class="help-block">URL de callback para autenticación OAuth (configure esto en su aplicación Yuju)</p>
+                            <p class="help-block">URL que Yuju abre con el parámetro code al pulsar "Conectar" (configure esto como URL de Autenticación en su aplicación Yuju)</p>
                         </div>
                     </div>
                     
@@ -367,12 +348,6 @@
                 <button type="submit" value="1" id="configuration_form_submit_btn" name="submitConfiguration" class="btn btn-default pull-right">
                     <i class="process-icon-save"></i> Guardar
                 </button>
-                
-                {if isset($oauth_status) && !$oauth_status.is_connected && $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
-                    <a href="{$oauth_auth_url|escape:'html':'UTF-8'}" class="btn btn-primary">
-                        <i class="icon-key"></i> Autorizar con Yuju
-                    </a>
-                {/if}
                 
                 {if $config.YUJU_CLIENT_ID && $config.YUJU_CLIENT_SECRET}
                     <button type="submit" name="testConnection" class="btn btn-info">

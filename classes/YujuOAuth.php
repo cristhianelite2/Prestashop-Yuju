@@ -31,7 +31,6 @@ class YujuOAuth
     private $auth_url;
     private $client_id;
     private $client_secret;
-    private $redirect_uri;
     private $logger;
 
     public function __construct()
@@ -41,35 +40,7 @@ class YujuOAuth
 
         $this->client_id = Configuration::get('YUJU_CLIENT_ID');
         $this->client_secret = Configuration::get('YUJU_CLIENT_SECRET');
-        $this->redirect_uri = $this->getRedirectUri();
         $this->logger = new YujuLogger();
-    }
-
-    /**
-     * Genera la URL de autorización para OAuth2.
-     */
-    public function getAuthorizationUrl($state = null)
-    {
-        if (!$this->client_id) {
-            throw new Exception('Client ID no configurado');
-        }
-
-        // Generar o usar el estado proporcionado
-        $oauth_state = $state ?: $this->generateState();
-        
-        // Guardar el estado para validación posterior
-        Configuration::updateValue('YUJU_OAUTH_STATE', $oauth_state);
-
-        // Según la documentación de Yuju, la autorización se hace directamente
-        // redirigiendo a la URL de autorización con los parámetros necesarios
-        $params = [
-            'client_id' => $this->client_id,
-            'redirect_uri' => $this->redirect_uri,
-            'state' => $oauth_state,
-        ];
-
-        // URL de autorización según documentación de Yuju
-        return 'https://api.tp.yuju.io/auth-generate-token?' . http_build_query($params);
     }
 
     /**
@@ -164,8 +135,9 @@ class YujuOAuth
      */
     private function isTokenExpired($oauth_data)
     {
-        if (!isset($oauth_data['token_expires'])) {
-            return true;
+        // Yuju no documenta expiración del token: sin fecha de expiración se considera vigente
+        if (empty($oauth_data['token_expires'])) {
+            return false;
         }
 
         $expires_at = strtotime($oauth_data['token_expires']);
@@ -217,9 +189,6 @@ class YujuOAuth
                     'success' => true,
                     'data' => [
                         'access_token' => $response_data['token'],
-                        'token_type' => 'Bearer',
-                        'expires_in' => 3600, // Default 1 hour
-                        'scope' => 'read write',
                     ],
                 ];
             } else {
@@ -362,14 +331,6 @@ class YujuOAuth
     }
 
     /**
-     * Genera un estado aleatorio para OAuth.
-     */
-    private function generateState()
-    {
-        return bin2hex(random_bytes(16));
-    }
-
-    /**
      * Obtiene la URI de redirección.
      */
     public function getRedirectUri()
@@ -477,14 +438,6 @@ class YujuOAuth
         $this->clearStoredTokenData();
 
         $this->logger->log('info', 'Credenciales OAuth actualizadas');
-    }
-
-    /**
-     * Valida el estado OAuth recibido.
-     */
-    public function validateState($received_state, $expected_state)
-    {
-        return hash_equals($expected_state, $received_state);
     }
 
     /**
