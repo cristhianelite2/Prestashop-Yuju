@@ -422,6 +422,12 @@
 <!-- Reemplaza TODO el bloque <script> en configuration.tpl con esto: -->
 
 <script type="text/javascript">
+// Token para AJAX (parseado por Smarty antes del bloque literal)
+window.yujuAdminToken = '{$token|escape:"javascript"}';
+</script>
+
+{literal}
+<script type="text/javascript">
 // JavaScript functionality is now handled in admin.js
 // This ensures compatibility with PrestaShop 8 module loading system
 console.log('✅ Configuration template loaded - JavaScript handled by admin.js');
@@ -442,7 +448,7 @@ function loadOAuthAttempts() {
             controller: 'AdminYujuConfiguration',
             ajax: 'true',
             action: 'GetOAuthAttempts',
-            token: '{$token|escape:"javascript"}',
+            token: window.yujuAdminToken,
             limit: 50
         },
         dataType: 'json',
@@ -521,7 +527,7 @@ function loadAttemptDetail(id) {
             controller: 'AdminYujuConfiguration',
             ajax: 'true',
             action: 'GetOAuthAttemptDetail',
-            token: '{$token|escape:"javascript"}',
+            token: window.yujuAdminToken,
             id: id
         },
         dataType: 'json',
@@ -592,7 +598,7 @@ function cleanOAuthAttempts() {
             controller: 'AdminYujuConfiguration',
             ajax: 'true',
             action: 'CleanOAuthAttempts',
-            token: '{$token|escape:"javascript"}',
+            token: window.yujuAdminToken,
             days: 30
         },
         dataType: 'json',
@@ -625,6 +631,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('yuju-clean-oauth-attempts').addEventListener('click', cleanOAuthAttempts);
 });
 </script>
+{/literal}
 
 
 <style>
