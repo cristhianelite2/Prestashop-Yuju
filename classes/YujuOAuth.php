@@ -487,60 +487,38 @@ class YujuOAuth
     }
 
     /**
-     * Registra un intento de OAuth en la base de datos.
+     * Registra un intento de OAuth en archivo de log.
      */
     private function logOAuthAttempt($status, $data)
     {
         try {
-            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
-            
-            // Crear tabla si no existe
-            $tableExists = Db::getInstance()->executeS("SHOW TABLES LIKE '$table'");
-            if (empty($tableExists)) {
-                $sql = "CREATE TABLE `$table` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT,
-                    `status` varchar(20) NOT NULL,
-                    `client_id` varchar(100) DEFAULT NULL,
-                    `url` varchar(500) DEFAULT NULL,
-                    `request_data` text,
-                    `response_body` longtext,
-                    `http_code` int(11) DEFAULT NULL,
-                    `curl_error` text,
-                    `curl_info` text,
-                    `verbose_log` longtext,
-                    `message` text,
-                    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (`id`),
-                    KEY `status` (`status`),
-                    KEY `created_at` (`created_at`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-                Db::getInstance()->execute($sql);
+            $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
+            if (!is_dir($log_dir)) {
+                mkdir($log_dir, 0755, true);
             }
 
-            $insert_data = [
+            $attempt_id = isset($data['attempt_id']) ? (int)$data['attempt_id'] : uniqid('oauth_', true);
+            $filename = $log_dir . $attempt_id . '.json';
+
+            $record = [
+                'attempt_id' => $attempt_id,
                 'status' => $status,
                 'client_id' => substr((string)($data['request_data']['client_id'] ?? ''), 0, 100),
                 'url' => $data['url'] ?? '',
-                'request_data' => isset($data['request_data']) ? json_encode($data['request_data']) : '',
+                'request_data' => isset($data['request_data']) ? $data['request_data'] : [],
                 'response_body' => $data['response_body'] ?? '',
                 'http_code' => $data['http_code'] ?? 0,
                 'curl_error' => $data['curl_error'] ?? '',
-                'curl_info' => isset($data['curl_info']) ? json_encode($data['curl_info']) : '',
+                'curl_info' => $data['curl_info'] ?? [],
                 'verbose_log' => $data['verbose_log'] ?? '',
                 'message' => $data['message'] ?? '',
+                'created_at' => date('Y-m-d H:i:s'),
             ];
 
-            if (isset($data['attempt_id'])) {
-                // Actualizar intento existente
-                Db::getInstance()->update($table, $insert_data, 'id = ' . (int)$data['attempt_id']);
-                return $data['attempt_id'];
-            } else {
-                // Nuevo intento
-                Db::getInstance()->insert($table, $insert_data);
-                return (int)Db::getInstance()->Insert_ID();
-            }
+            file_put_contents($filename, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+            return $attempt_id;
         } catch (Exception $e) {
-            // Silenciar errores de logging para no romper el flujo
             return null;
         }
     }
@@ -551,9 +529,37 @@ class YujuOAuth
     public function getOAuthAttempts($limit = 20)
     {
         try {
-            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
-            $sql = "SELECT * FROM `$table` ORDER BY `created_at` DESC LIMIT " . (int)$limit;
-            return Db::getInstance()->executeS($sql);
+            $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
+            if (!is_dir($log_dir)) {
+                return [];
+            }
+
+            $files = glob($log_dir . 'oauth_*.json');
+            if (empty($files)) {
+                $files = glob($log_dir . '*.json');
+            }
+
+            usort($files, function($a, $b) {
+                return filemtime($b) - filemtime($a);
+            });
+
+            $attempts = [];
+            foreach (array_slice($files, 0, $limit) as $file) {
+                $content = file_get_contents($file);
+                $data = json_decode($content, true);
+                if ($data) {
+                    $attempts[] = [
+                        'id' => $data['attempt_id'] ?? basename($file, '.json'),
+                        'status' => $data['status'] ?? 'unknown',
+                        'client_id' => $data['client_id'] ?? '',
+                        'http_code' => $data['http_code'] ?? 0,
+                        'message' => $data['message'] ?? '',
+                        'created_at' => $data['created_at'] ?? date('Y-m-d H:i:s', filemtime($file)),
+                    ];
+                }
+            }
+
+            return $attempts;
         } catch (Exception $e) {
             return [];
         }
@@ -565,32 +571,69 @@ class YujuOAuth
     public function getOAuthAttemptDetail($id)
     {
         try {
-            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
-            $sql = "SELECT * FROM `$table` WHERE `id` = " . (int)$id;
-            $row = Db::getInstance()->getRow($sql);
+            $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
             
-            if ($row) {
-                // Decodificar JSON fields
-                $row['request_data_decoded'] = json_decode($row['request_data'], true);
-                $row['curl_info_decoded'] = json_decode($row['curl_info'], true);
-                $row['response_data_decoded'] = json_decode($row['response_body'], true);
+            // Buscar por attempt_id en el nombre del archivo
+            $files = glob($log_dir . $id . '.json');
+            if (empty($files)) {
+                $files = glob($log_dir . 'oauth_' . $id . '.json');
             }
-            
-            return $row;
+            if (empty($files)) {
+                // Buscar en todos los archivos
+                $all_files = glob($log_dir . '*.json');
+                foreach ($all_files as $file) {
+                    $content = file_get_contents($file);
+                    $data = json_decode($content, true);
+                    if ($data && ($data['attempt_id'] ?? '') === $id) {
+                        $files = [$file];
+                        break;
+                    }
+                }
+            }
+
+            if (empty($files)) {
+                return null;
+            }
+
+            $file = $files[0];
+            $content = file_get_contents($file);
+            $data = json_decode($content, true);
+
+            if ($data) {
+                $data['request_data_decoded'] = $data['request_data'] ?? [];
+                $data['curl_info_decoded'] = $data['curl_info'] ?? [];
+                $data['response_data_decoded'] = $data['response_body'] ? json_decode($data['response_body'], true) : null;
+            }
+
+            return $data;
         } catch (Exception $e) {
             return null;
         }
     }
 
     /**
-     * Limpia intentos antiguos (más de 30 días).
+     * Limpia intentos antiguos (más de X días).
      */
     public function cleanOldOAuthAttempts($days = 30)
     {
         try {
-            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
-            $sql = "DELETE FROM `$table` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL " . (int)$days . " DAY)";
-            return Db::getInstance()->execute($sql);
+            $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
+            if (!is_dir($log_dir)) {
+                return false;
+            }
+
+            $files = glob($log_dir . '*.json');
+            $cutoff = time() - ($days * 86400);
+            $deleted = 0;
+
+            foreach ($files as $file) {
+                if (filemtime($file) < $cutoff) {
+                    unlink($file);
+                    $deleted++;
+                }
+            }
+
+            return $deleted > 0;
         } catch (Exception $e) {
             return false;
         }
