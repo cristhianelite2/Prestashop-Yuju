@@ -37,8 +37,8 @@ class AdminYujuLogsController extends ModuleAdminController
 
     public function initContent()
     {
-        $this->context->smarty->assign('current_controller', 'AdminYujuLogs');
         parent::initContent();
+        $this->context->smarty->assign('current_controller', 'AdminYujuLogs');
 
         $action = Tools::getValue('action', 'list');
         $filename = Tools::getValue('file');
@@ -63,6 +63,7 @@ class AdminYujuLogsController extends ModuleAdminController
             'db_logs' => $db_logs,
             'module_dir' => $this->module->getPathUri(),
             'current_action' => 'list',
+            'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
         ]);
     }
 
@@ -104,6 +105,7 @@ class AdminYujuLogsController extends ModuleAdminController
             'log_content' => $content,
             'log_stats' => $stats,
             'module_dir' => $this->module->getPathUri(),
+            'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
         ]);
     }
 
