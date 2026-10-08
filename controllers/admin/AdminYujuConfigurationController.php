@@ -84,12 +84,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $terms_url = $link->getModuleLink('prestashopyuju', 'terms', [], true);
         $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
-        // URLs permitidas para autenticación (dominios donde se puede usar la app)
-        $allowed_domains = [
-            Tools::getHttpHost(true),
-            str_replace(['http://', 'https://'], '', Tools::getShopDomainSsl(true)),
-        ];
-        $allowed_domains = array_unique(array_filter($allowed_domains));
+        // URLs permitidas en Yuju: deben registrarse completas (no solo el dominio)
+        $allowed_urls = array_values(array_unique(array_filter([
+            $redirect_uri,
+            $terms_url,
+            $webhook_url,
+        ])));
 
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
@@ -109,7 +109,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'auth_url' => $auth_url,
                 'redirect_uri' => $redirect_uri,
                 'webhook_url' => $webhook_url,
-                'allowed_domains' => $allowed_domains,
+                'allowed_urls' => $allowed_urls,
             ],
         ]);
 

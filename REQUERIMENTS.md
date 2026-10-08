@@ -42,7 +42,7 @@ Debes poner mucha atención a los requerimientos, características y funcionalid
     - ⏳ API Key
     - ⏳ API Secret
     - ⏳ URL de Webhook
-    - ⏳ Dominios Permitidos
+    - ⏳ URLs Permitidas
     - ⏳ Probar conexión
     - ⏳ Habilitar sincronización (Sí por default)
     - ⏳ Habilitar sincronización de precios (dependen de "Habilitar sincronización")

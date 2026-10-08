@@ -142,20 +142,20 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3">
-                            Dominios Permitidos
+                            URLs Permitidas
                         </label>
                         <div class="col-lg-9">
-                            {foreach from=$yuju_urls.allowed_domains item=domain name=domains}
+                            {foreach from=$yuju_urls.allowed_urls item=allowed_url name=allowed_urls}
                                 <div class="input-group" style="margin-bottom: 5px;">
-                                    <input type="text" class="form-control" value="{$domain|escape:'html':'UTF-8'}" readonly id="domain_{$smarty.foreach.domains.index}">
+                                    <input type="text" class="form-control" value="{$allowed_url|escape:'html':'UTF-8'}" readonly id="allowed_url_{$smarty.foreach.allowed_urls.index}">
                                     <span class="input-group-btn">
-                                        <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$domain|escape:'html':'UTF-8'}">
+                                        <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="{$allowed_url|escape:'html':'UTF-8'}">
                                             <i class="icon-copy"></i> Copiar
                                         </button>
                                     </span>
                                 </div>
                             {/foreach}
-                            <p class="help-block">Dominios permitidos para autenticación (configure estos en la configuración de su aplicación Yuju)</p>
+                            <p class="help-block">URLs completas permitidas para la conexión con Yuju, no solo el dominio (regístrelas en las URLs permitidas de su aplicación Yuju)</p>
                         </div>
                     </div>
                 </div>
