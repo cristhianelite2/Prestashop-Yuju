@@ -78,10 +78,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         ];
 
         // Generar URLs importantes para la configuración
-        $link = new Link();
-        $redirect_uri = $link->getModuleLink('prestashopyuju', 'oauth', [], true);
-        $webhook_url = $link->getModuleLink('prestashopyuju', 'webhook', [], true);
-        $terms_url = $link->getModuleLink('prestashopyuju', 'terms', [], true);
+        $redirect_uri = $oauth->getRedirectUri();
+        $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
+        $terms_url = YujuConfig::getModuleFileUrl('terms.php');
         $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
         // URLs permitidas en Yuju: deben registrarse completas (no solo el dominio)

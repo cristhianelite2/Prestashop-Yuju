@@ -21,6 +21,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 require_once dirname(__FILE__) . '/YujuLogger.php';
+require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOAuth
 {
@@ -371,11 +372,9 @@ class YujuOAuth
     /**
      * Obtiene la URI de redirección.
      */
-    private function getRedirectUri()
+    public function getRedirectUri()
     {
-        $link = new Link();
-
-        return $link->getModuleLink('prestashopyuju', 'oauth', [], true);
+        return YujuConfig::getModuleFileUrl('oauth.php');
     }
 
     /**

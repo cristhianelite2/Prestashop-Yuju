@@ -279,12 +279,7 @@ class AdminYujuWebhookController extends ModuleAdminController
 
     protected function getWebhookUrl()
     {
-        $shop_url = Configuration::get('PS_SHOP_DOMAIN');
-        $ssl = Configuration::get('PS_SSL_ENABLED');
-
-        $protocol = $ssl ? 'https://' : 'http://';
-
-        return $protocol . $shop_url . '/modules/prestashopyuju/webhook.php';
+        return YujuConfig::getModuleFileUrl('webhook.php');
     }
 
     public function ajaxProcessGetWebhookStats()
