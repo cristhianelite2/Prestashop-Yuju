@@ -154,6 +154,11 @@ class YujuOAuth
     {
         $url = 'https://api.tp.yuju.io/auth-generate-token';
 
+        $attempt_id = $this->logOAuthAttempt('start', [
+            'url' => $url,
+            'request_data' => $data,
+        ]);
+
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
@@ -167,43 +172,62 @@ class YujuOAuth
             ],
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_VERBOSE => true,
         ]);
+
+        // Capture verbose output for debugging
+        $verbose_output = fopen('php://temp', 'w+');
+        curl_setopt($ch, CURLOPT_STDERR, $verbose_output);
 
         $response_body = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curl_error = curl_error($ch);
+        $curl_info = curl_getinfo($ch);
+        
+        // Get verbose output
+        rewind($verbose_output);
+        $verbose_log = stream_get_contents($verbose_output);
+        fclose($verbose_output);
+        
         curl_close($ch);
 
+        $result = [
+            'http_code' => $http_code,
+            'response_body' => $response_body,
+            'curl_error' => $curl_error,
+            'curl_info' => $curl_info,
+            'verbose_log' => $verbose_log,
+        ];
+
         if ($curl_error) {
-            return [
-                'success' => false,
-                'message' => 'cURL Error: ' . $curl_error,
-            ];
+            $result['success'] = false;
+            $result['message'] = 'cURL Error: ' . $curl_error;
+            $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+            return $result;
         }
 
         $response_data = json_decode($response_body, true);
 
         if ($http_code >= 200 && $http_code < 300) {
             if (isset($response_data['token'])) {
-                return [
-                    'success' => true,
-                    'data' => [
-                        'access_token' => $response_data['token'],
-                    ],
+                $result['success'] = true;
+                $result['data'] = [
+                    'access_token' => $response_data['token'],
                 ];
+                $this->logOAuthAttempt('success', array_merge(['attempt_id' => $attempt_id], $result));
+                return $result;
             } else {
-                return [
-                    'success' => false,
-                    'message' => 'Token no encontrado en la respuesta',
-                ];
+                $result['success'] = false;
+                $result['message'] = 'Token no encontrado en la respuesta';
+                $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+                return $result;
             }
         } else {
             $error_message = isset($response_data['message']) ? $response_data['message'] : 'Error desconocido';
-            return [
-                'success' => false,
-                'message' => $error_message,
-                'http_code' => $http_code,
-            ];
+            $result['success'] = false;
+            $result['message'] = $error_message;
+            $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+            return $result;
         }
     }
 
@@ -460,5 +484,115 @@ class YujuOAuth
             'orders' => 'Gestión de órdenes',
             'webhooks' => 'Gestión de webhooks',
         ];
+    }
+
+    /**
+     * Registra un intento de OAuth en la base de datos.
+     */
+    private function logOAuthAttempt($status, $data)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
+            
+            // Crear tabla si no existe
+            $tableExists = Db::getInstance()->executeS("SHOW TABLES LIKE '$table'");
+            if (empty($tableExists)) {
+                $sql = "CREATE TABLE `$table` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `status` varchar(20) NOT NULL,
+                    `client_id` varchar(100) DEFAULT NULL,
+                    `url` varchar(500) DEFAULT NULL,
+                    `request_data` text,
+                    `response_body` longtext,
+                    `http_code` int(11) DEFAULT NULL,
+                    `curl_error` text,
+                    `curl_info` text,
+                    `verbose_log` longtext,
+                    `message` text,
+                    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    KEY `status` (`status`),
+                    KEY `created_at` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+                Db::getInstance()->execute($sql);
+            }
+
+            $insert_data = [
+                'status' => $status,
+                'client_id' => substr((string)($data['request_data']['client_id'] ?? ''), 0, 100),
+                'url' => $data['url'] ?? '',
+                'request_data' => isset($data['request_data']) ? json_encode($data['request_data']) : '',
+                'response_body' => $data['response_body'] ?? '',
+                'http_code' => $data['http_code'] ?? 0,
+                'curl_error' => $data['curl_error'] ?? '',
+                'curl_info' => isset($data['curl_info']) ? json_encode($data['curl_info']) : '',
+                'verbose_log' => $data['verbose_log'] ?? '',
+                'message' => $data['message'] ?? '',
+            ];
+
+            if (isset($data['attempt_id'])) {
+                // Actualizar intento existente
+                Db::getInstance()->update($table, $insert_data, 'id = ' . (int)$data['attempt_id']);
+                return $data['attempt_id'];
+            } else {
+                // Nuevo intento
+                Db::getInstance()->insert($table, $insert_data);
+                return (int)Db::getInstance()->Insert_ID();
+            }
+        } catch (Exception $e) {
+            // Silenciar errores de logging para no romper el flujo
+            return null;
+        }
+    }
+
+    /**
+     * Obtiene el historial de intentos de OAuth.
+     */
+    public function getOAuthAttempts($limit = 20)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
+            $sql = "SELECT * FROM `$table` ORDER BY `created_at` DESC LIMIT " . (int)$limit;
+            return Db::getInstance()->executeS($sql);
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Obtiene un intento específico con todos sus detalles.
+     */
+    public function getOAuthAttemptDetail($id)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
+            $sql = "SELECT * FROM `$table` WHERE `id` = " . (int)$id;
+            $row = Db::getInstance()->getRow($sql);
+            
+            if ($row) {
+                // Decodificar JSON fields
+                $row['request_data_decoded'] = json_decode($row['request_data'], true);
+                $row['curl_info_decoded'] = json_decode($row['curl_info'], true);
+                $row['response_data_decoded'] = json_decode($row['response_body'], true);
+            }
+            
+            return $row;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Limpia intentos antiguos (más de 30 días).
+     */
+    public function cleanOldOAuthAttempts($days = 30)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_oauth_attempts';
+            $sql = "DELETE FROM `$table` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL " . (int)$days . " DAY)";
+            return Db::getInstance()->execute($sql);
+        } catch (Exception $e) {
+            return false;
+        }
     }
 }
