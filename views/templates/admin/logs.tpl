@@ -112,60 +112,62 @@
                 </div>
             </div>
             
-            <script type="text/javascript">
-            // Resaltado de sintaxis simple para logs
-            document.addEventListener('DOMContentLoaded', function() {
-                var pre = document.getElementById('log-content');
-                if (!pre) return;
-                
-                var text = pre.textContent;
-                var lines = text.split('\n');
-                var html = '';
-                
-                lines.forEach(function(line) {
-                    var color = '';
-                    var lower = line.toLowerCase();
-                    
-                    if (lower.indexOf('] error') !== -1 || lower.indexOf('] error') !== -1 || lower.indexOf('exception') !== -1 || lower.indexOf('fatal') !== -1) {
-                        color = '#ff6b6b'; // rojo para errores
-                    } else if (lower.indexOf('] warning') !== -1 || lower.indexOf('] warn') !== -1) {
-                        color = '#ffd93d'; // amarillo para warnings
-                    } else if (lower.indexOf('] info') !== -1) {
-                        color = '#74c0fc'; // azul para info
-                    } else if (lower.indexOf('] debug') !== -1) {
-                        color = '#868e96'; // gris para debug
-                    }
-                    
-                    // Resaltar timestamps
-                    line = line.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, '<span style="color:#adb5bd">$1</span>');
-                    // Resaltar IPs
-                    line = line.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span style="color:#ffa94d">$1</span>');
-                    // Resaltar URLs
-                    line = line.replace(/(https?:\/\/[^\s]+)/g, '<span style="color:#74c0fc"><u>$1</u></span>');
-                    
-                    if (color) {
-                        html += '<span style="color:' + color + '">' + line + '</span>\n';
-                    } else {
-                        html += line + '\n';
-                    }
-                });
-                
-                pre.innerHTML = html;
-            });
-            
-            // Dropdown para cambiar líneas
-            document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link) {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var lines = this.getAttribute('data-lines');
-                    var url = window.location.href.replace(/lines=\d+/, 'lines=' + lines);
-                    if (!url.match(/lines=\d+/)) {
-                        url += (url.indexOf('?') === -1 ? '?' : '&') + 'lines=' + lines;
-                    }
-                    window.location.href = url;
-                });
-            });
-            </script>
+<script type="text/javascript">
+{literal}
+// Resaltado de sintaxis simple para logs
+document.addEventListener('DOMContentLoaded', function() {
+    var pre = document.getElementById('log-content');
+    if (!pre) return;
+    
+    var text = pre.textContent;
+    var lines = text.split('\n');
+    var html = '';
+    
+    lines.forEach(function(line) {
+        var color = '';
+        var lower = line.toLowerCase();
+        
+        if (lower.indexOf('] error') !== -1 || lower.indexOf('] error') !== -1 || lower.indexOf('exception') !== -1 || lower.indexOf('fatal') !== -1) {
+            color = '#ff6b6b'; // rojo para errores
+        } else if (lower.indexOf('] warning') !== -1 || lower.indexOf('] warn') !== -1) {
+            color = '#ffd93d'; // amarillo para warnings
+        } else if (lower.indexOf('] info') !== -1) {
+            color = '#74c0fc'; // azul para info
+        } else if (lower.indexOf('] debug') !== -1) {
+            color = '#868e96'; // gris para debug
+        }
+        
+        // Resaltar timestamps
+        line = line.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, '<span style="color:#adb5bd">$1</span>');
+        // Resaltar IPs
+        line = line.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span style="color:#ffa94d">$1</span>');
+        // Resaltar URLs
+        line = line.replace(/(https?:\/\/[^\s]+)/g, '<span style="color:#74c0fc"><u>$1</u></span>');
+        
+        if (color) {
+            html += '<span style="color:' + color + '">' + line + '</span>\n';
+        } else {
+            html += line + '\n';
+        }
+    });
+    
+    pre.innerHTML = html;
+});
+
+// Dropdown para cambiar líneas
+document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        var lines = this.getAttribute('data-lines');
+        var url = window.location.href.replace(/lines=\d+/, 'lines=' + lines);
+        if (!url.match(/lines=\d+/)) {
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'lines=' + lines;
+        }
+        window.location.href = url;
+    });
+});
+{/literal}
+</script>
             
         {else}
             {* Lista de archivos de log *}
