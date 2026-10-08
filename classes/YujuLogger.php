@@ -224,9 +224,13 @@ class YujuLogger
             }
         }
 
-        // Crear archivo .htaccess para proteger los logs
-        $htaccess_content = 'Order deny,allow\nDeny from all';
-        file_put_contents($this->log_directory . '.htaccess', $htaccess_content);
+        // Crear archivo .htaccess para proteger los logs (solo si el directorio existe y es escribible)
+        $htaccess_path = $this->log_directory . '.htaccess';
+        $htaccess_content = "# Apache 2.4+\nRequire all denied\n\n# Apache 2.2 fallback\n<IfModule !mod_authz_core.c>\n    Order deny,allow\n    Deny from all\n</IfModule>";
+        
+        if (is_dir($this->log_directory) && is_writable($this->log_directory)) {
+            @file_put_contents($htaccess_path, $htaccess_content);
+        }
     }
 
     /**
