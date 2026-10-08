@@ -74,18 +74,28 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_LOG_LEVEL' => Configuration::get('YUJU_LOG_LEVEL', 'info'),
             'YUJU_LOG_RETENTION' => Configuration::get('YUJU_LOG_RETENTION', 30),
             'YUJU_MONITOR_URL' => Configuration::get('YUJU_MONITOR_URL'),
-            'YUJU_ALLOWED_URLS' => Configuration::get('YUJU_ALLOWED_URLS') ?: Tools::getShopDomainSsl(true),
             'YUJU_MONITOR_TOKEN_SET' => (bool) Configuration::get('YUJU_MONITOR_TOKEN'),
         ];
 
         // Generar URLs importantes para la configuración
-        $auth_url = $oauth->getRedirectUri();
-        $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
-        $terms_url = YujuConfig::getModuleFileUrl('terms.php');
+        $link = new Link();
+        $redirect_uri = $link->getModuleLink('prestashopyuju', 'oauth', [], true);
+        $webhook_url = $link->getModuleLink('prestashopyuju', 'webhook', [], true);
+        $terms_url = $link->getModuleLink('prestashopyuju', 'terms', [], true);
+        $auth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
+        // URLs permitidas en Yuju: deben registrarse completas (no solo el dominio)
+        $allowed_urls = array_values(array_unique(array_filter([
+            $redirect_uri,
+            $terms_url,
+            $webhook_url,
+        ])));
+
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
             'api_stats' => $api_stats,
+            'oauth_url' => $auth_url,
+            'oauth_auth_url' => $auth_url,
             'module_path' => $this->module->getPathUri(),
             'current_tab' => 'configuration',
             'current_controller' => get_class($this),
@@ -97,7 +107,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'yuju_urls' => [
                 'terms_conditions' => $terms_url,
                 'auth_url' => $auth_url,
+                'redirect_uri' => $redirect_uri,
                 'webhook_url' => $webhook_url,
+                'allowed_urls' => $allowed_urls,
             ],
         ]);
 
@@ -617,20 +629,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_LOG_LEVEL' => Tools::getValue('YUJU_LOG_LEVEL'),
             'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
             'YUJU_MONITOR_URL' => Tools::getValue('YUJU_MONITOR_URL'),
-            'YUJU_ALLOWED_URLS' => $this->normalizeAllowedUrls(Tools::getValue('YUJU_ALLOWED_URLS')),
         ];
 
         // Validaciones básicas
         if (empty($configs['YUJU_CLIENT_ID']) || empty($configs['YUJU_CLIENT_SECRET'])) {
             $this->errors[] = $this->trans('Client ID y Client Secret son requeridos', array(), 'Modules.Prestashopyuju.Admin');
             return;
-        }
-
-        foreach (explode(',', $configs['YUJU_ALLOWED_URLS']) as $allowed_url) {
-            if ($allowed_url !== '' && !Validate::isUrl($allowed_url)) {
-                $this->errors[] = $this->trans('URLs permitidas contiene un valor no válido: ', array(), 'Modules.Prestashopyuju.Admin') . $allowed_url;
-                return;
-            }
         }
 
         if ($configs['YUJU_BATCH_SIZE'] < 1 || $configs['YUJU_BATCH_SIZE'] > 1000) {
@@ -672,16 +676,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
         } catch (Exception $e) {
             $this->errors[] = $this->trans('Error al guardar configuración: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
-    }
-
-    /**
-     * Normaliza una lista de URLs/dominios separados por comas (sin vacíos ni duplicados).
-     */
-    private function normalizeAllowedUrls($value)
-    {
-        $urls = array_filter(array_map('trim', explode(',', (string) $value)));
-
-        return implode(',', array_unique($urls));
     }
 
     private function getLastSyncTime()

@@ -25,6 +25,7 @@ require_once dirname(__FILE__) . '/YujuLogger.php';
 
 class YujuApiClient
 {
+    public const API_VERSION = 'v1';
     public const SANDBOX_BASE_URL = 'https://api.tp.yuju.io';
     public const PRODUCTION_BASE_URL = 'https://api.tp.yuju.io';
 
@@ -218,7 +219,7 @@ class YujuApiClient
      */
     private function buildUrl($endpoint, $params = [])
     {
-        $url = rtrim($this->base_url, '/') . '/' . ltrim($endpoint, '/');
+        $url = rtrim($this->base_url, '/') . '/' . self::API_VERSION . '/' . ltrim($endpoint, '/');
 
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
@@ -241,8 +242,8 @@ class YujuApiClient
         $access_token = $this->oauth->getValidAccessToken();
 
         if ($access_token) {
-            // Según la documentación de Yuju, el token se envía tal cual en la cabecera Authorization
-            $headers[] = 'Authorization: ' . $access_token;
+            // Según la documentación de Yuju, el token se envía con el formato 'Token {token}'
+            $headers[] = 'Authorization: Token ' . $access_token;
         }
 
         return $headers;
@@ -326,7 +327,7 @@ class YujuApiClient
      */
     public function isApiAvailable()
     {
-        $response = $this->get('account');
+        $response = $this->get('health');
 
         return $response['success'];
     }
@@ -336,7 +337,7 @@ class YujuApiClient
      */
     public function getUserInfo()
     {
-        return $this->get('account');
+        return $this->get('user/me');
     }
 
     /**
@@ -411,14 +412,14 @@ class YujuApiClient
     public function getStores($params = [])
     {
         try {
-            $url = $this->buildUrl('account', $params);
+            $url = $this->buildUrl('shops/', $params);
             $this->logger->info('Calling getStores endpoint', [
                 'url' => $url,
                 'params' => $params,
                 'base_url' => $this->base_url
             ]);
             
-            $response = $this->get('account', $params);
+            $response = $this->get('shops/', $params);
             
             $this->logger->info('getStores response received', [
                 'response' => $response,

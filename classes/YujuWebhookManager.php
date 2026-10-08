@@ -20,7 +20,6 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once dirname(__FILE__) . '/../config/config.php';
 require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuOrderManager.php';
@@ -524,7 +523,12 @@ class YujuWebhookManager
      */
     protected function getWebhookUrl()
     {
-        return YujuConfig::getModuleFileUrl('webhook.php');
+        $shop_url = Configuration::get('PS_SHOP_DOMAIN');
+        $ssl = Configuration::get('PS_SSL_ENABLED');
+
+        $protocol = $ssl ? 'https://' : 'http://';
+
+        return $protocol . $shop_url . '/modules/prestashopyuju/webhook.php';
     }
 
     /**

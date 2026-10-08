@@ -179,14 +179,6 @@ class YujuConfig
     }
 
     /**
-     * Get the full URL of a module entry-point file (ends in .php, not a friendly URL).
-     */
-    public static function getModuleFileUrl($file)
-    {
-        return Context::getContext()->link->getBaseLink(null, true) . 'modules/prestashopyuju/' . $file;
-    }
-
-    /**
      * Get API endpoints.
      */
     public static function getApiEndpoints()
