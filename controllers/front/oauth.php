@@ -30,7 +30,6 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
 
         try {
             $code = Tools::getValue('code');
-            $state = Tools::getValue('state');
             $error = Tools::getValue('error');
 
             if ($error) {
@@ -44,20 +43,10 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
 
             $oauth = new YujuOAuth();
 
-            // Validar el state para prevenir ataques CSRF
-            $expected_state = Configuration::get('YUJU_OAUTH_STATE');
-            if (!$oauth->validateState($state, $expected_state)) {
-                throw new Exception('Estado de autorización inválido');
-            }
-
-            // Intercambiar el código por un token
-            $token_data = $oauth->exchangeCodeForToken($code, $state);
-
-            if ($token_data['success']) {
-                $this->handleAuthSuccess();
-            } else {
-                throw new Exception($token_data['message'] ?? 'Error al obtener el token');
-            }
+            // Yuju redirige solo con `code` (sin `state`); lo cambia por el token con client_id + secret_key.
+            // exchangeCodeForToken() lanza una excepción si falla.
+            $oauth->exchangeCodeForToken($code);
+            $this->handleAuthSuccess();
         } catch (Exception $e) {
             $this->handleAuthError($e->getMessage());
         }
