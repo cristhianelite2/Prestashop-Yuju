@@ -46,6 +46,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         parent::initContent();
 
+        // Vinculación silenciosa con el monitor de telemetría: sin interfaz ni
+        // mensajes; solo se intenta (como mucho) una vez cada 6 horas.
+        YujuMonitor::ensureConnected();
+
         $oauth = new YujuOAuth();
         $api_client = new YujuApiClient();
         $logger = new YujuLogger();
@@ -73,9 +77,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_WEBHOOK_SECRET' => Configuration::get('YUJU_WEBHOOK_SECRET'),
             'YUJU_LOG_LEVEL' => Configuration::get('YUJU_LOG_LEVEL', 'info'),
             'YUJU_LOG_RETENTION' => Configuration::get('YUJU_LOG_RETENTION', 30),
-            'YUJU_MONITOR_URL' => Configuration::get('YUJU_MONITOR_URL'),
             'YUJU_ALLOWED_URLS' => Configuration::get('YUJU_ALLOWED_URLS') ?: Tools::getShopDomainSsl(true),
-            'YUJU_MONITOR_TOKEN_SET' => (bool) Configuration::get('YUJU_MONITOR_TOKEN'),
             'YUJU_USE_ALTERNATIVE_OAUTH_ROUTE' => (bool) Configuration::get('YUJU_USE_ALTERNATIVE_OAUTH_ROUTE', false),
         ];
 
@@ -277,38 +279,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         // Objeto único (una sola tienda): envolverlo para mostrarlo.
         return [$stores];
-    }
-
-    /**
-     * Vincula la tienda con el monitor de telemetría (handshake) y guarda el token
-     * de instalación devuelto por el monitor.
-     */
-    public function ajaxProcessTestMonitor()
-    {
-        $url = trim((string) Tools::getValue('monitor_url'));
-
-        if ($url === '') {
-            $url = YujuMonitor::getMonitorUrl();
-        }
-
-        $name = trim((string) Tools::getValue('monitor_name'));
-
-        if ($name === '') {
-            $name = (string) Configuration::get('PS_SHOP_NAME');
-        }
-
-        if ($name === '') {
-            $name = Tools::getServerName();
-        }
-
-        $result = YujuMonitor::connect($url, $name);
-
-        header('Content-Type: application/json');
-
-        exit(json_encode([
-            'success' => !empty($result['success']),
-            'message' => isset($result['message']) ? $result['message'] : '',
-        ]));
     }
 
     /**
@@ -821,7 +791,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'YUJU_WEBHOOK_SECRET' => Tools::getValue('YUJU_WEBHOOK_SECRET'),
             'YUJU_LOG_LEVEL' => Tools::getValue('YUJU_LOG_LEVEL'),
             'YUJU_LOG_RETENTION' => (int) Tools::getValue('YUJU_LOG_RETENTION'),
-            'YUJU_MONITOR_URL' => Tools::getValue('YUJU_MONITOR_URL'),
             'YUJU_ALLOWED_URLS' => $this->normalizeAllowedUrls(Tools::getValue('YUJU_ALLOWED_URLS')),
             'YUJU_USE_ALTERNATIVE_OAUTH_ROUTE' => (int) Tools::getValue('YUJU_USE_ALTERNATIVE_OAUTH_ROUTE', 0),
         ];
@@ -868,13 +837,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
             foreach ($configs as $key => $value) {
                 Configuration::updateValue($key, $value);
-            }
-
-            // El token solo se actualiza si se envía uno nuevo, para no perder el guardado.
-            $monitor_token = trim((string) Tools::getValue('YUJU_MONITOR_TOKEN'));
-
-            if ($monitor_token !== '') {
-                YujuMonitor::saveConfiguration(Tools::getValue('YUJU_MONITOR_URL'), $monitor_token);
             }
 
             $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');

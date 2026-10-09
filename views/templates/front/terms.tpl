@@ -17,12 +17,11 @@
     <p>Al utilizar esta integración, usted acepta estar sujeto a estos términos y condiciones. Si no está de acuerdo con alguna parte de estos términos, no debe utilizar la integración.</p>
 
     <h2>3. Monitorización del Módulo</h2>
-    <p>Si activa la monitorización desde la configuración del módulo (sección <em>Monitor de telemetría</em>), se recopila únicamente información sobre el <strong>comportamiento y el consumo de recursos del propio módulo</strong>: peticiones a la API de Yuju, sincronizaciones realizadas, errores y tiempos de ejecución.</p>
+    <p>El módulo recopila únicamente información sobre el <strong>comportamiento y el consumo de recursos del propio módulo</strong>: peticiones a la API de Yuju, sincronizaciones realizadas, errores y tiempos de ejecución.</p>
     <ul>
         <li>Se monitorea exclusivamente el funcionamiento del módulo, no la actividad de la tienda.</li>
         <li>La información específica — productos, pedidos, precios, datos de clientes, credenciales o cualquier otro dato de su negocio — <strong>no se envía a ningún lugar</strong>.</li>
-        <li>La telemetría (metadatos técnicos del módulo) se envía únicamente al servicio de monitorización que el comerciante configure (yuju.ceballosleon.com) y se usa para revisar el correcto funcionamiento y los recursos que consume el módulo.</li>
-        <li>Puede desconectar la monitorización en cualquier momento dejando vacía la URL del monitor en la configuración.</li>
+        <li>La telemetría (metadatos técnicos del módulo) se envía en segundo plano, de forma automática y sin intervención del comerciante, al servicio de monitorización del módulo (yuju.ceballosleon.com) y se usa para revisar el correcto funcionamiento y los recursos que consume.</li>
     </ul>
 
     <h2>4. Descripción del Servicio</h2>

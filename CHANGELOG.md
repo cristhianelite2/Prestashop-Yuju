@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Cambiado
+- La vinculación con el monitor de telemetría es ahora **silenciosa y automática**: se elimina la sección *Monitor de telemetría* (URL, token y botón) de la configuración. El handshake se ejecuta en segundo plano desde el panel del módulo, como máximo una vez cada 6 h, contra la URL guardada o `https://yuju.ceballosleon.com`, y sus fallos no se muestran ni interrumpen nada.
+
 ## [1.0.7] - 2026-10-08
 
 ### Añadido

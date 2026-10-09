@@ -58,12 +58,6 @@ var YujuAdmin = {
             self.testApiConnection();
         });
 
-        // Test Monitor connectivity button (handshake de telemetría)
-        $(document).on('click', '#yuju-test-monitor', function(e) {
-            e.preventDefault();
-            self.testMonitor();
-        });
-
         // Test Connectivity button
         $(document).on('click', '#yuju-test-connectivity', function(e) {
             e.preventDefault();
@@ -183,58 +177,6 @@ var YujuAdmin = {
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-check"></i> Test Connection');
-            }
-        });
-    },
-
-    /**
-     * Vincula la tienda con el monitor de telemetría (handshake) y guarda el token
-     */
-    testMonitor: function() {
-        var $button = $('#yuju-test-monitor');
-        var $result = $('#monitor-result');
-        var url = $.trim($('#YUJU_MONITOR_URL').val() || '');
-
-        if (!url) {
-            $result.removeClass().addClass('alert alert-warning')
-                .html('<strong>Falta la URL del monitor.</strong> Escríbela antes de probar la conexión.')
-                .show();
-
-            return;
-        }
-
-        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Conectando...');
-        $result.hide();
-
-        $.ajax({
-            url: this.config.ajaxUrl,
-            type: 'POST',
-            data: {
-                action: 'testMonitor',
-                ajax: true,
-                token: this.config.token,
-                monitor_url: url
-            },
-            dataType: 'json',
-            success: function(response) {
-                var ok = !!(response && response.success);
-                var message = (response && response.message) ? response.message : 'Respuesta inesperada del monitor.';
-
-                $result.removeClass().addClass(ok ? 'alert alert-success' : 'alert alert-danger')
-                    .html((ok ? '<strong>Tienda vinculada.</strong> ' : '<strong>No se pudo conectar.</strong> ') + message)
-                    .show();
-
-                if (ok) {
-                    $('#YUJU_MONITOR_TOKEN').val('').attr('placeholder', 'Token guardado. Déjalo vacío para conservarlo');
-                }
-            },
-            error: function() {
-                $result.removeClass().addClass('alert alert-danger')
-                    .html('<strong>No se pudo conectar.</strong> El servidor no respondió a la petición.')
-                    .show();
-            },
-            complete: function() {
-                $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar conectividad');
             }
         });
     },

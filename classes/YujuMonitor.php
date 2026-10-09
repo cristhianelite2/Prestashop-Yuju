@@ -38,6 +38,15 @@ class YujuMonitor
     public const CONFIG_URL = 'YUJU_MONITOR_URL';
     public const CONFIG_TOKEN = 'YUJU_MONITOR_TOKEN';
 
+    /** URL por defecto del monitor: la conexión es silenciosa y automática. */
+    public const DEFAULT_MONITOR_URL = 'https://yuju.ceballosleon.com';
+
+    /** Marca de tiempo del último intento silencioso de vinculación. */
+    private const CONFIG_LAST_CONNECT = 'YUJU_MONITOR_LAST_CONNECT';
+
+    /** Espera entre intentos silenciosos de vinculación (6 horas). */
+    private const CONNECT_RETRY_SECONDS = 21600;
+
     /** Límite de eventos por lote aceptado por el monitor. */
     private const MAX_BATCH = 50;
     private const CONNECT_TIMEOUT_SECONDS = 1;
@@ -64,6 +73,78 @@ class YujuMonitor
     public static function isConfigured()
     {
         return self::getMonitorUrl() !== '' && self::getToken() !== '';
+    }
+
+    /**
+     * Vincula la tienda con el monitor de forma silenciosa.
+     *
+     * Se ejecuta sin interfaz y sin mostrar mensajes: si la tienda aún no está
+     * vinculada, intenta el handshake contra la URL guardada (o la pública por
+     * defecto) y guarda el token devuelto. Los fallos se ignoran y no se
+     * reintenta antes de `CONNECT_RETRY_SECONDS`, de modo que la página del
+     * módulo nunca se ralentiza por el monitor.
+     *
+     * @return bool true si la tienda quedó vinculada (antes o en este intento)
+     */
+    public static function ensureConnected()
+    {
+        try {
+            if (self::isConfigured()) {
+                return true;
+            }
+
+            if (!class_exists('Configuration')) {
+                return false;
+            }
+
+            $now = time();
+            $last = (int) Configuration::get(self::CONFIG_LAST_CONNECT);
+
+            if ($last > 0 && ($now - $last) < self::CONNECT_RETRY_SECONDS) {
+                return false;
+            }
+
+            // Se marca antes de intentar: si el handshake cuelga, no se vuelve
+            // a probar hasta que toque.
+            Configuration::updateValue(self::CONFIG_LAST_CONNECT, (string) $now);
+
+            $url = self::getMonitorUrl();
+
+            if ($url === '') {
+                $url = self::DEFAULT_MONITOR_URL;
+            }
+
+            $name = trim((string) Configuration::get('PS_SHOP_NAME'));
+
+            if ($name === '' && class_exists('Tools')) {
+                $name = (string) Tools::getServerName();
+            }
+
+            $result = self::connect($url, $name);
+
+            if (!empty($result['success'])) {
+                self::logSilentConnect('ok');
+            }
+
+            return !empty($result['success']);
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Registro mínimo del resultado del handshake silencioso (sin datos).
+     */
+    private static function logSilentConnect($result)
+    {
+        try {
+            if (class_exists('YujuLogger')) {
+                $logger = new YujuLogger();
+                $logger->info('Monitor de telemetría vinculado en segundo plano', ['result' => (string) $result]);
+            }
+        } catch (Throwable $e) {
+            // Best-effort: nunca interrumpe.
+        }
     }
 
     /**
