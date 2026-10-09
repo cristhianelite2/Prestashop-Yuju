@@ -285,6 +285,10 @@ class YujuOAuth
 
     /**
      * Obtiene un access token válido (refresca si es necesario).
+     *
+     * Yuju no documenta refresh ni expiración: si no hay refresh token o el
+     * refresh falla, se devuelve el token guardado como último recurso (la
+     * API dirá si sigue vigente) en vez de anularlo localmente.
      */
     public function getValidAccessToken()
     {
@@ -296,13 +300,25 @@ class YujuOAuth
 
         // Verificar si el token ha expirado
         if ($this->isTokenExpired($oauth_data)) {
+            if (empty($oauth_data['refresh_token'])) {
+                $this->logger->log('warning', 'Token con expiración pasada pero sin refresh token: se reutiliza el guardado', [
+                    'token_expires' => $oauth_data['token_expires'],
+                ]);
+
+                return $oauth_data['access_token'];
+            }
+
             try {
                 $this->refreshToken();
                 $oauth_data = $this->getStoredTokenData();
-            } catch (Exception $e) {
-                $this->logger->log('error', 'No se pudo refrescar el token', ['error' => $e->getMessage()]);
 
-                return null;
+                if (!$oauth_data || !$oauth_data['access_token']) {
+                    return null;
+                }
+            } catch (Exception $e) {
+                $this->logger->log('warning', 'No se pudo refrescar el token: se reutiliza el guardado', ['error' => $e->getMessage()]);
+
+                return $oauth_data['access_token'];
             }
         }
 

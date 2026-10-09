@@ -505,31 +505,51 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
-     * Prueba la conexión con la API.
+     * Prueba la conexión con la API (usa el token guardado contra `account`
+     * y reporta la causa exacta si falla, en vez de un mensaje genérico).
      */
     private function testApiConnection()
     {
         try {
             $api_client = new YujuApiClient();
-
-            if (!$api_client->isApiAvailable()) {
-                $this->errors[] = $this->trans('No se pudo conectar con la API de Yuju', array(), 'Modules.Prestashopyuju.Admin');
-
-                return;
-            }
+            $oauth = new YujuOAuth();
+            $oauth_status = $oauth->getOAuthStatus();
 
             $user_info = $api_client->getUserInfo();
 
-            if ($user_info['success']) {
+            if (!empty($user_info['success'])) {
                 $this->confirmations[] = $this->trans('Conexión exitosa con la API de Yuju', array(), 'Modules.Prestashopyuju.Admin');
 
                 $logger = new YujuLogger();
                 $logger->info('Prueba de conexión API exitosa', [
                     'user_data' => $user_info['data'],
                 ]);
-            } else {
-                $this->errors[] = $this->trans('Error en la conexión: ', array(), 'Modules.Prestashopyuju.Admin') . $user_info['message'];
+
+                return;
             }
+
+            $detail = isset($user_info['message']) && $user_info['message'] !== ''
+                ? (string) $user_info['message']
+                : 'sin respuesta de la API';
+            $http = isset($user_info['http_code']) ? ' (HTTP ' . (int) $user_info['http_code'] . ')' : '';
+
+            if (empty($oauth_status['has_token'])) {
+                $token_note = 'No hay token guardado: autoriza la aplicación primero (Conectar en Yuju).';
+            } elseif (!empty($oauth_status['token_expires'])) {
+                $token_note = 'Hay token guardado (expira: ' . $oauth_status['token_expires'] . '): puede estar vencido o revocado en Yuju.';
+            } else {
+                $token_note = 'Hay token guardado: puede estar revocado en Yuju o sin acceso a la cuenta.';
+            }
+
+            $this->errors[] = $this->trans('Error en la conexión: ', array(), 'Modules.Prestashopyuju.Admin') . $detail . $http . '. ' . $token_note;
+
+            $logger = new YujuLogger();
+            $logger->error('Prueba de conexión API fallida', [
+                'detail' => $detail,
+                'http_code' => isset($user_info['http_code']) ? $user_info['http_code'] : null,
+                'has_token' => !empty($oauth_status['has_token']),
+                'token_expires' => $oauth_status['token_expires'],
+            ]);
         } catch (Exception $e) {
             $this->errors[] = $this->trans('Error al probar conexión: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
         }
