@@ -179,6 +179,28 @@ class AdminYujuConfigurationController extends ModuleAdminController
                         // true solo cuando ni el token guardado ni la comprobación
                         // a nivel Client ID + Secret Key dieron resultado.
                         'needs_auth' => !empty($connection_test['needs_auth']),
+                        'state' => isset($connection_test['state']) ? $connection_test['state'] : null,
+                        'auth_level' => isset($connection_test['data']['auth_level'])
+                            ? $connection_test['data']['auth_level']
+                            : null,
+                    ],
+                ];
+                exit(json_encode($response));
+            }
+
+            // Conectividad comprobada pero sin token usable (Yuju exige `code`
+            // para emitirlo): no tiene sentido llamar a la API todavía.
+            if (!empty($connection_test['needs_auth'])) {
+                $response = [
+                    'success' => true,
+                    'message' => $connection_test['message'],
+                    'data' => [
+                        'connection' => $connection_test,
+                        'stores' => [],
+                        'stores_count' => 0,
+                        'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
+                        'needs_auth' => true,
+                        'state' => isset($connection_test['state']) ? $connection_test['state'] : null,
                         'auth_level' => isset($connection_test['data']['auth_level'])
                             ? $connection_test['data']['auth_level']
                             : null,
@@ -202,6 +224,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     // permite diagnosticar sin gastar un code de un solo uso.
                     'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
                     'needs_auth' => false,
+                    'state' => isset($connection_test['state']) ? $connection_test['state'] : 'connected',
                     'auth_level' => isset($connection_test['data']['auth_level'])
                         ? $connection_test['data']['auth_level']
                         : null,

@@ -351,9 +351,14 @@ class YujuApiClient
      * Test API connection.
      *
      * Dos niveles distintos:
-     *  1. Credenciales (Client ID + Secret Key): pide token a Yuju y, si lo
-     *     devuelve, se guarda para usarlo en la API.
+     *  1. Credenciales (Client ID + Secret Key): contacta con Yuju y, si este
+     *     devuelve token, se guarda para usarlo en la API.
      *  2. Token (obtenido con code + secret + client_id): se usa contra la API.
+     *
+     * Yuju solo emite token con `code`, así que "conectividad OK" significa que
+     * la API de Yuju responde, no que haya token: `state` lo discrimina
+     * (`connected`, `connected_no_token`, `token_rejected`, `unreachable`,
+     * `yuju_error`, `api_error`, `exception`).
      */
     public function testConnection()
     {
@@ -369,29 +374,76 @@ class YujuApiClient
             if (!$access_token) {
                 // Sin token guardado: comprobación a nivel de credenciales
                 // (Client ID + Secret Key), sin necesidad de un code.
-                $this->logger->info('No stored access token: running credentials-level check');
+                $this->logger->info('No stored access token: running credentials-level connectivity check');
 
                 $credentials_check = $this->oauth->requestTokenWithCredentials();
+                $audit = $this->oauth->getCredentialAudit();
 
-                if (empty($credentials_check['success'])) {
-                    $message = isset($credentials_check['message']) ? $credentials_check['message'] : 'Error desconocido';
-                    $this->logger->error('Credentials check failed', ['message' => $message]);
+                if (!empty($credentials_check['success'])) {
+                    $access_token = $credentials_check['token'];
+                    $auth_level = 'credentials';
+                    $this->logger->info('Access token obtained from Client ID + Secret Key');
+                } elseif (empty($credentials_check['reached_yuju'])) {
+                    // Sin respuesta HTTP: o bien un fallo local (credenciales mal
+                    // configuradas) o bien un fallo real de conectividad.
+                    $local_error = in_array($credentials_check['reason'] ?? '', ['not_configured', 'format'], true);
+                    $this->logger->error('Yuju unreachable', ['check' => $credentials_check]);
 
                     return [
                         'success' => false,
-                        'needs_auth' => true,
-                        'message' => 'Error de conexión: ' . $message,
+                        'needs_auth' => $local_error,
+                        'state' => $local_error ? 'invalid_credentials' : 'unreachable',
+                        'message' => isset($credentials_check['message']) && $credentials_check['message'] !== ''
+                            ? $credentials_check['message']
+                            : 'No se pudo contactar con la API de Yuju',
                         'data' => [
                             'auth_level' => 'credentials',
-                            'credential_audit' => $this->oauth->getCredentialAudit(),
+                            'has_token' => false,
+                            'credential_audit' => $audit,
+                            'timestamp' => date('Y-m-d H:i:s'),
+                        ],
+                    ];
+                } elseif ((int) $credentials_check['http_code'] >= 500) {
+                    // Yuju contestó, pero con error interno: no es un problema nuestro.
+                    $this->logger->error('Yuju answered with server error', ['check' => $credentials_check]);
+
+                    return [
+                        'success' => false,
+                        'needs_auth' => false,
+                        'state' => 'yuju_error',
+                        'message' => 'La API de Yuju respondió con un error interno: ' . $credentials_check['message'],
+                        'data' => [
+                            'auth_level' => 'credentials',
+                            'has_token' => false,
+                            'credential_audit' => $audit,
+                            'timestamp' => date('Y-m-d H:i:s'),
+                        ],
+                    ];
+                } else {
+                    // Yuju respondió: la conectividad funciona. Sin `code` no emite
+                    // token, así que todavía no hay con qué llamar a la API.
+                    $this->logger->info('Credentials-level check reached Yuju (no token without code)', [
+                        'http_code' => $credentials_check['http_code'],
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'needs_auth' => true,
+                        'state' => 'connected_no_token',
+                        'message' => 'La API de Yuju responde (' . $credentials_check['message'] . '). '
+                            . 'Yuju solo emite token cuando recibe el `code` de conexión: pulsa "Conectar" en Yuju '
+                            . 'para que el módulo lo reciba y lo guarde; hasta entonces la API no aceptará '
+                            . 'peticiones autenticadas.',
+                        'data' => [
+                            'token_valid' => false,
+                            'api_accessible' => false,
+                            'auth_level' => 'credentials',
+                            'has_token' => false,
+                            'credential_audit' => $audit,
                             'timestamp' => date('Y-m-d H:i:s'),
                         ],
                     ];
                 }
-
-                $access_token = $credentials_check['token'];
-                $auth_level = 'credentials';
-                $this->logger->info('Access token obtained from Client ID + Secret Key');
             }
 
             // Probar la conexión con el endpoint de webhooks
@@ -403,7 +455,7 @@ class YujuApiClient
             $response = $this->get('webhook-sub');
 
             // Token rechazado por la API: reintenta una vez con credenciales
-            // frescas antes de devolver el error.
+            // frescas antes de decidir qué reportar.
             if (!$response['success'] && (int) ($response['http_code'] ?? 0) === 401) {
                 $this->logger->warning('Stored token rejected (401): retrying with credentials-level check');
 
@@ -412,6 +464,29 @@ class YujuApiClient
                 if (!empty($credentials_check['success'])) {
                     $auth_level = 'credentials';
                     $response = $this->get('webhook-sub');
+                } elseif (!empty($credentials_check['reached_yuju'])
+                    && (int) $credentials_check['http_code'] < 500
+                ) {
+                    // La API responde, pero el token guardado ya no sirve y sin
+                    // `code` no se puede emitir otro.
+                    $this->logger->info('Stored token rejected and no new token without code');
+
+                    return [
+                        'success' => true,
+                        'needs_auth' => true,
+                        'state' => 'token_rejected',
+                        'message' => 'La API de Yuju responde (' . $credentials_check['message'] . '), pero el token '
+                            . 'guardado fue rechazado (HTTP 401) y Yuju no emite uno nuevo sin el `code` de conexión: '
+                            . 'pulsa "Conectar" en Yuju para renovarlo.',
+                        'data' => [
+                            'token_valid' => false,
+                            'api_accessible' => false,
+                            'auth_level' => 'token',
+                            'has_token' => true,
+                            'credential_audit' => $this->oauth->getCredentialAudit(),
+                            'timestamp' => date('Y-m-d H:i:s'),
+                        ],
+                    ];
                 }
             }
 
@@ -424,11 +499,13 @@ class YujuApiClient
                 return [
                     'success' => true,
                     'needs_auth' => false,
+                    'state' => 'connected',
                     'message' => 'Conexión exitosa con la API de Yuju',
                     'data' => [
                         'token_valid' => true,
                         'api_accessible' => true,
                         'auth_level' => $auth_level,
+                        'has_token' => true,
                         'timestamp' => date('Y-m-d H:i:s'),
                     ],
                 ];
@@ -439,10 +516,13 @@ class YujuApiClient
                 return [
                     'success' => false,
                     'needs_auth' => false,
-                    'message' => 'Error al conectar con la API: ' . ($response['message'] ?? 'Error desconocido')
+                    'state' => 'api_error',
+                    'message' => 'La API de Yuju respondió pero rechazó la petición: '
+                        . ($response['message'] ?? 'Error desconocido')
                         . (isset($response['http_code']) ? ' (HTTP ' . (int) $response['http_code'] . ')' : ''),
                     'data' => [
                         'auth_level' => $auth_level,
+                        'has_token' => true,
                         'timestamp' => date('Y-m-d H:i:s'),
                     ],
                 ];
@@ -454,7 +534,8 @@ class YujuApiClient
             return [
                 'success' => false,
                 'needs_auth' => false,
-                'message' => 'Error de conexión: ' . $e->getMessage(),
+                'state' => 'exception',
+                'message' => $e->getMessage(),
             ];
         }
     }

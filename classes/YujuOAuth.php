@@ -89,19 +89,31 @@ class YujuOAuth
     }
 
     /**
-     * Comprueba las credenciales a nivel Client ID + Secret Key.
+     * Comprobación de conectividad a nivel Client ID + Secret Key.
      *
-     * Pide un token a Yuju (`POST /auth-generate-token`) usando únicamente
-     * `client_id` y `secret_key`, sin necesidad de un `code` de autorización.
-     * Si Yuju devuelve token, se guarda para usarlo en la API.
+     * Pide token a Yuju (`POST /auth-generate-token`) usando únicamente
+     * `client_id` y `secret_key`, sin necesidad de un `code`.
      *
-     * @return array{success: bool, token?: string, message?: string}
+     * Yuju solo emite token cuando recibe un `code` de conexión: sin él
+     * responde 403 `invalid credential`, una respuesta GENÉRICA que devuelve
+     * lo mismo con credenciales malas, con las de la documentación o sin
+     * `code` (verificado contra la API real). Por eso el resultado separa:
+     *
+     *  - `success`      => Yuju devolvió token (se guarda para la API).
+     *  - `reached_yuju` => hubo respuesta HTTP de Yuju: la conectividad funciona.
+     *  - `reason`       => `not_configured` / `format` / `network` cuando no se
+     *                      llegó a hacer la petición (fallo local, no de Yuju).
+     *  - `message`      => texto de Yuju, o el motivo de no haber llegado.
+     *
+     * @return array{success: bool, reached_yuju: bool, token?: string, http_code?: int, reason?: string, message: string}
      */
     public function requestTokenWithCredentials()
     {
         if (!$this->isConfigured()) {
             return [
                 'success' => false,
+                'reached_yuju' => false,
+                'reason' => 'not_configured',
                 'message' => 'Faltan credenciales: guarda el Client ID y el Secret Key en la configuración del módulo.',
             ];
         }
@@ -113,6 +125,8 @@ class YujuOAuth
 
             return [
                 'success' => false,
+                'reached_yuju' => false,
+                'reason' => 'format',
                 'message' => $format_error,
             ];
         }
@@ -128,18 +142,49 @@ class YujuOAuth
 
             return [
                 'success' => true,
+                'reached_yuju' => true,
                 'token' => $result['data']['access_token'],
+                'http_code' => isset($result['http_code']) ? (int) $result['http_code'] : 200,
+                'message' => 'Token emitido por Yuju',
             ];
         }
 
-        $message = isset($result['message']) && $result['message'] !== ''
-            ? (string) $result['message']
-            : 'Yuju rechazó las credenciales';
         $http_code = isset($result['http_code']) ? (int) $result['http_code'] : 0;
+        $curl_error = isset($result['curl_error']) ? (string) $result['curl_error'] : '';
+        $yuju_message = isset($result['message']) && $result['message'] !== ''
+            ? (string) $result['message']
+            : 'respuesta sin mensaje';
+
+        // Sin respuesta HTTP no hay forma de saber si la API está accesible:
+        // esto sí es un fallo de conectividad (DNS, TLS, cortaficheros, timeout).
+        if ($http_code <= 0 || $curl_error !== '') {
+            $this->logger->log('error', 'No se contactó con la API de Yuju', [
+                'curl_error' => $curl_error,
+                'http_code' => $http_code,
+            ]);
+
+            return [
+                'success' => false,
+                'reached_yuju' => false,
+                'reason' => 'network',
+                'http_code' => $http_code,
+                'message' => 'No se pudo contactar con la API de Yuju'
+                    . ($curl_error !== '' ? ': ' . $curl_error : ' (sin respuesta HTTP)'),
+            ];
+        }
+
+        // Hubo respuesta HTTP: la conectividad está bien, aunque Yuju no emita
+        // token sin `code`.
+        $this->logger->log('info', 'API de Yuju accesible (sin token: Yuju exige code para emitirlo)', [
+            'http_code' => $http_code,
+            'yuju_message' => $yuju_message,
+        ]);
 
         return [
             'success' => false,
-            'message' => $message . ($http_code ? ' (HTTP ' . $http_code . ')' : ''),
+            'reached_yuju' => true,
+            'http_code' => $http_code,
+            'message' => $yuju_message . ' (HTTP ' . $http_code . ')',
         ];
     }
 

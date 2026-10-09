@@ -261,11 +261,45 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 var html = '';
-                
+                var data = response.data || {};
+                var needsAuth = !!data.needs_auth;
+                var state = data.state || null;
+                var audit = data.credential_audit;
+
+                // Auditoría de credenciales guardadas (solo longitudes, sin valores).
+                var renderAudit = function() {
+                    if (!audit) {
+                        return '';
+                    }
+                    var auditOk = audit.client_id_is_hex32 && !audit.secret_has_whitespace && audit.secret_is_ascii !== false;
+                    var out = '<div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
+                    out += '<strong>Credenciales guardadas (solo formato, sin valores):</strong><br><small>';
+                    out += 'Client ID: ' + audit.client_id_length + ' car. (' + (audit.client_id_is_hex32 ? 'formato OK' : 'formato INVÁLIDO') + ')<br>';
+                    out += 'Secret: ' + audit.secret_key_length + ' car.'
+                        + (audit.secret_has_whitespace ? ' (contiene ESPACIOS)' : '')
+                        + (audit.secret_is_ascii === false ? ' (contiene caracteres INVISIBLES)' : '') + '<br>';
+                    out += '</small></div>';
+                    if (!auditOk) {
+                        out += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">Revisa el formato marcado arriba, guarda de nuevo la configuración y vuelve a probar la conectividad.</div>';
+                    }
+                    return out;
+                };
+
+                if (response.success && needsAuth) {
+                    // Yuju respondió (la conectividad está bien), pero todavía no
+                    // hay token utilizable: Yuju solo lo emite con el `code`.
+                    html += '<strong>Conectividad con Yuju: OK</strong><br>';
+                    html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">'
+                        + (response.message || 'Sin token de acceso todavía.') + '</div>';
+                    html += renderAudit();
+                    $result.removeClass().addClass('alert alert-success').html(html).show();
+                    return;
+                }
+
                 if (response.success) {
                     html += '<strong>Conexión exitosa!</strong><br>';
 
-                    var authLevel = response.data && response.data.auth_level;
+                    var authLevel = data.auth_level;
                     html += '<small>Nivel de autenticación: '
                         + (authLevel === 'credentials'
                             ? 'credenciales (Client ID + Secret Key)'
@@ -305,27 +339,17 @@ var YujuAdmin = {
                     
                     $result.removeClass().addClass('alert alert-success').html(html).show();
                 } else {
-                    var needsAuth = response.data && response.data.needs_auth;
-                    var audit = response.data && response.data.credential_audit;
-
-                    html += '<strong>' + (needsAuth ? 'Credenciales no válidas:' : 'Error de conexión:') + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
-
-                    if (audit) {
-                        var auditOk = audit.client_id_is_hex32 && !audit.secret_has_whitespace && audit.secret_is_ascii !== false;
-                        html += '<div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
-                        html += '<strong>Credenciales guardadas (solo formato, sin valores):</strong><br>';
-                        html += '<small>';
-                        html += 'Client ID: ' + audit.client_id_length + ' car. (' + (audit.client_id_is_hex32 ? 'formato OK' : 'formato INVÁLIDO') + ')<br>';
-                        html += 'Secret: ' + audit.secret_key_length + ' car.' + (audit.secret_has_whitespace ? ' (contiene ESPACIOS)' : '') + (audit.secret_is_ascii === false ? ' (contiene caracteres INVISIBLES)' : '') + '<br>';
-                        html += '</small>';
-                        html += '</div>';
-
-                        if (needsAuth && auditOk) {
-                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">El formato es correcto, pero Yuju rechazó las credenciales: verifica el Client ID y el Secret Key en Yuju &gt; Aplicaciones &gt; Ver credenciales, vuelve a guardar y prueba de nuevo.</div>';
-                        } else if (needsAuth && !auditOk) {
-                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">Revisa el formato marcado arriba, guarda de nuevo la configuración y vuelve a probar la conectividad.</div>';
-                        }
+                    var heading = 'Error de conexión:';
+                    if (state === 'invalid_credentials') {
+                        heading = 'Credenciales guardadas inválidas:';
+                    } else if (state === 'unreachable') {
+                        heading = 'No se pudo contactar con Yuju:';
+                    } else if (state === 'yuju_error') {
+                        heading = 'Yuju devolvió un error interno:';
                     }
+
+                    html += '<strong>' + heading + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    html += renderAudit();
                     
                     // Show debug info for errors
                     if (response.debug_info) {
