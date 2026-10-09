@@ -46,13 +46,8 @@ class YujuLogger
     {
         $log_entry = $this->formatLogEntry($level, $message, $context);
 
-        // Log en archivo
+        // Log solo en archivo (no en base de datos)
         $this->writeToFile($level, $log_entry);
-
-        // Log en base de datos para ciertos niveles
-        if (in_array($level, [self::LOG_LEVEL_ERROR, self::LOG_LEVEL_CRITICAL])) {
-            $this->writeToDatabase($level, $message, $context);
-        }
     }
 
     /**
@@ -129,33 +124,6 @@ class YujuLogger
     }
 
     /**
-     * Escribe el log en la base de datos.
-     */
-    private function writeToDatabase($level, $message, $context)
-    {
-        try {
-            $data = [
-                'log_type' => 'system',
-                'action' => 'log',
-                'entity_id' => 0,
-                'entity_type' => 'system',
-                'status' => ($level === self::LOG_LEVEL_ERROR || $level === self::LOG_LEVEL_CRITICAL) ? 'error' : 'warning',
-                'message' => $message,
-                'request_data' => json_encode($context),
-                'response_data' => null,
-                'execution_time' => 0,
-                'created_at' => date('Y-m-d H:i:s'),
-            ];
-
-            Db::getInstance()->insert('yuju_sync_logs', $data);
-        } catch (Exception $e) {
-            // Si falla el log en BD, al menos escribir en archivo
-            $error_log = '[' . date($this->date_format) . '] ERROR: Failed to write to database: ' . $e->getMessage() . PHP_EOL;
-            file_put_contents($this->log_directory . 'error.log', $error_log, FILE_APPEND | LOCK_EX);
-        }
-    }
-
-    /**
      * Obtiene el nombre del archivo de log según el nivel.
      */
     private function getLogFilename($level)
@@ -214,7 +182,7 @@ class YujuLogger
         }
 
         // Crear subdirectorios
-        $subdirs = ['sync_logs', 'error_logs', 'audit_reports'];
+        $subdirs = ['sync_logs', 'error_logs', 'audit_reports', 'oauth_attempts'];
 
         foreach ($subdirs as $subdir) {
             $subdir_path = $this->log_directory . $subdir;
@@ -254,86 +222,11 @@ class YujuLogger
     }
 
     /**
-     * Obtiene los logs de la base de datos.
-     */
-    public function getLogsFromDatabase($filters = [], $limit = 100, $offset = 0)
-    {
-        $where_conditions = ['1=1'];
-
-        if (isset($filters['log_type'])) {
-            $where_conditions[] = 'log_type = \'' . pSQL($filters['log_type']) . '\'';
-        }
-
-        if (isset($filters['status'])) {
-            $where_conditions[] = 'status = \'' . pSQL($filters['status']) . '\'';
-        }
-
-        if (isset($filters['entity_type'])) {
-            $where_conditions[] = 'entity_type = \'' . pSQL($filters['entity_type']) . '\'';
-        }
-
-        if (isset($filters['date_from'])) {
-            $where_conditions[] = 'start_time >= \'' . pSQL($filters['date_from']) . '\'';
-        }
-
-        if (isset($filters['date_to'])) {
-            $where_conditions[] = 'start_time <= \'' . pSQL($filters['date_to']) . '\'';
-        }
-
-        $where_clause = implode(' AND ', $where_conditions);
-
-        $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_sync_logs`
-                WHERE ' . $where_clause . '
-                ORDER BY `start_time` DESC
-                LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset;
-
-        return Db::getInstance()->executeS($sql);
-    }
-
-    /**
-     * Cuenta los logs en la base de datos.
-     */
-    public function countLogsInDatabase($filters = [])
-    {
-        $where_conditions = ['1=1'];
-
-        if (isset($filters['log_type'])) {
-            $where_conditions[] = 'log_type = \'' . pSQL($filters['log_type']) . '\'';
-        }
-
-        if (isset($filters['status'])) {
-            $where_conditions[] = 'status = \'' . pSQL($filters['status']) . '\'';
-        }
-
-        if (isset($filters['entity_type'])) {
-            $where_conditions[] = 'entity_type = \'' . pSQL($filters['entity_type']) . '\'';
-        }
-
-        if (isset($filters['date_from'])) {
-            $where_conditions[] = 'start_time >= \'' . pSQL($filters['date_from']) . '\'';
-        }
-
-        if (isset($filters['date_to'])) {
-            $where_conditions[] = 'start_time <= \'' . pSQL($filters['date_to']) . '\'';
-        }
-
-        $where_clause = implode(' AND ', $where_conditions);
-
-        $sql = 'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE ' . $where_clause;
-
-        return (int) Db::getInstance()->getValue($sql);
-    }
-
-    /**
-     * Limpia logs antiguos.
+     * Limpia logs antiguos (solo archivos).
      */
     public function cleanOldLogs($days = 30)
     {
         $cutoff_date = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-
-        // Limpiar base de datos
-        $sql = 'DELETE FROM `' . _DB_PREFIX_ . 'yuju_sync_logs` WHERE start_time < "' . pSQL($cutoff_date) . '"';
-        $deleted_db = Db::getInstance()->execute($sql);
 
         // Limpiar archivos
         $deleted_files = 0;
@@ -348,35 +241,36 @@ class YujuLogger
             }
         }
 
+        // Limpiar subdirectorios
+        $subdirs = ['sync_logs', 'error_logs', 'audit_reports', 'oauth_attempts'];
+        foreach ($subdirs as $subdir) {
+            $subdir_files = glob($this->log_directory . $subdir . '/*.log');
+            foreach ($subdir_files as $file) {
+                $file_date = filemtime($file);
+                if ($file_date < strtotime("-{$days} days")) {
+                    unlink($file);
+                    ++$deleted_files;
+                }
+            }
+        }
+
         $this->info('Limpieza de logs completada', [
             'days' => $days,
             'cutoff_date' => $cutoff_date,
-            'deleted_db_records' => $deleted_db,
             'deleted_files' => $deleted_files,
         ]);
 
         return [
-            'deleted_db_records' => $deleted_db,
             'deleted_files' => $deleted_files,
         ];
     }
 
     /**
-     * Obtiene estadísticas de logs.
+     * Obtiene estadísticas de logs (solo archivos).
      */
     public function getLogStats()
     {
         $stats = [];
-
-        // Estadísticas de base de datos
-        $sql = 'SELECT status, COUNT(*) as count FROM `' . _DB_PREFIX_ . 'yuju_sync_logs`
-                WHERE start_time >= CURDATE()
-                GROUP BY status';
-        $db_stats = Db::getInstance()->executeS($sql);
-
-        $stats['database'] = [
-            'today' => array_column($db_stats, 'count', 'status'),
-        ];
 
         // Estadísticas de archivos
         $files = glob($this->log_directory . '*.log');
@@ -391,67 +285,21 @@ class YujuLogger
 
         $stats['files']['total_size_mb'] = round($stats['files']['total_size'] / 1024 / 1024, 2);
 
-        return $stats;
-    }
-
-    /**
-     * Exporta logs a un archivo.
-     */
-    public function exportLogs($filters = [], $format = 'json')
-    {
-        $logs = $this->getLogsFromDatabase($filters, 0); // Sin límite
-
-        $export_filename = 'yuju_logs_export_' . date('Y-m-d_H-i-s');
-
-        switch ($format) {
-            case 'csv':
-                return $this->exportToCsv($logs, $export_filename);
-            case 'json':
-            default:
-                return $this->exportToJson($logs, $export_filename);
-        }
-    }
-
-    /**
-     * Exporta logs a formato CSV.
-     */
-    private function exportToCsv($logs, $filename)
-    {
-        $filepath = $this->log_directory . $filename . '.csv';
-        $file = fopen($filepath, 'w');
-
-        // Headers
-        $headers = ['ID', 'Tipo', 'Acción', 'Estado', 'Mensaje', 'Fecha'];
-        fputcsv($file, $headers);
-
-        // Data
-        foreach ($logs as $log) {
-            $row = [
-                $log['id_log'],
-                $log['log_type'],
-                $log['action'],
-                $log['status'],
-                $log['message'],
-                $log['created_at'],
+        // Estadísticas por subdirectorio
+        $subdirs = ['sync_logs', 'error_logs', 'audit_reports', 'oauth_attempts'];
+        foreach ($subdirs as $subdir) {
+            $subdir_files = glob($this->log_directory . $subdir . '/*.log');
+            $subdir_size = 0;
+            foreach ($subdir_files as $file) {
+                $subdir_size += filesize($file);
+            }
+            $stats['subdirs'][$subdir] = [
+                'files' => count($subdir_files),
+                'size_mb' => round($subdir_size / 1024 / 1024, 2),
             ];
-            fputcsv($file, $row);
         }
 
-        fclose($file);
-
-        return $filepath;
-    }
-
-    /**
-     * Exporta logs a formato JSON.
-     */
-    private function exportToJson($logs, $filename)
-    {
-        $filepath = $this->log_directory . $filename . '.json';
-        $json_data = json_encode($logs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        file_put_contents($filepath, $json_data);
-
-        return $filepath;
+        return $stats;
     }
 
     /**

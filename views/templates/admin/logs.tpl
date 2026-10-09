@@ -219,48 +219,7 @@ document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link)
                 </div>
             {/if}
             
-            <hr style="margin: 30px 0;">
-            
-            {* Logs de base de datos *}
-            <h4><i class="icon-database"></i> Logs en Base de Datos (últimos 50)</h4>
-            
-            {if $db_logs|@count > 0}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Nivel</th>
-                                <th>Mensaje</th>
-                                <th>Contexto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {foreach $db_logs as $log}
-                                <tr class="{if $log.level == 'error'}danger{elseif $log.level == 'warning'}warning{elseif $log.level == 'info'}info{/if}">
-                                    <td>{$log.created_at|escape:'html':'UTF-8'}</td>
-                                    <td>
-                                        <span class="label label-{if $log.level == 'error'}danger{elseif $log.level == 'warning'}warning{elseif $log.level == 'info'}info{/if}">
-                                            {$log.level|upper}
-                                        </span>
-                                    </td>
-                                    <td>{$log.message|escape:'html':'UTF-8'|truncate:100}</td>
-                                    <td>
-                                        {if $log.context}
-                                            <pre style="margin: 5px 0; max-height: 150px; overflow: auto; font-size: 11px;">{$log.context|json_encode|escape:'html':'UTF-8'}</pre>
-                                        {/if}
-                                    </td>
-                                </tr>
-                            {/foreach}
-                        </tbody>
-                    </table>
-                </div>
-            {else}
-                <div class="alert alert-info">
-                    <i class="icon-info-circle"></i>
-                    No hay logs en la base de datos.
-                </div>
-            {/if}
+<hr style="margin: 30px 0;">
         {/if}
     </div>
 </div>

@@ -59,11 +59,9 @@ class AdminYujuLogsController extends ModuleAdminController
     protected function listLogFiles()
     {
         $logs = $this->getLogs();
-        $db_logs = $this->logger->getLogsFromDatabase([], 50);
 
         $this->context->smarty->assign([
             'logs' => $logs,
-            'db_logs' => $db_logs,
             'module_dir' => $this->module->getPathUri(),
             'current_action' => 'list',
             'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
