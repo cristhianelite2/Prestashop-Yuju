@@ -53,6 +53,7 @@ class AdminYujuController extends ModuleAdminController
             'update_status' => $updateStatus,
             'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
             'admin_yuju_token' => Tools::getAdminTokenLite('AdminYuju'),
+            'terms_url' => $this->context->link->getModuleLink('prestashopyuju', 'terms', [], true),
         ]);
 
         $this->setTemplate('dashboard.tpl');

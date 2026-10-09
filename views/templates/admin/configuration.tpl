@@ -270,7 +270,7 @@
                     </div>
                 </div>
             </div>
-            
+
             {* Logging Settings *}
             <div class="panel panel-default">
                 <div class="panel-heading">

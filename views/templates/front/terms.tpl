@@ -16,7 +16,16 @@
     <h2>2. Aceptación de los Términos</h2>
     <p>Al utilizar esta integración, usted acepta estar sujeto a estos términos y condiciones. Si no está de acuerdo con alguna parte de estos términos, no debe utilizar la integración.</p>
 
-    <h2>3. Descripción del Servicio</h2>
+    <h2>3. Monitorización del Módulo</h2>
+    <p>Si activa la monitorización desde la configuración del módulo (sección <em>Monitor de telemetría</em>), se recopila únicamente información sobre el <strong>comportamiento y el consumo de recursos del propio módulo</strong>: peticiones a la API de Yuju, sincronizaciones realizadas, errores y tiempos de ejecución.</p>
+    <ul>
+        <li>Se monitorea exclusivamente el funcionamiento del módulo, no la actividad de la tienda.</li>
+        <li>La información específica — productos, pedidos, precios, datos de clientes, credenciales o cualquier otro dato de su negocio — <strong>no se envía a ningún lugar</strong>.</li>
+        <li>La telemetría (metadatos técnicos del módulo) se envía únicamente al servicio de monitorización que el comerciante configure (yuju.ceballosleon.com) y se usa para revisar el correcto funcionamiento y los recursos que consume el módulo.</li>
+        <li>Puede desconectar la monitorización en cualquier momento dejando vacía la URL del monitor en la configuración.</li>
+    </ul>
+
+    <h2>4. Descripción del Servicio</h2>
     <p>La integración Yuju permite:</p>
     <ul>
         <li>Sincronización bidireccional de productos entre {$shop_name|escape:'html':'UTF-8'} y Yuju</li>
@@ -26,7 +35,7 @@
         <li>Webhooks para actualizaciones en tiempo real</li>
     </ul>
 
-    <h2>4. Responsabilidades del Usuario</h2>
+    <h2>5. Responsabilidades del Usuario</h2>
     <p>El usuario se compromete a:</p>
     <ul>
         <li>Proporcionar información precisa y actualizada</li>
@@ -35,7 +44,7 @@
         <li>Notificar cualquier uso no autorizado de su cuenta</li>
     </ul>
 
-    <h2>5. Privacidad y Protección de Datos</h2>
+    <h2>6. Privacidad y Protección de Datos</h2>
     <p>La integración procesa datos de productos, pedidos y clientes de acuerdo con:</p>
     <ul>
         <li>Las políticas de privacidad de {$shop_name|escape:'html':'UTF-8'}</li>
@@ -43,7 +52,7 @@
         <li>La normativa aplicable de protección de datos (RGPD, LOPD, etc.)</li>
     </ul>
 
-    <h2>6. Limitación de Responsabilidad</h2>
+    <h2>7. Limitación de Responsabilidad</h2>
     <p>La integración se proporciona "tal como está" sin garantías de ningún tipo. {$shop_name|escape:'html':'UTF-8'} no será responsable de:</p>
     <ul>
         <li>Pérdidas de datos durante la sincronización</li>
@@ -52,16 +61,16 @@
         <li>Daños indirectos o consecuenciales</li>
     </ul>
 
-    <h2>7. Modificaciones</h2>
+    <h2>8. Modificaciones</h2>
     <p>Nos reservamos el derecho de modificar estos términos en cualquier momento. Las modificaciones entrarán en vigor inmediatamente después de su publicación en esta página.</p>
 
-    <h2>8. Terminación</h2>
+    <h2>9. Terminación</h2>
     <p>Cualquiera de las partes puede terminar el uso de esta integración en cualquier momento. Al terminar, se detendrán todas las sincronizaciones y se podrán eliminar los datos almacenados.</p>
 
-    <h2>9. Ley Aplicable</h2>
+    <h2>10. Ley Aplicable</h2>
     <p>Estos términos se regirán por las leyes del país donde esté registrado {$shop_name|escape:'html':'UTF-8'}.</p>
 
-    <h2>10. Contacto</h2>
+    <h2>11. Contacto</h2>
     <p>Para cualquier consulta sobre estos términos y condiciones, puede contactarnos en:</p>
     <ul>
         <li><strong>Email:</strong> {$shop_email|escape:'html':'UTF-8'}</li>
