@@ -47,6 +47,16 @@
         .close-btn:hover {
             background: #0056b3;
         }
+        a.close-btn {
+            display: inline-block;
+            text-decoration: none;
+            margin-left: 8px;
+        }
+        .detail {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
@@ -55,7 +65,14 @@
             <div class="icon success">✓</div>
             <div class="message success">
                 <strong>¡Autorización exitosa!</strong><br>
-                La conexión con Yuju se ha establecido correctamente.
+                Token guardado correctamente: la tienda ya puede usarlo contra la API de Yuju.
+            </div>
+            <div class="detail">
+                {if $token_expires}
+                    Expira: {$token_expires|escape:'html':'UTF-8'}
+                {else}
+                    Sin fecha de expiración registrada (Yuju no indica expiración)
+                {/if}
             </div>
         {else}
             <div class="icon error">✗</div>
@@ -64,7 +81,11 @@
                 {$error|escape:'html':'UTF-8'}
             </div>
         {/if}
-        
+        {if $config_url}
+            <a class="close-btn" href="{$config_url|escape:'html':'UTF-8'}">
+                Ir a la configuración del módulo
+            </a>
+        {/if}
         <button class="close-btn" onclick="window.close()">
             Cerrar ventana
         </button>

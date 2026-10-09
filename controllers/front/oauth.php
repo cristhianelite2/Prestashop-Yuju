@@ -56,17 +56,35 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
             // Yuju redirige con `code` (y opcionalmente `state`); lo cambia por el token con client_id + secret_key.
             // exchangeCodeForToken() lanza una excepción si falla.
             $oauth->exchangeCodeForToken($code, $state);
-            $this->handleAuthSuccess();
+
+            // Verificación del guardado: el token tiene que quedar legible en la
+            // base de datos, no solo devuelto por Yuju. Si no se pudo persistir,
+            // se reporta como error en lugar de un falso "éxito".
+            $logger = new YujuLogger();
+
+            if (empty($oauth->getValidAccessToken())) {
+                $logger->error('OAuth: Yuju devolvió el token pero no quedó guardado en la base de datos');
+
+                throw new Exception('Yuju devolvió el token, pero no se pudo guardar en la base de datos '
+                    . '(tabla `yuju_oauth_tokens`). Comprueba los permisos de la tabla y vuelve a conectar.');
+            }
+
+            $logger->info('OAuth: token intercambiado y guardado correctamente');
+
+            $this->handleAuthSuccess($oauth->getOAuthStatus());
         } catch (Exception $e) {
             $this->handleAuthError($e->getMessage());
         }
     }
 
-    private function handleAuthSuccess()
+    private function handleAuthSuccess(array $status = [])
     {
         $this->context->smarty->assign([
             'success' => true,
-            'message' => 'Autorización exitosa. Puedes cerrar esta ventana.',
+            'message' => 'Autorización exitosa. El token quedó guardado y ya puede usarlo la tienda.',
+            'token_saved' => true,
+            'token_expires' => isset($status['token_expires']) ? $status['token_expires'] : null,
+            'config_url' => $this->getModuleConfigUrl(),
         ]);
 
         $this->setTemplate('module:prestashopyuju/views/templates/front/oauth_callback.tpl');
@@ -77,8 +95,24 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
         $this->context->smarty->assign([
             'success' => false,
             'error' => $error_message,
+            'token_saved' => false,
+            'token_expires' => null,
+            'config_url' => $this->getModuleConfigUrl(),
         ]);
 
         $this->setTemplate('module:prestashopyuju/views/templates/front/oauth_callback.tpl');
+    }
+
+    /**
+     * URL de la configuración del módulo en el back office (para volver desde
+     * la ventana de autorización y probar la conectividad).
+     */
+    private function getModuleConfigUrl()
+    {
+        try {
+            return (string) $this->context->link->getAdminLink('AdminYujuConfiguration');
+        } catch (Exception $e) {
+            return '';
+        }
     }
 }
