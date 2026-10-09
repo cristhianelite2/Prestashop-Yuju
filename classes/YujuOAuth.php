@@ -543,6 +543,98 @@ class YujuOAuth
     }
 
     /**
+     * Diagnóstico de la lectura del token (no escribe ni consume el `code`).
+     *
+     * Sirve para ver por qué `getStoredTokenData()` no encuentra una fila que
+     * sí existe: distingue "tabla no visible", "SELECT sin filas", "SELECT con
+     * error de MySQL" y "fila leída pero sin `access_token`".
+     *
+     * No devuelve secretos: solo longitudes, identificadores de fila y
+     * mensajes de error con el prefijo de base de datos enmascarado.
+     *
+     * @return array<string, mixed>
+     */
+    public function diagnoseTokenStorage()
+    {
+        $table = _DB_PREFIX_ . 'yuju_oauth_tokens';
+
+        $diag = [
+            'table' => 'PREFIX_yuju_oauth_tokens',
+            'client_id_length' => strlen((string) $this->client_id),
+            'client_secret_length' => strlen((string) $this->client_secret),
+        ];
+
+        // 1) ¿La tabla es visible para el usuario de la base de datos?
+        try {
+            $rows = Db::getInstance()->executeS("SHOW TABLES LIKE '" . pSQL($table) . "'");
+            $diag['show_tables_rows'] = is_array($rows) ? count($rows) : 0;
+        } catch (Exception $e) {
+            $diag['show_tables_error'] = $this->maskDiagnosticText($e->getMessage());
+        }
+
+        // 2) ¿Cuántas filas hay? (lectura directa, sin ORDER BY)
+        try {
+            $count = Db::getInstance()->getValue('SELECT COUNT(*) FROM `' . bqSQL($table) . '`');
+            $diag['row_count'] = $count === false || $count === null ? null : (int) $count;
+        } catch (Exception $e) {
+            $diag['row_count_error'] = $this->maskDiagnosticText($e->getMessage());
+        }
+
+        // 3) ¿Devuelve fila el mismo SELECT que usa el módulo?
+        try {
+            $row = Db::getInstance()->getRow('SELECT * FROM `' . bqSQL($table) . '` ORDER BY `id` DESC LIMIT 1');
+
+            if (is_array($row) && $row) {
+                $diag['select_has_row'] = true;
+                $diag['last_id'] = isset($row['id']) ? (int) $row['id'] : null;
+                $diag['columns'] = implode(',', array_keys($row));
+                $diag['access_token_present'] = array_key_exists('access_token', $row);
+                $diag['access_token_length'] = array_key_exists('access_token', $row)
+                    ? strlen(trim((string) $row['access_token']))
+                    : -1;
+                $diag['token_expires'] = isset($row['token_expires']) ? (string) $row['token_expires'] : null;
+                $diag['updated_at'] = isset($row['updated_at']) ? (string) $row['updated_at'] : null;
+            } else {
+                $diag['select_has_row'] = false;
+            }
+        } catch (Exception $e) {
+            $diag['select_error'] = $this->maskDiagnosticText($e->getMessage());
+        }
+
+        // 4) ¿Qué devuelve justo lo que consulta el módulo?
+        try {
+            $token = $this->getValidAccessToken();
+            $diag['get_valid_access_token'] = $token === null ? null : strlen(trim((string) $token));
+        } catch (Exception $e) {
+            $diag['get_valid_access_token_error'] = $this->maskDiagnosticText($e->getMessage());
+        }
+
+        return $diag;
+    }
+
+    /**
+     * Enmascara prefijo de base de datos y credenciales en un mensaje de error.
+     */
+    private function maskDiagnosticText($text)
+    {
+        $text = (string) $text;
+
+        if (defined('_DB_PREFIX_') && _DB_PREFIX_ !== '') {
+            $text = str_replace(_DB_PREFIX_, 'PREFIX_', $text);
+        }
+
+        if (!empty($this->client_secret)) {
+            $text = str_replace($this->client_secret, '***secret***', $text);
+        }
+
+        if (!empty($this->client_id)) {
+            $text = str_replace($this->client_id, '***client_id***', $text);
+        }
+
+        return $text;
+    }
+
+    /**
      * Obtiene la URI de redirección.
      */
     public function getRedirectUri()

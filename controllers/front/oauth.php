@@ -26,6 +26,16 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
 {
     public function initContent()
     {
+        // Diagnóstico de la lectura del token: no consume `code`, no escribe
+        // nada y enmascara credenciales. Uso: /shop/yuju/oauth.php?diag=1
+        if (Tools::getValue('diag')) {
+            header('Content-Type: application/json; charset=utf-8');
+
+            $diagnostics = (new YujuOAuth())->diagnoseTokenStorage();
+            echo json_encode($diagnostics, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
         parent::initContent();
 
         try {
@@ -63,10 +73,12 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
             $logger = new YujuLogger();
 
             if (empty($oauth->getValidAccessToken())) {
-                $logger->error('OAuth: Yuju devolvió el token pero no quedó guardado en la base de datos');
+                $diagnostics = $oauth->diagnoseTokenStorage();
 
-                throw new Exception('Yuju devolvió el token, pero no se pudo guardar en la base de datos '
-                    . '(tabla `yuju_oauth_tokens`). Comprueba los permisos de la tabla y vuelve a conectar.');
+                $logger->error('OAuth: Yuju devolvió el token pero no quedó legible en la base de datos', $diagnostics);
+
+                throw new Exception('Yuju devolvió el token, pero no se pudo leer de la base de datos '
+                    . '(tabla `yuju_oauth_tokens`). Detalle: ' . json_encode($diagnostics, JSON_UNESCAPED_SLASHES));
             }
 
             $logger->info('OAuth: token intercambiado y guardado correctamente');
