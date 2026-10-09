@@ -83,6 +83,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $auth_url = $oauth->getRedirectUri();
         $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
         $terms_url = YujuConfig::getModuleFileUrl('terms.php');
+        $oauth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
@@ -100,6 +101,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'auth_url' => $auth_url,
                 'webhook_url' => $webhook_url,
             ],
+            'oauth_url' => $oauth_url,
         ]);
 
         // Verificar si es una petición AJAX
@@ -330,9 +332,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
-            Configuration::updateValue('YUJU_API_CLIENT_ID', $client_id);
-            Configuration::updateValue('YUJU_API_CLIENT_SECRET', $client_secret);
-            Configuration::updateValue('YUJU_API_ENVIRONMENT', $environment);
+            Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
+            Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
+            Configuration::updateValue('YUJU_ENVIRONMENT', $environment);
 
             $oauth = new YujuOAuth();
             $oauth->updateCredentials($client_id, $client_secret);
@@ -410,6 +412,15 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
             return;
         }
+
+        // Validar state para CSRF protection
+        $saved_state = Context::getContext()->cookie->yuju_oauth_state;
+        if ($saved_state && $state !== $saved_state) {
+            $this->errors[] = $this->trans('Estado OAuth inválido (posible ataque CSRF)', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+        // Limpiar state usado
+        Context::getContext()->cookie->yuju_oauth_state = '';
 
         try {
             $oauth->exchangeCodeForToken($code, $state);
@@ -532,9 +543,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $helper->submit_action = 'submitOAuthConfig';
 
         $helper->fields_value = [
-            'client_id' => Configuration::get('YUJU_API_CLIENT_ID'),
-            'client_secret' => Configuration::get('YUJU_API_CLIENT_SECRET'),
-            'environment' => Configuration::get('YUJU_API_ENVIRONMENT'),
+            'client_id' => Configuration::get('YUJU_CLIENT_ID'),
+            'client_secret' => Configuration::get('YUJU_CLIENT_SECRET'),
+            'environment' => Configuration::get('YUJU_ENVIRONMENT'),
         ];
 
         return $helper->generateForm([$fields_form]);

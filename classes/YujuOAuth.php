@@ -44,6 +44,39 @@ class YujuOAuth
     }
 
     /**
+     * Obtiene la URL de autorización de OAuth para iniciar el flujo de autorización.
+     */
+    public function getAuthorizationUrl($state = null)
+    {
+        if (!$this->client_id) {
+            throw new Exception('Client ID no configurado');
+        }
+
+        $redirect_uri = $this->getRedirectUri();
+        $scope = Configuration::get('YUJU_SCOPE', 'read write');
+
+        $params = [
+            'client_id' => $this->client_id,
+            'redirect_uri' => $redirect_uri,
+            'response_type' => 'code',
+            'scope' => $scope,
+        ];
+
+        if ($state) {
+            $params['state'] = $state;
+        } else {
+            // Generar state aleatorio para seguridad CSRF
+            $state = bin2hex(random_bytes(16));
+            $params['state'] = $state;
+        }
+
+        // Guardar state en sesión para validación en callback
+        Context::getContext()->cookie->yuju_oauth_state = $state;
+
+        return $this->auth_url . '/oauth/authorize?' . http_build_query($params);
+    }
+
+    /**
      * Intercambia el código de autorización por un access token usando la API de Yuju.
      */
     public function exchangeCodeForToken($code, $state = null)

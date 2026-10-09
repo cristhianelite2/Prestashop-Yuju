@@ -30,6 +30,7 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
 
         try {
             $code = Tools::getValue('code');
+            $state = Tools::getValue('state');
             $error = Tools::getValue('error');
 
             if ($error) {
@@ -41,11 +42,20 @@ class PrestashopyujuOAuthModuleFrontController extends ModuleFrontController
                 throw new Exception('Código de autorización no recibido');
             }
 
+            // Validar state si está presente (CSRF protection)
+            $saved_state = Context::getContext()->cookie->yuju_oauth_state;
+            if ($saved_state && $state && $state !== $saved_state) {
+                throw new Exception('Estado OAuth inválido (posible ataque CSRF)');
+            }
+            if ($saved_state) {
+                Context::getContext()->cookie->yuju_oauth_state = '';
+            }
+
             $oauth = new YujuOAuth();
 
-            // Yuju redirige solo con `code` (sin `state`); lo cambia por el token con client_id + secret_key.
+            // Yuju redirige con `code` (y opcionalmente `state`); lo cambia por el token con client_id + secret_key.
             // exchangeCodeForToken() lanza una excepción si falla.
-            $oauth->exchangeCodeForToken($code);
+            $oauth->exchangeCodeForToken($code, $state);
             $this->handleAuthSuccess();
         } catch (Exception $e) {
             $this->handleAuthError($e->getMessage());

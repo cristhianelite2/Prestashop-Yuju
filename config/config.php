@@ -77,7 +77,7 @@ class YujuConfig
     {
         return [
             // API Settings
-            'YUJU_API_ENVIRONMENT' => 'sandbox',
+            'YUJU_ENVIRONMENT' => 'sandbox',
             'YUJU_API_TIMEOUT' => self::DEFAULT_TIMEOUT,
             'YUJU_API_CONNECT_TIMEOUT' => self::DEFAULT_CONNECT_TIMEOUT,
             'YUJU_API_RETRIES' => self::DEFAULT_RETRIES,
@@ -160,7 +160,7 @@ class YujuConfig
      */
     public static function getApiBaseUrl()
     {
-        $environment = self::get('YUJU_API_ENVIRONMENT', 'sandbox');
+        $environment = self::get('YUJU_ENVIRONMENT', 'sandbox');
 
         return $environment === 'production' ? YUJU_PRODUCTION_URL : YUJU_SANDBOX_URL;
     }
