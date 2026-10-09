@@ -190,6 +190,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     'connection' => $connection_test,
                     'stores' => $stores_list,
                     'stores_count' => count($stores_list),
+                    // Auditoría de credenciales guardadas (solo longitudes, sin valores):
+                    // permite diagnosticar sin gastar un code de un solo uso.
+                    'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
                 ],
             ];
         } catch (Exception $e) {

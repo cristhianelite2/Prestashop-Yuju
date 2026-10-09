@@ -201,10 +201,11 @@ class YujuOAuth
                 . 'ni caracteres de más. El code no se ha gastado.';
         }
 
-        if (preg_match('/[\x00-\x1F\x7F]/', $secret)) {
-            return 'El Secret Key guardado contiene caracteres de control invisibles (longitud actual: ' . strlen($secret) . '). '
-                . 'Bórralo por completo en la configuración del módulo y pégalo de nuevo desde Yuju. '
-                . 'El code no se ha gastado.';
+        if (preg_match('/[^\x20-\x7E]/', $secret)) {
+            return 'El Secret Key guardado contiene caracteres invisibles o no ASCII (se guardaron ' . strlen($secret) . ' car., '
+                . 'pero ocupan más al enviarse: típico de copiar-pegar desde una web). Bórralo por completo en la '
+                . 'configuración del módulo, cópialo de nuevo desde Yuju pasándolo primero por un editor de texto '
+                . 'plano (Bloc de notas) y guárdalo. El code no se ha gastado.';
         }
 
         return null;
@@ -225,6 +226,7 @@ class YujuOAuth
             'client_id_is_hex32' => (bool) preg_match('/^[0-9a-f]{32}$/', $client_id),
             'secret_key_length' => strlen($secret),
             'secret_has_whitespace' => (bool) preg_match('/\s/', $secret),
+            'secret_is_ascii' => ! (bool) preg_match('/[^\x20-\x7E]/', $secret),
         ];
     }
 
