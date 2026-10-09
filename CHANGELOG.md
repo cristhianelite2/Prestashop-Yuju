@@ -10,6 +10,9 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Cambiado
 - La vinculación con el monitor de telemetría es ahora **silenciosa y automática**: se elimina la sección *Monitor de telemetría* (URL, token y botón) de la configuración. El handshake se ejecuta en segundo plano desde el panel del módulo, como máximo una vez cada 6 h, contra la URL guardada o `https://yuju.ceballosleon.com`, y sus fallos no se muestran ni interrumpen nada.
 
+### Eliminado
+- Sección *Historial de Intentos OAuth (Debug)* de la configuración (acordeón con detalle de request/response/cURL verbose), su JavaScript inline y sus estilos. Ese historial se consulta en **Yuju Logs**, donde los intentos aparecen agrupados en un único bloque con el número de falidos, el último intento y el historial paginado. Se retiran los endpoints AJAX `GetOAuthAttempts`, `GetOAuthAttemptDetail` y `CleanOAuthAttempts` que solo alimentaban ese panel.
+
 ## [1.0.7] - 2026-10-08
 
 ### Añadido
