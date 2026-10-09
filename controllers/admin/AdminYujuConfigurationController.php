@@ -160,23 +160,36 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         try {
             $api_client = new YujuApiClient();
-            
-            // Test basic connection first
+
+            // Test basic connection first (usa el token guardado, no las
+            // credenciales en vivo: solo valida que el token siga vigente).
             $connection_test = $api_client->testConnection();
-            
-            if (!$connection_test) {
-                throw new Exception('No se pudo establecer conexión con la API de Yuju');
+
+            if (empty($connection_test['success'])) {
+                $response = [
+                    'success' => false,
+                    'message' => isset($connection_test['message']) && $connection_test['message'] !== ''
+                        ? $connection_test['message']
+                        : 'No se pudo establecer conexión con la API de Yuju',
+                    'data' => [
+                        'connection' => $connection_test,
+                        'stores' => [],
+                    ],
+                ];
+                exit(json_encode($response));
             }
-            
+
             // Get stores from API
             $stores = $api_client->getStores();
-            
+            $stores_list = $this->normalizeStoresList($stores);
+
             $response = [
                 'success' => true,
                 'message' => $this->trans('Connectivity test successful', array(), 'Modules.Prestashopyuju.Admin'),
                 'data' => [
                     'connection' => $connection_test,
-                    'stores' => $stores
+                    'stores' => $stores_list,
+                    'stores_count' => count($stores_list),
                 ],
             ];
         } catch (Exception $e) {
@@ -187,6 +200,45 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         exit(json_encode($response));
+    }
+
+    /**
+     * Normaliza la respuesta del endpoint `account` a una lista de tiendas.
+     *
+     * El endpoint puede devolver una lista directa, un objeto con la lista
+     * dentro (`stores`/`data`) o una sola tienda como objeto.
+     *
+     * @param mixed $stores
+     *
+     * @return array
+     */
+    private function normalizeStoresList($stores)
+    {
+        if (empty($stores) || !is_array($stores)) {
+            return [];
+        }
+
+        // Payload de error (p. ej. si `account` falló): no hay tiendas.
+        if (array_key_exists('success', $stores) && empty($stores['success'])) {
+            return [];
+        }
+
+        if (isset($stores['stores']) && is_array($stores['stores'])) {
+            return array_values($stores['stores']);
+        }
+
+        if (isset($stores['data']) && is_array($stores['data'])) {
+            return array_values($stores['data']);
+        }
+
+        // Lista secuencial: ya es una lista de tiendas.
+        $keys = array_keys($stores);
+        if ($keys === range(0, count($stores) - 1)) {
+            return array_values($stores);
+        }
+
+        // Objeto único (una sola tienda): envolverlo para mostrarlo.
+        return [$stores];
     }
 
     /**

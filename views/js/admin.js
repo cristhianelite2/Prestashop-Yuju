@@ -285,10 +285,17 @@ var YujuAdmin = {
                         html += '</div>';
                     }
                     
-                    if (response.data && response.data.stores && response.data.stores.length > 0) {
+                    var stores = (response.data && response.data.stores) || [];
+                    if (!Array.isArray(stores)) {
+                        stores = [stores];
+                    }
+                    if (stores.length > 0) {
                         html += '<div style="margin-top: 10px;"><strong>Tiendas disponibles:</strong><ul>';
-                        response.data.stores.forEach(function(store) {
-                            html += '<li>' + (store.name || 'Sin nombre') + ' (ID: ' + (store.id || 'N/A') + ')</li>';
+                        stores.forEach(function(store) {
+                            store = store || {};
+                            var name = store.name || store.title || store.shop || store.shop_name || 'Sin nombre';
+                            var id = store.id || store.store_id || store.shop_id || 'N/A';
+                            html += '<li>' + name + ' (ID: ' + id + ')</li>';
                         });
                         html += '</ul></div>';
                     } else {

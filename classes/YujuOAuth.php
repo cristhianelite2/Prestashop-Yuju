@@ -173,7 +173,11 @@ class YujuOAuth
 
         if (stripos($message, 'invalid credential') !== false) {
             $message .= '. Verifica que el Client ID tenga 32 caracteres hexadecimales '
-                . '(sin espacios, comillas ni mayúsculas) y que el Secret Key no contenga espacios.';
+                . '(sin espacios, comillas ni mayúsculas) y que el Secret Key sea exactamente el de '
+                . 'Yuju > Aplicaciones > Ver credenciales (sin espacios ni caracteres de más). '
+                . 'Yuju devuelve este mismo error cuando el code ya se usó o caducó: el code es de un '
+                . 'solo uso y vence en minutos, así que genera uno nuevo pulsando "Conectar" en Yuju '
+                . 'y ábrelo una sola vez sin recargarlo.';
         } elseif (stripos($message, 'expired') !== false) {
             $message .= '. El code caduca: pulsa "Conectar" en Yuju y usa el enlace resultante sin recargarlo.';
         }
@@ -312,7 +316,12 @@ class YujuOAuth
         if ($curl_error) {
             $result['success'] = false;
             $result['message'] = 'cURL Error: ' . $curl_error;
-            $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+            $this->logOAuthAttempt('error', array_merge([
+                'attempt_id' => $attempt_id,
+                'url' => $url,
+                'request_data' => $data,
+                'client_id' => isset($data['client_id']) ? $data['client_id'] : '',
+            ], $result));
             return $result;
         }
 
@@ -324,19 +333,34 @@ class YujuOAuth
                 $result['data'] = [
                     'access_token' => $response_data['token'],
                 ];
-                $this->logOAuthAttempt('success', array_merge(['attempt_id' => $attempt_id], $result));
+                $this->logOAuthAttempt('success', array_merge([
+                    'attempt_id' => $attempt_id,
+                    'url' => $url,
+                    'request_data' => $data,
+                    'client_id' => isset($data['client_id']) ? $data['client_id'] : '',
+                ], $result));
                 return $result;
             } else {
                 $result['success'] = false;
                 $result['message'] = 'Token no encontrado en la respuesta';
-                $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+                $this->logOAuthAttempt('error', array_merge([
+                    'attempt_id' => $attempt_id,
+                    'url' => $url,
+                    'request_data' => $data,
+                    'client_id' => isset($data['client_id']) ? $data['client_id'] : '',
+                ], $result));
                 return $result;
             }
         } else {
             $error_message = isset($response_data['message']) ? $response_data['message'] : 'Error desconocido';
             $result['success'] = false;
             $result['message'] = $error_message;
-            $this->logOAuthAttempt('error', array_merge(['attempt_id' => $attempt_id], $result));
+            $this->logOAuthAttempt('error', array_merge([
+                'attempt_id' => $attempt_id,
+                'url' => $url,
+                'request_data' => $data,
+                'client_id' => isset($data['client_id']) ? $data['client_id'] : '',
+            ], $result));
             return $result;
         }
     }
@@ -649,6 +673,21 @@ class YujuOAuth
                     $record['request_data'] = !empty($record['request_data'])
                         ? $record['request_data']
                         : ($previous['request_data'] ?? []);
+                    // Los registros de resultado a veces llegan sin el contexto del
+                    // request: conservar url, client_id y diagnóstico previos.
+                    if (empty($record['url']) && !empty($previous['url'])) {
+                        $record['url'] = $previous['url'];
+                    }
+                    if (empty($record['client_id']) && !empty($previous['client_id'])) {
+                        $record['client_id'] = $previous['client_id'];
+                    }
+                    if (isset($previous['credentials']) && is_array($previous['credentials'])) {
+                        $prev_client_len = (int) ($previous['credentials']['client_id_length'] ?? 0);
+                        $new_client_len = (int) ($record['credentials']['client_id_length'] ?? 0);
+                        if ($new_client_len === 0 && $prev_client_len > 0) {
+                            $record['credentials'] = $previous['credentials'];
+                        }
+                    }
                 }
             }
 
