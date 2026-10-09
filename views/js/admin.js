@@ -304,7 +304,27 @@ var YujuAdmin = {
                     
                     $result.removeClass().addClass('alert alert-success').html(html).show();
                 } else {
-                    html += '<strong>Error de conexión:</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    var needsAuth = response.data && response.data.needs_auth;
+                    var audit = response.data && response.data.credential_audit;
+
+                    html += '<strong>' + (needsAuth ? 'Falta autorización:' : 'Error de conexión:') + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
+
+                    if (audit) {
+                        var auditOk = audit.client_id_is_hex32 && !audit.secret_has_whitespace && audit.secret_is_ascii !== false;
+                        html += '<div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
+                        html += '<strong>Credenciales guardadas (solo formato, sin valores):</strong><br>';
+                        html += '<small>';
+                        html += 'Client ID: ' + audit.client_id_length + ' car. (' + (audit.client_id_is_hex32 ? 'formato OK' : 'formato INVÁLIDO') + ')<br>';
+                        html += 'Secret: ' + audit.secret_key_length + ' car.' + (audit.secret_has_whitespace ? ' (contiene ESPACIOS)' : '') + (audit.secret_is_ascii === false ? ' (contiene caracteres INVISIBLES)' : '') + '<br>';
+                        html += '</small>';
+                        html += '</div>';
+
+                        if (needsAuth && auditOk) {
+                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">El formato es correcto: autoriza la app pulsando "Conectar" en Yuju y usa el code resultante una sola vez, sin recargarlo.</div>';
+                        } else if (needsAuth && !auditOk) {
+                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">Revisa el formato marcado arriba, guarda de nuevo y luego autoriza la app en Yuju.</div>';
+                        }
+                    }
                     
                     // Show debug info for errors
                     if (response.debug_info) {
@@ -325,7 +345,7 @@ var YujuAdmin = {
                         html += '</div>';
                     }
                     
-                    $result.removeClass().addClass('alert alert-danger').html(html).show();
+                    $result.removeClass().addClass('alert ' + (needsAuth ? 'alert-warning' : 'alert-danger')).html(html).show();
                 }
             },
             error: function(xhr, status, error) {

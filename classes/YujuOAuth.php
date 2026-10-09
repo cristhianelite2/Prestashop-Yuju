@@ -657,19 +657,43 @@ class YujuOAuth
 
     /**
      * Actualiza las credenciales OAuth.
+     *
+     * Solo elimina el token guardado cuando las credenciales realmente
+     * cambiaron: re-guardar los mismos valores conserva la autorización.
+     *
+     * @return bool true si las credenciales cambiaron (token eliminado)
      */
     public function updateCredentials($client_id, $client_secret)
     {
+        $changed = $this->haveCredentialsChanged($client_id, $client_secret);
+
         $this->client_id = $this->normalizeClientId($client_id);
         $this->client_secret = trim((string) $client_secret);
 
         Configuration::updateValue('YUJU_CLIENT_ID', $this->client_id);
         Configuration::updateValue('YUJU_CLIENT_SECRET', $this->client_secret);
 
-        // Si las credenciales cambian, limpiar tokens existentes
-        $this->clearStoredTokenData();
+        if ($changed) {
+            // Las credenciales cambiaron: el token guardado pertenece a las
+            // anteriores, así que se limpia para forzar una re-autorización.
+            $this->clearStoredTokenData();
+            $this->logger->log('info', 'Credenciales OAuth actualizadas (token anterior eliminado: re-autoriza la app)');
+        } else {
+            $this->logger->log('info', 'Credenciales OAuth re-guardadas sin cambios (token conservado)');
+        }
 
-        $this->logger->log('info', 'Credenciales OAuth actualizadas');
+        return $changed;
+    }
+
+    /**
+     * Indica si unas credenciales difieren de las guardadas (normalizadas).
+     *
+     * @return bool
+     */
+    public function haveCredentialsChanged($client_id, $client_secret)
+    {
+        return $this->normalizeClientId($this->client_id) !== $this->normalizeClientId($client_id)
+            || $this->client_secret !== trim((string) $client_secret);
     }
 
     /**

@@ -166,6 +166,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $connection_test = $api_client->testConnection();
 
             if (empty($connection_test['success'])) {
+                $oauth = new YujuOAuth();
                 $response = [
                     'success' => false,
                     'message' => isset($connection_test['message']) && $connection_test['message'] !== ''
@@ -174,6 +175,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     'data' => [
                         'connection' => $connection_test,
                         'stores' => [],
+                        // Auditoría de credenciales guardadas (solo longitudes):
+                        // permite diagnosticar el formato sin gastar un code.
+                        'credential_audit' => $oauth->getCredentialAudit(),
+                        'needs_auth' => !$oauth->hasValidToken(),
                     ],
                 ];
                 exit(json_encode($response));
@@ -193,6 +198,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     // Auditoría de credenciales guardadas (solo longitudes, sin valores):
                     // permite diagnosticar sin gastar un code de un solo uso.
                     'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
+                    'needs_auth' => false,
                 ],
             ];
         } catch (Exception $e) {
@@ -394,14 +400,17 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
-            Configuration::updateValue('YUJU_CLIENT_ID', strtolower($client_id));
-            Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
+            $oauth = new YujuOAuth();
+            // Guarda client/secret y solo elimina el token si cambiaron
+            // (re-guardar los mismos valores conserva la autorización).
+            $credentials_changed = $oauth->updateCredentials($client_id, $client_secret);
             Configuration::updateValue('YUJU_ENVIRONMENT', $environment);
 
-            $oauth = new YujuOAuth();
-            $oauth->updateCredentials($client_id, $client_secret);
-
             $this->confirmations[] = $this->trans('Configuración OAuth guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
+
+            if ($credentials_changed) {
+                $this->confirmations[] = $this->trans('Las credenciales cambiaron: autoriza la aplicación de nuevo con un code fresco.', array(), 'Modules.Prestashopyuju.Admin');
+            }
 
             $logger = new YujuLogger();
             $logger->info('Configuración OAuth actualizada', [
@@ -801,6 +810,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         try {
+            $oauth = new YujuOAuth();
+            // Guarda client/secret y solo elimina el token guardado si las
+            // credenciales realmente cambiaron (re-guardar lo mismo conserva
+            // la autorización existente).
+            $credentials_changed = $oauth->updateCredentials($configs['YUJU_CLIENT_ID'], $configs['YUJU_CLIENT_SECRET']);
+
             foreach ($configs as $key => $value) {
                 Configuration::updateValue($key, $value);
             }
@@ -813,6 +828,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
             }
 
             $this->confirmations[] = $this->trans('Configuración guardada correctamente', array(), 'Modules.Prestashopyuju.Admin');
+
+            if ($credentials_changed) {
+                $this->confirmations[] = $this->trans('Las credenciales cambiaron: el token anterior se eliminó, autoriza la aplicación de nuevo con un code fresco.', array(), 'Modules.Prestashopyuju.Admin');
+            }
 
             $logger = new YujuLogger();
             $logger->info('Configuración principal actualizada', [
