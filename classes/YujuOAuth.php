@@ -144,6 +144,17 @@ class YujuOAuth
             throw new Exception('Credenciales OAuth no configuradas (Client ID / Secret)');
         }
 
+        // Validación previa: el code es de un solo uso, así que no se envía
+        // la petición si las credenciales tienen un formato que Yuju va a
+        // rechazar. De este modo el code sigue vigente para reintentarlo.
+        $credential_error = $this->validateCredentialsForTokenRequest();
+
+        if ($credential_error !== null) {
+            $this->logger->error('Credenciales OAuth con formato inválido (petición no enviada)', $this->getCredentialAudit());
+
+            throw new Exception($credential_error);
+        }
+
         $data = [
             'client_id' => $this->client_id,
             'secret_key' => $this->client_secret,
@@ -162,6 +173,59 @@ class YujuOAuth
 
             throw new Exception('Error al obtener token: ' . $this->buildTokenErrorMessage($response));
         }
+    }
+
+    /**
+     * Valida el formato de las credenciales antes de pedir el token.
+     *
+     * Devuelve null si el formato es aceptable para Yuju, o el mensaje de
+     * error (sin exponer valores) si la petición se debe abortar sin gastar
+     * el code de un solo uso.
+     *
+     * @return string|null
+     */
+    private function validateCredentialsForTokenRequest()
+    {
+        $client_id = (string) $this->client_id;
+        $secret = (string) $this->client_secret;
+
+        if (!preg_match('/^[0-9a-f]{32}$/', $client_id)) {
+            return 'El Client ID guardado no tiene el formato esperado (32 caracteres hexadecimales en minúsculas; '
+                . 'longitud actual: ' . strlen($client_id) . '). Re-guárdalo desde la configuración del módulo '
+                . 'copiándolo exactamente de Yuju > Aplicaciones > Ver credenciales. El code no se ha gastado.';
+        }
+
+        if (preg_match('/\s/', $secret)) {
+            return 'El Secret Key guardado contiene espacios o saltos de línea (longitud actual: ' . strlen($secret) . '). '
+                . 'Re-guárdalo copiándolo exactamente de Yuju > Aplicaciones > Ver credenciales, sin espacios '
+                . 'ni caracteres de más. El code no se ha gastado.';
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F]/', $secret)) {
+            return 'El Secret Key guardado contiene caracteres de control invisibles (longitud actual: ' . strlen($secret) . '). '
+                . 'Bórralo por completo en la configuración del módulo y pégalo de nuevo desde Yuju. '
+                . 'El code no se ha gastado.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Auditoría de credenciales sin exponer valores (solo longitudes y formato).
+     *
+     * @return array
+     */
+    public function getCredentialAudit()
+    {
+        $client_id = (string) $this->client_id;
+        $secret = (string) $this->client_secret;
+
+        return [
+            'client_id_length' => strlen($client_id),
+            'client_id_is_hex32' => (bool) preg_match('/^[0-9a-f]{32}$/', $client_id),
+            'secret_key_length' => strlen($secret),
+            'secret_has_whitespace' => (bool) preg_match('/\s/', $secret),
+        ];
     }
 
     /**
