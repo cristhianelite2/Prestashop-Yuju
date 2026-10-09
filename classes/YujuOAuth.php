@@ -532,9 +532,21 @@ class YujuOAuth
                 return null;
             }
             
+            // PrestaShop añade "LIMIT 1" por su cuenta cuando se usa
+            // Db::getRow() (docblock del núcleo: "the select query (without
+            // LIMIT 1)"). Llevarlo ya escrito producía `... LIMIT 1 LIMIT 1`,
+            // error de sintaxis SQL y, en consecuencia, "sin fila": el token
+            // estaba guardado pero nunca se leía. Se usa executeS() con el
+            // límite explícito para no depender de esa variante del núcleo.
             $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_oauth_tokens` ORDER BY `id` DESC LIMIT 1';
-            
-            return Db::getInstance()->getRow($sql);
+
+            $rows = Db::getInstance()->executeS($sql);
+
+            if (is_array($rows) && isset($rows[0])) {
+                return $rows[0];
+            }
+
+            return null;
         } catch (Exception $e) {
             // Log del error y retornar null
             PrestaShopLogger::addLog('Error in getStoredTokenData: ' . $e->getMessage(), 3);
@@ -582,7 +594,9 @@ class YujuOAuth
 
         // 3) ¿Devuelve fila el mismo SELECT que usa el módulo?
         try {
-            $row = Db::getInstance()->getRow('SELECT * FROM `' . bqSQL($table) . '` ORDER BY `id` DESC LIMIT 1');
+            // executeS + LIMIT explícito: getRow() añadiría otro "LIMIT 1"
+            $rows = Db::getInstance()->executeS('SELECT * FROM `' . bqSQL($table) . '` ORDER BY `id` DESC LIMIT 1');
+            $row = is_array($rows) && isset($rows[0]) ? $rows[0] : null;
 
             if (is_array($row) && $row) {
                 $diag['select_has_row'] = true;
