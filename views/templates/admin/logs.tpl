@@ -301,7 +301,6 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
                             <tr>
                                 <th>Archivo</th>
                                 <th>Tipo</th>
-                                <th>Ubicación</th>
                                 <th>Tamaño</th>
                                 <th>Modificado</th>
                                 <th>Acciones</th>
@@ -321,7 +320,6 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
                                             <span class="label label-default">LOG</span>
                                         {/if}
                                     </td>
-                                    <td><code>{$log.subdir|escape:'html':'UTF-8'}</code></td>
                                     <td>{$log.size_human|escape:'html':'UTF-8'}</td>
                                     <td>{$log.modified|escape:'html':'UTF-8'}</td>
                                     <td>
