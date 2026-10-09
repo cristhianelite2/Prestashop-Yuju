@@ -61,6 +61,8 @@ class AdminYujuLogsController extends ModuleAdminController
             }
 
             $this->viewLogFile($filename, $lines);
+        } elseif ($action === 'oauth') {
+            $this->viewOAuthAttempts((int) Tools::getValue('page', 1));
         } else {
             $this->listLogFiles();
         }
@@ -72,12 +74,199 @@ class AdminYujuLogsController extends ModuleAdminController
     {
         $logs = $this->getLogs();
 
+        // Los intentos OAuth se muestran como un único grupo resumido.
+        $oauth_group = $this->buildOAuthGroup($logs);
+        $logs = array_values(array_filter($logs, function ($log) {
+            return $log['subdir'] !== 'oauth_attempts/';
+        }));
+
         $this->context->smarty->assign([
             'logs' => $logs,
+            'oauth_group' => $oauth_group,
             'module_dir' => $this->module->getPathUri(),
             'current_action' => 'list',
             'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
         ]);
+    }
+
+    /**
+     * Agrupa todos los archivos de oauth_attempts/ en un único bloque con el
+     * total de intentos, los fallidos y el intento más reciente.
+     */
+    protected function buildOAuthGroup($logs)
+    {
+        $oauth_logs = array_values(array_filter($logs, function ($log) {
+            return $log['subdir'] === 'oauth_attempts/';
+        }));
+
+        if (empty($oauth_logs)) {
+            return null;
+        }
+
+        $group = [
+            'total' => count($oauth_logs),
+            'failed' => 0,
+            'success' => 0,
+            'pending' => 0,
+            'latest' => null,
+        ];
+
+        // $logs viene ordenado por fecha descendente: el primero es el más reciente.
+        foreach ($oauth_logs as $index => $log) {
+            $data = $this->readOAuthAttemptData($log['full_path']);
+
+            $status = isset($data['status']) ? (string) $data['status'] : 'unknown';
+            $http_code = isset($data['http_code']) ? (int) $data['http_code'] : 0;
+            $curl_error = isset($data['curl_error']) ? (string) $data['curl_error'] : '';
+
+            if ($this->isFailedOAuthAttempt($status, $http_code, $curl_error)) {
+                $group['failed']++;
+            } elseif ($status === 'success') {
+                $group['success']++;
+            } else {
+                // 'start' u otros estados sin resultado definitivo.
+                $group['pending']++;
+            }
+
+            if ($index === 0) {
+                $group['latest'] = [
+                    'filename' => $log['filename'],
+                    'full_path' => $log['full_path'],
+                    'status' => $status,
+                    'is_failed' => $this->isFailedOAuthAttempt($status, $http_code, $curl_error),
+                    'http_code' => $http_code,
+                    'message' => isset($data['message']) ? (string) $data['message'] : '',
+                    'curl_error' => $curl_error,
+                    'client_id' => isset($data['client_id']) ? (string) $data['client_id'] : '',
+                    'created_at' => isset($data['created_at']) ? (string) $data['created_at'] : $log['modified'],
+                    'modified' => $log['modified'],
+                ];
+            }
+        }
+
+        return $group;
+    }
+
+    /**
+     * Listado paginado de todos los intentos OAuth registrados (historial).
+     */
+    protected function viewOAuthAttempts($page = 1)
+    {
+        $attempts = $this->getOAuthAttemptList();
+
+        $per_page = 20;
+        $total = count($attempts);
+        $pages = max(1, (int) ceil($total / $per_page));
+        $page = min(max(1, $page), $pages);
+
+        $failed = 0;
+        foreach ($attempts as $attempt) {
+            if ($attempt['is_failed']) {
+                $failed++;
+            }
+        }
+
+        $this->context->smarty->assign([
+            'current_action' => 'oauth',
+            'oauth_attempts' => array_slice($attempts, ($page - 1) * $per_page, $per_page),
+            'oauth_total' => $total,
+            'oauth_failed' => $failed,
+            'oauth_success' => $total - $failed,
+            'oauth_page' => $page,
+            'oauth_pages' => $pages,
+            'oauth_page_prev' => max(1, $page - 1),
+            'oauth_page_next' => min($pages, $page + 1),
+            'oauth_pager' => range(1, $pages),
+            'module_dir' => $this->module->getPathUri(),
+            'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
+        ]);
+    }
+
+    /**
+     * Devuelve el resumen de cada intento OAuth ordenado del más reciente al
+     * más antiguo.
+     */
+    protected function getOAuthAttemptList()
+    {
+        $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
+        $attempts = [];
+
+        if (!is_dir($log_dir)) {
+            return $attempts;
+        }
+
+        $files = glob($log_dir . '*.json');
+
+        if (empty($files)) {
+            return $attempts;
+        }
+
+        usort($files, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        foreach ($files as $file) {
+            if (!is_readable($file)) {
+                continue;
+            }
+
+            $data = $this->readOAuthAttemptData(basename($file));
+
+            $status = isset($data['status']) ? (string) $data['status'] : 'unknown';
+            $http_code = isset($data['http_code']) ? (int) $data['http_code'] : 0;
+            $curl_error = isset($data['curl_error']) ? (string) $data['curl_error'] : '';
+
+            $attempts[] = [
+                'filename' => basename($file),
+                'full_path' => 'oauth_attempts/' . basename($file),
+                'attempt_id' => isset($data['attempt_id']) ? (string) $data['attempt_id'] : basename($file, '.json'),
+                'status' => $status,
+                'is_failed' => $this->isFailedOAuthAttempt($status, $http_code, $curl_error),
+                'http_code' => $http_code,
+                'message' => isset($data['message']) ? (string) $data['message'] : '',
+                'curl_error' => $curl_error,
+                'url' => isset($data['url']) ? (string) $data['url'] : '',
+                'client_id' => isset($data['client_id']) ? (string) $data['client_id'] : '',
+                'created_at' => isset($data['created_at'])
+                    ? (string) $data['created_at']
+                    : date('Y-m-d H:i:s', filemtime($file)),
+                'modified' => date('Y-m-d H:i:s', filemtime($file)),
+            ];
+        }
+
+        return $attempts;
+    }
+
+    /**
+     * Lee y decodifica un intento OAuth por su nombre de archivo.
+     */
+    protected function readOAuthAttemptData($filename)
+    {
+        $filepath = $this->resolveLogFile($filename);
+
+        if (!$filepath) {
+            return [];
+        }
+
+        $data = json_decode((string) file_get_contents($filepath), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * Determina si un intento OAuth se considera fallido.
+     */
+    protected function isFailedOAuthAttempt($status, $http_code = 0, $curl_error = '')
+    {
+        if ($status === 'error') {
+            return true;
+        }
+
+        if ($curl_error !== '') {
+            return true;
+        }
+
+        return $http_code >= 400;
     }
 
     protected function viewLogFile($filename, $lines = 500)

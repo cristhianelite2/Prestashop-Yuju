@@ -54,6 +54,11 @@
                         <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$view_filename|escape:'html':'UTF-8'}&lines={$view_lines}&download=1" class="btn btn-default">
                             <i class="icon-download"></i> Descargar
                         </a>
+                        {if $view_is_json}
+                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=oauth" class="btn btn-default">
+                            <i class="icon-time"></i> Historial de intentos
+                        </a>
+                        {/if}
                     </div>
 
                     {* Estadísticas del archivo *}
@@ -222,7 +227,72 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
                 Usa este visor para leerlos de forma segura. Los intentos de conexión OAuth se guardan como JSON.
             </div>
 
-            <h4><i class="icon-file"></i> Archivos de log ({$logs|@count})</h4>
+            {if $oauth_group}
+                {* Grupo único con todos los intentos OAuth *}
+                <div class="panel panel-warning yuju-oauth-group">
+                    <div class="panel-heading">
+                        <i class="icon-lock"></i> Intentos de conexión OAuth
+                        <span class="badge pull-right">{$oauth_group.total|intval} intento{if $oauth_group.total != 1}s{/if}</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-lg-2 col-md-3 col-sm-4 col-xs-6">
+                                <div class="text-center yuju-oauth-stat">
+                                    <h3 class="text-danger">{$oauth_group.failed|intval}</h3>
+                                    <small>Intentos fallidos</small>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-3 col-sm-4 col-xs-6">
+                                <div class="text-center yuju-oauth-stat">
+                                    <h3 class="text-success">{$oauth_group.success|intval}</h3>
+                                    <small>Exitosos</small>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-3 col-sm-4 col-xs-6">
+                                <div class="text-center yuju-oauth-stat">
+                                    <h3 class="text-muted">{$oauth_group.pending|intval}</h3>
+                                    <small>Sin resultado</small>
+                                </div>
+                            </div>
+                            <div class="col-lg-6 col-md-12">
+                                {if $oauth_group.latest}
+                                    <strong>Último intento:</strong>
+                                    {if $oauth_group.latest.is_failed}
+                                        <span class="label label-danger">FALLIDO</span>
+                                    {elseif $oauth_group.latest.status == 'success'}
+                                        <span class="label label-success">EXITOSO</span>
+                                    {else}
+                                        <span class="label label-warning">{$oauth_group.latest.status|escape:'html':'UTF-8'|upper}</span>
+                                    {/if}
+                                    <small class="text-muted">{$oauth_group.latest.created_at|escape:'html':'UTF-8'}</small><br>
+                                    {if $oauth_group.latest.http_code}
+                                        <small><strong>HTTP:</strong> {$oauth_group.latest.http_code|intval}</small>
+                                    {/if}
+                                    {if $oauth_group.latest.curl_error}
+                                        <small class="text-danger"><strong>cURL:</strong> {$oauth_group.latest.curl_error|escape:'html':'UTF-8'}</small>
+                                    {elseif $oauth_group.latest.message}
+                                        <small class="text-muted">{$oauth_group.latest.message|escape:'html':'UTF-8'}</small>
+                                    {/if}
+                                {/if}
+                            </div>
+                        </div>
+
+                        <hr style="margin: 15px 0;">
+
+                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$oauth_group.latest.full_path|escape:'html':'UTF-8'}" class="btn btn-primary">
+                            <i class="icon-eye-open"></i> Ver último intento
+                        </a>
+                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=oauth" class="btn btn-default">
+                            <i class="icon-time"></i> Ver anteriores ({$oauth_group.total|intval} en total)
+                        </a>
+                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$oauth_group.latest.full_path|escape:'html':'UTF-8'}&download=1" class="btn btn-default">
+                            <i class="icon-download"></i> Descargar último
+                        </a>
+                    </div>
+                </div>
+            {/if}
+
+            <h4><i class="icon-file"></i> Otros archivos de log ({$logs|@count})</h4>
 
             {if $logs|@count > 0}
                 <div class="table-responsive">
@@ -275,6 +345,135 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
             {/if}
 
 <hr style="margin: 30px 0;">
+
+        {/if}
+
+        {if $current_action === 'oauth'}
+            {* Historial agrupado de intentos OAuth *}
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="btn-toolbar" style="margin-bottom: 20px;">
+                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" class="btn btn-default">
+                            <i class="icon-arrow-left"></i> Volver a la lista
+                        </a>
+                    </div>
+
+                    <div class="row" style="margin-bottom: 15px;">
+                        <div class="col-lg-3">
+                            <div class="panel panel-default">
+                                <div class="panel-body text-center">
+                                    <h3 class="text-primary">{$oauth_total|intval}</h3>
+                                    <small>Intentos registrados</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3">
+                            <div class="panel panel-danger">
+                                <div class="panel-body text-center">
+                                    <h3>{$oauth_failed|intval}</h3>
+                                    <small>Intentos fallidos</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3">
+                            <div class="panel panel-success">
+                                <div class="panel-body text-center">
+                                    <h3>{$oauth_success|intval}</h3>
+                                    <small>Exitosos</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3">
+                            <div class="panel panel-default">
+                                <div class="panel-body text-center">
+                                    <h3 class="text-muted">{$oauth_page|intval}/{$oauth_pages|intval}</h3>
+                                    <small>Página</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4><i class="icon-lock"></i> Historial de intentos OAuth</h4>
+
+                    {if $oauth_attempts|@count > 0}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Estado</th>
+                                        <th>Fecha</th>
+                                        <th>HTTP</th>
+                                        <th>Mensaje / Error</th>
+                                        <th>Client ID</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {foreach $oauth_attempts as $attempt}
+                                        <tr class="{if $attempt.is_failed}danger{elseif $attempt.status == 'success'}success{else}warning{/if}">
+                                            <td><strong>{$attempt.attempt_id|escape:'html':'UTF-8'}</strong></td>
+                                            <td>
+                                                {if $attempt.is_failed}
+                                                    <span class="label label-danger">FALLIDO</span>
+                                                {elseif $attempt.status == 'success'}
+                                                    <span class="label label-success">EXITOSO</span>
+                                                {else}
+                                                    <span class="label label-warning">{$attempt.status|escape:'html':'UTF-8'|upper}</span>
+                                                {/if}
+                                            </td>
+                                            <td>{$attempt.created_at|escape:'html':'UTF-8'}</td>
+                                            <td>{$attempt.http_code|intval}</td>
+                                            <td>
+                                                {if $attempt.curl_error}
+                                                    <small class="text-danger">{$attempt.curl_error|escape:'html':'UTF-8'}</small>
+                                                {elseif $attempt.message}
+                                                    <small>{$attempt.message|escape:'html':'UTF-8'}</small>
+                                                {else}
+                                                    <small class="text-muted">—</small>
+                                                {/if}
+                                            </td>
+                                            <td><small><code>{$attempt.client_id|escape:'html':'UTF-8'}</code></small></td>
+                                            <td>
+                                                <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$attempt.full_path|escape:'html':'UTF-8'}" class="btn btn-xs btn-default" title="Ver detalle">
+                                                    <i class="icon-eye-open"></i> Ver
+                                                </a>
+                                                <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$attempt.full_path|escape:'html':'UTF-8'}&download=1" class="btn btn-xs btn-default" title="Descargar">
+                                                    <i class="icon-download"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    {/foreach}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {if $oauth_pages > 1}
+                            <nav class="text-center">
+                                <ul class="pagination">
+                                    <li class="{if $oauth_page <= 1}disabled{/if}">
+                                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=oauth&page={$oauth_page_prev}">&laquo;</a>
+                                    </li>
+                                    {foreach $oauth_pager as $p}
+                                        <li class="{if $p == $oauth_page}active{/if}">
+                                            <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=oauth&page={$p}">{$p}</a>
+                                        </li>
+                                    {/foreach}
+                                    <li class="{if $oauth_page >= $oauth_pages}disabled{/if}">
+                                        <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=oauth&page={$oauth_page_next}">&raquo;</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        {/if}
+                    {else}
+                        <div class="alert alert-warning">
+                            <i class="icon-warning-sign"></i>
+                            No se han registrado intentos de conexión OAuth todavía.
+                        </div>
+                    {/if}
+                </div>
+            </div>
+
         {/if}
     </div>
 </div>
@@ -310,6 +509,24 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
 
 .btn-toolbar .btn-group {
     margin-left: 10px;
+}
+
+/* Grupo de intentos OAuth */
+.yuju-oauth-group .yuju-oauth-stat {
+    padding: 5px 0 10px;
+    border-right: 1px solid #eee;
+}
+
+.yuju-oauth-group .yuju-oauth-stat h3 {
+    margin: 0 0 5px;
+    font-size: 26px;
+}
+
+@media (max-width: 768px) {
+    .yuju-oauth-group .yuju-oauth-stat {
+        border-right: none;
+        border-bottom: 1px solid #eee;
+    }
 }
 
 .panel-body .pre-scrollable {
