@@ -275,7 +275,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         try {
             $oauth = new YujuOAuth();
-            $id = (int) Tools::getValue('id');
+            $id = (string) Tools::getValue('id');
             $detail = $oauth->getOAuthAttemptDetail($id);
 
             $response = [
@@ -321,8 +321,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     private function processOAuthConfiguration()
     {
-        $client_id = Tools::getValue('client_id');
-        $client_secret = Tools::getValue('client_secret');
+        $client_id = trim((string) Tools::getValue('client_id'));
+        $client_id = trim($client_id, "\"'");
+        $client_secret = trim((string) Tools::getValue('client_secret'));
         $environment = Tools::getValue('environment');
 
         if (empty($client_id) || empty($client_secret)) {
@@ -331,8 +332,14 @@ class AdminYujuConfigurationController extends ModuleAdminController
             return;
         }
 
+        if (!preg_match('/^[0-9a-fA-F]{32}$/', $client_id)) {
+            $this->errors[] = $this->trans('El Client ID debe tener 32 caracteres hexadecimales (revisa que no tenga espacios, comillas ni caracteres de más).', array(), 'Modules.Prestashopyuju.Admin');
+
+            return;
+        }
+
         try {
-            Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
+            Configuration::updateValue('YUJU_CLIENT_ID', strtolower($client_id));
             Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
             Configuration::updateValue('YUJU_ENVIRONMENT', $environment);
 
@@ -649,7 +656,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         $logger = new YujuLogger();
 
-        return $logger->getLogsFromDatabase([], $limit);
+        return $logger->getRecentLogs($limit);
     }
 
     /**
@@ -690,8 +697,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         $configs = [
             'YUJU_ENVIRONMENT' => Tools::getValue('YUJU_ENVIRONMENT'),
-            'YUJU_CLIENT_ID' => Tools::getValue('YUJU_CLIENT_ID'),
-            'YUJU_CLIENT_SECRET' => Tools::getValue('YUJU_CLIENT_SECRET'),
+            'YUJU_CLIENT_ID' => strtolower(trim(trim((string) Tools::getValue('YUJU_CLIENT_ID')), "\"'")),
+            'YUJU_CLIENT_SECRET' => trim((string) Tools::getValue('YUJU_CLIENT_SECRET')),
             'YUJU_AUTO_SYNC' => (int) Tools::getValue('YUJU_AUTO_SYNC'),
             'YUJU_SYNC_FREQUENCY' => (int) Tools::getValue('YUJU_SYNC_FREQUENCY'),
             'YUJU_BATCH_SIZE' => (int) Tools::getValue('YUJU_BATCH_SIZE'),
@@ -708,6 +715,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
         // Validaciones básicas
         if (empty($configs['YUJU_CLIENT_ID']) || empty($configs['YUJU_CLIENT_SECRET'])) {
             $this->errors[] = $this->trans('Client ID y Client Secret son requeridos', array(), 'Modules.Prestashopyuju.Admin');
+            return;
+        }
+
+        if (!preg_match('/^[0-9a-f]{32}$/', $configs['YUJU_CLIENT_ID'])) {
+            $this->errors[] = $this->trans('El Client ID debe tener 32 caracteres hexadecimales (revisa que no tenga espacios, comillas ni caracteres de más).', array(), 'Modules.Prestashopyuju.Admin');
             return;
         }
 

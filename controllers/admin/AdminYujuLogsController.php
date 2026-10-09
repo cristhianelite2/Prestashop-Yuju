@@ -24,6 +24,12 @@ require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
 
 class AdminYujuLogsController extends ModuleAdminController
 {
+    /**
+     * Subdirectorios de logs que se muestran en el visor.
+     * El visor es 100% por archivo (no lee de base de datos).
+     */
+    protected $log_subdirs = ['', 'sync_logs/', 'error_logs/', 'audit_reports/', 'oauth_attempts/'];
+
     protected $logger;
 
     public function __construct()
@@ -41,6 +47,7 @@ class AdminYujuLogsController extends ModuleAdminController
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuLogs',
             'current_index' => $this->context->link->getAdminLink('AdminYujuLogs'),
+            'token' => Tools::getAdminTokenLite('AdminYujuLogs'),
         ]);
 
         $action = Tools::getValue('action', 'list');
@@ -48,6 +55,11 @@ class AdminYujuLogsController extends ModuleAdminController
         $lines = (int) Tools::getValue('lines', 500);
 
         if ($action === 'view' && $filename) {
+            if (Tools::getValue('download')) {
+                $this->downloadLogFile($filename);
+                return;
+            }
+
             $this->viewLogFile($filename, $lines);
         } else {
             $this->listLogFiles();
@@ -70,25 +82,7 @@ class AdminYujuLogsController extends ModuleAdminController
 
     protected function viewLogFile($filename, $lines = 500)
     {
-        // Validar nombre de archivo para path traversal
-        $filename = basename($filename);
-        if (!preg_match('/^[\w\-\.]+$/', $filename)) {
-            $this->errors[] = $this->trans('Nombre de archivo inválido', [], 'Modules.Prestashopyuju.Admin');
-            $this->listLogFiles();
-            return;
-        }
-
-        $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/';
-        $subdirs = ['', 'sync_logs/', 'error_logs/', 'audit_reports/'];
-        $filepath = null;
-
-        foreach ($subdirs as $subdir) {
-            $test_path = $log_dir . $subdir . $filename;
-            if (file_exists($test_path) && is_readable($test_path)) {
-                $filepath = $test_path;
-                break;
-            }
-        }
+        $filepath = $this->resolveLogFile($filename);
 
         if (!$filepath) {
             $this->errors[] = $this->trans('Archivo no encontrado o no legible', [], 'Modules.Prestashopyuju.Admin');
@@ -101,7 +95,8 @@ class AdminYujuLogsController extends ModuleAdminController
 
         $this->context->smarty->assign([
             'current_action' => 'view',
-            'view_filename' => $filename,
+            'view_filename' => basename($filepath),
+            'view_is_json' => pathinfo($filepath, PATHINFO_EXTENSION) === 'json',
             'view_lines' => $lines,
             'log_content' => $content,
             'log_stats' => $stats,
@@ -110,10 +105,70 @@ class AdminYujuLogsController extends ModuleAdminController
         ]);
     }
 
+    /**
+     * Resuelve el nombre de archivo recibido a un fichero real dentro del
+     * directorio de logs. Soporta alias sin fecha (p. ej. "error.log" apunta al
+     * "error_YYYY-MM-DD.log" más reciente) para URLs antiguas.
+     */
+    protected function resolveLogFile($filename)
+    {
+        $filename = basename((string) $filename);
+
+        if ($filename === '' || !preg_match('/^[\w\-\.]+$/', $filename)) {
+            return null;
+        }
+
+        $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/';
+
+        // 1. Coincidencia exacta en cualquier subdirectorio.
+        foreach ($this->log_subdirs as $subdir) {
+            $test_path = $log_dir . $subdir . $filename;
+
+            if (is_file($test_path) && is_readable($test_path)) {
+                return $test_path;
+            }
+        }
+
+        // 2. Alias: buscar por prefijo y quedarse con el más reciente.
+        $stem = pathinfo($filename, PATHINFO_FILENAME);
+        $matches = [];
+
+        foreach ($this->log_subdirs as $subdir) {
+            $full_dir = $log_dir . $subdir;
+
+            if (!is_dir($full_dir)) {
+                continue;
+            }
+
+            foreach (['log', 'json'] as $extension) {
+                $candidates = glob($full_dir . $stem . '*.' . $extension);
+                if (!empty($candidates)) {
+                    $matches = array_merge($matches, $candidates);
+                }
+            }
+        }
+
+        if (empty($matches)) {
+            return null;
+        }
+
+        usort($matches, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        $filepath = reset($matches);
+
+        return (is_file($filepath) && is_readable($filepath)) ? $filepath : null;
+    }
+
     protected function readLogFile($filepath, $lines = 500)
     {
+        if (pathinfo($filepath, PATHINFO_EXTENSION) === 'json') {
+            return $this->readJsonFile($filepath);
+        }
+
         $content = [];
-        
+
         if (filesize($filepath) > 10 * 1024 * 1024) { // > 10MB
             // Leer solo las últimas líneas para archivos grandes
             $handle = fopen($filepath, 'r');
@@ -122,7 +177,7 @@ class AdminYujuLogsController extends ModuleAdminController
                 fseek($handle, 0, SEEK_END);
                 $pos = ftell($handle);
                 $line_count = 0;
-                
+
                 while ($pos > 0 && $line_count < $lines) {
                     $read_size = min(8192, $pos);
                     $pos -= $read_size;
@@ -132,7 +187,7 @@ class AdminYujuLogsController extends ModuleAdminController
                     $line_count = substr_count($buffer, "\n");
                 }
                 fclose($handle);
-                
+
                 $file_lines = array_filter(explode("\n", $buffer));
                 $content = array_slice($file_lines, -$lines);
             }
@@ -144,17 +199,86 @@ class AdminYujuLogsController extends ModuleAdminController
         return array_reverse($content); // Más recientes primero
     }
 
+    /**
+     * Lee un archivo JSON (intentos OAuth) y lo devuelve formateado por líneas.
+     */
+    protected function readJsonFile($filepath)
+    {
+        $raw = file_get_contents($filepath);
+        $decoded = json_decode($raw, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return explode("\n", (string) $raw);
+        }
+
+        $pretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return explode("\n", $pretty);
+    }
+
+    /**
+     * Envía el archivo de log como descarga.
+     */
+    protected function downloadLogFile($filename)
+    {
+        $filepath = $this->resolveLogFile($filename);
+
+        if (!$filepath) {
+            $this->errors[] = $this->trans('Archivo no encontrado o no legible', [], 'Modules.Prestashopyuju.Admin');
+            $this->listLogFiles();
+            $this->setTemplate('logs.tpl');
+
+            return;
+        }
+
+        $download_name = basename($filepath);
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $download_name . '"');
+        header('Content-Length: ' . filesize($filepath));
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        readfile($filepath);
+        exit;
+    }
+
     protected function getLogStats($filepath)
     {
+        $size = filesize($filepath);
+
         $stats = [
-            'size' => filesize($filepath),
-            'size_human' => $this->formatBytes(filesize($filepath)),
+            'size' => $size,
+            'size_human' => $this->formatBytes($size),
             'modified' => date('Y-m-d H:i:s', filemtime($filepath)),
+            'type' => pathinfo($filepath, PATHINFO_EXTENSION),
             'lines' => 0,
             'errors' => 0,
             'warnings' => 0,
             'info' => 0,
         ];
+
+        if ($stats['type'] === 'json') {
+            $decoded = json_decode((string) file_get_contents($filepath), true);
+
+            if (is_array($decoded)) {
+                $stats['lines'] = is_array($decoded) ? count($decoded, COUNT_RECURSIVE) : 0;
+
+                if (isset($decoded['status'])) {
+                    if ($decoded['status'] === 'error') {
+                        $stats['errors'] = 1;
+                    } elseif ($decoded['status'] === 'success') {
+                        $stats['info'] = 1;
+                    } else {
+                        $stats['warnings'] = 1;
+                    }
+                }
+            }
+
+            return $stats;
+        }
 
         // Contar líneas y niveles (muestra rápida de últimas 1000 líneas)
         $handle = fopen($filepath, 'r');
@@ -163,45 +287,45 @@ class AdminYujuLogsController extends ModuleAdminController
             $error_count = 0;
             $warning_count = 0;
             $info_count = 0;
-            
+
             // Ir al final y leer hacia atrás
             fseek($handle, 0, SEEK_END);
             $pos = ftell($handle);
             $buffer = '';
             $lines_read = 0;
-            
+
             while ($pos > 0 && $lines_read < 1000) {
                 $read_size = min(4096, $pos);
                 $pos -= $read_size;
                 fseek($handle, $pos);
                 $chunk = fread($handle, $read_size);
                 $buffer = $chunk . $buffer;
-                
+
                 $new_lines = substr_count($buffer, "\n");
                 if ($new_lines > $line_count) {
                     $lines_read += $new_lines - $line_count;
                     $line_count = $new_lines;
                 }
-                
+
                 if ($line_count >= 1000) break;
             }
             fclose($handle);
 
             $file_lines = array_filter(explode("\n", $buffer));
             $file_lines = array_slice($file_lines, -1000);
-            
+
             $stats['lines'] = count($file_lines);
-            
+
             foreach ($file_lines as $line) {
-                if (stripos($line, '] error') !== false || stripos($line, '] ERROR') !== false) {
+                if (stripos($line, '] error') !== false || stripos($line, '] critical') !== false) {
                     $error_count++;
-                } elseif (stripos($line, '] warning') !== false || stripos($line, '] WARNING') !== false) {
+                } elseif (stripos($line, '] warning') !== false) {
                     $warning_count++;
-                } elseif (stripos($line, '] info') !== false || stripos($line, '] INFO') !== false) {
+                } elseif (stripos($line, '] info') !== false) {
                     $info_count++;
                 }
             }
-            
+
             $stats['errors'] = $error_count;
             $stats['warnings'] = $warning_count;
             $stats['info'] = $info_count;
@@ -216,32 +340,48 @@ class AdminYujuLogsController extends ModuleAdminController
         $logs = [];
 
         if (is_dir($log_dir)) {
-            $subdirs = ['', 'sync_logs/', 'error_logs/', 'audit_reports/'];
-            
-            foreach ($subdirs as $subdir) {
+            foreach ($this->log_subdirs as $subdir) {
                 $full_dir = $log_dir . $subdir;
-                if (is_dir($full_dir)) {
-                    $files = scandir($full_dir);
-                    
-                    foreach ($files as $file) {
-                        if (pathinfo($file, PATHINFO_EXTENSION) === 'log') {
-                            $filepath = $full_dir . $file;
-                            $logs[] = [
-                                'filename' => $file,
-                                'subdir' => $subdir,
-                                'full_path' => $subdir . $file,
-                                'size' => filesize($filepath),
-                                'size_human' => $this->formatBytes(filesize($filepath)),
-                                'modified' => date('Y-m-d H:i:s', filemtime($filepath)),
-                            ];
-                        }
+
+                if (!is_dir($full_dir)) {
+                    continue;
+                }
+
+                $files = scandir($full_dir);
+
+                foreach ($files as $file) {
+                    if ($file === '.' || $file === '..') {
+                        continue;
                     }
+
+                    $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+                    if (!in_array($extension, ['log', 'json'], true)) {
+                        continue;
+                    }
+
+                    $filepath = $full_dir . $file;
+
+                    if (!is_file($filepath)) {
+                        continue;
+                    }
+
+                    $logs[] = [
+                        'filename' => $file,
+                        'subdir' => $subdir,
+                        'full_path' => $subdir . $file,
+                        'type' => $extension,
+                        'is_error' => stripos($file, 'error') !== false,
+                        'size' => filesize($filepath),
+                        'size_human' => $this->formatBytes(filesize($filepath)),
+                        'modified' => date('Y-m-d H:i:s', filemtime($filepath)),
+                    ];
                 }
             }
         }
 
         // Ordenar por fecha descendente
-        usort($logs, function($a, $b) {
+        usort($logs, function ($a, $b) {
             return strtotime($b['modified']) - strtotime($a['modified']);
         });
 

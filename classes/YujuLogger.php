@@ -303,6 +303,98 @@ class YujuLogger
     }
 
     /**
+     * Obtiene las entradas de log dentro de un rango de fechas, leyendo los
+     * archivos de log (no la base de datos).
+     *
+     * @return array Lista de líneas de log, más recientes primero
+     */
+    public function getLogsByDateRange($start, $end, $lines = 500)
+    {
+        $start_ts = strtotime((string) $start);
+        $end_ts = strtotime((string) $end);
+
+        if ($start_ts === false || $end_ts === false) {
+            return [];
+        }
+
+        $filtered = [];
+
+        foreach ($this->getLogFiles() as $file) {
+            $file_lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+            if (empty($file_lines)) {
+                continue;
+            }
+
+            foreach ($file_lines as $line) {
+                if (!preg_match('/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/', $line, $matches)) {
+                    continue;
+                }
+
+                $timestamp = strtotime($matches[1]);
+
+                if ($timestamp !== false && $timestamp >= $start_ts && $timestamp <= $end_ts) {
+                    $filtered[] = $line;
+                }
+            }
+        }
+
+        $filtered = array_reverse($filtered);
+
+        return array_slice($filtered, 0, $lines);
+    }
+
+    /**
+     * Obtiene las entradas de log más recientes de todos los archivos.
+     *
+     * @return array Lista de líneas de log, más recientes primero
+     */
+    public function getRecentLogs($limit = 10)
+    {
+        $entries = [];
+
+        foreach ($this->getLogFiles() as $file) {
+            $file_lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+            if (empty($file_lines)) {
+                continue;
+            }
+
+            foreach (array_slice($file_lines, -$limit) as $line) {
+                $entries[] = [
+                    'line' => $line,
+                    'modified' => filemtime($file),
+                ];
+            }
+        }
+
+        usort($entries, function ($a, $b) {
+            return $b['modified'] - $a['modified'];
+        });
+
+        return array_slice(array_column($entries, 'line'), 0, $limit);
+    }
+
+    /**
+     * Obtiene la lista de archivos .log ordenados por fecha de modificación.
+     *
+     * @return array
+     */
+    public function getLogFiles()
+    {
+        $files = array_merge(
+            glob($this->log_directory . '*.log'),
+            glob($this->log_directory . '*/*.log')
+        );
+
+        usort($files, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
+        return $files;
+    }
+
+    /**
      * Configura el logger.
      */
     public function configure($options = [])

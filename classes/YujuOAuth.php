@@ -35,12 +35,60 @@ class YujuOAuth
 
     public function __construct()
     {
+        $this->logger = new YujuLogger();
+
         $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
         $this->auth_url = ($environment === 'production') ? self::PRODUCTION_AUTH_URL : self::SANDBOX_AUTH_URL;
 
-        $this->client_id = Configuration::get('YUJU_CLIENT_ID');
-        $this->client_secret = Configuration::get('YUJU_CLIENT_SECRET');
-        $this->logger = new YujuLogger();
+        $this->client_id = $this->normalizeClientId(
+            $this->resolveCredential('YUJU_CLIENT_ID', 'YUJU_API_CLIENT_ID')
+        );
+        $this->client_secret = $this->resolveCredential('YUJU_CLIENT_SECRET', 'YUJU_API_CLIENT_SECRET');
+    }
+
+    /**
+     * Resuelve una credencial desde Configuration.
+     *
+     * Si la clave actual está vacía intenta migrar automáticamente el valor
+     * guardado por versiones anteriores bajo una clave legada (YUJU_API_*).
+     */
+    private function resolveCredential($key, $legacy_key = null)
+    {
+        $value = Configuration::get($key);
+        $value = is_string($value) ? trim($value) : '';
+
+        if ($value === '' && $legacy_key) {
+            $legacy_value = Configuration::get($legacy_key);
+            $legacy_value = is_string($legacy_value) ? trim($legacy_value) : '';
+
+            if ($legacy_value !== '') {
+                Configuration::updateValue($key, $legacy_value);
+                $this->logger->info('Credencial OAuth migrada desde clave legada', [
+                    'key' => $key,
+                    'legacy_key' => $legacy_key,
+                ]);
+
+                return $legacy_value;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Normaliza el Client ID: elimina espacios, comillas y pasa a minúsculas
+     * cuando el valor tiene el formato esperado (32 caracteres hexadecimales).
+     */
+    private function normalizeClientId($value)
+    {
+        $value = trim((string) $value);
+        $value = trim($value, "\"'");
+
+        if (preg_match('/^[0-9a-fA-F]{32}$/', $value)) {
+            return strtolower($value);
+        }
+
+        return $value;
     }
 
     /**
@@ -81,8 +129,19 @@ class YujuOAuth
      */
     public function exchangeCodeForToken($code, $state = null)
     {
+        $code = trim((string) $code);
+
+        if ($code === '') {
+            throw new Exception('Código de autorización vacío');
+        }
+
         if (!$this->client_id || !$this->client_secret) {
-            throw new Exception('Credenciales OAuth no configuradas');
+            $this->logger->error('Credenciales OAuth incompletas', [
+                'client_id_set' => !empty($this->client_id),
+                'client_secret_set' => !empty($this->client_secret),
+            ]);
+
+            throw new Exception('Credenciales OAuth no configuradas (Client ID / Secret)');
         }
 
         $data = [
@@ -101,8 +160,25 @@ class YujuOAuth
         } else {
             $this->logger->log('error', 'Error al obtener OAuth token', $response);
 
-            throw new Exception('Error al obtener token: ' . $response['message']);
+            throw new Exception('Error al obtener token: ' . $this->buildTokenErrorMessage($response));
         }
+    }
+
+    /**
+     * Construye un mensaje de error útil a partir de la respuesta de Yuju.
+     */
+    private function buildTokenErrorMessage($response)
+    {
+        $message = isset($response['message']) ? (string) $response['message'] : 'Error desconocido';
+
+        if (stripos($message, 'invalid credential') !== false) {
+            $message .= '. Verifica que el Client ID tenga 32 caracteres hexadecimales '
+                . '(sin espacios, comillas ni mayúsculas) y que el Secret Key no contenga espacios.';
+        } elseif (stripos($message, 'expired') !== false) {
+            $message .= '. El code caduca: pulsa "Conectar" en Yuju y usa el enlace resultante sin recargarlo.';
+        }
+
+        return $message;
     }
 
     /**
@@ -190,6 +266,7 @@ class YujuOAuth
         $attempt_id = $this->logOAuthAttempt('start', [
             'url' => $url,
             'request_data' => $data,
+            'client_id' => isset($data['client_id']) ? $data['client_id'] : '',
         ]);
 
         $ch = curl_init();
@@ -493,11 +570,11 @@ class YujuOAuth
      */
     public function updateCredentials($client_id, $client_secret)
     {
-        $this->client_id = $client_id;
-        $this->client_secret = $client_secret;
+        $this->client_id = $this->normalizeClientId($client_id);
+        $this->client_secret = trim((string) $client_secret);
 
-        Configuration::updateValue('YUJU_CLIENT_ID', $client_id);
-        Configuration::updateValue('YUJU_CLIENT_SECRET', $client_secret);
+        Configuration::updateValue('YUJU_CLIENT_ID', $this->client_id);
+        Configuration::updateValue('YUJU_CLIENT_SECRET', $this->client_secret);
 
         // Si las credenciales cambian, limpiar tokens existentes
         $this->clearStoredTokenData();
@@ -520,7 +597,11 @@ class YujuOAuth
     }
 
     /**
-     * Registra un intento de OAuth en archivo de log.
+     * Registra un intento de OAuth en archivo de log (JSON).
+     *
+     * El identificador del intento es una cadena; si ya existe un archivo para
+     * ese intento se actualiza (merge) en lugar de crear uno nuevo, de forma que
+     * la respuesta final conserve el request registrado al iniciar.
      */
     private function logOAuthAttempt($status, $data)
     {
@@ -530,23 +611,46 @@ class YujuOAuth
                 mkdir($log_dir, 0755, true);
             }
 
-            $attempt_id = isset($data['attempt_id']) ? (int)$data['attempt_id'] : uniqid('oauth_', true);
+            $attempt_id = isset($data['attempt_id']) && $data['attempt_id'] !== ''
+                ? (string) $data['attempt_id']
+                : uniqid('oauth_', true);
+
             $filename = $log_dir . $attempt_id . '.json';
+
+            $request_data = isset($data['request_data']) && is_array($data['request_data'])
+                ? $this->maskSensitiveData($data['request_data'])
+                : [];
 
             $record = [
                 'attempt_id' => $attempt_id,
                 'status' => $status,
-                'client_id' => substr((string)($data['request_data']['client_id'] ?? ''), 0, 100),
+                'client_id' => isset($data['client_id']) && $data['client_id'] !== ''
+                    ? substr((string) $data['client_id'], 0, 100)
+                    : substr((string) ($request_data['client_id'] ?? ''), 0, 100),
                 'url' => $data['url'] ?? '',
-                'request_data' => isset($data['request_data']) ? $data['request_data'] : [],
+                'request_data' => $request_data,
                 'response_body' => $data['response_body'] ?? '',
                 'http_code' => $data['http_code'] ?? 0,
                 'curl_error' => $data['curl_error'] ?? '',
                 'curl_info' => $data['curl_info'] ?? [],
                 'verbose_log' => $data['verbose_log'] ?? '',
                 'message' => $data['message'] ?? '',
+                'credentials' => $this->getCredentialDiagnostics($data),
                 'created_at' => date('Y-m-d H:i:s'),
             ];
+
+            // Si ya existe un registro para este intento, fusionar para no perder
+            // la información capturada al iniciar la petición.
+            if (file_exists($filename)) {
+                $previous = json_decode((string) file_get_contents($filename), true);
+
+                if (is_array($previous)) {
+                    $record['created_at'] = $previous['created_at'] ?? $record['created_at'];
+                    $record['request_data'] = !empty($record['request_data'])
+                        ? $record['request_data']
+                        : ($previous['request_data'] ?? []);
+                }
+            }
 
             file_put_contents($filename, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
@@ -554,6 +658,43 @@ class YujuOAuth
         } catch (Exception $e) {
             return null;
         }
+    }
+
+    /**
+     * Oculta valores sensibles antes de escribirlos en el log.
+     */
+    private function maskSensitiveData($data)
+    {
+        if (!is_array($data)) {
+            return $data;
+        }
+
+        foreach (['secret_key', 'client_secret', 'secret'] as $sensitive_key) {
+            if (isset($data[$sensitive_key]) && is_string($data[$sensitive_key]) && $data[$sensitive_key] !== '') {
+                $data[$sensitive_key] = substr($data[$sensitive_key], 0, 4) . '***';
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Devuelve un resumen de diagnóstico de las credenciales usadas.
+     */
+    private function getCredentialDiagnostics($data)
+    {
+        $request_data = isset($data['request_data']) && is_array($data['request_data'])
+            ? $data['request_data']
+            : [];
+
+        $client_id = (string) ($data['client_id'] ?? ($request_data['client_id'] ?? ''));
+        $secret = (string) ($data['request_data']['secret_key'] ?? '');
+
+        return [
+            'client_id_length' => strlen($client_id),
+            'client_id_is_hex32' => (bool) preg_match('/^[0-9a-f]{32}$/', $client_id),
+            'secret_key_length' => strlen($secret),
+        ];
     }
 
     /**
@@ -605,7 +746,14 @@ class YujuOAuth
     {
         try {
             $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/oauth_attempts/';
-            
+
+            // Sanitizar el identificador para evitar path traversal
+            $id = preg_replace('/[^A-Za-z0-9_.\-]/', '', (string) $id);
+
+            if ($id === '') {
+                return null;
+            }
+
             // Buscar por attempt_id en el nombre del archivo
             $files = glob($log_dir . $id . '.json');
             if (empty($files)) {

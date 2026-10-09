@@ -24,7 +24,7 @@
         <i class="icon-file-text"></i>
         Visor de Logs - Yuju Integration
     </div>
-    
+
     <div class="panel-body">
         {if $current_action === 'view'}
             {* Vista de archivo individual *}
@@ -34,6 +34,7 @@
                         <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" class="btn btn-default">
                             <i class="icon-arrow-left"></i> Volver a la lista
                         </a>
+                        {if !$view_is_json}
                         <div class="btn-group pull-right">
                             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
                                 Líneas: <span class="current-lines">{$view_lines}</span> <span class="caret"></span>
@@ -46,6 +47,7 @@
                                 <li><a href="#" data-lines="5000">5000</a></li>
                             </ul>
                         </div>
+                        {/if}
                         <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}&action=view&file={$view_filename|escape:'html':'UTF-8'}&lines={$view_lines}" class="btn btn-info" target="_blank">
                             <i class="icon-refresh"></i> Recargar
                         </a>
@@ -53,109 +55,152 @@
                             <i class="icon-download"></i> Descargar
                         </a>
                     </div>
-                    
+
                     {* Estadísticas del archivo *}
-                    <div class="row" style="margin-bottom: 15px;">
-                        <div class="col-lg-3">
-                            <div class="panel panel-default">
-                                <div class="panel-body text-center">
-                                    <h3 class="text-primary">{$log_stats.lines}</h3>
-                                    <small>Líneas mostradas</small>
+                    {if $view_is_json}
+                        <div class="row" style="margin-bottom: 15px;">
+                            <div class="col-lg-3">
+                                <div class="panel {if $log_stats.errors}panel-danger{elseif $log_stats.info}panel-success{else}panel-warning{/if}">
+                                    <div class="panel-body text-center">
+                                        <h3>
+                                            {if $log_stats.errors}
+                                                <span class="label label-danger">ERROR</span>
+                                            {elseif $log_stats.info}
+                                                <span class="label label-success">OK</span>
+                                            {else}
+                                                <span class="label label-warning">?</span>
+                                            {/if}
+                                        </h3>
+                                        <small>Estado del intento OAuth</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="panel panel-default">
+                                    <div class="panel-body text-center">
+                                        <h3 class="text-primary">{$log_stats.lines}</h3>
+                                        <small>Campos JSON</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-3">
-                            <div class="panel panel-danger">
-                                <div class="panel-body text-center">
-                                    <h3>{$log_stats.errors}</h3>
-                                    <small>Errores</small>
+                    {else}
+                        <div class="row" style="margin-bottom: 15px;">
+                            <div class="col-lg-3">
+                                <div class="panel panel-default">
+                                    <div class="panel-body text-center">
+                                        <h3 class="text-primary">{$log_stats.lines}</h3>
+                                        <small>Líneas mostradas</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="panel panel-danger">
+                                    <div class="panel-body text-center">
+                                        <h3>{$log_stats.errors}</h3>
+                                        <small>Errores</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="panel panel-warning">
+                                    <div class="panel-body text-center">
+                                        <h3>{$log_stats.warnings}</h3>
+                                        <small>Advertencias</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="panel panel-info">
+                                    <div class="panel-body text-center">
+                                        <h3>{$log_stats.info}</h3>
+                                        <small>Info</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-3">
-                            <div class="panel panel-warning">
-                                <div class="panel-body text-center">
-                                    <h3>{$log_stats.warnings}</h3>
-                                    <small>Advertencias</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-3">
-                            <div class="panel panel-info">
-                                <div class="panel-body text-center">
-                                    <h3>{$log_stats.info}</h3>
-                                    <small>Info</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
+                    {/if}
+
                     <div class="row" style="margin-bottom: 15px;">
                         <div class="col-lg-6">
-                            <strong>Archivo:</strong> {$view_filename|escape:'html':'UTF-8'}<br>
+                            <strong>Archivo:</strong> {$view_filename|escape:'html':'UTF-8'}
+                            {if $view_is_json}<span class="label label-info">OAuth JSON</span>{else}<span class="label label-default">Log</span>{/if}<br>
                             <strong>Tamaño:</strong> {$log_stats.size_human}<br>
                             <strong>Última modificación:</strong> {$log_stats.modified}
                         </div>
                     </div>
-                    
+
                     {* Contenido del log *}
                     <div class="panel panel-default">
                         <div class="panel-body" style="padding: 0; max-height: 70vh; overflow: auto;">
-                            <pre id="log-content" style="margin: 0; padding: 15px; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; background: #1e1e1e; color: #d4d4d4; border: none;">{foreach $log_content as $line}{$line|escape:'html':'UTF-8'}
+                            <pre id="log-content" data-json="{if $view_is_json}1{else}0{/if}" style="margin: 0; padding: 15px; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; background: #1e1e1e; color: #d4d4d4; border: none;">{foreach $log_content as $line}{$line|escape:'html':'UTF-8'}
 {/foreach}</pre>
                         </div>
                     </div>
-                    
+
                     <div class="text-center" style="margin-top: 10px; color: #999; font-size: 12px;">
-                        Mostrando las últimas {$view_lines} líneas de {$log_stats.lines} totales (aprox.)
+                        {if $view_is_json}
+                            Detalle completo del intento OAuth registrado en archivo.
+                        {else}
+                            Mostrando las últimas {$view_lines} líneas de {$log_stats.lines} totales (aprox.)
+                        {/if}
                     </div>
                 </div>
             </div>
-            
+
 <script type="text/javascript">
 {literal}
-// Resaltado de sintaxis simple para logs
+// Resaltado de sintaxis simple para logs de texto
 document.addEventListener('DOMContentLoaded', function() {
     var pre = document.getElementById('log-content');
     if (!pre) return;
-    
+
+    // Los JSON ya llegan formateados; no re-resaltar para no romperlos.
+    if (pre.getAttribute('data-json') === '1') return;
+
     var text = pre.textContent;
     var lines = text.split('\n');
     var html = '';
-    
+
     lines.forEach(function(line) {
         var color = '';
         var lower = line.toLowerCase();
-        
-        if (lower.indexOf('] error') !== -1 || lower.indexOf('] error') !== -1 || lower.indexOf('exception') !== -1 || lower.indexOf('fatal') !== -1) {
+
+        if (lower.indexOf(' error') !== -1 || lower.indexOf('critical') !== -1 || lower.indexOf('exception') !== -1 || lower.indexOf('fatal') !== -1) {
             color = '#ff6b6b'; // rojo para errores
-        } else if (lower.indexOf('] warning') !== -1 || lower.indexOf('] warn') !== -1) {
+        } else if (lower.indexOf(' warning') !== -1 || lower.indexOf(' warn') !== -1) {
             color = '#ffd93d'; // amarillo para warnings
-        } else if (lower.indexOf('] info') !== -1) {
+        } else if (lower.indexOf(' info') !== -1) {
             color = '#74c0fc'; // azul para info
-        } else if (lower.indexOf('] debug') !== -1) {
+        } else if (lower.indexOf(' debug') !== -1) {
             color = '#868e96'; // gris para debug
         }
-        
+
+        // Escapar para no inyectar HTML desde el contenido del log
+        var safe = line
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
         // Resaltar timestamps
-        line = line.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, '<span style="color:#adb5bd">$1</span>');
+        safe = safe.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, '<span style="color:#adb5bd">$1</span>');
         // Resaltar IPs
-        line = line.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span style="color:#ffa94d">$1</span>');
+        safe = safe.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '<span style="color:#ffa94d">$1</span>');
         // Resaltar URLs
-        line = line.replace(/(https?:\/\/[^\s]+)/g, '<span style="color:#74c0fc"><u>$1</u></span>');
-        
+        safe = safe.replace(/(https?:\/\/[^\s]+)/g, '<span style="color:#74c0fc"><u>$1</u></span>');
+
         if (color) {
-            html += '<span style="color:' + color + '">' + line + '</span>\n';
+            html += '<span style="color:' + color + '">' + safe + '</span>\n';
         } else {
-            html += line + '\n';
+            html += safe + '\n';
         }
     });
-    
+
     pre.innerHTML = html;
 });
 
-// Dropdown para cambiar líneas
-document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link) {
+// Dropdown para cambiar líneas (data-lines está en el <a>, dentro de .dropdown-menu)
+document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link) {
     link.addEventListener('click', function(e) {
         e.preventDefault();
         var lines = this.getAttribute('data-lines');
@@ -168,24 +213,24 @@ document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link)
 });
 {/literal}
 </script>
-            
+
         {else}
-            {* Lista de archivos de log *}
+            {* Lista de archivos de log (100% por archivo, no hay lectura de base de datos) *}
             <div class="alert alert-info">
                 <i class="icon-info-circle"></i>
                 Los archivos de log están protegidos por .htaccess y no son accesibles directamente por URL.
-                Usa este visor para leerlos de forma segura.
+                Usa este visor para leerlos de forma segura. Los intentos de conexión OAuth se guardan como JSON.
             </div>
-            
-            {* Logs de archivo *}
-            <h4><i class="icon-file"></i> Logs en archivos ({$logs|@count})</h4>
-            
+
+            <h4><i class="icon-file"></i> Archivos de log ({$logs|@count})</h4>
+
             {if $logs|@count > 0}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead>
                             <tr>
                                 <th>Archivo</th>
+                                <th>Tipo</th>
                                 <th>Ubicación</th>
                                 <th>Tamaño</th>
                                 <th>Modificado</th>
@@ -194,8 +239,18 @@ document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link)
                         </thead>
                         <tbody>
                             {foreach $logs as $log}
-                                <tr>
-                                    <td><strong>{$log.filename|escape:'html':'UTF-8'}</strong></td>
+                                <tr class="{if $log.is_error}danger{elseif $log.type == 'json'}info{/if}">
+                                    <td>
+                                        <strong>{$log.filename|escape:'html':'UTF-8'}</strong>
+                                        {if $log.type == 'json'}<br><small class="text-muted">Intento OAuth</small>{/if}
+                                    </td>
+                                    <td>
+                                        {if $log.type == 'json'}
+                                            <span class="label label-info">OAuth JSON</span>
+                                        {else}
+                                            <span class="label label-default">LOG</span>
+                                        {/if}
+                                    </td>
                                     <td><code>{$log.subdir|escape:'html':'UTF-8'}</code></td>
                                     <td>{$log.size_human|escape:'html':'UTF-8'}</td>
                                     <td>{$log.modified|escape:'html':'UTF-8'}</td>
@@ -218,7 +273,7 @@ document.querySelectorAll('.dropdown-menu[data-lines] a').forEach(function(link)
                     No se encontraron archivos de log en <code>{$module_dir|escape:'html':'UTF-8'}logs/</code>
                 </div>
             {/if}
-            
+
 <hr style="margin: 30px 0;">
         {/if}
     </div>
