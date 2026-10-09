@@ -70,12 +70,6 @@ var YujuAdmin = {
             self.testConnectivity();
         });
 
-        // OAuth Authorization button
-        $(document).on('click', '#yuju-authorize', function(e) {
-            e.preventDefault();
-            self.authorizeOAuth();
-        });
-
         // Sync buttons
         $(document).on('click', '.yuju-sync-button', function(e) {
             e.preventDefault();
@@ -270,6 +264,13 @@ var YujuAdmin = {
                 
                 if (response.success) {
                     html += '<strong>Conexión exitosa!</strong><br>';
+
+                    var authLevel = response.data && response.data.auth_level;
+                    html += '<small>Nivel de autenticación: '
+                        + (authLevel === 'credentials'
+                            ? 'credenciales (Client ID + Secret Key)'
+                            : (authLevel === 'token' ? 'token de API' : 'n/d'))
+                        + '</small><br>';
                     
                     // Show debug info
                     if (response.data && response.data.debug_info) {
@@ -307,7 +308,7 @@ var YujuAdmin = {
                     var needsAuth = response.data && response.data.needs_auth;
                     var audit = response.data && response.data.credential_audit;
 
-                    html += '<strong>' + (needsAuth ? 'Falta autorización:' : 'Error de conexión:') + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    html += '<strong>' + (needsAuth ? 'Credenciales no válidas:' : 'Error de conexión:') + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
 
                     if (audit) {
                         var auditOk = audit.client_id_is_hex32 && !audit.secret_has_whitespace && audit.secret_is_ascii !== false;
@@ -320,9 +321,9 @@ var YujuAdmin = {
                         html += '</div>';
 
                         if (needsAuth && auditOk) {
-                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">El formato es correcto: autoriza la app pulsando "Conectar" en Yuju y usa el code resultante una sola vez, sin recargarlo.</div>';
+                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">El formato es correcto, pero Yuju rechazó las credenciales: verifica el Client ID y el Secret Key en Yuju &gt; Aplicaciones &gt; Ver credenciales, vuelve a guardar y prueba de nuevo.</div>';
                         } else if (needsAuth && !auditOk) {
-                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">Revisa el formato marcado arriba, guarda de nuevo y luego autoriza la app en Yuju.</div>';
+                            html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">Revisa el formato marcado arriba, guarda de nuevo la configuración y vuelve a probar la conectividad.</div>';
                         }
                     }
                     
@@ -363,50 +364,6 @@ var YujuAdmin = {
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
-            }
-        });
-    },
-
-    /**
-     * Authorize OAuth
-     */
-    authorizeOAuth: function() {
-        var self = this;
-        
-        $.ajax({
-            url: this.config.ajaxUrl,
-            type: 'POST',
-            data: {
-                action: 'getAuthUrl',
-                ajax: true,
-                token: this.config.token
-            },
-            dataType: 'json',
-            success: function(response) {
-                if (response.success && response.authUrl) {
-                    // Open authorization window
-                    var authWindow = window.open(
-                        response.authUrl,
-                        'yuju_oauth',
-                        'width=600,height=700,scrollbars=yes,resizable=yes'
-                    );
-                    
-                    // Check for completion
-                    var checkClosed = setInterval(function() {
-                        if (authWindow.closed) {
-                            clearInterval(checkClosed);
-                            // Refresh page to show new auth status
-                            setTimeout(function() {
-                                window.location.reload();
-                            }, 1000);
-                        }
-                    }, 1000);
-                } else {
-                    self.showAlert('Failed to get authorization URL: ' + (response.message || 'Unknown error'), 'error');
-                }
-            },
-            error: function() {
-                self.showAlert('Failed to initiate OAuth authorization', 'error');
             }
         });
     },

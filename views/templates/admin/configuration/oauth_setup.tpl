@@ -82,7 +82,7 @@
             {else}
                 <div class="alert alert-warning">
                     <i class="icon-warning"></i>
-                    {l s='Not connected to Yuju API. Please configure your credentials and authorize the connection.' mod='prestashopyuju'}
+                    {l s='Not connected to Yuju API. Save your Client ID and Secret Key and run the connectivity test, or connect from Yuju (Configuraciones > Aplicaciones > Conectar).' mod='prestashopyuju'}
                 </div>
                 
                 <form action="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" method="post" class="form-horizontal">
@@ -137,12 +137,11 @@
                         <button type="submit" name="submitOAuthConfig" class="btn btn-primary">
                             <i class="icon-save"></i> {l s='Save Configuration' mod='prestashopyuju'}
                         </button>
-                        
-                        {if isset($oauth_url) && $oauth_url}
-                            <a href="{$oauth_url|escape:'html':'UTF-8'}" class="btn btn-success" target="_blank">
-                                <i class="icon-key"></i> {l s='Authorize with Yuju' mod='prestashopyuju'}
-                            </a>
-                        {/if}
+                        <p class="help-block">
+                            La conexión se completa desde Yuju (Configuraciones &gt; Aplicaciones &gt; Conectar):
+                            Yuju redirige a la URL de Autenticación con el parámetro <code>code</code> y el módulo
+                            lo cambia por el token automáticamente.
+                        </p>
                     </div>
                 </form>
             {/if}

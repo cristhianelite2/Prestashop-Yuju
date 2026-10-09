@@ -77,12 +77,19 @@ composer require yuju/prestashop-integration
    - **Environment**: Choose between Sandbox and Production
 3. Click **Save**
 
-### 2. OAuth Authorization
+### 2. Connectivity test and API token
 
-1. Click **Authorize with Yuju** button
-2. You'll be redirected to Yuju's authorization page
-3. Grant permissions to your PrestaShop store
-4. You'll be redirected back with a success message
+1. Click **Probar Conectividad** in the configuration page
+2. The module validates your credentials (**Client ID** + **Secret Key**) against
+   `POST https://api.tp.yuju.io/auth-generate-token` and stores the token it returns
+3. Alternatively, connect from Yuju (**Configuraciones > Aplicaciones > Conectar**):
+   Yuju redirects to the **URL de Autenticación** of your store with a `code`, and the
+   module exchanges it for the token automatically
+4. Click **Probar Conectividad** again: it calls the Yuju API with the token and lists
+   your available stores
+
+> Yuju has no authorization server of its own (`auth.yuju.io` does not exist): the only
+> token endpoint is `POST https://api.tp.yuju.io/auth-generate-token`.
 
 ### 3. Synchronization Settings
 
@@ -191,10 +198,10 @@ The module creates the following database tables:
 
 ### Common Issues
 
-#### 1. OAuth Authorization Failed
-- Verify your Client ID and Client Secret
-- Check that your redirect URI is correctly configured
-- Ensure your server can make HTTPS requests
+#### 1. Connectivity test fails
+- Verify your Client ID and Client Secret (Yuju > Aplicaciones > Ver credenciales)
+- Check the credential format reported by the test (32 hex characters, no spaces)
+- Ensure your server can make HTTPS requests to `api.tp.yuju.io`
 
 #### 2. Sync Errors
 - Check the logs in **Logs** section

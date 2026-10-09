@@ -83,7 +83,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $auth_url = $oauth->getRedirectUri();
         $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
         $terms_url = YujuConfig::getModuleFileUrl('terms.php');
-        $oauth_url = $oauth_status['configured'] ? $oauth->getAuthorizationUrl() : null;
         
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
@@ -101,7 +100,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'auth_url' => $auth_url,
                 'webhook_url' => $webhook_url,
             ],
-            'oauth_url' => $oauth_url,
         ]);
 
         // Verificar si es una petición AJAX
@@ -178,7 +176,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
                         // Auditoría de credenciales guardadas (solo longitudes):
                         // permite diagnosticar el formato sin gastar un code.
                         'credential_audit' => $oauth->getCredentialAudit(),
-                        'needs_auth' => !$oauth->hasValidToken(),
+                        // true solo cuando ni el token guardado ni la comprobación
+                        // a nivel Client ID + Secret Key dieron resultado.
+                        'needs_auth' => !empty($connection_test['needs_auth']),
+                        'auth_level' => isset($connection_test['data']['auth_level'])
+                            ? $connection_test['data']['auth_level']
+                            : null,
                     ],
                 ];
                 exit(json_encode($response));
@@ -199,6 +202,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     // permite diagnosticar sin gastar un code de un solo uso.
                     'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
                     'needs_auth' => false,
+                    'auth_level' => isset($connection_test['data']['auth_level'])
+                        ? $connection_test['data']['auth_level']
+                        : null,
                 ],
             ];
         } catch (Exception $e) {
@@ -534,7 +540,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $http = isset($user_info['http_code']) ? ' (HTTP ' . (int) $user_info['http_code'] . ')' : '';
 
             if (empty($oauth_status['has_token'])) {
-                $token_note = 'No hay token guardado: autoriza la aplicación primero (Conectar en Yuju).';
+                $token_note = 'No hay token guardado: usa "Probar Conectividad", que valida las credenciales (Client ID + Secret Key) '
+                    . 'y obtiene un token automáticamente si Yuju las acepta.';
             } elseif (!empty($oauth_status['token_expires'])) {
                 $token_note = 'Hay token guardado (expira: ' . $oauth_status['token_expires'] . '): puede estar vencido o revocado en Yuju.';
             } else {

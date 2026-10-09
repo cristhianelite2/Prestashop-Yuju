@@ -36,7 +36,7 @@ class YujuApiClient
 
     public function __construct()
     {
-        $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
+        $environment = Configuration::get('YUJU_ENVIRONMENT') ?: 'sandbox';
         $this->base_url = ($environment === 'production') ? self::PRODUCTION_BASE_URL : self::SANDBOX_BASE_URL;
         $this->oauth = new YujuOAuth();
         $this->logger = new YujuLogger();
@@ -106,7 +106,15 @@ class YujuApiClient
                 'response' => $response
             ]);
 
-            if ($response['success'] || $retry_count >= $this->max_retries) {
+            // Un error de autenticación no se resuelve reintentando: se corta
+            // el backoff para responder rápido (y poder revalidar credenciales).
+            $http_code = (int) ($response['http_code'] ?? 0);
+
+            if ($response['success']
+                || $retry_count >= $this->max_retries
+                || $http_code === 401
+                || $http_code === 403
+            ) {
                 break;
             }
 
@@ -341,35 +349,72 @@ class YujuApiClient
 
     /**
      * Test API connection.
+     *
+     * Dos niveles distintos:
+     *  1. Credenciales (Client ID + Secret Key): pide token a Yuju y, si lo
+     *     devuelve, se guarda para usarlo en la API.
+     *  2. Token (obtenido con code + secret + client_id): se usa contra la API.
      */
     public function testConnection()
     {
         try {
             $this->logger->info('Starting connection test', [
                 'base_url' => $this->base_url,
-                'environment' => Configuration::get('YUJU_ENVIRONMENT', 'sandbox')
+                'environment' => Configuration::get('YUJU_ENVIRONMENT')
             ]);
-            
-            // Verificar que tenemos un token válido
+
             $access_token = $this->oauth->getValidAccessToken();
+            $auth_level = 'token';
+
             if (!$access_token) {
-                $this->logger->error('Failed to obtain valid access token');
-                return [
-                    'success' => false,
-                    'message' => 'No hay token de acceso válido. Por favor, autoriza la aplicación primero.',
-                ];
+                // Sin token guardado: comprobación a nivel de credenciales
+                // (Client ID + Secret Key), sin necesidad de un code.
+                $this->logger->info('No stored access token: running credentials-level check');
+
+                $credentials_check = $this->oauth->requestTokenWithCredentials();
+
+                if (empty($credentials_check['success'])) {
+                    $message = isset($credentials_check['message']) ? $credentials_check['message'] : 'Error desconocido';
+                    $this->logger->error('Credentials check failed', ['message' => $message]);
+
+                    return [
+                        'success' => false,
+                        'needs_auth' => true,
+                        'message' => 'Error de conexión: ' . $message,
+                        'data' => [
+                            'auth_level' => 'credentials',
+                            'credential_audit' => $this->oauth->getCredentialAudit(),
+                            'timestamp' => date('Y-m-d H:i:s'),
+                        ],
+                    ];
+                }
+
+                $access_token = $credentials_check['token'];
+                $auth_level = 'credentials';
+                $this->logger->info('Access token obtained from Client ID + Secret Key');
             }
 
-            $this->logger->info('Access token obtained successfully');
-            
             // Probar la conexión con el endpoint de webhooks
             $url = $this->buildUrl('webhook-sub');
             $this->logger->info('Testing connection with webhook-sub endpoint', [
                 'url' => $url
             ]);
-            
+
             $response = $this->get('webhook-sub');
-            
+
+            // Token rechazado por la API: reintenta una vez con credenciales
+            // frescas antes de devolver el error.
+            if (!$response['success'] && (int) ($response['http_code'] ?? 0) === 401) {
+                $this->logger->warning('Stored token rejected (401): retrying with credentials-level check');
+
+                $credentials_check = $this->oauth->requestTokenWithCredentials();
+
+                if (!empty($credentials_check['success'])) {
+                    $auth_level = 'credentials';
+                    $response = $this->get('webhook-sub');
+                }
+            }
+
             $this->logger->info('webhook-sub response received', [
                 'response' => $response
             ]);
@@ -378,10 +423,12 @@ class YujuApiClient
                 $this->logger->info('Connection test successful');
                 return [
                     'success' => true,
+                    'needs_auth' => false,
                     'message' => 'Conexión exitosa con la API de Yuju',
                     'data' => [
                         'token_valid' => true,
                         'api_accessible' => true,
+                        'auth_level' => $auth_level,
                         'timestamp' => date('Y-m-d H:i:s'),
                     ],
                 ];
@@ -391,7 +438,13 @@ class YujuApiClient
                 ]);
                 return [
                     'success' => false,
-                    'message' => 'Error al conectar con la API: ' . ($response['message'] ?? 'Error desconocido'),
+                    'needs_auth' => false,
+                    'message' => 'Error al conectar con la API: ' . ($response['message'] ?? 'Error desconocido')
+                        . (isset($response['http_code']) ? ' (HTTP ' . (int) $response['http_code'] . ')' : ''),
+                    'data' => [
+                        'auth_level' => $auth_level,
+                        'timestamp' => date('Y-m-d H:i:s'),
+                    ],
                 ];
             }
         } catch (Exception $e) {
@@ -400,6 +453,7 @@ class YujuApiClient
             ]);
             return [
                 'success' => false,
+                'needs_auth' => false,
                 'message' => 'Error de conexión: ' . $e->getMessage(),
             ];
         }

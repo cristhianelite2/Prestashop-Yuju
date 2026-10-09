@@ -25,10 +25,10 @@ require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOAuth
 {
-    public const SANDBOX_AUTH_URL = 'https://auth-sandbox.yuju.io';
-    public const PRODUCTION_AUTH_URL = 'https://auth.yuju.io';
+    // Yuju no expone un servidor de autorización propio (auth.yuju.io /
+    // auth-sandbox.yuju.io no existen): el único flujo documentado es
+    // "Conectar" en Yuju -> redirección con `code` -> POST /auth-generate-token.
 
-    private $auth_url;
     private $client_id;
     private $client_secret;
     private $logger;
@@ -36,9 +36,6 @@ class YujuOAuth
     public function __construct()
     {
         $this->logger = new YujuLogger();
-
-        $environment = Configuration::get('YUJU_ENVIRONMENT', 'sandbox');
-        $this->auth_url = ($environment === 'production') ? self::PRODUCTION_AUTH_URL : self::SANDBOX_AUTH_URL;
 
         $this->client_id = $this->normalizeClientId(
             $this->resolveCredential('YUJU_CLIENT_ID', 'YUJU_API_CLIENT_ID')
@@ -92,36 +89,87 @@ class YujuOAuth
     }
 
     /**
-     * Obtiene la URL de autorización de OAuth para iniciar el flujo de autorización.
+     * Comprueba las credenciales a nivel Client ID + Secret Key.
+     *
+     * Pide un token a Yuju (`POST /auth-generate-token`) usando únicamente
+     * `client_id` y `secret_key`, sin necesidad de un `code` de autorización.
+     * Si Yuju devuelve token, se guarda para usarlo en la API.
+     *
+     * @return array{success: bool, token?: string, message?: string}
      */
-    public function getAuthorizationUrl($state = null)
+    public function requestTokenWithCredentials()
     {
-        if (!$this->client_id) {
-            throw new Exception('Client ID no configurado');
+        if (!$this->isConfigured()) {
+            return [
+                'success' => false,
+                'message' => 'Faltan credenciales: guarda el Client ID y el Secret Key en la configuración del módulo.',
+            ];
         }
 
-        $redirect_uri = $this->getRedirectUri();
-        $scope = Configuration::get('YUJU_SCOPE', 'read write');
+        $format_error = $this->validateCredentialFormat();
 
-        $params = [
+        if ($format_error !== null) {
+            $this->logger->log('error', 'Credenciales con formato inválido (comprobación de credenciales)', $this->getCredentialAudit());
+
+            return [
+                'success' => false,
+                'message' => $format_error,
+            ];
+        }
+
+        $result = $this->makeYujuTokenRequest([
             'client_id' => $this->client_id,
-            'redirect_uri' => $redirect_uri,
-            'response_type' => 'code',
-            'scope' => $scope,
-        ];
+            'secret_key' => $this->client_secret,
+        ]);
 
-        if ($state) {
-            $params['state'] = $state;
-        } else {
-            // Generar state aleatorio para seguridad CSRF
-            $state = bin2hex(random_bytes(16));
-            $params['state'] = $state;
+        if (!empty($result['success']) && !empty($result['data']['access_token'])) {
+            $this->saveTokenData($result['data']);
+            $this->logger->log('info', 'Token obtenido con Client ID + Secret Key (comprobación de credenciales)');
+
+            return [
+                'success' => true,
+                'token' => $result['data']['access_token'],
+            ];
         }
 
-        // Guardar state en sesión para validación en callback
-        Context::getContext()->cookie->yuju_oauth_state = $state;
+        $message = isset($result['message']) && $result['message'] !== ''
+            ? (string) $result['message']
+            : 'Yuju rechazó las credenciales';
+        $http_code = isset($result['http_code']) ? (int) $result['http_code'] : 0;
 
-        return $this->auth_url . '/oauth/authorize?' . http_build_query($params);
+        return [
+            'success' => false,
+            'message' => $message . ($http_code ? ' (HTTP ' . $http_code . ')' : ''),
+        ];
+    }
+
+    /**
+     * Valida el formato de las credenciales guardadas sin consumir ningún code.
+     *
+     * @return string|null mensaje de error o null si el formato es válido
+     */
+    private function validateCredentialFormat()
+    {
+        $audit = $this->getCredentialAudit();
+
+        if (!$audit['client_id_is_hex32']) {
+            return 'El Client ID guardado no tiene el formato esperado (32 caracteres hexadecimales; longitud actual: '
+                . $audit['client_id_length'] . '). Re-guárdalo desde la configuración del módulo copiándolo exactamente '
+                . 'de Yuju > Aplicaciones > Ver credenciales.';
+        }
+
+        if ($audit['secret_has_whitespace']) {
+            return 'El Secret Key guardado contiene espacios o saltos de línea (longitud actual: ' . $audit['secret_key_length']
+                . '). Re-guárdalo copiándolo exactamente de Yuju > Aplicaciones > Ver credenciales.';
+        }
+
+        if (!$audit['secret_is_ascii']) {
+            return 'El Secret Key guardado contiene caracteres invisibles o no ASCII (se guardaron ' . $audit['secret_key_length']
+                . ' car.): típico de copiar-pegar desde una web. Bórralo por completo, cópialo pasando antes por un editor '
+                . 'de texto plano y guárdalo de nuevo.';
+        }
+
+        return null;
     }
 
     /**
@@ -186,26 +234,10 @@ class YujuOAuth
      */
     private function validateCredentialsForTokenRequest()
     {
-        $client_id = (string) $this->client_id;
-        $secret = (string) $this->client_secret;
+        $format_error = $this->validateCredentialFormat();
 
-        if (!preg_match('/^[0-9a-f]{32}$/', $client_id)) {
-            return 'El Client ID guardado no tiene el formato esperado (32 caracteres hexadecimales en minúsculas; '
-                . 'longitud actual: ' . strlen($client_id) . '). Re-guárdalo desde la configuración del módulo '
-                . 'copiándolo exactamente de Yuju > Aplicaciones > Ver credenciales. El code no se ha gastado.';
-        }
-
-        if (preg_match('/\s/', $secret)) {
-            return 'El Secret Key guardado contiene espacios o saltos de línea (longitud actual: ' . strlen($secret) . '). '
-                . 'Re-guárdalo copiándolo exactamente de Yuju > Aplicaciones > Ver credenciales, sin espacios '
-                . 'ni caracteres de más. El code no se ha gastado.';
-        }
-
-        if (preg_match('/[^\x20-\x7E]/', $secret)) {
-            return 'El Secret Key guardado contiene caracteres invisibles o no ASCII (se guardaron ' . strlen($secret) . ' car., '
-                . 'pero ocupan más al enviarse: típico de copiar-pegar desde una web). Bórralo por completo en la '
-                . 'configuración del módulo, cópialo de nuevo desde Yuju pasándolo primero por un editor de texto '
-                . 'plano (Bloc de notas) y guárdalo. El code no se ha gastado.';
+        if ($format_error !== null) {
+            return $format_error . ' El code no se ha gastado.';
         }
 
         return null;
@@ -252,74 +284,25 @@ class YujuOAuth
     }
 
     /**
-     * Refresca el access token usando el refresh token.
-     */
-    public function refreshToken()
-    {
-        $oauth_data = $this->getStoredTokenData();
-
-        if (!$oauth_data || !$oauth_data['refresh_token']) {
-            throw new Exception('No hay refresh token disponible');
-        }
-
-        $data = [
-            'grant_type' => 'refresh_token',
-            'client_id' => $this->client_id,
-            'client_secret' => $this->client_secret,
-            'refresh_token' => $oauth_data['refresh_token'],
-        ];
-
-        $response = $this->makeTokenRequest($data);
-
-        if ($response['success']) {
-            $this->saveTokenData($response['data']);
-            $this->logger->log('info', 'OAuth token refrescado exitosamente');
-
-            return true;
-        } else {
-            $this->logger->log('error', 'Error al refrescar OAuth token', $response);
-
-            throw new Exception('Error al refrescar token: ' . $response['message']);
-        }
-    }
-
-    /**
-     * Obtiene un access token válido (refresca si es necesario).
+     * Obtiene el access token guardado.
      *
-     * Yuju no documenta refresh ni expiración: si no hay refresh token o el
-     * refresh falla, se devuelve el token guardado como último recurso (la
-     * API dirá si sigue vigente) en vez de anularlo localmente.
+     * Yuju no documenta refresh token ni endpoint de renovación (el único
+     * flujo es pedir un token nuevo a /auth-generate-token), así que si el
+     * token guardado tiene la expiración pasada se reutiliza: la API dirá si
+     * sigue vigente en vez de anularlo localmente.
      */
     public function getValidAccessToken()
     {
         $oauth_data = $this->getStoredTokenData();
 
-        if (!$oauth_data || !$oauth_data['access_token']) {
+        if (!$oauth_data || empty($oauth_data['access_token'])) {
             return null;
         }
 
-        // Verificar si el token ha expirado
         if ($this->isTokenExpired($oauth_data)) {
-            if (empty($oauth_data['refresh_token'])) {
-                $this->logger->log('warning', 'Token con expiración pasada pero sin refresh token: se reutiliza el guardado', [
-                    'token_expires' => $oauth_data['token_expires'],
-                ]);
-
-                return $oauth_data['access_token'];
-            }
-
-            try {
-                $this->refreshToken();
-                $oauth_data = $this->getStoredTokenData();
-
-                if (!$oauth_data || !$oauth_data['access_token']) {
-                    return null;
-                }
-            } catch (Exception $e) {
-                $this->logger->log('warning', 'No se pudo refrescar el token: se reutiliza el guardado', ['error' => $e->getMessage()]);
-
-                return $oauth_data['access_token'];
-            }
+            $this->logger->log('warning', 'Token con expiración pasada: Yuju no ofrece refresh, se reutiliza el guardado', [
+                'token_expires' => $oauth_data['token_expires'],
+            ]);
         }
 
         return $oauth_data['access_token'];
@@ -448,62 +431,6 @@ class YujuOAuth
     }
 
     /**
-     * Realiza una petición para obtener o refrescar tokens (método legacy).
-     */
-    private function makeTokenRequest($data)
-    {
-        $url = $this->auth_url . '/oauth/token';
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query($data),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/x-www-form-urlencoded',
-                'Accept: application/json',
-            ],
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-        ]);
-
-        $response_body = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_error = curl_error($ch);
-        curl_close($ch);
-
-        if ($curl_error) {
-            return [
-                'success' => false,
-                'error' => 'CURL_ERROR',
-                'message' => $curl_error,
-            ];
-        }
-
-        $decoded_response = json_decode($response_body, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return [
-                'success' => false,
-                'error' => 'JSON_DECODE_ERROR',
-                'message' => 'Invalid JSON response',
-            ];
-        }
-
-        $success = ($http_code >= 200 && $http_code < 300);
-
-        return [
-            'success' => $success,
-            'http_code' => $http_code,
-            'data' => $decoded_response,
-            'error' => $success ? null : (isset($decoded_response['error']) ? $decoded_response['error'] : 'HTTP_' . $http_code),
-            'message' => $success ? null : (isset($decoded_response['error_description']) ? $decoded_response['error_description'] : 'HTTP Error ' . $http_code),
-        ];
-    }
-
-    /**
      * Guarda los datos del token en la base de datos.
      */
     private function saveTokenData($token_data)
@@ -587,46 +514,25 @@ class YujuOAuth
     }
 
     /**
-     * Revoca el token actual.
+     * Elimina el token local.
+     *
+     * Yuju no documenta endpoint de revocación (no existe servidor de
+     * autorización propio), así que la "revocación" consiste en borrar el
+     * token guardado: la siguiente conexión pedirá uno nuevo.
      */
     public function revokeToken()
     {
         $oauth_data = $this->getStoredTokenData();
 
-        if (!$oauth_data || !$oauth_data['access_token']) {
+        if (!$oauth_data || empty($oauth_data['access_token'])) {
             return true; // No hay token que revocar
         }
 
-        $data = [
-            'token' => $oauth_data['access_token'],
-            'client_id' => $this->client_id,
-            'client_secret' => $this->client_secret,
-        ];
-
-        $url = $this->auth_url . '/oauth/revoke';
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query($data),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/x-www-form-urlencoded',
-            ],
-        ]);
-
-        curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        // Eliminar datos locales independientemente del resultado
         $this->clearStoredTokenData();
 
-        $this->logger->log('info', 'Token OAuth revocado', ['http_code' => $http_code]);
+        $this->logger->log('info', 'Token OAuth eliminado localmente');
 
-        return $http_code >= 200 && $http_code < 300;
+        return true;
     }
 
     /**
