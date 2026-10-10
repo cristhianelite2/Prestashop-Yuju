@@ -7,6 +7,9 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Corregido
+- Botón **"Probar Conectividad"** de la configuración sin efecto en PrestaShop 9: el JS del módulo solo se cargaba vía hooks (`displayBackOfficeHeader`/`actionAdminControllerSetMedia`), que pueden no estar registrados o ejecutarse tarde. `AdminYujuConfigurationController` ahora define `setMedia()` y carga `admin.js`/`admin.css` de forma determinista, y la plantilla inyecta `yujuAdminConfig` (URL AJAX + token) para no depender de los globales `window.currentIndex`/`window.token`.
+
 ### Cambiado
 - La vinculación con el monitor usa el **flujo autorizado versionado**: la tienda solo se registra (`POST /api/v1/modules/register`) tras una prueba de conectividad satisfactoria (`state === 'connected'` sin `needs_auth`) desde `Probar conectividad`; ya no hay handshake silencioso en segundo plano. El registro es idempotente: si la instalación ya tiene API key no se rota, y al presentarla el monitor devuelve la misma clave.
 - La telemetría se envía a `POST /api/v1/modules/activity` autenticada con la cabecera `X-API-Key` (antes `/api/events` con Bearer).

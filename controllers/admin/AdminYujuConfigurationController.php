@@ -42,6 +42,23 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $this->toolbar_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
     }
 
+    /**
+     * Carga los assets del módulo (admin.js / admin.css) de forma determinista.
+     *
+     * No se puede depender de displayBackOfficeHeader o actionAdminControllerSetMedia:
+     * si el hook no está registrado en la tienda (p. ej. módulo actualizado sin
+     * re-registrar hooks) o se ejecuta tarde (PrestaShop 9), el JS nunca se carga
+     * y los botones de la página no responden. setMedia() se invoca siempre por el
+     * núcleo para todo controlador admin, así que aquí es el punto garantizado.
+     */
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+        $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+    }
+
     public function initContent()
     {
         parent::initContent();

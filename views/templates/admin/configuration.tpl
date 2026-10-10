@@ -330,6 +330,16 @@
 </div>
 
 
+<script>
+    // Parámetros de AJAX deterministas para YujuAdmin: no dependen de los
+    // globales window.currentIndex / window.token (cuyo formato cambió en
+    // PrestaShop 9); los inyecta el controlador vía Smarty.
+    var yujuAdminConfig = {
+        ajaxUrl: '{$ajax_url|escape:'javascript':'UTF-8'}',
+        token: '{$token|escape:'javascript':'UTF-8'}'
+    };
+</script>
+
 {/block}
 
 
