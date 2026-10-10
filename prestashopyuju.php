@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.4';
+        $this->version = '1.1.5';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -243,7 +243,7 @@ class Prestashopyuju extends Module
             }
 
             if (!$tab->save()) {
-                $this->logger->error('Failed to install tab: ' . $tab_data['class_name']);
+                PrestaShopLogger::addLog('Failed to install tab: ' . $tab_data['class_name'], 3);
 
                 return false;
             }
@@ -274,7 +274,7 @@ class Prestashopyuju extends Module
 
             if (Validate::isLoadedObject($tab) && $tab->id > 0) {
                 if (!$tab->delete()) {
-                    $this->logger->error('Failed to uninstall tab: ' . $class_name);
+                    PrestaShopLogger::addLog('Failed to uninstall tab: ' . $class_name, 3);
                 }
             }
         }
@@ -283,40 +283,45 @@ class Prestashopyuju extends Module
     }
 
     /**
-     * Lista de hooks que el módulo necesita registrar.
+     * Lista de hooks que el módulo puede registrar.
      *
      * Se expone como método público para que el back-office pueda comprobar
      * cuáles están realmente registrados en la tienda (p. ej. tras una
      * actualización que no re-registró los hooks).
+     *
+     * - `displayBackOfficeHeader` y `actionAdminControllerSetMedia` solo cargan
+     *   los assets del panel y van siempre activos.
+     * - Los 4 hooks de sincronización puntual están DESHABILITADOS por defecto
+     *   (ver YUJU_DISABLED_HOOKS) y se activan desde el switch del panel.
      *
      * @return string[] Nombres técnicos de los hooks
      */
     public function getModuleHooks()
     {
         return [
-        'actionProductAdd',
-        'actionProductUpdate',
-        'actionProductDelete',
-        'actionUpdateQuantity',
-        'actionProductAttributeUpdate',
-        'actionCategoryAdd',
-        'actionCategoryUpdate',
-        'actionCategoryDelete',
-        'actionOrderStatusUpdate',
-        'actionValidateOrder',
-        'actionOrderReturn',
-        'actionProductAttributeDelete',
-        'actionAttributeGroupDelete',
-        'actionAttributeDelete',
-        'actionCarrierUpdate',
-        'actionCustomerAccountAdd',
-        'actionCustomerAccountUpdate',
-        'actionObjectManufacturerAddAfter',
-        'actionObjectManufacturerUpdateAfter',
-        'actionObjectManufacturerDeleteAfter',
         'displayBackOfficeHeader',
-        'displayAdminProductsExtra',
         'actionAdminControllerSetMedia',
+        'actionProductUpdate',
+        'actionUpdateQuantity',
+        'actionValidateOrder',
+        'actionOrderStatusUpdate',
+        ];
+    }
+
+    /**
+     * Hooks de sincronización que vienen deshabilitados de fábrica.
+     *
+     * El usuario puede activarlos con el switch del panel de configuración.
+     *
+     * @return string[]
+     */
+    public static function getDefaultDisabledHooks()
+    {
+        return [
+            'actionProductUpdate',
+            'actionUpdateQuantity',
+            'actionValidateOrder',
+            'actionOrderStatusUpdate',
         ];
     }
 
@@ -334,6 +339,12 @@ class Prestashopyuju extends Module
         $raw = Configuration::get('YUJU_DISABLED_HOOKS');
 
         if (!is_string($raw) || $raw === '') {
+            // Distinguir "no configurado" (aplicar los de fábrica) de "lista
+            // vacía intencional" (el usuario activó todos los switches).
+            if (!Configuration::hasKey('YUJU_DISABLED_HOOKS')) {
+                return static::getDefaultDisabledHooks();
+            }
+
             return [];
         }
 
@@ -406,7 +417,7 @@ class Prestashopyuju extends Module
             }
 
             if (!$this->registerHook($hook)) {
-                $this->logger->error('Failed to register hook: ' . $hook);
+                PrestaShopLogger::addLog('Failed to register hook: ' . $hook, 3);
 
                 return false;
             }
@@ -424,7 +435,7 @@ class Prestashopyuju extends Module
 
         foreach ($defaults as $key => $value) {
             if (!Configuration::updateValue($key, $value)) {
-                $this->logger->error('Failed to install configuration: ' . $key);
+                PrestaShopLogger::addLog('Failed to install configuration: ' . $key, 3);
 
                 return false;
             }
@@ -461,7 +472,7 @@ class Prestashopyuju extends Module
         foreach ($directories as $dir) {
             if (!is_dir($dir)) {
                 if (!mkdir($dir, 0755, true)) {
-                    $this->logger->error('Failed to create directory: ' . $dir);
+                    PrestaShopLogger::addLog('Failed to create directory: ' . $dir, 3);
 
                     return false;
                 }
@@ -493,202 +504,109 @@ class Prestashopyuju extends Module
     // Hook implementations
 
     /**
-     * Product add hook.
-     */
-    public function hookActionProductAdd($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'create');
-        }
-    }
-
-    /**
-     * Product update hook.
+     * Al actualizar un producto: empuja el producto a Yuju.
+     *
+     * Disponible pero DESHABILITADO por defecto (ver YUJU_DISABLED_HOOKS). Se
+     * activa desde el switch del panel. La sincronización es best-effort: si la
+     * API falla se registra el error y NUNCA se interrumpe el guardado.
      */
     public function hookActionProductUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'update');
+        $product_id = 0;
+
+        if (isset($params['product']) && Validate::isLoadedObject($params['product'])) {
+            $product_id = (int) $params['product']->id;
+        } elseif (isset($params['id_product'])) {
+            $product_id = (int) $params['id_product'];
+        }
+
+        if ($product_id <= 0) {
+            return;
+        }
+
+        try {
+            $product_manager = new YujuProductManager();
+            $product_manager->syncProductsToYuju([$product_id]);
+        } catch (Throwable $e) {
+            PrestaShopLogger::addLog('[Yuju] actionProductUpdate (product ' . $product_id . '): ' . $e->getMessage(), 2);
         }
     }
 
     /**
-     * Product delete hook.
-     */
-    public function hookActionProductDelete($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['product']->id, 'delete');
-        }
-    }
-
-    /**
-     * Stock update hook.
+     * Al actualizar el stock: empuja stock y precio del producto a Yuju.
+     *
+     * DESHABILITADO por defecto. Cubre "stock/precio": los cambios de precio
+     * entran por actionProductUpdate, por lo que aquí se sincronizan ambos.
      */
     public function hookActionUpdateQuantity($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_STOCK_SYNC')) {
-            $this->sync_manager->queueStockSync($params['id_product'], $params['id_product_attribute']);
+        $product_id = isset($params['id_product']) ? (int) $params['id_product'] : 0;
+
+        if ($product_id <= 0) {
+            return;
+        }
+
+        try {
+            $sync_manager = new YujuSyncManager();
+            $sync_manager->syncStock([$product_id]);
+            $sync_manager->syncPrices([$product_id]);
+        } catch (Throwable $e) {
+            PrestaShopLogger::addLog('[Yuju] actionUpdateQuantity (product ' . $product_id . '): ' . $e->getMessage(), 2);
         }
     }
 
     /**
-     * Product attribute update hook.
-     */
-    public function hookActionProductAttributeUpdate($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_update');
-        }
-    }
-
-    /**
-     * Category add hook.
-     */
-    public function hookActionCategoryAdd($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'create');
-        }
-    }
-
-    /**
-     * Category update hook.
-     */
-    public function hookActionCategoryUpdate($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'update');
-        }
-    }
-
-    /**
-     * Category delete hook.
-     */
-    public function hookActionCategoryDelete($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CATEGORY_SYNC')) {
-            $this->sync_manager->queueCategorySync($params['category']->id, 'delete');
-        }
-    }
-
-    /**
-     * Order status update hook.
+     * Al cambiar el estado de un pedido: lo replica en Yuju.
+     *
+     * DESHABILITADO por defecto.
      */
     public function hookActionOrderStatusUpdate($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['id_order'], 'status_update');
+        $order_id = isset($params['id_order']) ? (int) $params['id_order'] : 0;
+        $status_id = 0;
+
+        if (isset($params['newOrderStatus']) && Validate::isLoadedObject($params['newOrderStatus'])) {
+            $status_id = (int) $params['newOrderStatus']->id;
+        } elseif (isset($params['id_order_state'])) {
+            $status_id = (int) $params['id_order_state'];
+        }
+
+        if ($order_id <= 0 || $status_id <= 0) {
+            return;
+        }
+
+        try {
+            $order_manager = new YujuOrderManager($this->context);
+            $order_manager->updateOrderStatusInYuju($order_id, $status_id);
+        } catch (Throwable $e) {
+            PrestaShopLogger::addLog('[Yuju] actionOrderStatusUpdate (order ' . $order_id . '): ' . $e->getMessage(), 2);
         }
     }
 
     /**
-     * Order validation hook.
+     * Al validar un pedido: lo envía a Yuju.
+     *
+     * DESHABILITADO por defecto.
      */
     public function hookActionValidateOrder($params)
     {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['order']->id, 'create');
-        }
-    }
+        $order_id = 0;
 
-    /**
-     * Order return hook.
-     */
-    public function hookActionOrderReturn($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ORDER_SYNC')) {
-            $this->sync_manager->queueOrderSync($params['order']->id, 'return');
+        if (isset($params['order']) && Validate::isLoadedObject($params['order'])) {
+            $order_id = (int) $params['order']->id;
+        } elseif (isset($params['id_order'])) {
+            $order_id = (int) $params['id_order'];
         }
-    }
 
-    /**
-     * Product attribute delete hook.
-     */
-    public function hookActionProductAttributeDelete($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_PRODUCT_SYNC')) {
-            $this->sync_manager->queueProductSync($params['id_product'], 'attribute_delete');
+        if ($order_id <= 0) {
+            return;
         }
-    }
 
-    /**
-     * Attribute group delete hook.
-     */
-    public function hookActionAttributeGroupDelete($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
-            $this->sync_manager->queueAttributeSync($params['object']->id, 'group_delete');
-        }
-    }
-
-    /**
-     * Attribute delete hook.
-     */
-    public function hookActionAttributeDelete($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_ATTRIBUTE_SYNC')) {
-            $this->sync_manager->queueAttributeSync($params['object']->id, 'delete');
-        }
-    }
-
-    /**
-     * Carrier update hook.
-     */
-    public function hookActionCarrierUpdate($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CARRIER_SYNC')) {
-            $this->sync_manager->queueCarrierSync($params['carrier']->id, 'update');
-        }
-    }
-
-    /**
-     * Customer account add hook.
-     */
-    public function hookActionCustomerAccountAdd($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CUSTOMER_SYNC')) {
-            $this->sync_manager->queueCustomerSync($params['newCustomer']->id, 'create');
-        }
-    }
-
-    /**
-     * Customer account update hook.
-     */
-    public function hookActionCustomerAccountUpdate($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_CUSTOMER_SYNC')) {
-            $this->sync_manager->queueCustomerSync($params['customer']->id, 'update');
-        }
-    }
-
-    /**
-     * Manufacturer add hook.
-     */
-    public function hookActionObjectManufacturerAddAfter($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
-            $this->sync_manager->queueManufacturerSync($params['object']->id, 'create');
-        }
-    }
-
-    /**
-     * Manufacturer update hook.
-     */
-    public function hookActionObjectManufacturerUpdateAfter($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
-            $this->sync_manager->queueManufacturerSync($params['object']->id, 'update');
-        }
-    }
-
-    /**
-     * Manufacturer delete hook.
-     */
-    public function hookActionObjectManufacturerDeleteAfter($params)
-    {
-        if (YujuConfig::get('YUJU_ENABLE_AUTO_SYNC') && YujuConfig::get('YUJU_ENABLE_MANUFACTURER_SYNC')) {
-            $this->sync_manager->queueManufacturerSync($params['object']->id, 'delete');
+        try {
+            $order_manager = new YujuOrderManager($this->context);
+            $order_manager->sendOrderToYuju($order_id);
+        } catch (Throwable $e) {
+            PrestaShopLogger::addLog('[Yuju] actionValidateOrder (order ' . $order_id . '): ' . $e->getMessage(), 2);
         }
     }
 
@@ -737,26 +655,6 @@ class Prestashopyuju extends Module
     }
 
     /**
-     * Admin products extra hook.
-     */
-    public function hookDisplayAdminProductsExtra($params)
-    {
-        $product_id = (int) Tools::getValue('id_product');
-
-        if ($product_id) {
-            $sync_status = $this->sync_manager->getProductSyncStatus($product_id);
-
-            $this->context->smarty->assign([
-            'product_id' => $product_id,
-            'sync_status' => $sync_status,
-            'yuju_product_id' => $this->sync_manager->getYujuProductId($product_id),
-            ]);
-
-            return $this->display(__FILE__, 'views/templates/admin/product_sync_info.tpl');
-        }
-    }
-
-    /**
      * Get module instance.
      */
     public static function getInstance()
@@ -775,9 +673,11 @@ class Prestashopyuju extends Module
      */
     public function isConfigured()
     {
+        $oauth = new YujuOAuth();
+
         return !empty(YujuConfig::get('YUJU_CLIENT_ID'))
         && !empty(YujuConfig::get('YUJU_CLIENT_SECRET'))
-        && $this->oauth->hasValidToken();
+        && $oauth->hasValidToken();
     }
 
     /**
@@ -785,9 +685,11 @@ class Prestashopyuju extends Module
      */
     public function getModuleStatus()
     {
+        $oauth = new YujuOAuth();
+
         return [
         'configured' => $this->isConfigured(),
-        'connected' => $this->oauth->hasValidToken(),
+        'connected' => $oauth->hasValidToken(),
         'sync_enabled' => YujuConfig::get('YUJU_ENABLE_AUTO_SYNC'),
         'last_sync' => YujuConfig::get('YUJU_LAST_SYNC_TIME'),
         'version' => $this->version,

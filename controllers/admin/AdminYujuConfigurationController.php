@@ -175,28 +175,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
     protected static function getHookLabels()
     {
         return [
-            'actionProductAdd' => 'Al crear un producto',
             'actionProductUpdate' => 'Al actualizar un producto',
-            'actionProductDelete' => 'Al eliminar un producto',
-            'actionUpdateQuantity' => 'Al actualizar el stock',
-            'actionProductAttributeUpdate' => 'Al actualizar una combinación',
-            'actionCategoryAdd' => 'Al crear una categoría',
-            'actionCategoryUpdate' => 'Al actualizar una categoría',
-            'actionCategoryDelete' => 'Al eliminar una categoría',
-            'actionOrderStatusUpdate' => 'Al cambiar el estado de un pedido',
+            'actionUpdateQuantity' => 'Al actualizar el stock (y precio)',
             'actionValidateOrder' => 'Al validar un pedido',
-            'actionOrderReturn' => 'Al registrar una devolución',
-            'actionProductAttributeDelete' => 'Al eliminar una combinación',
-            'actionAttributeGroupDelete' => 'Al eliminar un grupo de atributos',
-            'actionAttributeDelete' => 'Al eliminar un atributo',
-            'actionCarrierUpdate' => 'Al actualizar un transportista',
-            'actionCustomerAccountAdd' => 'Al crear una cuenta de cliente',
-            'actionCustomerAccountUpdate' => 'Al actualizar una cuenta de cliente',
-            'actionObjectManufacturerAddAfter' => 'Al crear un fabricante',
-            'actionObjectManufacturerUpdateAfter' => 'Al actualizar un fabricante',
-            'actionObjectManufacturerDeleteAfter' => 'Al eliminar un fabricante',
+            'actionOrderStatusUpdate' => 'Al cambiar el estado de un pedido',
             'displayBackOfficeHeader' => 'Cabecera del panel de administración',
-            'displayAdminProductsExtra' => 'Pestaña extra en la ficha de producto',
             'actionAdminControllerSetMedia' => 'Carga de assets en el panel de administración',
         ];
     }

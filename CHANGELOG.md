@@ -5,6 +5,25 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-10-10
+
+### Cambiado
+- **Limpieza de hooks**: el panel *"Estado de los Hooks del Módulo"* pasa de 23 a **6** hooks. Se eliminan 20 hooks que ya no se usaban (habían quedado de una arquitectura inicial de auto-sync por hooks); la sincronización automática se ejecuta por **cron** (`cron/sync.php`) y **webhooks** (`webhook.php`).
+- Solo quedan siempre activos `displayBackOfficeHeader` y `actionAdminControllerSetMedia` (assets del panel).
+
+### Añadido
+- **Hooks de sincronización puntual cableados y deshabilitados por defecto** (se activan con el switch del panel):
+  - `actionProductUpdate` → empuja el producto a Yuju (`YujuProductManager::syncProductsToYuju`).
+  - `actionUpdateQuantity` → sincroniza **stock y precio** del producto (`YujuSyncManager::syncStock` + `syncPrices`).
+  - `actionValidateOrder` → crea el pedido en Yuju (`YujuOrderManager::sendOrderToYuju`).
+  - `actionOrderStatusUpdate` → replica el cambio de estado (`YujuOrderManager::updateOrderStatusInYuju`).
+- Todos los handlers son *best-effort*: `try/catch` + log, para no interrumpir jamás el guardado del producto/pedido si la API falla.
+- `upgrade/upgrade-1.1.5.php`: desregistra los 20 hooks retirados en tiendas existentes y deja los 4 nuevos desactivados por defecto.
+
+### Corregido
+- Las rutas de error de instalación/desinstalación usaban `$this->logger` (que es `null`); ahora usan `PrestaShopLogger::addLog`.
+- Eliminado el hook `displayAdminProductsExtra`, que llamaba a métodos inexistentes (`getProductSyncStatus`) sobre `$this->sync_manager` nulo.
+
 ## [1.1.4] - 2026-10-10
 
 ### Añadido

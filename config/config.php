@@ -122,7 +122,9 @@ class YujuConfig
             'YUJU_ENABLE_WEBHOOKS' => true,
 
             // Hooks Settings
-            'YUJU_DISABLED_HOOKS' => '',
+            // Hooks de sincronización puntual deshabilitados de fábrica.
+            // El usuario puede activarlos con el switch del panel.
+            'YUJU_DISABLED_HOOKS' => 'actionProductUpdate,actionUpdateQuantity,actionValidateOrder,actionOrderStatusUpdate',
 
             // Advanced Settings
             'YUJU_ENABLE_COMPRESSION' => true,
