@@ -247,6 +247,17 @@ var YujuAdmin = {
                             ? 'credenciales (Client ID + Secret Key)'
                             : (authLevel === 'token' ? 'token de API' : 'n/d'))
                         + '</small><br>';
+
+                    // Estado de la vinculación con el monitor de telemetría.
+                    var monitor = data.monitor;
+                    if (monitor) {
+                        html += '<small>Monitor de telemetría: '
+                            + (monitor.success
+                                ? (monitor.already_registered ? 'registrada (clave recuperada)' : 'vinculada')
+                                : (monitor.attempted ? 'no se pudo vincular' : 'sin cambios'))
+                            + (monitor.message ? ' — ' + monitor.message : '')
+                            + '</small><br>';
+                    }
                     
                     // Show debug info
                     if (response.data && response.data.debug_info) {
@@ -258,6 +269,10 @@ var YujuAdmin = {
                         html += 'Entorno: ' + (debug.environment || 'N/A') + '<br>';
                         html += 'Conexión exitosa: ' + (debug.connection_test_result && debug.connection_test_result.success ? 'Sí' : 'No') + '<br>';
                         html += 'Cantidad de tiendas: ' + (debug.stores_count || 0) + '<br>';
+                        if (typeof debug.stores_raw !== 'undefined') {
+                            html += 'Respuesta cruda de Yuju (account): <code style="font-size:11px; word-break:break-all;">'
+                                + JSON.stringify(debug.stores_raw) + '</code><br>';
+                        }
                         html += '</small>';
                         html += '</div>';
                     }
@@ -269,9 +284,18 @@ var YujuAdmin = {
                     if (stores.length > 0) {
                         html += '<div style="margin-top: 10px;"><strong>Tiendas disponibles:</strong><ul>';
                         stores.forEach(function(store) {
-                            store = store || {};
-                            var name = store.name || store.title || store.shop || store.shop_name || 'Sin nombre';
-                            var id = store.id || store.store_id || store.shop_id || 'N/A';
+                            // Forma no reconocida (p. ej. un listado anidado):
+                            // se muestra el JSON tal cual para poder ajustarlo.
+                            if (store === null || typeof store !== 'object' || Array.isArray(store)) {
+                                html += '<li><code style="font-size:11px; word-break:break-all;">'
+                                    + JSON.stringify(store) + '</code></li>';
+                                return;
+                            }
+                            var name = store.name || store.title || store.shop || store.shop_name
+                                || store.store_name || store.storeName || store.shopName
+                                || store.company_name || store.account_name || 'Sin nombre';
+                            var id = store.id || store.store_id || store.shop_id
+                                || store.storeId || store.shopId || store.uuid || store.code || 'N/A';
                             html += '<li>' + name + ' (ID: ' + id + ')</li>';
                         });
                         html += '</ul></div>';

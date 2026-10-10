@@ -125,17 +125,51 @@ class YujuMonitor
      */
     public static function registerIfAuthorized($connectionTest, $force = false)
     {
+        return !empty(self::attemptRegistration($connectionTest, $force)['success']);
+    }
+
+    /**
+     * Intenta la vinculación y describe el resultado (para mostrarlo en el panel).
+     *
+     * A diferencia del registro de segundo plano, una acción explícita
+     * (`$force = true`) siempre contacta con el monitor aunque la tienda ya
+     * estuviera vinculada: presenta su API key para que el monitor registre el
+     * intento (idempotente, sin rotar la clave) y así el dashboard refleje la
+     * conexión recién probada.
+     *
+     * @param array<string, mixed> $connectionTest Resultado de YujuApiClient::testConnection()
+     * @param bool                 $force          Acción explícita (botón "Probar Conectividad")
+     *
+     * @return array{attempted: bool, success: bool, already_registered: bool, message: string}
+     */
+    public static function attemptRegistration($connectionTest, $force = false)
+    {
         try {
             if (!class_exists('Configuration')) {
-                return false;
-            }
-
-            if (self::isConfigured()) {
-                return true;
+                return [
+                    'attempted' => false,
+                    'success' => false,
+                    'already_registered' => false,
+                    'message' => 'El monitor no está disponible en este contexto.',
+                ];
             }
 
             if (!self::isAuthorized($connectionTest)) {
-                return false;
+                return [
+                    'attempted' => false,
+                    'success' => false,
+                    'already_registered' => false,
+                    'message' => 'La conectividad aún no está autorizada: la tienda no se vincula.',
+                ];
+            }
+
+            if (!$force && self::isConfigured()) {
+                return [
+                    'attempted' => false,
+                    'success' => true,
+                    'already_registered' => false,
+                    'message' => 'La tienda ya estaba vinculada al monitor.',
+                ];
             }
 
             if (!$force) {
@@ -143,7 +177,12 @@ class YujuMonitor
                 $last = (int) Configuration::get(self::CONFIG_LAST_CONNECT);
 
                 if ($last > 0 && ($now - $last) < self::CONNECT_RETRY_SECONDS) {
-                    return false;
+                    return [
+                        'attempted' => false,
+                        'success' => false,
+                        'already_registered' => false,
+                        'message' => 'Vinculación reciente; se espera al siguiente intento.',
+                    ];
                 }
             }
 
@@ -166,9 +205,19 @@ class YujuMonitor
             $result = self::register($url, $name);
             self::logConnect($result);
 
-            return !empty($result['success']);
+            return [
+                'attempted' => true,
+                'success' => !empty($result['success']),
+                'already_registered' => !empty($result['already_registered']),
+                'message' => isset($result['message']) ? (string) $result['message'] : '',
+            ];
         } catch (Throwable $e) {
-            return false;
+            return [
+                'attempted' => false,
+                'success' => false,
+                'already_registered' => false,
+                'message' => 'No se pudo intentar la vinculación con el monitor.',
+            ];
         }
     }
 
@@ -541,12 +590,21 @@ class YujuMonitor
 
     /**
      * Llave temporal del handshake: SHA-256 de "yuju" más la fecha/hora (d/m/y H:i).
+     *
+     * El instante se expresa en **UTC**: el monitor valida su versión de la
+     * llave con la hora del servidor en UTC, así que usar la hora local del
+     * servidor de la tienda rompería la ventana de ±2 minutos y el registro
+     * quedaría rechazado con `invalid_handshake_key`.
+     *
+     * @param int|null $timestamp Unix timestamp (por defecto, ahora)
+     *
+     * @return string Clave hexadécimal de 64 caracteres
      */
     public static function handshakeKey($timestamp = null)
     {
         $timestamp = $timestamp === null ? time() : (int) $timestamp;
 
-        return hash('sha256', 'yuju' . date('d/m/y H:i', $timestamp));
+        return hash('sha256', 'yuju' . gmdate('d/m/y H:i', $timestamp));
     }
 
     /**

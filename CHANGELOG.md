@@ -5,6 +5,19 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-09
+
+### Corregido
+- El registro de la tienda en el monitor fallaba **siempre** cuando la zona horaria del servidor de PrestaShop no era UTC: la llave temporal del handshake se generaba con `date()` (hora local) y el monitor la valida en UTC, así que el monitor respondía `401 invalid_handshake_key` y jamás quedaba rastro. Ahora se deriva con `gmdate()` (UTC) en el módulo y en el monitor, dentro de la ventana de ±2 minutos.
+- `"Tiendas disponibles: Sin nombre (ID: N/A)"`: el listado de tiendas no se desenvolvía cuando la API de Yuju devuelve envoltorios anidados (p. ej. `{"data": {"stores": [...]}}`). `normalizeStoresList()` ahora desenvuelve los contenedores habituales recursivamente, y el panel muestra el JSON crudo de `account` en bloque de depuración cuando el esquema aún no coincide, para poder ajustarlo sin adivinar.
+
+### Cambiado
+- El botón **"Probar Conectividad"** ahora genera un intento de vinculación **visible en el monitor en cada pulsación** (también cuando la tienda ya estaba vinculada: presenta su API key, sin rotarla). El monitor registra cada intento —éxito o rechazo— y el panel muestra si se vinculó y qué respondió (`data.monitor`).
+- La respuesta del test de conectividad incluye `data.monitor` (estado del registro) y `data.debug_info.stores_raw` (respuesta cruda del endpoint `account`) para diagnóstico.
+
+### Añadido
+- Panel **"Intentos de conexión"** en el dashboard del monitor (`/app`): cada intento entrante de `/api/v1/modules/register` queda registrado (nueva tabla `registration_attempts`) con dominio, nombre, versiones, IP, resultado, HTTP y hora —incluidos los rechazados por handshake, API key, tienda ya registrada, campos prohibidos o payload inválido.
+
 ## [Unreleased]
 
 ### Corregido
