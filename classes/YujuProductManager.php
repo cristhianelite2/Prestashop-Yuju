@@ -97,11 +97,8 @@ class YujuProductManager
 
             $this->logger->log('Product synchronization from Yuju completed. Synced: ' . $synced_count . ' (Created: ' . $created_count . ', Updated: ' . $updated_count . '), Errors: ' . count($errors), 'info');
 
-            YujuMonitor::emit('sync.product', [
+            YujuMonitor::tally('sync.product', (int) $synced_count, count($errors), [
                 'direction' => 'from_yuju',
-                'status' => empty($errors) ? 'success' : 'warning',
-                'count' => (int) $synced_count,
-                'failedCount' => count($errors),
             ]);
 
             return [
@@ -114,10 +111,9 @@ class YujuProductManager
         } catch (Exception $e) {
             $this->logger->log('Product synchronization from Yuju failed: ' . $e->getMessage(), 'error');
 
-            YujuMonitor::emit('sync.error', [
+            YujuMonitor::tally('sync.error', 0, 1, [
                 'direction' => 'from_yuju',
                 'level' => 'error',
-                'status' => 'error',
             ]);
 
             return [
@@ -167,11 +163,8 @@ class YujuProductManager
 
             $this->logger->log('Product synchronization to Yuju completed. Synced: ' . $synced_count . ' (Created: ' . $created_count . ', Updated: ' . $updated_count . '), Errors: ' . count($errors), 'info');
 
-            YujuMonitor::emit('sync.product', [
+            YujuMonitor::tally('sync.product', (int) $synced_count, count($errors), [
                 'direction' => 'to_yuju',
-                'status' => empty($errors) ? 'success' : 'warning',
-                'count' => (int) $synced_count,
-                'failedCount' => count($errors),
             ]);
 
             return [
@@ -184,10 +177,9 @@ class YujuProductManager
         } catch (Exception $e) {
             $this->logger->log('Product synchronization to Yuju failed: ' . $e->getMessage(), 'error');
 
-            YujuMonitor::emit('sync.error', [
+            YujuMonitor::tally('sync.error', 0, 1, [
                 'direction' => 'to_yuju',
                 'level' => 'error',
-                'status' => 'error',
             ]);
 
             return [

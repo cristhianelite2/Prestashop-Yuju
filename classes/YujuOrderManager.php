@@ -94,17 +94,35 @@ class YujuOrderManager
 
             switch ($event_type) {
                 case 'order.created':
-                    return $this->createOrderFromYuju($order_data);
+                    $result = $this->createOrderFromYuju($order_data);
+                    break;
                 case 'order.updated':
-                    return $this->updateOrderFromYuju($order_data);
+                    $result = $this->updateOrderFromYuju($order_data);
+                    break;
                 case 'order.status_changed':
-                    return $this->updateOrderStatus($order_data);
+                    $result = $this->updateOrderStatus($order_data);
+                    break;
                 case 'order.cancelled':
-                    return $this->cancelOrder($order_data);
+                    $result = $this->cancelOrder($order_data);
+                    break;
                 default:
                     throw new Exception('Unknown webhook event type: ' . $event_type);
             }
+
+            // Un único contador por webhook aunque internamente componga varias
+            // operaciones (created/updated/status_changed/cancelled): evita el
+            // doble conteo cuando updateOrderFromYuju cambia el estado.
+            YujuMonitor::tally('sync.order', 1, 0, [
+                'direction' => 'from_yuju',
+            ]);
+
+            return $result;
         } catch (Exception $e) {
+            YujuMonitor::tally('sync.order', 0, 1, [
+                'direction' => 'from_yuju',
+                'level' => 'error',
+            ]);
+
             $this->logger->log('Webhook order processing failed: ' . $e->getMessage(), 'error');
             throw $e;
         }
@@ -287,6 +305,27 @@ class YujuOrderManager
      */
     public function sendOrderToYuju($order_id)
     {
+        try {
+            $result = $this->doSendOrderToYuju($order_id);
+
+            YujuMonitor::tally('sync.order', 1, 0, ['direction' => 'to_yuju']);
+
+            return $result;
+        } catch (Exception $e) {
+            YujuMonitor::tally('sync.order', 0, 1, [
+                'direction' => 'to_yuju',
+                'level' => 'error',
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Envía un pedido a Yuju (lógica sin instrumentar).
+     */
+    protected function doSendOrderToYuju($order_id)
+    {
         $order = new Order($order_id);
 
         if (!Validate::isLoadedObject($order)) {
@@ -325,6 +364,27 @@ class YujuOrderManager
      * Update order status in Yuju.
      */
     public function updateOrderStatusInYuju($order_id, $new_status)
+    {
+        try {
+            $result = $this->doUpdateOrderStatusInYuju($order_id, $new_status);
+
+            YujuMonitor::tally('sync.order', 1, 0, ['direction' => 'to_yuju']);
+
+            return $result;
+        } catch (Exception $e) {
+            YujuMonitor::tally('sync.order', 0, 1, [
+                'direction' => 'to_yuju',
+                'level' => 'error',
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Actualiza el estado de un pedido en Yuju (lógica sin instrumentar).
+     */
+    protected function doUpdateOrderStatusInYuju($order_id, $new_status)
     {
         $mapping = $this->getOrderMapping($order_id);
 

@@ -46,8 +46,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
     {
         parent::initContent();
 
-        // Vinculación silenciosa con el monitor de telemetría: sin interfaz ni
-        // mensajes; solo se intenta (como mucho) una vez cada 6 horas.
+        // Vinculación con el monitor de telemetría: la tienda solo se registra
+        // tras una prueba de conectividad autorizada (ver ajaxProcessTestConnectivity),
+        // así que aquí únicamente se consulta el estado; nunca se registra en
+        // segundo plano sin validar credenciales.
         YujuMonitor::ensureConnected();
 
         $oauth = new YujuOAuth();
@@ -214,6 +216,15 @@ class AdminYujuConfigurationController extends ModuleAdminController
             // Get stores from API
             $stores = $api_client->getStores();
             $stores_list = $this->normalizeStoresList($stores);
+
+            // Registro autorizado en el monitor: solo cuando la validación
+            // existente fue satisfactoria (state=connected sin needs_auth).
+            // El monitor nunca altera la respuesta de esta petición.
+            try {
+                YujuMonitor::registerIfAuthorized($connection_test, true);
+            } catch (Throwable $e) {
+                // Best-effort: un monitor caído no interrumpe la configuración.
+            }
 
             $response = [
                 'success' => true,

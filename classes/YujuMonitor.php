@@ -31,24 +31,36 @@ if (!defined('_PS_VERSION_')) {
  * de la tienda.
  *
  * No se envían cuerpos de peticiones, cabeceras, productos, pedidos, datos de
- * clientes ni credenciales.
+ * clientes ni credenciales de pago.
+ *
+ * Registro (ver docs/MONITOR_API.md):
+ * - La tienda solo se registra cuando la validación de credenciales/autorización
+ *   del módulo ha sido satisfactoria (`state === 'connected'` y sin `needs_auth`).
+ *   Un mero formato correcto no registra nada.
+ * - El registro es idempotente: si la tienda ya tiene API key no se rota; y si
+ *   el monitor la conoce, presenta la clave vigente para recuperar la MISMA.
  */
 class YujuMonitor
 {
     public const CONFIG_URL = 'YUJU_MONITOR_URL';
     public const CONFIG_TOKEN = 'YUJU_MONITOR_TOKEN';
 
-    /** URL por defecto del monitor: la conexión es silenciosa y automática. */
+    /** URL por defecto del monitor. */
     public const DEFAULT_MONITOR_URL = 'https://yuju.ceballosleon.com';
 
-    /** Marca de tiempo del último intento silencioso de vinculación. */
+    /** Rutas versionadas del contrato compartido. */
+    private const REGISTER_PATH = '/api/v1/modules/register';
+    private const ACTIVITY_PATH = '/api/v1/modules/activity';
+
+    /** Marca de tiempo del último intento de vinculación. */
     private const CONFIG_LAST_CONNECT = 'YUJU_MONITOR_LAST_CONNECT';
 
-    /** Espera entre intentos silenciosos de vinculación (6 horas). */
+    /** Espera entre intentos automáticos de vinculación (6 horas). */
     private const CONNECT_RETRY_SECONDS = 21600;
 
     /** Límite de eventos por lote aceptado por el monitor. */
     private const MAX_BATCH = 50;
+    private const MAX_COUNTER = 1000000;
     private const CONNECT_TIMEOUT_SECONDS = 1;
     private const REQUEST_TIMEOUT_SECONDS = 2;
     private const MAX_ENDPOINT_LENGTH = 100;
@@ -60,8 +72,14 @@ class YujuMonitor
     private const EVENT_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
     private const EVENT_LEVELS = ['warning', 'error', 'critical'];
 
+    /** Tipos que se agregan por ejecución con tally(). */
+    private const TALLY_TYPES = ['sync.product', 'sync.order', 'sync.error'];
+
     /** @var array<int, array<string, mixed>> Eventos pendientes de enviar en esta petición. */
     private static $queue = [];
+
+    /** @var array<string, array<string, mixed>> Contadores agregados por tipo. */
+    private static $tallies = [];
 
     private static $flush_registered = false;
 
@@ -76,37 +94,62 @@ class YujuMonitor
     }
 
     /**
-     * Vincula la tienda con el monitor de forma silenciosa.
+     * Devuelve si la tienda está vinculada al monitor.
      *
-     * Se ejecuta sin interfaz y sin mostrar mensajes: si la tienda aún no está
-     * vinculada, intenta el handshake contra la URL guardada (o la pública por
-     * defecto) y guarda el token devuelto. Los fallos se ignoran y no se
-     * reintenta antes de `CONNECT_RETRY_SECONDS`, de modo que la página del
-     * módulo nunca se ralentiza por el monitor.
+     * No realiza ningún handshake: la vinculación solo ocurre tras una prueba de
+     * conectividad autorizada (ver registerIfAuthorized()), de modo que una
+     * mera instalación o visita al panel no registra la tienda.
      *
-     * @return bool true si la tienda quedó vinculada (antes o en este intento)
+     * @return bool
      */
     public static function ensureConnected()
     {
         try {
-            if (self::isConfigured()) {
-                return true;
-            }
+            return self::isConfigured();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
 
+    /**
+     * Registra la tienda si la prueba de conectividad demuestra autorización.
+     *
+     * Solo actúa cuando la validación existente del módulo devolvió
+     * `state === 'connected'` sin `needs_auth`; en cualquier otro caso no
+     * registra ni genera clave.
+     *
+     * @param array<string, mixed> $connectionTest Resultado de YujuApiClient::testConnection()
+     * @param bool                 $force          Ignora el intervalo entre intentos (acción explícita)
+     *
+     * @return bool true si la tienda queda vinculada (antes o en este intento)
+     */
+    public static function registerIfAuthorized($connectionTest, $force = false)
+    {
+        try {
             if (!class_exists('Configuration')) {
                 return false;
             }
 
-            $now = time();
-            $last = (int) Configuration::get(self::CONFIG_LAST_CONNECT);
+            if (self::isConfigured()) {
+                return true;
+            }
 
-            if ($last > 0 && ($now - $last) < self::CONNECT_RETRY_SECONDS) {
+            if (!self::isAuthorized($connectionTest)) {
                 return false;
             }
 
-            // Se marca antes de intentar: si el handshake cuelga, no se vuelve
-            // a probar hasta que toque.
-            Configuration::updateValue(self::CONFIG_LAST_CONNECT, (string) $now);
+            if (!$force) {
+                $now = time();
+                $last = (int) Configuration::get(self::CONFIG_LAST_CONNECT);
+
+                if ($last > 0 && ($now - $last) < self::CONNECT_RETRY_SECONDS) {
+                    return false;
+                }
+            }
+
+            // Se marca antes de intentar: si la petición cuelga, no se reintenta
+            // en cada carga hasta que toque.
+            Configuration::updateValue(self::CONFIG_LAST_CONNECT, (string) time());
 
             $url = self::getMonitorUrl();
 
@@ -120,11 +163,8 @@ class YujuMonitor
                 $name = (string) Tools::getServerName();
             }
 
-            $result = self::connect($url, $name);
-
-            if (!empty($result['success'])) {
-                self::logSilentConnect('ok');
-            }
+            $result = self::register($url, $name);
+            self::logConnect($result);
 
             return !empty($result['success']);
         } catch (Throwable $e) {
@@ -133,15 +173,48 @@ class YujuMonitor
     }
 
     /**
-     * Registro mínimo del resultado del handshake silencioso (sin datos).
+     * Comprueba que la prueba de conectividad demuestra autorización real.
+     *
+     * @param mixed $connectionTest
      */
-    private static function logSilentConnect($result)
+    private static function isAuthorized($connectionTest)
+    {
+        if (!is_array($connectionTest)) {
+            return false;
+        }
+
+        if (empty($connectionTest['success']) || !empty($connectionTest['needs_auth'])) {
+            return false;
+        }
+
+        return isset($connectionTest['state']) && $connectionTest['state'] === 'connected';
+    }
+
+    /**
+     * Registro mínimo del resultado de la vinculación (sin datos sensibles).
+     *
+     * @param array<string, mixed> $result
+     */
+    private static function logConnect(array $result)
     {
         try {
-            if (class_exists('YujuLogger')) {
-                $logger = new YujuLogger();
-                $logger->info('Monitor de telemetría vinculado en segundo plano', ['result' => (string) $result]);
+            if (!class_exists('YujuLogger')) {
+                return;
             }
+
+            $logger = new YujuLogger();
+
+            if (!empty($result['success'])) {
+                $logger->info('Tienda vinculada al monitor de telemetría', [
+                    'already_registered' => !empty($result['already_registered']),
+                ]);
+
+                return;
+            }
+
+            $logger->warning('No se pudo vincular la tienda al monitor de telemetría', [
+                'reason' => isset($result['message']) ? (string) $result['message'] : 'unknown',
+            ]);
         } catch (Throwable $e) {
             // Best-effort: nunca interrumpe.
         }
@@ -160,7 +233,7 @@ class YujuMonitor
     }
 
     /**
-     * Token de instalación guardado (nunca se expone en el panel).
+     * API key de instalación guardada (nunca se expone en el panel).
      */
     private static function getToken()
     {
@@ -172,8 +245,10 @@ class YujuMonitor
     }
 
     /**
-     * Registra un evento de telemetría. Devuelve false si el tipo no es válido o
-     * si la tienda no está vinculada; nunca lanza excepciones.
+     * Registra un evento puntual de telemetría. Devuelve false si el tipo no es
+     * válido; nunca lanza excepciones.
+     *
+     * Para contadores agregados de sincronización usa tally().
      *
      * @param string               $type
      * @param array<string, mixed> $payload
@@ -202,7 +277,58 @@ class YujuMonitor
     }
 
     /**
-     * Envía el lote pendiente. Se invoca en el cierre de la petición.
+     * Acumula contadores agregados de una ejecución de sincronización.
+     *
+     * Evita el envío de un evento por producto/pedido: al cerrar la petición se
+     * emite un único evento por tipo con el total y los fallos. Los contadores
+     * se saturan en MAX_COUNTER para respetar el esquema del monitor.
+     *
+     * @param string               $type    sync.product | sync.order | sync.error
+     * @param int                  $count   elementos procesados (éxitos + fallos)
+     * @param int                  $failed  elementos fallidos
+     * @param array<string, mixed> $payload dirección y nivel opcionales
+     *
+     * @return bool
+     */
+    public static function tally($type, $count = 0, $failed = 0, array $payload = [])
+    {
+        try {
+            if (!is_string($type) || !in_array($type, self::TALLY_TYPES, true)) {
+                return false;
+            }
+
+            $count = max(0, min(self::MAX_COUNTER, (int) $count));
+            $failed = max(0, min(self::MAX_COUNTER, (int) $failed));
+
+            if (!isset(self::$tallies[$type])) {
+                self::$tallies[$type] = ['count' => 0, 'failed' => 0];
+            }
+
+            self::$tallies[$type]['count'] = min(self::MAX_COUNTER, self::$tallies[$type]['count'] + $count);
+            self::$tallies[$type]['failed'] = min(self::MAX_COUNTER, self::$tallies[$type]['failed'] + $failed);
+
+            if (isset($payload['direction']) && in_array($payload['direction'], self::EVENT_DIRECTIONS, true)) {
+                self::$tallies[$type]['direction'] = $payload['direction'];
+            }
+
+            if ($type === 'sync.error'
+                && isset($payload['level'])
+                && in_array(strtolower((string) $payload['level']), self::EVENT_LEVELS, true)
+            ) {
+                self::$tallies[$type]['level'] = strtolower((string) $payload['level']);
+            }
+
+            self::registerFlush();
+
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Envía el lote pendiente (eventos puntuales + agregados). Se invoca en el
+     * cierre de la petición.
      */
     public static function flush()
     {
@@ -210,16 +336,24 @@ class YujuMonitor
             return;
         }
 
-        if (self::$queue === []) {
+        if (self::$queue === [] && self::$tallies === []) {
             return;
         }
 
         self::$flushing = true;
-        $events = array_splice(self::$queue, 0, self::MAX_BATCH);
 
         try {
-            if (self::isConfigured()) {
-                self::post(self::getMonitorUrl() . '/api/events', ['events' => $events], self::getToken());
+            $events = array_splice(self::$queue, 0, self::MAX_BATCH);
+            $events = array_merge($events, self::takeTallyEvents());
+
+            // El contrato admite 50 eventos por lote. Los agregados (más
+            // valiosos) van al final, así que al recortar se conservan.
+            if (count($events) > self::MAX_BATCH) {
+                $events = array_slice($events, -self::MAX_BATCH);
+            }
+
+            if ($events !== [] && self::isConfigured()) {
+                self::postActivity($events);
             }
         } catch (Throwable $e) {
             // La telemetría es best-effort: nunca interrumpe al llamante.
@@ -229,18 +363,82 @@ class YujuMonitor
     }
 
     /**
-     * Realiza el handshake con el monitor y guarda el token devuelto.
+     * Convierte los contadores acumulados en eventos agregados y los vacía.
      *
-     * El módulo envía una llave derivada de su hora (SHA-256 de "yuju" + fecha/hora)
-     * que el monitor valida dentro de una ventana de tiempo; si es correcta, la
-     * instalación queda registrada y se guarda el token para la telemetría.
+     * @return array<int, array<string, mixed>>
+     */
+    private static function takeTallyEvents()
+    {
+        if (self::$tallies === []) {
+            return [];
+        }
+
+        // Correlation id único por lote: hace idempotente un reenvío y evita
+        // que el índice único del monitor descarte eventos legítimos de otro
+        // lote. Formato válido para el contrato ([A-Za-z0-9_-]{8,64}).
+        $seed = 'r' . substr(hash('sha256', uniqid('', true)), 0, 12);
+        $events = [];
+
+        foreach (self::TALLY_TYPES as $type) {
+            if (!isset(self::$tallies[$type])) {
+                continue;
+            }
+
+            $tally = self::$tallies[$type];
+            $event = [
+                'type' => $type,
+                'status' => $tally['failed'] > 0 ? ($type === 'sync.error' ? 'error' : 'warning') : 'success',
+                'count' => $tally['count'],
+                'failedCount' => $tally['failed'],
+                'correlationId' => $seed . '-' . str_replace('.', '_', $type),
+                'occurredAt' => gmdate('Y-m-d H:i:s'),
+            ];
+
+            if (isset($tally['direction'])) {
+                $event['direction'] = $tally['direction'];
+            }
+
+            if (isset($tally['level'])) {
+                $event['level'] = $tally['level'];
+            }
+
+            $events[] = $event;
+        }
+
+        self::$tallies = [];
+
+        return $events;
+    }
+
+    /**
+     * Envía los eventos al endpoint versionado de actividad, autenticando con
+     * la API key de la instalación en la cabecera `X-API-Key`.
+     *
+     * @param array<int, array<string, mixed>> $events
+     */
+    private static function postActivity(array $events)
+    {
+        self::post(
+            self::getMonitorUrl() . self::ACTIVITY_PATH,
+            ['events' => $events],
+            null,
+            ['X-API-Key: ' . self::getToken()]
+        );
+    }
+
+    /**
+     * Registra la instalación contra el monitor y guarda la API key devuelta.
+     *
+     * Solo se envían datos mínimos (dominio, nombre, versiones y fecha UTC). Si
+     * la tienda ya posee una clave se presenta en `X-API-Key` para que el
+     * monitor devuelva la MISMA clave lógica sin rotarla.
      *
      * @param string $url  URL base del monitor
      * @param string $name Nombre de la tienda
      *
      * @return array<string, mixed>
      */
-    public static function connect($url, $name)
+    public static function register($url, $name)
     {
         $url = rtrim(trim((string) $url), '/');
 
@@ -266,6 +464,7 @@ class YujuMonitor
             'key' => self::handshakeKey(),
             'url' => self::shopUrl(),
             'name' => (string) $name,
+            'registered_at' => gmdate('Y-m-d H:i:s'),
         ];
 
         if ($module_version) {
@@ -276,8 +475,15 @@ class YujuMonitor
             $payload['prestashop_version'] = (string) $prestashop_version;
         }
 
+        $headers = [];
+        $current_key = self::getToken();
+
+        if ($current_key !== '') {
+            $headers[] = 'X-API-Key: ' . $current_key;
+        }
+
         try {
-            $response = self::post($url . '/api/connect', $payload, null);
+            $response = self::post($url . self::REGISTER_PATH, $payload, null, $headers);
         } catch (Throwable $e) {
             return ['success' => false, 'message' => 'No se pudo contactar con el monitor.'];
         }
@@ -302,24 +508,32 @@ class YujuMonitor
         if ($response['status'] === 401) {
             return [
                 'success' => false,
-                'message' => 'El monitor rechazó la llave de conexión. Revisa la fecha y hora del servidor.',
+                'message' => 'El monitor rechazó la llave de conexión o la API key de la tienda.',
+            ];
+        }
+
+        if ($response['status'] === 409) {
+            return [
+                'success' => false,
+                'message' => 'El monitor ya tiene registrada esta tienda y no se pudo recuperar su clave.',
             ];
         }
 
         if ($response['status'] < 200 || $response['status'] >= 300 || empty($body['ok'])) {
             $message = isset($body['message']) ? (string) $body['message'] : 'HTTP ' . $response['status'];
 
-            return ['success' => false, 'message' => 'El monitor rechazó la conexión: ' . $message];
+            return ['success' => false, 'message' => 'El monitor rechazó el registro: ' . $message];
         }
 
-        if (empty($body['token'])) {
-            return ['success' => false, 'message' => 'El monitor no devolvió un token de instalación.'];
+        if (empty($body['api_key'])) {
+            return ['success' => false, 'message' => 'El monitor no devolvió una API key de instalación.'];
         }
 
-        self::saveConfiguration($url, (string) $body['token']);
+        self::saveConfiguration($url, (string) $body['api_key']);
 
         return [
             'success' => true,
+            'already_registered' => !empty($body['already_registered']),
             'message' => 'Tienda vinculada al monitor correctamente.',
             'installation' => isset($body['installation']) ? $body['installation'] : null,
         ];
@@ -336,7 +550,7 @@ class YujuMonitor
     }
 
     /**
-     * Guarda la URL del monitor y, opcionalmente, el token de instalación.
+     * Guarda la URL del monitor y, opcionalmente, la API key de instalación.
      */
     public static function saveConfiguration($url, $token = null)
     {
@@ -377,6 +591,7 @@ class YujuMonitor
         $event = [
             'type' => $type,
             'status' => $status,
+            'occurredAt' => gmdate('Y-m-d H:i:s'),
         ];
 
         if (isset($payload['direction']) && in_array($payload['direction'], self::EVENT_DIRECTIONS, true)) {
@@ -403,7 +618,7 @@ class YujuMonitor
             }
         }
 
-        foreach (['httpStatus' => 599, 'durationMs' => 600000, 'count' => 1000000, 'failedCount' => 1000000] as $field => $max) {
+        foreach (['httpStatus' => 599, 'durationMs' => 600000, 'count' => self::MAX_COUNTER, 'failedCount' => self::MAX_COUNTER] as $field => $max) {
             if (isset($payload[$field]) && is_numeric($payload[$field])) {
                 $event[$field] = max(0, min($max, (int) $payload[$field]));
             }
@@ -444,7 +659,7 @@ class YujuMonitor
     }
 
     /**
-     * URL pública de la tienda para el handshake.
+     * URL pública de la tienda para el registro.
      */
     private static function shopUrl()
     {
@@ -472,11 +687,12 @@ class YujuMonitor
     /**
      * Petición POST JSON best-effort.
      *
-     * @param array<string, mixed> $body
+     * @param array<string, mixed>  $body
+     * @param array<int, string>    $extraHeaders
      *
      * @return array{status: int, body: string|false, error: string}|null
      */
-    private static function post($url, array $body, $token = null)
+    private static function post($url, array $body, $token = null, array $extraHeaders = [])
     {
         if (!function_exists('curl_init')) {
             return null;
@@ -486,6 +702,10 @@ class YujuMonitor
 
         if ($token !== null && $token !== '') {
             $headers[] = 'Authorization: Bearer ' . $token;
+        }
+
+        foreach ($extraHeaders as $header) {
+            $headers[] = $header;
         }
 
         $ch = curl_init();

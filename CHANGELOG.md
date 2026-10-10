@@ -8,7 +8,14 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ## [Unreleased]
 
 ### Cambiado
-- La vinculación con el monitor de telemetría es ahora **silenciosa y automática**: se elimina la sección *Monitor de telemetría* (URL, token y botón) de la configuración. El handshake se ejecuta en segundo plano desde el panel del módulo, como máximo una vez cada 6 h, contra la URL guardada o `https://yuju.ceballosleon.com`, y sus fallos no se muestran ni interrumpen nada.
+- La vinculación con el monitor usa el **flujo autorizado versionado**: la tienda solo se registra (`POST /api/v1/modules/register`) tras una prueba de conectividad satisfactoria (`state === 'connected'` sin `needs_auth`) desde `Probar conectividad`; ya no hay handshake silencioso en segundo plano. El registro es idempotente: si la instalación ya tiene API key no se rota, y al presentarla el monitor devuelve la misma clave.
+- La telemetría se envía a `POST /api/v1/modules/activity` autenticada con la cabecera `X-API-Key` (antes `/api/events` con Bearer).
+- Los contadores de sincronización se **agregan por ejecución** (`YujuMonitor::tally()`): un evento por tipo con `count`/`failedCount` y `correlationId` único por lote (sin doble conteo), en lugar de un evento por producto.
+- **Nueva telemetría de pedidos** (`YujuOrderManager`): webhooks entrantes (creado/actualizado/estado/cancelado) y envío de pedidos a Yuju, con un contador por operación y sus errores.
+- Los eventos puntuales (`api.request`) incluyen `occurredAt` en UTC (`gmdate`).
+
+### Añadido
+- `docs/MONITOR_API.md`: referencia de la integración con el monitor (flujos, protección de credenciales, configuración).
 
 ### Eliminado
 - Sección *Historial de Intentos OAuth (Debug)* de la configuración (acordeón con detalle de request/response/cURL verbose), su JavaScript inline y sus estilos. Ese historial se consulta en **Yuju Logs**, donde los intentos aparecen agrupados en un único bloque con el número de falidos, el último intento y el historial paginado. Se retiran los endpoints AJAX `GetOAuthAttempts`, `GetOAuthAttemptDetail` y `CleanOAuthAttempts` que solo alimentaban ese panel.
