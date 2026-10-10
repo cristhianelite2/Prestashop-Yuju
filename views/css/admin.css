@@ -562,3 +562,98 @@
     -webkit-animation: yuju-spin 1s infinite linear;
     animation: yuju-spin 1s infinite linear;
 }
+
+/* Hooks status panel (Configuración > Estado de los Hooks) */
+.yuju-hook-intro {
+    margin-bottom: 15px;
+    color: #555;
+}
+
+.yuju-hook-summary {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.yuju-hook-summary.ok {
+    background: #d4edda;
+    color: #256029;
+    border: 1px solid #a8d5b5;
+}
+
+.yuju-hook-summary.warn {
+    background: #fff3cd;
+    color: #8a6d3b;
+    border: 1px solid #ffe08a;
+}
+
+.yuju-hook-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.yuju-hook-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 100%;
+    padding: 8px 12px;
+    border: 1px solid #e5e5e5;
+    border-left-width: 4px;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.yuju-hook-item.is-registered {
+    border-left-color: #5cb85c;
+    background: #f6fbf6;
+}
+
+.yuju-hook-item.is-missing {
+    border-left-color: #d9534f;
+    background: #fdf4f4;
+}
+
+.yuju-hook-badge {
+    flex: 0 0 130px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.yuju-hook-item.is-registered .yuju-hook-badge {
+    color: #3c763d;
+}
+
+.yuju-hook-item.is-missing .yuju-hook-badge {
+    color: #a94442;
+}
+
+.yuju-hook-label {
+    flex: 1 1 auto;
+    color: #333;
+}
+
+.yuju-hook-name {
+    flex: 0 0 auto;
+    background: #eef0f3;
+    color: #6b7280;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+@media (max-width: 768px) {
+    .yuju-hook-item {
+        flex-wrap: wrap;
+    }
+
+    .yuju-hook-name {
+        flex-basis: 100%;
+    }
+}

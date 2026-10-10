@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-10-10
+
+### Añadido
+- Panel **"Estado de los Hooks del Módulo"** en *Configuración*: lista los hooks que el módulo necesita y marca cuáles están **habilitados** (registrados en la tienda) y cuáles **no**, con un resumen (`X/Y habilitados`) y aviso cuando faltan por registrar. Útil tras una actualización que no re-registró los hooks (p. ej. si los assets o algún evento dejaban de funcionar).
+
 ## [1.1.2] - 2026-10-09
 
 ### Corregido

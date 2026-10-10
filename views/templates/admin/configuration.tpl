@@ -326,6 +326,60 @@
                 {/if}
             </div>
         </form>
+
+        {* Estado de los Hooks del Módulo *}
+        <div class="panel panel-default yuju-hooks-panel">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    <i class="icon-plug"></i>
+                    Estado de los Hooks del Módulo
+                </h3>
+            </div>
+            <div class="panel-body">
+                {if $hooks_total > 0}
+                    <p class="yuju-hook-intro">
+                        El módulo necesita estar registrado en <strong>{$hooks_total} hooks</strong> de PrestaShop para sincronizar cambios automáticamente. Estado actual:
+                        {if $hooks_registered == $hooks_total}
+                            <span class="yuju-hook-summary ok">
+                                <i class="icon-check"></i> Todos habilitados ({$hooks_registered}/{$hooks_total})
+                            </span>
+                        {else}
+                            <span class="yuju-hook-summary warn">
+                                <i class="icon-warning"></i> {$hooks_registered}/{$hooks_total} habilitados · faltan {$hooks_missing}
+                            </span>
+                        {/if}
+                    </p>
+
+                    <div class="yuju-hook-list">
+                        {foreach from=$hooks_status item=hook}
+                            <div class="yuju-hook-item {if $hook.registered}is-registered{else}is-missing{/if}">
+                                <span class="yuju-hook-badge">
+                                    {if $hook.registered}
+                                        <i class="icon-check"></i> Habilitado
+                                    {else}
+                                        <i class="icon-remove"></i> No habilitado
+                                    {/if}
+                                </span>
+                                <span class="yuju-hook-label">{$hook.label|escape:'html':'UTF-8'}</span>
+                                <code class="yuju-hook-name">{$hook.name|escape:'html':'UTF-8'}</code>
+                            </div>
+                        {/foreach}
+                    </div>
+
+                    {if $hooks_missing > 0}
+                        <div class="alert alert-warning" style="margin-top:15px;">
+                            <i class="icon-warning"></i>
+                            Hay hooks sin habilitar. Reinstale el módulo desde la página de <strong>Módulos</strong> para volver a registrarlos; hasta entonces algunos cambios (productos, pedidos, clientes, etc.) podrían no sincronizarse automáticamente.
+                        </div>
+                    {/if}
+                {else}
+                    <div class="alert alert-info">
+                        <i class="icon-info-circle"></i>
+                        No se pudo obtener la lista de hooks del módulo.
+                    </div>
+                {/if}
+            </div>
+        </div>
     </div>
 </div>
 

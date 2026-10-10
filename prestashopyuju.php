@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.2';
+        $this->version = '1.1.3';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -283,11 +283,17 @@ class Prestashopyuju extends Module
     }
 
     /**
-     * Register module hooks.
+     * Lista de hooks que el módulo necesita registrar.
+     *
+     * Se expone como método público para que el back-office pueda comprobar
+     * cuáles están realmente registrados en la tienda (p. ej. tras una
+     * actualización que no re-registró los hooks).
+     *
+     * @return string[] Nombres técnicos de los hooks
      */
-    protected function registerHooks()
+    public function getModuleHooks()
     {
-        $hooks = [
+        return [
         'actionProductAdd',
         'actionProductUpdate',
         'actionProductDelete',
@@ -312,8 +318,14 @@ class Prestashopyuju extends Module
         'displayAdminProductsExtra',
         'actionAdminControllerSetMedia',
         ];
+    }
 
-        foreach ($hooks as $hook) {
+    /**
+     * Register module hooks.
+     */
+    protected function registerHooks()
+    {
+        foreach ($this->getModuleHooks() as $hook) {
             if (!$this->registerHook($hook)) {
                 $this->logger->error('Failed to register hook: ' . $hook);
 

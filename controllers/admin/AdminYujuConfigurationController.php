@@ -105,6 +105,36 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $webhook_url = YujuConfig::getModuleFileUrl('webhook.php');
         $terms_url = YujuConfig::getModuleFileUrl('terms.php');
         
+        // Estado de los hooks del módulo: permite ver en el back-office cuáles
+        // están realmente registrados en la tienda y cuáles no. Es útil, por
+        // ejemplo, cuando una actualización del módulo no re-registra los hooks
+        // y algún comportamiento (assets, eventos) deja de funcionar.
+        $hook_labels = self::getHookLabels();
+        $hooks_status = [];
+        $hooks_registered = 0;
+        $module_hooks = method_exists($this->module, 'getModuleHooks') ? $this->module->getModuleHooks() : [];
+
+        foreach ($module_hooks as $hook) {
+            $is_registered = false;
+
+            try {
+                $is_registered = method_exists($this->module, 'isRegisteredInHook')
+                    && (bool) $this->module->isRegisteredInHook($hook);
+            } catch (Exception $e) {
+                $is_registered = false;
+            }
+
+            if ($is_registered) {
+                ++$hooks_registered;
+            }
+
+            $hooks_status[] = [
+                'name' => $hook,
+                'label' => isset($hook_labels[$hook]) ? $hook_labels[$hook] : $hook,
+                'registered' => $is_registered,
+            ];
+        }
+
         $this->context->smarty->assign([
             'oauth_status' => $oauth_status,
             'api_stats' => $api_stats,
@@ -112,6 +142,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'current_tab' => 'configuration',
             'current_controller' => get_class($this),
             'config' => $config,
+            'hooks_status' => $hooks_status,
+            'hooks_registered' => $hooks_registered,
+            'hooks_total' => count($hooks_status),
+            'hooks_missing' => count($hooks_status) - $hooks_registered,
             'current_index' => self::$currentIndex,
             'token' => Tools::getAdminTokenLite('AdminYujuConfiguration'),
             'ajax_url' => self::$currentIndex . '&token=' . Tools::getAdminTokenLite('AdminYujuConfiguration'),
@@ -129,6 +163,42 @@ class AdminYujuConfigurationController extends ModuleAdminController
         } else {
             $this->setTemplate('configuration.tpl');
         }
+    }
+
+    /**
+     * Etiquetas legibles (en español) para cada hook del módulo.
+     *
+     * Si un hook no está en este mapa se mostrará su nombre técnico.
+     *
+     * @return array<string, string> nombre técnico => descripción
+     */
+    protected static function getHookLabels()
+    {
+        return [
+            'actionProductAdd' => 'Al crear un producto',
+            'actionProductUpdate' => 'Al actualizar un producto',
+            'actionProductDelete' => 'Al eliminar un producto',
+            'actionUpdateQuantity' => 'Al actualizar el stock',
+            'actionProductAttributeUpdate' => 'Al actualizar una combinación',
+            'actionCategoryAdd' => 'Al crear una categoría',
+            'actionCategoryUpdate' => 'Al actualizar una categoría',
+            'actionCategoryDelete' => 'Al eliminar una categoría',
+            'actionOrderStatusUpdate' => 'Al cambiar el estado de un pedido',
+            'actionValidateOrder' => 'Al validar un pedido',
+            'actionOrderReturn' => 'Al registrar una devolución',
+            'actionProductAttributeDelete' => 'Al eliminar una combinación',
+            'actionAttributeGroupDelete' => 'Al eliminar un grupo de atributos',
+            'actionAttributeDelete' => 'Al eliminar un atributo',
+            'actionCarrierUpdate' => 'Al actualizar un transportista',
+            'actionCustomerAccountAdd' => 'Al crear una cuenta de cliente',
+            'actionCustomerAccountUpdate' => 'Al actualizar una cuenta de cliente',
+            'actionObjectManufacturerAddAfter' => 'Al crear un fabricante',
+            'actionObjectManufacturerUpdateAfter' => 'Al actualizar un fabricante',
+            'actionObjectManufacturerDeleteAfter' => 'Al eliminar un fabricante',
+            'displayBackOfficeHeader' => 'Cabecera del panel de administración',
+            'displayAdminProductsExtra' => 'Pestaña extra en la ficha de producto',
+            'actionAdminControllerSetMedia' => 'Carga de assets en el panel de administración',
+        ];
     }
 
     public function postProcess()
