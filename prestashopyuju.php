@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.3';
+        $this->version = '1.1.4';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -321,11 +321,90 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Hooks deshabilitados manualmente desde el back-office.
+     *
+     * Se guardan como lista separada por comas en YUJU_DISABLED_HOOKS para que
+     * el estado elegido sobreviva a reinstalaciones/actualizaciones (registerHooks()
+     * los omite). Solo se devuelven nombres que siguen existiendo en el módulo.
+     *
+     * @return string[]
+     */
+    public function getDisabledHooks()
+    {
+        $raw = Configuration::get('YUJU_DISABLED_HOOKS');
+
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $module_hooks = $this->getModuleHooks();
+        $list = array_map('trim', explode(',', $raw));
+
+        return array_values(array_filter($list, function ($hook) use ($module_hooks) {
+            return $hook !== '' && in_array($hook, $module_hooks, true);
+        }));
+    }
+
+    /**
+     * Habilita o deshabilita un hook del módulo.
+     *
+     * Registra/desregistra el hook en PrestaShop y persiste la elección en
+     * YUJU_DISABLED_HOOKS. Devuelve true si el estado solicitado ya está aplicado.
+     *
+     * @param string $hook Nombre técnico del hook
+     * @param bool $enabled true para habilitar, false para deshabilitar
+     *
+     * @return bool
+     */
+    public function setHookEnabled($hook, $enabled)
+    {
+        if (!in_array($hook, $this->getModuleHooks(), true)) {
+            return false;
+        }
+
+        $disabled = $this->getDisabledHooks();
+
+        if ($enabled) {
+            $disabled = array_values(array_diff($disabled, [$hook]));
+            Configuration::updateValue('YUJU_DISABLED_HOOKS', implode(',', $disabled));
+
+            if ($this->isRegisteredInHook($hook)) {
+                return true;
+            }
+
+            return (bool) $this->registerHook($hook);
+        }
+
+        if (!in_array($hook, $disabled, true)) {
+            $disabled[] = $hook;
+        }
+        Configuration::updateValue('YUJU_DISABLED_HOOKS', implode(',', $disabled));
+
+        if (!$this->isRegisteredInHook($hook)) {
+            return true;
+        }
+
+        // Se resuelve el id y se desregistra por id: Hook::unregisterHook acepta
+        // nombre o id, pero por id funciona también en PrestaShop 1.7.
+        $hook_id = (int) Hook::getIdByName($hook);
+
+        return $hook_id > 0 ? (bool) $this->unregisterHook($hook_id) : false;
+    }
+
+    /**
      * Register module hooks.
+     *
+     * Omite los hooks deshabilitados manualmente desde el back-office.
      */
     protected function registerHooks()
     {
+        $disabled = $this->getDisabledHooks();
+
         foreach ($this->getModuleHooks() as $hook) {
+            if (in_array($hook, $disabled, true)) {
+                continue;
+            }
+
             if (!$this->registerHook($hook)) {
                 $this->logger->error('Failed to register hook: ' . $hook);
 

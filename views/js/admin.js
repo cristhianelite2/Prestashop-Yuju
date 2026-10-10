@@ -104,6 +104,11 @@ var YujuAdmin = {
         $(document).on('change', '.yuju-auto-save', function() {
             self.autoSaveConfig();
         });
+
+        // Switches de hooks (Configuración > Estado de los Hooks)
+        $(document).on('change', '.yuju-toggle-hook', function() {
+            self.toggleHook($(this));
+        });
     },
 
     /**
@@ -356,6 +361,92 @@ var YujuAdmin = {
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');
             }
         });
+    },
+
+    /**
+     * Toggle a module hook (Configuración > Estado de los Hooks).
+     */
+    toggleHook: function($input) {
+        var self = this;
+        var hook = $input.data('hook');
+        var enabled = $input.val() === '1';
+        var $switch = $input.closest('.yuju-hook-switch');
+
+        if (!hook || !$switch.length) {
+            return;
+        }
+
+        $switch.addClass('yuju-hook-switch-loading');
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'toggleHook',
+                ajax: true,
+                token: this.config.token,
+                hook: hook,
+                enabled: enabled ? 1 : 0
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (!response || !response.success) {
+                    self.showAlert(
+                        'No se pudo cambiar "' + hook + '": ' + ((response && response.message) || 'error desconocido'),
+                        'error'
+                    );
+                    self.setHookSwitch($switch, !enabled);
+                    return;
+                }
+
+                self.setHookSwitch($switch, !!response.enabled);
+            },
+            error: function() {
+                self.showAlert('No se pudo cambiar "' + hook + '": error de conexión', 'error');
+                self.setHookSwitch($switch, !enabled);
+            },
+            complete: function() {
+                $switch.removeClass('yuju-hook-switch-loading');
+            }
+        });
+    },
+
+    /**
+     * Set the visual state of a hook switch without firing change.
+     */
+    setHookSwitch: function($switch, enabled) {
+        $switch.find('input[type="radio"][value="' + (enabled ? '1' : '0') + '"]').prop('checked', true);
+
+        var $item = $switch.closest('.yuju-hook-item');
+        $item.toggleClass('is-registered', enabled).toggleClass('is-missing', !enabled);
+
+        this.refreshHookSummary();
+    },
+
+    /**
+     * Recompute the hooks summary (and warning) from the DOM.
+     */
+    refreshHookSummary: function() {
+        var $items = $('.yuju-hook-item');
+
+        if (!$items.length) {
+            return;
+        }
+
+        var total = $items.length;
+        var registered = $items.filter('.is-registered').length;
+        var missing = total - registered;
+        var $summary = $('.yuju-hook-summary');
+
+        if (registered === total) {
+            $summary.removeClass('warn').addClass('ok')
+                .html('<i class="icon-check"></i> Todos habilitados (' + registered + '/' + total + ')');
+        } else {
+            $summary.removeClass('ok').addClass('warn')
+                .html('<i class="icon-warning"></i> ' + registered + '/' + total + ' habilitados · faltan ' + missing);
+        }
+
+        $('.yuju-hooks-warning').toggle(missing > 0);
     },
 
     /**

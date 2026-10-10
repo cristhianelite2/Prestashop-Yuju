@@ -336,29 +336,28 @@
                 </h3>
             </div>
             <div class="panel-body">
+                <div id="yuju-alerts"></div>
                 {if $hooks_total > 0}
                     <p class="yuju-hook-intro">
                         El módulo necesita estar registrado en <strong>{$hooks_total} hooks</strong> de PrestaShop para sincronizar cambios automáticamente. Estado actual:
-                        {if $hooks_registered == $hooks_total}
-                            <span class="yuju-hook-summary ok">
+                        <span class="yuju-hook-summary {if $hooks_registered == $hooks_total}ok{else}warn{/if}">
+                            {if $hooks_registered == $hooks_total}
                                 <i class="icon-check"></i> Todos habilitados ({$hooks_registered}/{$hooks_total})
-                            </span>
-                        {else}
-                            <span class="yuju-hook-summary warn">
+                            {else}
                                 <i class="icon-warning"></i> {$hooks_registered}/{$hooks_total} habilitados · faltan {$hooks_missing}
-                            </span>
-                        {/if}
+                            {/if}
+                        </span>
                     </p>
 
                     <div class="yuju-hook-list">
                         {foreach from=$hooks_status item=hook}
                             <div class="yuju-hook-item {if $hook.registered}is-registered{else}is-missing{/if}">
-                                <span class="yuju-hook-badge">
-                                    {if $hook.registered}
-                                        <i class="icon-check"></i> Habilitado
-                                    {else}
-                                        <i class="icon-remove"></i> No habilitado
-                                    {/if}
+                                <span class="yuju-hook-switch switch prestashop-switch fixed-width-lg">
+                                    <input type="radio" name="yuju_hook_{$hook.name|escape:'html':'UTF-8'}" id="yuju_hook_{$hook.name|escape:'html':'UTF-8'}_on" value="1" class="yuju-toggle-hook" data-hook="{$hook.name|escape:'html':'UTF-8'}" {if $hook.registered}checked="checked"{/if}>
+                                    <label for="yuju_hook_{$hook.name|escape:'html':'UTF-8'}_on">Sí</label>
+                                    <input type="radio" name="yuju_hook_{$hook.name|escape:'html':'UTF-8'}" id="yuju_hook_{$hook.name|escape:'html':'UTF-8'}_off" value="0" class="yuju-toggle-hook" data-hook="{$hook.name|escape:'html':'UTF-8'}" {if !$hook.registered}checked="checked"{/if}>
+                                    <label for="yuju_hook_{$hook.name|escape:'html':'UTF-8'}_off">No</label>
+                                    <a class="slide-button btn"></a>
                                 </span>
                                 <span class="yuju-hook-label">{$hook.label|escape:'html':'UTF-8'}</span>
                                 <code class="yuju-hook-name">{$hook.name|escape:'html':'UTF-8'}</code>
@@ -366,12 +365,10 @@
                         {/foreach}
                     </div>
 
-                    {if $hooks_missing > 0}
-                        <div class="alert alert-warning" style="margin-top:15px;">
-                            <i class="icon-warning"></i>
-                            Hay hooks sin habilitar. Reinstale el módulo desde la página de <strong>Módulos</strong> para volver a registrarlos; hasta entonces algunos cambios (productos, pedidos, clientes, etc.) podrían no sincronizarse automáticamente.
-                        </div>
-                    {/if}
+                    <div class="alert alert-warning yuju-hooks-warning" style="margin-top:15px;{if $hooks_missing <= 0} display:none;{/if}">
+                        <i class="icon-warning"></i>
+                        Hay hooks deshabilitados. Mientras estén apagados, los cambios de ese tipo (productos, pedidos, clientes, etc.) no se sincronizarán automáticamente.
+                    </div>
                 {else}
                     <div class="alert alert-info">
                         <i class="icon-info-circle"></i>

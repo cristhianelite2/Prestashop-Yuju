@@ -121,6 +121,9 @@ class YujuConfig
             'YUJU_WEBHOOK_RETRIES' => self::DEFAULT_WEBHOOK_RETRIES,
             'YUJU_ENABLE_WEBHOOKS' => true,
 
+            // Hooks Settings
+            'YUJU_DISABLED_HOOKS' => '',
+
             // Advanced Settings
             'YUJU_ENABLE_COMPRESSION' => true,
             'YUJU_ENABLE_CACHE' => true,

@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-10-10
+
+### Añadido
+- **Switch por hook** en el panel *"Estado de los Hooks del Módulo"*: cada hook se puede **habilitar/deshabilitar** desde la configuración. Al apagarlo se desregistra el hook de PrestaShop y la elección se guarda en `YUJU_DISABLED_HOOKS` (nueva clave en `YujuConfig`), por lo que `registerHooks()` lo omite al reinstalar/actualizar el módulo y el estado se mantiene. Nuevo endpoint AJAX `ToggleHook` en `AdminYujuConfigurationController` y métodos `getDisabledHooks()`/`setHookEnabled()` en el módulo. El resumen (`X/Y habilitados`) y el aviso se recalculan al instante, sin recargar la página.
+
 ## [1.1.3] - 2026-10-10
 
 ### Añadido

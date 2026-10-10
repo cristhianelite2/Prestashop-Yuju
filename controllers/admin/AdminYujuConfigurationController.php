@@ -359,6 +359,49 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
+     * Habilita o deshabilita un hook del módulo desde el panel de configuración.
+     *
+     * Registra/desregistra el hook en PrestaShop y persiste la elección para
+     * que sobreviva a reinstalaciones (ver YujuModule::setHookEnabled()).
+     */
+    public function ajaxProcessToggleHook()
+    {
+        $response = ['success' => false, 'message' => ''];
+
+        try {
+            $hook = (string) Tools::getValue('hook');
+            $enabled = (int) Tools::getValue('enabled');
+
+            $module_hooks = method_exists($this->module, 'getModuleHooks')
+                ? $this->module->getModuleHooks()
+                : [];
+
+            if (!in_array($hook, $module_hooks, true)) {
+                throw new Exception('Hook no válido.');
+            }
+
+            if (!method_exists($this->module, 'setHookEnabled')) {
+                throw new Exception('El módulo no admite cambiar hooks; actualícelo.');
+            }
+
+            // setHookEnabled() devuelve true solo si el estado solicitado quedó
+            // aplicado, así que no hace falta releer el estado (evita caches).
+            $applied = (bool) $this->module->setHookEnabled($hook, (bool) $enabled);
+
+            $response['success'] = $applied;
+            $response['hook'] = $hook;
+            $response['enabled'] = (bool) $enabled;
+            $response['message'] = $applied
+                ? ($enabled ? 'Hook habilitado.' : 'Hook deshabilitado.')
+                : ($enabled ? 'No se pudo habilitar el hook.' : 'No se pudo deshabilitar el hook.');
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+
+        exit(json_encode($response));
+    }
+
+    /**
      * Normaliza la respuesta del endpoint `account` a una lista de tiendas.
      *
      * El endpoint puede devolver una lista directa, un objeto con la lista

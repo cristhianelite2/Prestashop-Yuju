@@ -618,20 +618,15 @@
     background: #fdf4f4;
 }
 
-.yuju-hook-badge {
-    flex: 0 0 130px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+.yuju-hook-switch {
+    flex: 0 0 auto;
+    margin: 0;
+    float: none;
 }
 
-.yuju-hook-item.is-registered .yuju-hook-badge {
-    color: #3c763d;
-}
-
-.yuju-hook-item.is-missing .yuju-hook-badge {
-    color: #a94442;
+.yuju-hook-switch-loading {
+    opacity: 0.55;
+    pointer-events: none;
 }
 
 .yuju-hook-label {
