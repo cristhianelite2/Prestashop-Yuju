@@ -8,7 +8,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ## [1.1.5] - 2026-10-10
 
 ### Cambiado
-- **Limpieza de hooks**: el panel *"Estado de los Hooks del Módulo"* pasa de 23 a **6** hooks. Se eliminan 20 hooks que ya no se usaban (habían quedado de una arquitectura inicial de auto-sync por hooks); la sincronización automática se ejecuta por **cron** (`cron/sync.php`) y **webhooks** (`webhook.php`).
+- **Limpieza de hooks**: el panel *"Estado de los Hooks del Módulo"* pasa de 23 a **6** hooks. Se eliminan 17 hooks que ya no se usaban (habían quedado de una arquitectura inicial de auto-sync por hooks); la sincronización automática se ejecuta por **cron** (`cron/sync.php`) y **webhooks** (`webhook.php`).
 - Solo quedan siempre activos `displayBackOfficeHeader` y `actionAdminControllerSetMedia` (assets del panel).
 
 ### Añadido
@@ -18,7 +18,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   - `actionValidateOrder` → crea el pedido en Yuju (`YujuOrderManager::sendOrderToYuju`).
   - `actionOrderStatusUpdate` → replica el cambio de estado (`YujuOrderManager::updateOrderStatusInYuju`).
 - Todos los handlers son *best-effort*: `try/catch` + log, para no interrumpir jamás el guardado del producto/pedido si la API falla.
-- `upgrade/upgrade-1.1.5.php`: desregistra los 20 hooks retirados en tiendas existentes y deja los 4 nuevos desactivados por defecto.
+- `upgrade/upgrade-1.1.5.php`: desregistra los 17 hooks retirados en tiendas existentes y deja los 4 nuevos desactivados por defecto. Además, el módulo aplica una migración equivalente una sola vez desde el back-office (`ensureHookMigration`), porque el actualizador propio (GitHub) no ejecuta los scripts `upgrade/`.
 
 ### Corregido
 - Las rutas de error de instalación/desinstalación usaban `$this->logger` (que es `null`); ahora usan `PrestaShopLogger::addLog`.

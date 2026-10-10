@@ -4,7 +4,7 @@
  *
  * Actualización 1.1.4 -> 1.1.5
  *
- * - Se retiran 20 hooks que ya no se usaban: la sincronización automática pasó a
+ * - Se retiran 17 hooks que ya no se usaban: la sincronización automática pasó a
  *   ejecutarse por cron (cron/sync.php) y por webhooks (webhook.php). Hay que
  *   desregistrarlos en las tiendas ya instaladas (PrestaShop no lo hace solo).
  * - Los 4 hooks de sincronización puntual (producto, stock/precio, validar
@@ -76,6 +76,10 @@ function upgrade_module_1_1_5($module)
             $module->unregisterHook($hook_id);
         }
     }
+
+    // Marca la migración como aplicada para que la red de seguridad en runtime
+    // (Module::ensureHookMigration) no la repita.
+    Configuration::updateValue('YUJU_HOOKS_SCHEMA', '1.1.5');
 
     return true;
 }

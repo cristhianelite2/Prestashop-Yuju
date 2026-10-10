@@ -403,6 +403,78 @@ class Prestashopyuju extends Module
     }
 
     /**
+     * Migración de hooks de la versión 1.1.5 (idempotente).
+     *
+     * El actualizador propio del módulo (GitHub) copia los ficheros y actualiza
+     * la versión en BD, pero NO ejecuta los scripts `upgrade/` de PrestaShop
+     * (eso solo ocurre en el flujo `runUpgradeModule`). Por eso, la primera vez
+     * que se entra al back-office tras actualizar, se aplica aquí la misma
+     * migración que `upgrade/upgrade-1.1.5.php`:
+     *  - desregistra los hooks retirados (23 → 6);
+     *  - deja desactivados por defecto los 4 hooks de sincronización puntual.
+     *
+     * Un flag (YUJU_HOOKS_SCHEMA) evita repetirla y evita pisar una elección
+     * posterior del usuario.
+     */
+    protected function ensureHookMigration()
+    {
+        if (Configuration::get('YUJU_HOOKS_SCHEMA') === '1.1.5') {
+            return;
+        }
+
+        $removed_hooks = [
+            'actionProductAdd',
+            'actionProductDelete',
+            'actionProductAttributeUpdate',
+            'actionProductAttributeDelete',
+            'actionCategoryAdd',
+            'actionCategoryUpdate',
+            'actionCategoryDelete',
+            'actionOrderReturn',
+            'actionAttributeGroupDelete',
+            'actionAttributeDelete',
+            'actionCarrierUpdate',
+            'actionCustomerAccountAdd',
+            'actionCustomerAccountUpdate',
+            'actionObjectManufacturerAddAfter',
+            'actionObjectManufacturerUpdateAfter',
+            'actionObjectManufacturerDeleteAfter',
+            'displayAdminProductsExtra',
+        ];
+
+        foreach ($removed_hooks as $hook) {
+            $hook_id = (int) Hook::getIdByName($hook);
+
+            if ($hook_id > 0 && $this->isRegisteredInHook($hook)) {
+                $this->unregisterHook($hook_id);
+            }
+        }
+
+        // Los hooks de sincronización puntual empiezan apagados: se añaden a la
+        // lista de deshabilitados y se desregistran.
+        $default_disabled = static::getDefaultDisabledHooks();
+        $raw = Configuration::get('YUJU_DISABLED_HOOKS');
+        $current = [];
+
+        if (is_string($raw) && $raw !== '') {
+            $current = array_filter(array_map('trim', explode(',', $raw)));
+        }
+
+        $merged = array_values(array_unique(array_merge($current, $default_disabled)));
+        Configuration::updateValue('YUJU_DISABLED_HOOKS', implode(',', $merged));
+
+        foreach ($default_disabled as $hook) {
+            $hook_id = (int) Hook::getIdByName($hook);
+
+            if ($hook_id > 0 && $this->isRegisteredInHook($hook)) {
+                $this->unregisterHook($hook_id);
+            }
+        }
+
+        Configuration::updateValue('YUJU_HOOKS_SCHEMA', '1.1.5');
+    }
+
+    /**
      * Register module hooks.
      *
      * Omite los hooks deshabilitados manualmente desde el back-office.
@@ -615,6 +687,11 @@ class Prestashopyuju extends Module
      */
     public function hookDisplayBackOfficeHeader()
     {
+        // Red de seguridad: aplica una vez la migración de hooks de 1.1.5 en
+        // tiendas que se actualizan con el actualizador propio del módulo (que
+        // no ejecuta los scripts `upgrade/` de PrestaShop).
+        $this->ensureHookMigration();
+
         $controller = Tools::getValue('controller');
         
         // Cargar CSS/JS en página de configuración del módulo

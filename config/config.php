@@ -125,6 +125,10 @@ class YujuConfig
             // Hooks de sincronización puntual deshabilitados de fábrica.
             // El usuario puede activarlos con el switch del panel.
             'YUJU_DISABLED_HOOKS' => 'actionProductUpdate,actionUpdateQuantity,actionValidateOrder,actionOrderStatusUpdate',
+            // Marca de la migración de hooks aplicada. En instalaciones nuevas
+            // ya viene al valor actual para que la migración no se ejecute; en
+            // instalaciones existentes se escribe al aplicarla una vez.
+            'YUJU_HOOKS_SCHEMA' => '1.1.5',
 
             // Advanced Settings
             'YUJU_ENABLE_COMPRESSION' => true,
