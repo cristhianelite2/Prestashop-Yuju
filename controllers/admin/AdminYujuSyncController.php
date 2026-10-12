@@ -396,6 +396,20 @@ class AdminYujuSyncController extends ModuleAdminController
             $this->respondWithJson($response);
         }
 
+        $selected_product_ids_raw = Tools::getValue('selected_product_ids', '[]');
+        $selected_product_ids = is_array($selected_product_ids_raw)
+            ? $selected_product_ids_raw
+            : json_decode((string) $selected_product_ids_raw, true);
+        if (!is_array($selected_product_ids)) {
+            $this->respondWithJson(['success' => false, 'message' => 'La selección de productos no es válida.']);
+            return;
+        }
+        $selected_product_ids = array_values(array_unique(array_filter(array_map('intval', $selected_product_ids), function($id) { return $id > 0; })));
+        if (empty($selected_product_ids)) {
+            $this->respondWithJson(['success' => false, 'message' => 'Selecciona al menos un producto para actualizar.']);
+            return;
+        }
+
         $lock_created = false;
         $response = [];
 
@@ -404,7 +418,7 @@ class AdminYujuSyncController extends ModuleAdminController
             $report_manager = $this->sync_manager->getProductReportManager();
             $state = $report_manager->getStoredState();
 
-            if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+            if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
                 $report_products = $report_manager->getCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
@@ -419,7 +433,9 @@ class AdminYujuSyncController extends ModuleAdminController
                     $this->sync_manager->createSyncLock();
                     $lock_created = true;
 
-                    $results = $this->sync_manager->pushDifferencesToYuju($reconciliation_report);
+                    $results = $this->sync_manager->pushDifferencesToYuju($reconciliation_report, $selected_product_ids, true);
+                    // Revalidate against the same cached report; no new report is requested.
+                    $updated_reconciliation_report = $this->sync_manager->getYujuProductSyncReport($report_index, $report_products);
 
                     $response = [
                         'success' => true,
@@ -431,7 +447,7 @@ class AdminYujuSyncController extends ModuleAdminController
                         'synced_count' => isset($results['synced']) ? (int) $results['synced'] : 0,
                         'errors' => isset($results['products']) ? array_filter($results['products'], function($p) { return $p['status'] === 'error'; }) : [],
                         'details' => isset($results['products']) ? $results['products'] : [],
-                        'report' => $reconciliation_report,
+                        'report' => $updated_reconciliation_report,
                     ];
                 } else {
                     $response = [

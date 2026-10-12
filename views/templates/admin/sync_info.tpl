@@ -291,9 +291,41 @@ $(function() {
     var reconciliationPage = 1;
     var reconciliationPageSize = 100;
     var reconciliationFilter = 'differences';
+    var reconciliationUrgencyFilter = 'all';
+    var reconciliationSelectedProducts = {};
 
     function getProductStatus(product) {
         return product.reconciliation_status || product.status || 'needs_review';
+    }
+
+    function isUrgentDifference(field) {
+        var parts = String(field || '').toLowerCase().split('.');
+        var normalized = parts[parts.length - 1].replace(/[\\s-]/g, '_');
+        return $.inArray(normalized, ['name', 'product_name', 'stock', 'quantity', 'price']) !== -1;
+    }
+
+    function getUrgentDifferences(product) {
+        return $.grep(product.differences || [], function(difference) { return isUrgentDifference(difference.field); });
+    }
+
+    function getNonUrgentDifferences(product) {
+        return $.grep(product.differences || [], function(difference) { return !isUrgentDifference(difference.field); });
+    }
+
+    function canSelectUrgentUpdate(product) {
+        return getProductStatus(product) === 'differences' && !!product.yuju_product_id &&
+            !!product.prestashop_product_id && getUrgentDifferences(product).length > 0;
+    }
+
+    function getSelectedProductIds() {
+        return Object.keys(reconciliationSelectedProducts).filter(function(id) { return reconciliationSelectedProducts[id] === true; });
+    }
+
+    function updatePushButton() {
+        var selectedCount = getSelectedProductIds().length;
+        if (selectedCount > 0) {
+            $pushBtn.html('<i class="icon-refresh"></i> Actualizar urgentes seleccionados (' + selectedCount + ')').show();
+        } else { $pushBtn.hide(); }
     }
 
     function renderReconciliationTable() {
@@ -306,7 +338,13 @@ $(function() {
             disabled: 'Sincronización deshabilitada'
         };
         var filteredProducts = $.grep(reconciliationProducts, function(product) {
-            return reconciliationFilter === 'all' || getProductStatus(product) === reconciliationFilter;
+            var statusMatches = reconciliationFilter === 'all' || getProductStatus(product) === reconciliationFilter;
+            var urgentCount = getUrgentDifferences(product).length;
+            var nonUrgentCount = getNonUrgentDifferences(product).length;
+            var urgencyMatches = reconciliationUrgencyFilter === 'all' ||
+                (reconciliationUrgencyFilter === 'urgent' && urgentCount > 0) ||
+                (reconciliationUrgencyFilter === 'non_urgent' && nonUrgentCount > 0);
+            return statusMatches && urgencyMatches;
         });
         var totalPages = Math.max(1, Math.ceil(filteredProducts.length / reconciliationPageSize));
         reconciliationPage = Math.min(Math.max(1, reconciliationPage), totalPages);
@@ -316,7 +354,8 @@ $(function() {
         $container.empty();
 
         var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
-            '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Diferencias</th>' +
+            '<th><input type="checkbox" id="yuju-select-all-urgent" aria-label="Seleccionar todos los productos con diferencias urgentes"></th>' +
+            '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Prioridad</th><th>Diferencias</th>' +
             '</tr></thead><tbody></tbody></table>');
 
         $.each(pageProducts, function(index, product) {
@@ -330,19 +369,51 @@ $(function() {
             }
 
             var status = getProductStatus(product);
+            var urgentDifferences = getUrgentDifferences(product);
+            var nonUrgentDifferences = getNonUrgentDifferences(product);
+            var productId = String(product.prestashop_product_id || '');
+            var selectable = canSelectUrgentUpdate(product);
             var $row = $('<tr></tr>');
+            var $selectCell = $('<td></td>');
+            var $select = $('<input type="checkbox" class="yuju-select-urgent-product" aria-label="Seleccionar actualización urgente">')
+                .prop('disabled', !selectable)
+                .prop('checked', selectable && reconciliationSelectedProducts[productId] === true)
+                .on('change', function() {
+                    if ($(this).is(':checked')) reconciliationSelectedProducts[productId] = true;
+                    else delete reconciliationSelectedProducts[productId];
+                    renderReconciliationTable();
+                });
+            $selectCell.append($select);
+            $row.append($selectCell);
             // Treat all report values as text; never inject Yuju-provided HTML.
             $row.append($('<td></td>').text(product.prestashop_product_id || '—'));
             $row.append($('<td></td>').text(product.yuju_product_id || '—'));
             $row.append($('<td></td>').text(product.name || '—'));
             $row.append($('<td></td>').text(product.sku || '—'));
             $row.append($('<td></td>').text(statusLabels[status] || status));
+            var priorityText = [];
+            if (urgentDifferences.length) priorityText.push('Urgentes: ' + urgentDifferences.map(function(d) { return d.field; }).join(', '));
+            if (nonUrgentDifferences.length) priorityText.push('No urgentes: ' + nonUrgentDifferences.map(function(d) { return d.field; }).join(', '));
+            $row.append($('<td></td>').text(priorityText.length ? priorityText.join(' | ') : '—'));
             $row.append($('<td></td>').text(diffFields.length ? diffFields.join(', ') + (msg ? ' — ' + msg : '') : (msg || '—')));
             $table.find('tbody').append($row);
         });
 
         if (pageProducts.length) {
             $container.append($table);
+            var selectableInFilter = $.grep(filteredProducts, canSelectUrgentUpdate);
+            var allSelectableChecked = selectableInFilter.length > 0 && $.grep(selectableInFilter, function(product) {
+                return reconciliationSelectedProducts[String(product.prestashop_product_id)] === true;
+            }).length === selectableInFilter.length;
+            $('#yuju-select-all-urgent').prop('checked', allSelectableChecked).prop('disabled', selectableInFilter.length === 0).on('change', function() {
+                var checked = $(this).is(':checked');
+                $.each(selectableInFilter, function(i, product) {
+                    var id = String(product.prestashop_product_id);
+                    if (checked) reconciliationSelectedProducts[id] = true;
+                    else delete reconciliationSelectedProducts[id];
+                });
+                renderReconciliationTable();
+            });
         } else {
             $container.append($('<p class="alert alert-info"></p>').text('No hay productos para el filtro seleccionado.'));
         }
@@ -370,17 +441,7 @@ $(function() {
         $pagination.append($nav);
         $container.append($pagination);
 
-        var syncableCount = 0;
-        $.each(reconciliationActionableProducts, function(i, product) {
-            if (product.syncable && product.yuju_product_id) {
-                syncableCount++;
-            }
-        });
-        if (syncableCount > 0) {
-            $pushBtn.html('<i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju) (' + syncableCount + ')').show();
-        } else {
-            $pushBtn.hide();
-        }
+        updatePushButton();
     }
 
     function renderReconciliation(report, message) {
@@ -389,6 +450,8 @@ $(function() {
         reconciliationPage = 1;
         reconciliationPageSize = 100;
         reconciliationFilter = 'differences';
+        reconciliationUrgencyFilter = 'all';
+        reconciliationSelectedProducts = {};
 
         var notInYujuCount = 0;
         var syncedCount = 0;
@@ -446,12 +509,29 @@ $(function() {
             reconciliationFilter = 'differences';
             reconciliationPageSize = 100;
             reconciliationPage = 1;
+            reconciliationUrgencyFilter = 'all';
+            reconciliationSelectedProducts = {};
             $statusSelect.val(reconciliationFilter);
             $pageSizeSelect.val(String(reconciliationPageSize));
+            $urgencySelect.val(reconciliationUrgencyFilter);
             renderReconciliationTable();
         }).appendTo($resetColumn);
-        $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn);
-        $container.append($filters).append('<div id="yuju-reconciliation-results"></div>');
+        var $urgencyColumn = $('<div class="col-sm-6" style="margin-top:10px;"></div>');
+        $urgencyColumn.append('<label for="yuju-reconciliation-urgency">Tipo de diferencia</label>');
+        var $urgencySelect = $('<select id="yuju-reconciliation-urgency" class="form-control">' +
+            '<option value="all">Todas las diferencias</option>' +
+            '<option value="urgent">Solo urgentes (nombre, stock y precio)</option>' +
+            '<option value="non_urgent">Solo no urgentes (otros campos)</option>' +
+            '</select>').val(reconciliationUrgencyFilter);
+        $urgencySelect.on('change', function() {
+            reconciliationUrgencyFilter = $(this).val();
+            reconciliationPage = 1;
+            renderReconciliationTable();
+        });
+        $urgencyColumn.append($urgencySelect);
+        $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn).append($urgencyColumn);
+        $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente nombre, stock y precio; los demás campos no se modificarán.</p>');
+        $container.append('<div id="yuju-reconciliation-results"></div>');
 
         showMessage(
             message || ('Reconciliación cargada: ' + reconciliationProducts.length + ' productos de PrestaShop. La vista inicial muestra solo los que tienen diferencias.'),
@@ -509,11 +589,14 @@ $(function() {
     });
 
     $pushBtn.on('click', function() {
-        if (!confirm('¿Desea enviar los valores de PrestaShop a Yuju para productos vinculados con diferencias? No se crearán productos en Yuju.')) {
+        var selectedIds = getSelectedProductIds();
+        if (!selectedIds.length) {
+            showMessage('Selecciona al menos un producto con diferencias urgentes.', 'alert-warning');
             return;
         }
-        setLoading($pushBtn, true, 'Enviando a Yuju...');
-        ajaxAction('pushDifferencesToYuju', null, function(response) {
+        if (!confirm('Se actualizarán en Yuju únicamente nombre, stock y precio de ' + selectedIds.length + ' producto(s) seleccionado(s). Los demás campos no se modificarán. ¿Continuar?')) return;
+        setLoading($pushBtn, true, 'Actualizando campos urgentes...');
+        ajaxAction('pushDifferencesToYuju', {ldelim}selected_product_ids: JSON.stringify(selectedIds), urgent_only: 1{rdelim}, function(response) {
             setLoading($pushBtn, false);
             if (response && response.success) {
                 var synced = response.synced_count || 0;
@@ -525,7 +608,7 @@ $(function() {
                     }
                 });
                 showMessage(
-                    'Sincronización completada' + (failed ? ' falló ' + failed + ' veces' : ''),
+                    'Actualización urgente finalizada. Productos actualizados: ' + synced + (failed ? '; errores: ' + failed : '') + '. La tabla se vuelve a validar con el reporte actual.',
                     failed ? 'alert-warning' : 'alert-success'
                 );
                 if (response.report) {

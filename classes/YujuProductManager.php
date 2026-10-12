@@ -1258,11 +1258,21 @@ class YujuProductManager
      *
      * @return array Result with counts and errors
      */
-    public function pushDifferencesToYuju($report)
+    public function pushDifferencesToYuju($report, $selected_product_ids = [], $urgent_only = true)
     {
         if (!is_array($report) || !isset($report['unsynced_products'])) {
             throw new InvalidArgumentException('Invalid reconciliation report.');
         }
+        $selected_product_ids = array_values(array_unique(array_filter(array_map('intval', (array) $selected_product_ids), function($id) { return $id > 0; })));
+        if (empty($selected_product_ids)) {
+            throw new InvalidArgumentException('At least one explicitly selected PrestaShop product is required.');
+        }
+        $selected_lookup = array_fill_keys($selected_product_ids, true);
+        $is_urgent_field = function($field) {
+            $parts = explode('.', strtolower((string) $field));
+            $name = preg_replace('/[\\s-]+/', '_', end($parts));
+            return in_array($name, ['name', 'product_name', 'stock', 'quantity', 'price'], true);
+        };
 
         $results = [
             'synced' => 0,
@@ -1271,8 +1281,27 @@ class YujuProductManager
         ];
 
         foreach ($report['unsynced_products'] as $unsynced) {
+            $prestashop_product_id = isset($unsynced['prestashop_product_id']) ? (int) $unsynced['prestashop_product_id'] : 0;
+            if (!$prestashop_product_id || !isset($selected_lookup[$prestashop_product_id])) continue;
+            if ($urgent_only) {
+                $urgent_parent_differences = array_filter(isset($unsynced['differences']) ? $unsynced['differences'] : [], function($difference) use ($is_urgent_field) {
+                    return isset($difference['field']) && strpos($difference['field'], 'variations.') !== 0 && $is_urgent_field($difference['field']);
+                });
+                $urgent_variation_differences = false;
+                $comparison = isset($unsynced['variation_comparison']['differences']) ? $unsynced['variation_comparison']['differences'] : [];
+                foreach ($comparison as $variant_differences) {
+                    foreach ($variant_differences as $difference) {
+                        if (isset($difference['field']) && $is_urgent_field($difference['field'])) { $urgent_variation_differences = true; break 2; }
+                    }
+                }
+                if (empty($urgent_parent_differences) && !$urgent_variation_differences) {
+                    $results['products'][] = ['prestashop_product_id' => $prestashop_product_id, 'status' => 'skipped', 'reason' => 'The selected product has no urgent name, stock, or price differences.'];
+                    continue;
+                }
+            }
+
             // Only process products that are linked to Yuju and have actionable differences
-            if (empty($unsynced['yuju_product_id']) || empty($unsynced['syncable'])) {
+            if (empty($unsynced['yuju_product_id']) || (!$urgent_only && empty($unsynced['syncable']))) {
                 $results['products'][] = [
                     'prestashop_product_id' => (int) $unsynced['prestashop_product_id'],
                     'status' => 'skipped',
@@ -1281,7 +1310,6 @@ class YujuProductManager
                 continue;
             }
 
-            $prestashop_product_id = (int) $unsynced['prestashop_product_id'];
             $yuju_product_id = (string) $unsynced['yuju_product_id'];
 
             try {
@@ -1297,7 +1325,7 @@ class YujuProductManager
                 $diff_payload = [];
                 foreach ($unsynced['differences'] as $difference) {
                     $field = $difference['field'];
-                    if (strpos($field, 'variations.') !== 0) {
+                    if (strpos($field, 'variations.') !== 0 && (!$urgent_only || $is_urgent_field($field))) {
                         $diff_payload[$field] = $difference['prestashop'];
                     }
                 }
@@ -1334,7 +1362,9 @@ class YujuProductManager
                     $variation_id = (string) $matched['id_variation'];
                     $variation_payload = [];
                     foreach ($variant_differences as $difference) {
-                        $variation_payload[$difference['field']] = $difference['prestashop'];
+                        if (!$urgent_only || (isset($difference['field']) && $is_urgent_field($difference['field']))) {
+                            $variation_payload[$difference['field']] = $difference['prestashop'];
+                        }
                     }
 
                     if (!empty($variation_payload)) {
@@ -1345,8 +1375,8 @@ class YujuProductManager
                     }
                 }
 
-                // Create missing variations (only for already-linked parent products)
-                foreach ($variation_comparison['to_create'] as $variation) {
+                // Creating missing variations is a structural change, never part of urgent-only updates.
+                foreach (($urgent_only ? [] : $variation_comparison['to_create']) as $variation) {
                     $variation_payload = $variation;
                     if (!isset($variation_payload['sku'])) {
                         continue;
@@ -1358,8 +1388,18 @@ class YujuProductManager
                     }
                 }
 
-                // Update status to synced
-                $this->updateProductStatus($prestashop_product_id, 'synced', null, $yuju_product_id);
+                // Preserve pending status if any non-urgent field or missing variation remains.
+                $has_non_urgent_differences = false;
+                if ($urgent_only) {
+                    foreach ($unsynced['differences'] as $difference) {
+                        $field = (string) $difference['field'];
+                        $field_parts = explode('.', $field);
+                        $base_field = strpos($field, 'variations.') === 0 ? end($field_parts) : $field;
+                        if (!$is_urgent_field($base_field)) { $has_non_urgent_differences = true; break; }
+                    }
+                    if (!empty($variation_comparison['to_create'])) $has_non_urgent_differences = true;
+                }
+                $this->updateProductStatus($prestashop_product_id, $has_non_urgent_differences ? 'pending' : 'synced', null, $yuju_product_id);
 
                 $results['synced']++;
                 $results['products'][] = [
