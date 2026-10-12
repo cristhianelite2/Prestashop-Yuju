@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Recuperación de informes JSONL válidos desde `var/reports/` cuando el estado guardado ya no referencia el archivo, sin sobrescribir configuración ni solicitar un nuevo reporte a Yuju.
+- La recuperación local valida cada candidato y omite archivos incompletos, vacíos, inválidos o fuera del límite de tamaño.
+- Se conserva `yuju_product_reports` como candidata para metadatos de reportes; no se eliminan tablas automáticamente sin verificar datos y referencias en cada instalación.
+
+
 Todos los cambios notables de este proyecto serán documentados en este archivo.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
