@@ -368,6 +368,8 @@ class YujuProductReportManager
             && $this->file_store->reportExists($state['cache_id']);
 
         if ($saved_cache_is_readable) {
+            $this->saveReportMetadata($state);
+
             return $state;
         }
 
