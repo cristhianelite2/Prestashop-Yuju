@@ -7,6 +7,10 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## 2026-10-12
 
+### Corregido
+- El inicio de un reporte que Yuju devuelve como `COMPLETED` ahora descarga y valida el archivo antes de marcarlo listo; si falta la caché, se reanuda la descarga de la tarea existente sin crear otro reporte ni consumir cuota.
+- El panel solo habilita la reconciliación cuando el servidor confirma `report_cached: true` y muestra el error real devuelto por el servidor.
+
 ### Añadido
 - Flujo de sincronización basado en **reporte general asíncrono** de Yuju (`POST /products-gral-report`): "Iniciar sincronización" solicita el reporte, espera a que se complete (polling), descarga el JSONL en caché privada con validación SSRF, y reconcilia catálogo PrestaShop contra Yuju por ID guardado o SKU único.
 - Matching determinista: ID Yuju existente tiene prioridad; SKU de padre o variación enlaza solo si es único; SKU ambiguos o duplicados quedan pendientes para resolución manual.
