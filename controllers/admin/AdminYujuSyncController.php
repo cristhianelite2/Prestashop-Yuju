@@ -100,15 +100,15 @@ class AdminYujuSyncController extends ModuleAdminController
         ],
         ];
 
-        $this->fields_list['status']['filter_key'] = 'sl!status';
-        $this->fields_list['sync_type']['filter_key'] = 'sl!sync_type';
-        $this->fields_list['sync_direction']['filter_key'] = 'sl!sync_direction';
+        
+        
+        
 
         $this->_select = 'sl.*';
         $this->_join = '';
         $this->_where = '';
         $this->_group = '';
-        $this->_orderBy = 'sl.start_time';
+        $this->_orderBy = 'a.start_time';
         $this->_orderWay = 'DESC';
     }
 
@@ -188,14 +188,14 @@ class AdminYujuSyncController extends ModuleAdminController
             // AWS SigV4 auth errors - likely using the undocumented GET /products endpoint
             if ($endpoint === 'products' || stripos($message, '/products') !== false) {
                 $guidance[] = $this->trans(
-                    'El endpoint GET /products no está documentado públicamente y requiere autenticación AWS SigV4. '
-                    . 'El módulo ahora usa el reporte general oficial (POST /products-gral-report) en su lugar.',
+                    'El endpoint GET /products no estÃ¡ documentado pÃºblicamente y requiere autenticaciÃ³n AWS SigV4. '
+                    . 'El mÃ³dulo ahora usa el reporte general oficial (POST /products-gral-report) en su lugar.',
                     array(),
                     'Modules.Prestashopyuju.Admin'
                 );
             } else {
                 $guidance[] = $this->trans(
-                    'Error de firma de autenticación AWS. Verifica que el token de Yuju sea válido y que la cuenta tenga permisos para el endpoint solicitado.',
+                    'Error de firma de autenticaciÃ³n AWS. Verifica que el token de Yuju sea vÃ¡lido y que la cuenta tenga permisos para el endpoint solicitado.',
                     array(),
                     'Modules.Prestashopyuju.Admin'
                 );
@@ -204,8 +204,8 @@ class AdminYujuSyncController extends ModuleAdminController
 
         if (stripos($message, 'quota') !== false || stripos($message, 'rate limit') !== false || stripos($message, 'too many') !== false) {
             $guidance[] = $this->trans(
-                'Se ha alcanzado el límite de solicitudes del reporte general (máximo 2 por día UTC). '
-                . 'Intenta nuevamente mañana o reutiliza el reporte anterior si ya está completado.',
+                'Se ha alcanzado el lÃ­mite de solicitudes del reporte general (mÃ¡ximo 2 por dÃ­a UTC). '
+                . 'Intenta nuevamente maÃ±ana o reutiliza el reporte anterior si ya estÃ¡ completado.',
                 array(),
                 'Modules.Prestashopyuju.Admin'
             );
@@ -213,7 +213,7 @@ class AdminYujuSyncController extends ModuleAdminController
 
         if (stripos($message, '401') !== false || stripos($message, 'Unauthorized') !== false) {
             $guidance[] = $this->trans(
-                'El token de Yuju no es válido o ha expirado. Ve a la pestaña "Conectividad" y pulsa "Conectar" para reautorizar.',
+                'El token de Yuju no es vÃ¡lido o ha expirado. Ve a la pestaÃ±a "Conectividad" y pulsa "Conectar" para reautorizar.',
                 array(),
                 'Modules.Prestashopyuju.Admin'
             );
@@ -221,7 +221,7 @@ class AdminYujuSyncController extends ModuleAdminController
 
         if (stripos($message, '403') !== false || stripos($message, 'Forbidden') !== false) {
             $guidance[] = $this->trans(
-                'La API de Yuju rechazó la solicitud (HTTP 403). Verifica los permisos de la cuenta Yuju o contacta a soporte de Yuju.',
+                'La API de Yuju rechazÃ³ la solicitud (HTTP 403). Verifica los permisos de la cuenta Yuju o contacta a soporte de Yuju.',
                 array(),
                 'Modules.Prestashopyuju.Admin'
             );
@@ -246,7 +246,7 @@ class AdminYujuSyncController extends ModuleAdminController
         // Generic fallback
         if (empty($guidance)) {
             $guidance[] = $this->trans(
-                'Error inesperado. Revisa los logs del módulo (PrestaShop → Parámetros avanzados → Logs) para más detalles.',
+                'Error inesperado. Revisa los logs del mÃ³dulo (PrestaShop â†’ ParÃ¡metros avanzados â†’ Logs) para mÃ¡s detalles.',
                 array(),
                 'Modules.Prestashopyuju.Admin'
             );
@@ -373,7 +373,7 @@ class AdminYujuSyncController extends ModuleAdminController
                     $response = [
                         'success' => true,
                         'message' => sprintf(
-                            $this->trans('Sincronización finalizada. Productos actualizados: %d. Errores: %d.', array(), 'Modules.Prestashopyuju.Admin'),
+                            $this->trans('SincronizaciÃ³n finalizada. Productos actualizados: %d. Errores: %d.', array(), 'Modules.Prestashopyuju.Admin'),
                             isset($results['synced']) ? (int) $results['synced'] : 0,
                             isset($results['failed']) ? (int) $results['failed'] : 0
                         ),
@@ -385,7 +385,7 @@ class AdminYujuSyncController extends ModuleAdminController
                 } else {
                     $response = [
                         'success' => false,
-                        'message' => $this->trans('El reporte cacheado está vacío.', array(), 'Modules.Prestashopyuju.Admin'),
+                        'message' => $this->trans('El reporte cacheado estÃ¡ vacÃ­o.', array(), 'Modules.Prestashopyuju.Admin'),
                     ];
                 }
             } else {
