@@ -20,9 +20,9 @@ class YujuProductReportFileStore
     public function __construct($directory = null, $resolver = null, $transport = null, $max_report_bytes = self::MAX_REPORT_BYTES)
     {
         if ($directory === null) {
-            $module_root = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
-            $directory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-                . DIRECTORY_SEPARATOR . 'yuju-report-' . substr(hash('sha256', $module_root), 0, 16);
+            // Keep the report with the module so it survives system-temp cleanup/reboots.
+            // The directory is private and protected against direct HTTP access.
+            $directory = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'reports';
         }
 
         $this->directory = $directory;
@@ -351,16 +351,16 @@ class YujuProductReportFileStore
         }
 
         $real_directory = realpath($this->directory);
-        $temp_root = realpath(sys_get_temp_dir());
-        if (!$real_directory || !$temp_root
-            || strpos($real_directory, rtrim($temp_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) !== 0
-        ) {
-            throw new RuntimeException('The Yuju report cache must be inside the system temporary directory.');
-        }
+        $module_root = realpath(dirname(__DIR__));
+        $expected_root = $module_root
+            ? $module_root . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'reports'
+            : false;
 
-        $document_root = isset($_SERVER['DOCUMENT_ROOT']) ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
-        if ($document_root && strpos($real_directory, rtrim($document_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) === 0) {
-            throw new RuntimeException('The Yuju report cache cannot be inside the public document root.');
+        if (!$real_directory || !$module_root || !$expected_root
+            || $real_directory !== $expected_root
+            || is_link($real_directory)
+        ) {
+            throw new RuntimeException('The Yuju report cache must be inside the module var/reports directory.');
         }
 
         @chmod($real_directory, 0700);
