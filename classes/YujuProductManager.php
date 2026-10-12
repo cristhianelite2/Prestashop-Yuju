@@ -60,35 +60,33 @@ class YujuProductManager
             ['depth', 'length', 'shipping_depth'],
             ['depth', 'depth', 'shipping_depth'],
         ];
-        foreach ($legacy_mappings as $legacy) {
-            list($ps_field, $old_yuju_field, $new_yuju_field) = $legacy;
-            Db::getInstance()->execute('
-                UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping old_mapping
-                SET yuju_field = "' . pSQL($new_yuju_field) . '",
-                    updated_at = NOW()
-                WHERE old_mapping.prestashop_field = "' . pSQL($ps_field) . '"
-                  AND old_mapping.yuju_field = "' . pSQL($old_yuju_field) . '"
-                  AND NOT EXISTS (
-                    SELECT 1 FROM ' . _DB_PREFIX_ . 'yuju_product_mapping valid_mapping
-                    WHERE valid_mapping.prestashop_field = old_mapping.prestashop_field
-                      AND valid_mapping.yuju_field = "' . pSQL($new_yuju_field) . '"
-                      AND valid_mapping.id_mapping != old_mapping.id_mapping
-                  )
-            ');
+        $all_mappings = Db::getInstance()->executeS('
+            SELECT id_mapping, prestashop_field, yuju_field
+            FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
+        ');
+        $mapping_targets = [];
+        if (is_array($all_mappings)) {
+            foreach ($all_mappings as $row) {
+                $mapping_targets[$row['prestashop_field'] . '|' . $row['yuju_field']] = (int) $row['id_mapping'];
+            }
+            foreach ($all_mappings as $row) {
+                foreach ($legacy_mappings as $legacy) {
+                    list($ps_field, $old_yuju_field, $new_yuju_field) = $legacy;
+                    if ($row['prestashop_field'] !== $ps_field || $row['yuju_field'] !== $old_yuju_field) {
+                        continue;
+                    }
+                    $target_key = $ps_field . '|' . $new_yuju_field;
+                    if (!isset($mapping_targets[$target_key]) || $mapping_targets[$target_key] === (int) $row['id_mapping']) {
+                        Db::getInstance()->update(
+                            'yuju_product_mapping',
+                            ['yuju_field' => pSQL($new_yuju_field), 'updated_at' => date('Y-m-d H:i:s')],
+                            'id_mapping = ' . (int) $row['id_mapping']
+                        );
+                        $mapping_targets[$target_key] = (int) $row['id_mapping'];
+                    }
+                }
+            }
         }
-        Db::getInstance()->execute('
-            UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
-            SET is_active = 0, updated_at = NOW()
-            WHERE (prestashop_field = "description_short" AND yuju_field = "short_description")
-               OR (prestashop_field = "active" AND yuju_field = "status")
-               OR (prestashop_field = "wholesale_price" AND yuju_field = "cost_price")
-        ');
-        Db::getInstance()->execute('
-            UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
-            SET sync_direction = "prestashop_to_yuju", updated_at = NOW()
-            WHERE sync_direction = "ps_to_yuju"
-        ');
-
         // If a valid mapping already existed, disable rather than compare a stale legacy alias.
         Db::getInstance()->execute('
             UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
