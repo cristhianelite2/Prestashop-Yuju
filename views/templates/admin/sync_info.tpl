@@ -31,10 +31,12 @@
         <div id="yuju-product-sync-report" class="hidden" role="status" aria-live="polite" style="margin-bottom: 20px;">
             <div id="yuju-product-sync-message" class="alert alert-info"></div>
             <div class="row">
-                <div class="col-sm-3"><strong>Total:</strong> <span id="yuju-products-total">0</span></div>
-                <div class="col-sm-3"><strong>Sincronizados:</strong> <span id="yuju-products-synced">0</span></div>
-                <div class="col-sm-3"><strong>No están en Yuju:</strong> <span id="yuju-products-unsynced">0</span></div>
-                <div class="col-sm-3"><strong>Con diferencias:</strong> <span id="yuju-products-differences">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>Total:</strong> <span id="yuju-products-total">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>Sincronizados:</strong> <span id="yuju-products-synced">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>No están en Yuju:</strong> <span id="yuju-products-unsynced">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>Con diferencias:</strong> <span id="yuju-products-differences">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>Diferencias urgentes:</strong> <span id="yuju-products-urgent-differences">0</span></div>
+                <div class="col-xs-6 col-sm-2"><strong>Diferencias no urgentes:</strong> <span id="yuju-products-non-urgent-differences">0</span></div>
             </div>
             <div id="yuju-unsynced-products" class="table-responsive" style="margin-top: 15px;"></div>
             <div id="yuju-report-actions" style="margin-top: 15px;">
@@ -456,6 +458,8 @@ $(function() {
         var notInYujuCount = 0;
         var syncedCount = 0;
         var differencesCount = 0;
+        var urgentDifferencesCount = 0;
+        var nonUrgentDifferencesCount = 0;
         $.each(reconciliationProducts, function(index, product) {
             var status = getProductStatus(product);
             if (status === 'not_in_yuju') {
@@ -464,6 +468,12 @@ $(function() {
                 syncedCount++;
             } else if (status === 'differences') {
                 differencesCount++;
+                if (getUrgentDifferences(product).length > 0) {
+                    urgentDifferencesCount++;
+                }
+                if (getNonUrgentDifferences(product).length > 0) {
+                    nonUrgentDifferencesCount++;
+                }
             }
         });
 
@@ -471,6 +481,8 @@ $(function() {
         $('#yuju-products-synced').text(syncedCount);
         $('#yuju-products-unsynced').text(notInYujuCount);
         $('#yuju-products-differences').text(differencesCount);
+        $('#yuju-products-urgent-differences').text(urgentDifferencesCount);
+        $('#yuju-products-non-urgent-differences').text(nonUrgentDifferencesCount);
 
         var $container = $('#yuju-unsynced-products');
         $container.empty();
