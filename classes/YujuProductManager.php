@@ -1301,7 +1301,7 @@ class YujuProductManager
             }
 
             // Only process products that are linked to Yuju and have actionable differences
-            if (empty($unsynced['yuju_product_id']) || empty($unsynced['syncable'])) {
+            if (empty($unsynced['yuju_product_id']) || (!$urgent_only && empty($unsynced['syncable']))) {
                 $results['products'][] = [
                     'prestashop_product_id' => (int) $unsynced['prestashop_product_id'],
                     'status' => 'skipped',
@@ -1393,7 +1393,8 @@ class YujuProductManager
                 if ($urgent_only) {
                     foreach ($unsynced['differences'] as $difference) {
                         $field = (string) $difference['field'];
-                        $base_field = strpos($field, 'variations.') === 0 ? end(explode('.', $field)) : $field;
+                        $field_parts = explode('.', $field);
+                        $base_field = strpos($field, 'variations.') === 0 ? end($field_parts) : $field;
                         if (!$is_urgent_field($base_field)) { $has_non_urgent_differences = true; break; }
                     }
                     if (!empty($variation_comparison['to_create'])) $has_non_urgent_differences = true;
