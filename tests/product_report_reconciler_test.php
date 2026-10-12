@@ -67,13 +67,13 @@ assertSameValue(['description'], $comparison['uncomparable'], 'Missing fields in
 
 $mapped_name_comparison = YujuProductReportReconciler::compareMappedFields(
     ['name' => 'Nombre desde PrestaShop', 'stock' => 7],
-    ['name' => 'Nombre en Yuju', 'stock' => 7],
+    ['name' => 'Nombre en Yuju', 'stock' => 5],
     [
         ['yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_active' => 1],
         ['yuju_field' => 'stock', 'field_type' => 'integer', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
     ]
 );
-assertSameValue(['name'], array_column($mapped_name_comparison['differences'], 'field'), 'The product name must be compared using Yuju API field name "name".');
+assertSameValue(['name', 'stock'], array_column($mapped_name_comparison['differences'], 'field'), 'Product name and canonical PrestaShop-to-Yuju fields must be compared using Yuju API names.');
 
 $variation_comparison = YujuProductReportReconciler::compareVariations(
     [
