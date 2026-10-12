@@ -185,7 +185,7 @@ $(function() {
     }
 
     function ajaxAction(action, params, onSuccess, onError) {
-        var data = {ajax: 1, action: action};
+        var data = {ldelim}ajax: 1, action: action{rdelim};
         if (params) {
             $.each(params, function(k, v) {
                 data[k] = v;
