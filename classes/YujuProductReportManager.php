@@ -403,7 +403,7 @@ class YujuProductReportManager
         try {
             $db = Db::getInstance();
             $table = _DB_PREFIX_ . 'yuju_product_reports';
-            $table_sql = '`' . bqSQL($table) . '`';
+            $table_sql = chr(96) . bqSQL($table) . chr(96);
             $create_sql = "CREATE TABLE IF NOT EXISTS {$table_sql} (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `id_task` varchar(64) DEFAULT NULL,
