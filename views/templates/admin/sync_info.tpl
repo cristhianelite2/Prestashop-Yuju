@@ -307,7 +307,7 @@ $(function() {
         reconciliationPage = Math.min(Math.max(1, reconciliationPage), totalPages);
         var startIndex = (reconciliationPage - 1) * reconciliationPageSize;
         var pageProducts = filteredProducts.slice(startIndex, startIndex + reconciliationPageSize);
-        var $container = $('#yuju-unsynced-products');
+        var $container = $('#yuju-reconciliation-results');
         $container.empty();
 
         var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
@@ -443,7 +443,7 @@ $(function() {
             renderReconciliationTable();
         }).appendTo($resetColumn);
         $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn);
-        $container.append($filters);
+        $container.append($filters).append('<div id="yuju-reconciliation-results"></div>');
 
         showMessage(
             message || ('Reconciliación cargada: ' + reconciliationProducts.length + ' productos de PrestaShop. La vista inicial muestra solo los que tienen diferencias.'),
