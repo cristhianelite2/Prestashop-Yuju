@@ -44,6 +44,45 @@ class FakeYujuReportApiClient
     }
 }
 
+class FakeYujuProductReportFileStore
+{
+    public $downloadedUrls = [];
+    public $cachedRows = [];
+    public $failDownloads = false;
+
+    public function downloadAndValidate($url)
+    {
+        $this->downloadedUrls[] = $url;
+
+        if ($this->failDownloads) {
+            $this->failDownloads = false;
+            throw new RuntimeException('unsafe report URL');
+        }
+
+        return [
+            'cache_id' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'product_count' => count($this->cachedRows),
+            'size_bytes' => 123,
+            'downloaded_at' => 1000,
+        ];
+    }
+
+    public function reportExists($cache_id)
+    {
+        return $cache_id === 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    }
+
+    public function readProducts($cache_id)
+    {
+        return new ArrayIterator($this->cachedRows);
+    }
+
+    public function deleteReport($cache_id)
+    {
+        return true;
+    }
+}
+
 function assertSameValue($expected, $actual, $message)
 {
     if ($expected !== $actual) {
@@ -53,7 +92,9 @@ function assertSameValue($expected, $actual, $message)
 
 Configuration::$values = [];
 $api = new FakeYujuReportApiClient();
-$manager = new YujuProductReportManager($api);
+$file_store = new FakeYujuProductReportFileStore();
+$file_store->cachedRows = [['id_product' => '101'], ['id_product' => '303']];
+$manager = new YujuProductReportManager($api, $file_store);
 
 $started = $manager->startOrResumeReport();
 assertSameValue(true, $started['success'], 'A report should start when no report is active.');
@@ -72,7 +113,11 @@ $processing = $manager->pollReport();
 assertSameValue('PROCESSING', $processing['status'], 'Processing tasks should remain pending.');
 $complete = $manager->pollReport();
 assertSameValue('COMPLETED', $complete['status'], 'A completed task should expose its URL to the server-side downloader.');
-assertSameValue('https://reports.example/file.jsonl?signature=secret', $complete['report_url'], 'The returned URL should not be lost before download.');
+assertSameValue(['https://reports.example/file.jsonl?signature=secret'], $file_store->downloadedUrls, 'The signed URL should be downloaded on the server.');
+assertSameValue(false, isset($complete['report_url']), 'The signed URL must not be returned to the browser.');
+assertSameValue(2, count(iterator_to_array($manager->getCachedReportProducts())), 'The completed report should be available from private cache.');
+$manager->pollReport();
+assertSameValue(2, $api->statusCalls, 'A cached report should not require another status request.');
 
 $quotaState = ['date_utc' => gmdate('Y-m-d'), 'count' => 2];
 Configuration::updateValue(YujuProductReportManager::QUOTA_CONFIG_KEY, json_encode($quotaState));
@@ -89,5 +134,21 @@ $failed_manager->startOrResumeReport();
 $unknown = $failed_manager->startOrResumeReport();
 assertSameValue('UNKNOWN', $unknown['status'], 'A timed-out create should be treated as an unknown result.');
 assertSameValue(1, $failed_api->createCalls, 'An unknown POST result must not be retried automatically.');
+
+Configuration::$values = [];
+$retry_api = new FakeYujuReportApiClient();
+$retry_api->statusResponses = [
+    ['success' => true, 'data' => ['status' => 'COMPLETED', 'url' => 'https://reports.example/file.jsonl?signature=secret']],
+    ['success' => true, 'data' => ['status' => 'COMPLETED', 'url' => 'https://reports.example/file.jsonl?signature=secret']],
+];
+$retry_store = new FakeYujuProductReportFileStore();
+$retry_store->failDownloads = true;
+$retry_manager = new YujuProductReportManager($retry_api, $retry_store);
+$retry_manager->startOrResumeReport();
+assertSameValue('DOWNLOAD_ERROR', $retry_manager->pollReport()['status'], 'A failed download should be recorded without starting another report.');
+assertSameValue('DOWNLOAD_ERROR', $retry_manager->pollReport()['status'], 'Polling should not retry a failed download automatically.');
+assertSameValue('COMPLETED', $retry_manager->pollReport(true)['status'], 'The owner can explicitly retry downloading the completed task.');
+assertSameValue(1, $retry_api->createCalls, 'Retrying download must not create another quota-limited report.');
+assertSameValue(2, $retry_api->statusCalls, 'Only the explicit download retry should recheck task status.');
 
 echo "Product report lifecycle tests passed.\n";

@@ -7,6 +7,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 require_once dirname(__FILE__) . '/YujuApiClient.php';
+require_once dirname(__FILE__) . '/YujuProductReportFileStore.php';
 
 class YujuProductReportManager
 {
@@ -14,10 +15,12 @@ class YujuProductReportManager
     const QUOTA_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_QUOTA';
 
     private $api_client;
+    private $file_store;
 
-    public function __construct($api_client = null)
+    public function __construct($api_client = null, $file_store = null)
     {
         $this->api_client = $api_client ?: new YujuApiClient();
+        $this->file_store = $file_store ?: new YujuProductReportFileStore();
     }
 
     /**
@@ -29,13 +32,42 @@ class YujuProductReportManager
     {
         $state = $this->getStoredState();
 
-        if (!empty($state['task_id']) && in_array($state['status'], ['CREATED', 'PROCESSING', 'COMPLETED'], true)) {
+        $has_cached_report = !empty($state['cache_id'])
+            && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
+            && $this->file_store->reportExists($state['cache_id']);
+
+        if (!empty($state['task_id']) && in_array($state['status'], ['CREATED', 'PROCESSING'], true)) {
             return [
                 'success' => true,
                 'status' => $state['status'],
                 'task_id' => $state['task_id'],
                 'requested_at' => isset($state['requested_at']) ? (int) $state['requested_at'] : null,
                 'reused' => true,
+            ];
+        }
+
+        if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && $has_cached_report) {
+            return [
+                'success' => true,
+                'status' => 'COMPLETED',
+                'task_id' => $state['task_id'],
+                'requested_at' => isset($state['requested_at']) ? (int) $state['requested_at'] : null,
+                'reused' => true,
+            ];
+        }
+
+        if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !$has_cached_report) {
+            $state['status'] = 'DOWNLOAD_EXPIRED';
+            $state['cache_id'] = null;
+            $this->storeJson(self::STATE_CONFIG_KEY, $state);
+        }
+
+        if ($state['status'] === 'DOWNLOAD_ERROR' && !empty($state['task_id'])) {
+            return [
+                'success' => false,
+                'status' => 'DOWNLOAD_ERROR',
+                'task_id' => $state['task_id'],
+                'message' => 'El reporte ya está listo, pero su descarga falló la validación. Reintenta la descarga del reporte; no inicies otra tarea.',
             ];
         }
 
@@ -152,9 +184,25 @@ class YujuProductReportManager
      *
      * @return array
      */
-    public function pollReport()
+    public function pollReport($retry_download = false)
     {
         $state = $this->getStoredState();
+
+        if ($state['status'] === 'DOWNLOAD_ERROR' && !$retry_download) {
+            return [
+                'success' => false,
+                'status' => 'DOWNLOAD_ERROR',
+                'task_id' => $state['task_id'],
+                'message' => 'El reporte está listo, pero la descarga necesita revisión o reintento manual.',
+            ];
+        }
+
+        if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])
+            && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
+            && $this->file_store->reportExists($state['cache_id'])
+        ) {
+            return $this->getCachedReportStatus($state);
+        }
 
         if (empty($state['task_id'])) {
             return ['success' => false, 'status' => $state['status'], 'message' => 'No hay un reporte activo para consultar.'];
@@ -181,22 +229,45 @@ class YujuProductReportManager
             return ['success' => false, 'status' => $state['status'], 'message' => 'Yuju devolvió un estado de reporte desconocido.'];
         }
 
-        $state['status'] = $status;
-        $this->storeJson(self::STATE_CONFIG_KEY, $state);
-
         if ($status === 'COMPLETED') {
-            $report_url = isset($data['url']) ? (string) $data['url'] : '';
+            $report_url = isset($data['url']) && is_string($data['url']) ? $data['url'] : '';
 
             if ($report_url === '') {
                 return ['success' => false, 'status' => 'ERROR', 'message' => 'El reporte terminó, pero Yuju no devolvió su URL de descarga.'];
             }
 
-            return [
-                'success' => true,
-                'status' => 'COMPLETED',
-                'task_id' => $state['task_id'],
-                'report_url' => $report_url,
-            ];
+            try {
+                $download = $this->file_store->downloadAndValidate($report_url);
+            } catch (Exception $e) {
+                $state['status'] = 'DOWNLOAD_ERROR';
+                $state['download_error'] = 'download_failed';
+                $this->storeJson(self::STATE_CONFIG_KEY, $state);
+
+                return [
+                    'success' => false,
+                    'status' => 'DOWNLOAD_ERROR',
+                    'message' => 'No se pudo descargar o validar el reporte. Reintenta la descarga; no se volverá a generar el reporte ni a consumir cuota.',
+                ];
+            }
+
+            $state['status'] = 'COMPLETED';
+            $state['cache_id'] = $download['cache_id'];
+            $state['product_count'] = (int) $download['product_count'];
+            $state['report_size_bytes'] = (int) $download['size_bytes'];
+            $state['report_downloaded_at'] = (int) $download['downloaded_at'];
+
+            if (!$this->storeJson(self::STATE_CONFIG_KEY, $state)) {
+                $this->file_store->deleteReport($download['cache_id']);
+
+                return ['success' => false, 'status' => 'ERROR', 'message' => 'No se pudo guardar el reporte descargado en el estado local.'];
+            }
+
+            return $this->getCachedReportStatus($state);
+        }
+
+        $state['status'] = $status;
+        if (!$this->storeJson(self::STATE_CONFIG_KEY, $state)) {
+            return ['success' => false, 'status' => 'ERROR', 'message' => 'No se pudo guardar el estado actualizado del reporte.'];
         }
 
         return [
@@ -207,11 +278,45 @@ class YujuProductReportManager
         ];
     }
 
+    /**
+     * Read validated products from the current private report cache.
+     *
+     * @return Generator
+     */
+    public function getCachedReportProducts()
+    {
+        $state = $this->getStoredState();
+
+        if ($state['status'] !== 'COMPLETED' || empty($state['cache_id'])
+            || !preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
+            || !$this->file_store->reportExists($state['cache_id'])
+        ) {
+            throw new RuntimeException('No validated general-products report is cached.');
+        }
+
+        return $this->file_store->readProducts($state['cache_id']);
+    }
+
+    protected function getCachedReportStatus($state)
+    {
+        return [
+            'success' => true,
+            'status' => 'COMPLETED',
+            'task_id' => $state['task_id'],
+            'product_count' => isset($state['product_count']) ? (int) $state['product_count'] : 0,
+            'report_size_bytes' => isset($state['report_size_bytes']) ? (int) $state['report_size_bytes'] : 0,
+            'report_downloaded_at' => isset($state['report_downloaded_at']) ? (int) $state['report_downloaded_at'] : 0,
+            'report_cached' => true,
+        ];
+    }
+
     protected function getStoredState()
     {
         $state = json_decode((string) Configuration::get(self::STATE_CONFIG_KEY), true);
 
-        return is_array($state) ? $state : ['status' => '', 'task_id' => null];
+        return is_array($state)
+            ? array_merge(['status' => '', 'task_id' => null], $state)
+            : ['status' => '', 'task_id' => null];
     }
 
     protected function getDailyQuota($today)

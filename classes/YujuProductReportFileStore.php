@@ -1,0 +1,381 @@
+<?php
+/**
+ * Secure temporary storage and streaming parser for Yuju JSONL reports.
+ */
+if (!defined('_PS_VERSION_')) {
+    exit;
+}
+
+class YujuProductReportFileStore
+{
+    const MAX_REPORT_BYTES = 268435456;
+    const MAX_LINE_BYTES = 10485760;
+    const MAX_REDIRECTS = 3;
+
+    private $directory;
+    private $resolver;
+    private $transport;
+    private $max_report_bytes;
+
+    public function __construct($directory = null, $resolver = null, $transport = null, $max_report_bytes = self::MAX_REPORT_BYTES)
+    {
+        if ($directory === null) {
+            $module_root = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
+            $directory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . 'yuju-report-' . substr(hash('sha256', $module_root), 0, 16);
+        }
+
+        $this->directory = $directory;
+        $this->resolver = $resolver;
+        $this->transport = $transport;
+        $this->max_report_bytes = max(1, (int) $max_report_bytes);
+    }
+
+    /**
+     * Download, validate and cache a report file returned by Yuju.
+     *
+     * @param string $url Signed URL returned by the authenticated report API
+     *
+     * @return array Cache ID and validated report summary; never returns the URL
+     */
+    public function downloadAndValidate($url)
+    {
+        $this->ensurePrivateDirectory();
+        $cache_id = bin2hex(random_bytes(16));
+        $path = $this->getPath($cache_id);
+        $current_url = $url;
+
+        try {
+            for ($redirect = 0; $redirect <= self::MAX_REDIRECTS; ++$redirect) {
+                $target = $this->validateReportUrl($current_url);
+                $result = $this->downloadOnce($current_url, $path, $target['host'], $target['ip']);
+
+                if ($result['status'] >= 300 && $result['status'] < 400) {
+                    if ($redirect === self::MAX_REDIRECTS || empty($result['location'])) {
+                        throw new RuntimeException('The report download exceeded the allowed redirects.');
+                    }
+
+                    $current_url = $this->resolveRedirect($current_url, $result['location']);
+                    continue;
+                }
+
+                if ($result['status'] < 200 || $result['status'] >= 300) {
+                    throw new RuntimeException('Yuju report download failed with HTTP ' . (int) $result['status'] . '.');
+                }
+
+                if (!is_file($path) || filesize($path) < 0 || filesize($path) > $this->max_report_bytes) {
+                    throw new RuntimeException('The downloaded Yuju report is missing or exceeds the size limit.');
+                }
+
+                @chmod($path, 0600);
+                $product_count = 0;
+                foreach ($this->readProducts($cache_id) as $product) {
+                    ++$product_count;
+                }
+
+                return [
+                    'cache_id' => $cache_id,
+                    'product_count' => $product_count,
+                    'size_bytes' => (int) filesize($path),
+                    'downloaded_at' => time(),
+                ];
+            }
+        } catch (Exception $e) {
+            $this->deleteReport($cache_id);
+            throw $e;
+        }
+
+        $this->deleteReport($cache_id);
+        throw new RuntimeException('Yuju report download did not complete.');
+    }
+
+    /**
+     * Stream validated parent product rows from a cached JSONL file.
+     *
+     * @param string $cache_id
+     *
+     * @return Generator
+     */
+    public function readProducts($cache_id)
+    {
+        $path = $this->getPath($cache_id);
+
+        if (!is_file($path) || is_link($path)) {
+            throw new RuntimeException('The cached Yuju report is no longer available.');
+        }
+
+        $handle = fopen($path, 'rb');
+        if (!$handle) {
+            throw new RuntimeException('Could not open the cached Yuju report.');
+        }
+
+        $line_number = 0;
+
+        try {
+            while (($line = fgets($handle, self::MAX_LINE_BYTES + 2)) !== false) {
+                ++$line_number;
+
+                if (strlen($line) > self::MAX_LINE_BYTES && substr($line, -1) !== "\n") {
+                    throw new RuntimeException('Yuju report line ' . $line_number . ' exceeds the size limit.');
+                }
+
+                if ($line_number === 1) {
+                    $line = preg_replace('/^\xEF\xBB\xBF/', '', $line);
+                }
+
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+
+                $product = json_decode($line, true);
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($product)) {
+                    throw new RuntimeException('Yuju report line ' . $line_number . ' is not valid JSON.');
+                }
+
+                $product_id = $this->getScalar($product, ['id_product', 'id', 'product_id']);
+                if ($product_id === null || $product_id === '') {
+                    throw new RuntimeException('Yuju report line ' . $line_number . ' has no product ID.');
+                }
+                $product['id_product'] = (string) $product_id;
+
+                if (!isset($product['variations'])) {
+                    $product['variations'] = [];
+                } elseif (!is_array($product['variations'])) {
+                    throw new RuntimeException('Yuju report line ' . $line_number . ' has invalid variations data.');
+                }
+
+                foreach ($product['variations'] as $variation) {
+                    if (!is_array($variation)) {
+                        throw new RuntimeException('Yuju report line ' . $line_number . ' contains an invalid variation.');
+                    }
+
+                    $sku = $this->getScalar($variation, ['sku']);
+                    if ($sku === null || trim((string) $sku) === '') {
+                        throw new RuntimeException('Yuju report line ' . $line_number . ' contains a variation without SKU.');
+                    }
+                }
+
+                yield $product;
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    public function reportExists($cache_id)
+    {
+        $path = $this->getPath($cache_id);
+
+        return is_file($path) && !is_link($path);
+    }
+
+    public function deleteReport($cache_id)
+    {
+        $path = $this->getPath($cache_id);
+
+        return !file_exists($path) || (!is_link($path) && unlink($path));
+    }
+
+    /**
+     * Remove only expired files created by this class.
+     */
+    public function cleanupExpired($max_age = 86400)
+    {
+        $this->ensurePrivateDirectory();
+        $deleted = 0;
+        $files = glob($this->directory . DIRECTORY_SEPARATOR . '*.jsonl');
+
+        foreach ($files as $path) {
+            if (is_link($path) || !preg_match('/^[a-f0-9]{32}\.jsonl$/', basename($path))) {
+                continue;
+            }
+
+            if (filemtime($path) < time() - max(0, (int) $max_age) && unlink($path)) {
+                ++$deleted;
+            }
+        }
+
+        return $deleted;
+    }
+
+    protected function validateReportUrl($url)
+    {
+        if (!is_string($url) || $url === '') {
+            throw new InvalidArgumentException('Yuju returned an empty report URL.');
+        }
+
+        $parts = parse_url($url);
+        if (empty($parts['scheme']) || strtolower($parts['scheme']) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
+            || (isset($parts['port']) && (int) $parts['port'] !== 443)
+        ) {
+            throw new InvalidArgumentException('Yuju returned a report URL that is not a safe HTTPS URL.');
+        }
+
+        $host = strtolower(rtrim($parts['host'], '.'));
+        $addresses = $this->resolvePublicAddresses($host);
+
+        if (empty($addresses)) {
+            throw new InvalidArgumentException('Could not resolve the report host to a public address.');
+        }
+
+        foreach ($addresses as $address) {
+            if (!filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                throw new InvalidArgumentException('The report host resolves to a non-public IP address.');
+            }
+        }
+
+        return ['host' => $host, 'ip' => reset($addresses)];
+    }
+
+    protected function resolvePublicAddresses($host)
+    {
+        if ($this->resolver) {
+            $addresses = call_user_func($this->resolver, $host);
+        } elseif (filter_var($host, FILTER_VALIDATE_IP)) {
+            $addresses = [$host];
+        } else {
+            $addresses = gethostbynamel($host);
+        }
+
+        return is_array($addresses) ? array_values(array_unique($addresses)) : [];
+    }
+
+    protected function resolveRedirect($current_url, $location)
+    {
+        $location = trim((string) $location);
+        $parts = parse_url($location);
+
+        if (!empty($parts['scheme'])) {
+            return $location;
+        }
+
+        if (strpos($location, '/') !== 0 || strpos($location, '//') === 0) {
+            throw new InvalidArgumentException('Yuju returned an unsupported relative report redirect.');
+        }
+
+        $current = parse_url($current_url);
+
+        return 'https://' . $current['host'] . $location;
+    }
+
+    protected function downloadOnce($url, $path, $host, $ip)
+    {
+        if ($this->transport) {
+            return call_user_func($this->transport, $url, $path, $ip, $this->max_report_bytes);
+        }
+
+        $handle = fopen($path, 'wb');
+        if (!$handle) {
+            throw new RuntimeException('Could not create the temporary Yuju report file.');
+        }
+        @chmod($path, 0600);
+
+        $downloaded = 0;
+        $location = null;
+        $content_length = null;
+        $curl = curl_init($url);
+
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_RESOLVE => [$host . ':443:' . $ip],
+            CURLOPT_HTTPHEADER => ['Accept: application/jsonl, application/json, text/plain'],
+            CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$location, &$content_length) {
+                if (stripos($header, 'Location:') === 0) {
+                    $location = trim(substr($header, strlen('Location:')));
+                } elseif (stripos($header, 'Content-Length:') === 0) {
+                    $content_length = (int) trim(substr($header, strlen('Content-Length:')));
+                }
+
+                return strlen($header);
+            },
+            CURLOPT_WRITEFUNCTION => function ($curl, $chunk) use ($handle, &$downloaded, &$content_length) {
+                $chunk_length = strlen($chunk);
+                if ($downloaded + $chunk_length > $this->max_report_bytes
+                    || ($content_length !== null && $content_length > $this->max_report_bytes)
+                ) {
+                    return 0;
+                }
+
+                $written = fwrite($handle, $chunk);
+                if ($written === false) {
+                    return 0;
+                }
+                $downloaded += $written;
+
+                return $written;
+            },
+        ]);
+
+        $result = curl_exec($curl);
+        $curl_error = curl_error($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        curl_close($curl);
+        fclose($handle);
+
+        if ($result === false && $status < 300) {
+            throw new RuntimeException($downloaded >= $this->max_report_bytes
+                ? 'The Yuju report exceeds the configured download size limit.'
+                : 'Could not download the Yuju report: ' . $curl_error
+            );
+        }
+
+        return ['status' => $status, 'location' => $location];
+    }
+
+    protected function ensurePrivateDirectory()
+    {
+        if (is_link($this->directory)) {
+            throw new RuntimeException('The report cache directory cannot be a symbolic link.');
+        }
+
+        if (!is_dir($this->directory) && !mkdir($this->directory, 0700, true) && !is_dir($this->directory)) {
+            throw new RuntimeException('Could not create the private Yuju report cache directory.');
+        }
+
+        $real_directory = realpath($this->directory);
+        $temp_root = realpath(sys_get_temp_dir());
+        if (!$real_directory || !$temp_root
+            || strpos($real_directory, rtrim($temp_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) !== 0
+        ) {
+            throw new RuntimeException('The Yuju report cache must be inside the system temporary directory.');
+        }
+
+        $document_root = isset($_SERVER['DOCUMENT_ROOT']) ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
+        if ($document_root && strpos($real_directory, rtrim($document_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) === 0) {
+            throw new RuntimeException('The Yuju report cache cannot be inside the public document root.');
+        }
+
+        @chmod($real_directory, 0700);
+        $this->directory = $real_directory;
+    }
+
+    protected function getPath($cache_id)
+    {
+        if (!is_string($cache_id) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+            throw new InvalidArgumentException('Invalid Yuju report cache ID.');
+        }
+
+        return $this->directory . DIRECTORY_SEPARATOR . $cache_id . '.jsonl';
+    }
+
+    protected function getScalar($row, $keys)
+    {
+        foreach ($keys as $key) {
+            if (isset($row[$key]) && is_scalar($row[$key]) && (string) $row[$key] !== '') {
+                return $row[$key];
+            }
+        }
+
+        return null;
+    }
+}
