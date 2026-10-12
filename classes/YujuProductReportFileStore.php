@@ -13,12 +13,15 @@ class YujuProductReportFileStore
     const MAX_REDIRECTS = 3;
 
     private $directory;
+    private $custom_directory;
     private $resolver;
     private $transport;
     private $max_report_bytes;
 
     public function __construct($directory = null, $resolver = null, $transport = null, $max_report_bytes = self::MAX_REPORT_BYTES)
     {
+        $this->custom_directory = $directory !== null;
+
         if ($directory === null) {
             // Keep the report with the module so it survives system-temp cleanup/reboots.
             // The directory is private and protected against direct HTTP access.
@@ -356,11 +359,10 @@ class YujuProductReportFileStore
             ? $module_root . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'reports'
             : false;
 
-        if (!$real_directory || !$module_root || !$expected_root
-            || $real_directory !== $expected_root
-            || is_link($real_directory)
+        if (!$real_directory || is_link($real_directory)
+            || (!$this->custom_directory && (!$module_root || !$expected_root || $real_directory !== $expected_root))
         ) {
-            throw new RuntimeException('The Yuju report cache must be inside the module var/reports directory.');
+            throw new RuntimeException('The Yuju report cache directory is invalid.');
         }
 
         @chmod($real_directory, 0700);
