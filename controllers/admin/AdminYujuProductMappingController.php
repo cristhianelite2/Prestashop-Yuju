@@ -435,8 +435,8 @@ class AdminYujuProductMappingController extends ModuleAdminController
             list($ps_field, $old_yuju_field, $new_yuju_field) = $legacy;
             Db::getInstance()->execute('
                 UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping old_mapping
-                SET old_mapping.yuju_field = "' . pSQL($new_yuju_field) . '",
-                    old_mapping.updated_at = NOW()
+                SET yuju_field = "' . pSQL($new_yuju_field) . '",
+                    updated_at = NOW()
                 WHERE old_mapping.prestashop_field = "' . pSQL($ps_field) . '"
                   AND old_mapping.yuju_field = "' . pSQL($old_yuju_field) . '"
                   AND NOT EXISTS (
