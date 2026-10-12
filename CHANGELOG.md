@@ -8,6 +8,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ## 2026-10-12
 
 ### Corregido
+- Se escapan con `{ldelim}` y `{rdelim}` los delimitadores del objeto JavaScript `retry_download` para evitar que Smarty lo interprete como una etiqueta y falle al compilar la plantilla.
 - Si Yuju devuelve `COMPLETED` desde la solicitud inicial, el módulo descarga y valida el archivo antes de marcarlo listo; si falta la caché, recupera la descarga de la misma tarea sin crear otro reporte ni consumir cuota.
 - El panel solo habilita la reconciliación cuando el servidor confirma `report_cached: true`.
 - Un archivo HTTP 200 vacío ya no se acepta como reporte cacheado; se registra un diagnóstico seguro y se elimina el archivo inválido.
