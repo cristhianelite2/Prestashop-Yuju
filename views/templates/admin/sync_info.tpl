@@ -226,15 +226,22 @@ $(function() {
                 if (startPolling) {
                     startAutoPoll();
                 }
-            } else if (status === 'COMPLETED') {
+            } else if (status === 'COMPLETED' && response.report_cached === true) {
                 stopAutoPoll();
-                showMessage('Informe listo. Cargue la reconciliación para ver las diferencias.', 'alert-success');
+                showMessage('Informe descargado y listo. Cargue la reconciliación para ver las diferencias.', 'alert-success');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
                 if (response.product_count !== undefined) {
                     $('#yuju-products-total').text(response.product_count);
                 }
+            } else if (status === 'COMPLETED') {
+                // Fail closed: remote status alone does not mean the local report is readable.
+                stopAutoPoll();
+                showMessage(response.message || 'Yuju terminó el informe, pero aún no está disponible en la caché local. Compruebe la descarga antes de reconciliar.', 'alert-warning');
+                $pollBtn.show();
+                $loadBtn.hide();
+                $pushBtn.hide();
             } else if (status === 'DOWNLOAD_ERROR') {
                 stopAutoPoll();
                 showMessage('Informe listo pero falló la validación del descarga. Reintente el descarga.', 'alert-warning');
@@ -378,7 +385,7 @@ $(function() {
                 renderReconciliation(response.report, response.message);
             } else {
                 showMessage(
-                    'No hay informe completado en caché. Primero inicie un informe.',
+                    (response && response.message) || 'No hay informe completado en caché. Primero inicie un informe.',
                     'alert-danger'
                 );
             }
