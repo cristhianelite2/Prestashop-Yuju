@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Se corrige el reenvío del índice y los productos del reporte JSONL validado desde `YujuSyncManager` hacia `YujuProductManager`, para que AdminYujuSync pueda construir y mostrar la reconciliación en lugar de descartar el reporte y lanzar un error.
+
 - La reconciliación de AdminYujuSync carga automáticamente el último reporte JSONL local validado, incluso si falta el ID de tarea guardado.
 - Los metadatos del reporte local se registran o actualizan en la tabla propia `yuju_product_reports`; el archivo y sus productos permanecen en `var/reports/`.
 - Se crea la tabla de metadatos del módulo si no existe, sin modificar tablas generales de PrestaShop ni almacenar URLs firmadas o rutas absolutas.

@@ -132,9 +132,12 @@ class YujuSyncManager
     /**
      * Get Yuju products and compare them with the module's saved product IDs.
      */
-    public function getYujuProductSyncReport()
+    public function getYujuProductSyncReport($report_index = null, $report_products = null)
     {
-        return $this->product_manager->getYujuProductSyncReport();
+        // Forward the already validated cached-report index and rows supplied by
+        // AdminYujuSyncController. Dropping these arguments makes reconciliation
+        // fail with "A validated Yuju general report is required for reconciliation."
+        return $this->product_manager->getYujuProductSyncReport($report_index, $report_products);
     }
 
     /**
