@@ -18,7 +18,7 @@ if (strpos($template, 'report.all_products || report.unsynced_products') === fal
     throw new RuntimeException('The reconciliation table must render all products, not only unsynchronized products.');
 }
 
-if (strpos($template, '{retry_download: true}') === false) {
+if (strpos($template, '{ldelim}retry_download: true{rdelim}') === false) {
     throw new RuntimeException('The manual poll action must retry failed downloads for the existing report task.');
 }
 
