@@ -90,4 +90,20 @@ try {
 }
 rmdir($invalid_directory);
 
+$empty_directory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'yuju-report-empty-' . bin2hex(random_bytes(5));
+$empty_transport = function ($url, $path) {
+    file_put_contents($path, '');
+
+    return ['status' => 200, 'location' => null];
+};
+$empty_store = new YujuProductReportFileStore($empty_directory, $resolver, $empty_transport, 1024);
+
+try {
+    $empty_store->downloadAndValidate('https://reports.test/empty.jsonl');
+    throw new Exception('An empty report must not be accepted as a completed product cache.');
+} catch (RuntimeException $exception) {
+    assertSameValue([], glob($empty_directory . DIRECTORY_SEPARATOR . '*.jsonl'), 'Empty report files must be deleted instead of marked cached.');
+}
+rmdir($empty_directory);
+
 echo "Product report file store tests passed.\n";
