@@ -12,6 +12,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - El panel solo habilita la reconciliación cuando el servidor confirma `report_cached: true`.
 - Un archivo HTTP 200 vacío ya no se acepta como reporte cacheado; se registra un diagnóstico seguro y se elimina el archivo inválido.
 - Al cargar la reconciliación se comprueba el resultado de la recuperación y, si se detecta una caché vacía de una versión anterior, se vuelve a descargar la tarea existente antes de mostrar un error preciso.
+- El botón de comprobación ahora reintenta realmente una descarga fallida reutilizando la tarea guardada, y el panel muestra el mensaje diagnóstico del backend en lugar de ocultarlo con un error genérico.
 
 ### Añadido
 - Flujo de sincronización basado en **reporte general asíncrono** de Yuju (`POST /products-gral-report`): "Iniciar sincronización" solicita el reporte, espera a que se complete (polling), descarga el JSONL en caché privada con validación SSRF, y reconcilia catálogo PrestaShop contra Yuju por ID guardado o SKU único.
