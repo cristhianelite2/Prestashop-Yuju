@@ -174,6 +174,65 @@ class YujuProductReportFileStore
         }
     }
 
+    /**
+     * Find the newest valid report already stored inside this module.
+     *
+     * This is a read-only recovery path for deployments where the JSONL file
+     * exists but the old Configuration state no longer points to it.
+     * Files are only accepted after the same streaming validation used for
+     * freshly downloaded reports.
+     *
+     * @return array|null
+     */
+    public function discoverLatestValidReport()
+    {
+        $this->ensurePrivateDirectory();
+        $paths = glob($this->directory . DIRECTORY_SEPARATOR . '*.jsonl');
+
+        if (!is_array($paths) || !$paths) {
+            return null;
+        }
+
+        usort($paths, function ($left, $right) {
+            return (int) filemtime($right) <=> (int) filemtime($left);
+        });
+
+        foreach ($paths as $path) {
+            $cache_id = basename($path, '.jsonl');
+            if (is_link($path) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+                continue;
+            }
+
+            $size = filesize($path);
+            if ($size === false || $size <= 0 || $size > $this->max_report_bytes) {
+                continue;
+            }
+
+            try {
+                $product_count = 0;
+                foreach ($this->readProducts($cache_id) as $unused_product) {
+                    ++$product_count;
+                }
+            } catch (Exception $e) {
+                // Ignore invalid or partially written files and try the next candidate.
+                continue;
+            }
+
+            if ($product_count < 1) {
+                continue;
+            }
+
+            return [
+                'cache_id' => $cache_id,
+                'product_count' => $product_count,
+                'size_bytes' => (int) $size,
+                'downloaded_at' => (int) filemtime($path),
+            ];
+        }
+
+        return null;
+    }
+
     public function reportExists($cache_id)
     {
         $path = $this->getPath($cache_id);
