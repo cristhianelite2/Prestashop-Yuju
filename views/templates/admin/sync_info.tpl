@@ -33,8 +33,8 @@
             <div class="row">
                 <div class="col-sm-3"><strong>Total:</strong> <span id="yuju-products-total">0</span></div>
                 <div class="col-sm-3"><strong>Sincronizados:</strong> <span id="yuju-products-synced">0</span></div>
-                <div class="col-sm-3"><strong>No sincronizados:</strong> <span id="yuju-products-unsynced">0</span></div>
-                <div class="col-sm-3"><strong>Listos para enviar:</strong> <span id="yuju-products-syncable">0</span></div>
+                <div class="col-sm-3"><strong>No están en Yuju:</strong> <span id="yuju-products-unsynced">0</span></div>
+                <div class="col-sm-3"><strong>Con diferencias:</strong> <span id="yuju-products-differences">0</span></div>
             </div>
             <div id="yuju-unsynced-products" class="table-responsive" style="margin-top: 15px;"></div>
             <div id="yuju-report-actions" style="margin-top: 15px;">
@@ -286,88 +286,178 @@ $(function() {
         }
     }
 
-    function renderReconciliation(report, message) {
-        // Mostrar todo el catálogo de PrestaShop; conservar aparte el subconjunto accionable.
-        var products = report.all_products || report.unsynced_products || [];
-        var actionableProducts = report.unsynced_products || [];
-        $('#yuju-products-total').text(report.total || 0);
-        $('#yuju-products-synced').text(report.synced_count || 0);
-        $('#yuju-products-unsynced').text(report.unsynced_count || 0);
-        $('#yuju-products-syncable').text(report.syncable_count || 0);
+    var reconciliationProducts = [];
+    var reconciliationActionableProducts = [];
+    var reconciliationPage = 1;
+    var reconciliationPageSize = 100;
+    var reconciliationFilter = 'differences';
 
-        showMessage(
-            message || ('Reconciliación cargada: ' + products.length + ' productos en la tabla. Solo los vinculados con diferencias pueden enviarse a Yuju.'),
-            products.length > 0 ? 'alert-info' : 'alert-success'
-        );
+    function getProductStatus(product) {
+        return product.reconciliation_status || product.status || 'needs_review';
+    }
+
+    function renderReconciliationTable() {
+        var statusLabels = {
+            synced: 'Correctamente sincronizado',
+            differences: 'Con diferencias',
+            not_in_yuju: 'No está en Yuju',
+            ambiguous: 'SKU ambiguo',
+            needs_review: 'Revisión manual',
+            disabled: 'Sincronización deshabilitada'
+        };
+        var filteredProducts = $.grep(reconciliationProducts, function(product) {
+            return reconciliationFilter === 'all' || getProductStatus(product) === reconciliationFilter;
+        });
+        var totalPages = Math.max(1, Math.ceil(filteredProducts.length / reconciliationPageSize));
+        reconciliationPage = Math.min(Math.max(1, reconciliationPage), totalPages);
+        var startIndex = (reconciliationPage - 1) * reconciliationPageSize;
+        var pageProducts = filteredProducts.slice(startIndex, startIndex + reconciliationPageSize);
+        var $container = $('#yuju-reconciliation-results');
+        $container.empty();
+
+        var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
+            '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Diferencias</th>' +
+            '</tr></thead><tbody></tbody></table>');
+
+        $.each(pageProducts, function(index, product) {
+            var diffFields = [];
+            $.each(product.differences || [], function(i, difference) {
+                diffFields.push(difference.field || '');
+            });
+            var msg = product.message || '';
+            if (product.uncomparable && product.uncomparable.length) {
+                msg += (msg ? ' ' : '') + 'No comparable: ' + product.uncomparable.join(', ');
+            }
+
+            var status = getProductStatus(product);
+            var $row = $('<tr></tr>');
+            // Treat all report values as text; never inject Yuju-provided HTML.
+            $row.append($('<td></td>').text(product.prestashop_product_id || '—'));
+            $row.append($('<td></td>').text(product.yuju_product_id || '—'));
+            $row.append($('<td></td>').text(product.name || '—'));
+            $row.append($('<td></td>').text(product.sku || '—'));
+            $row.append($('<td></td>').text(statusLabels[status] || status));
+            $row.append($('<td></td>').text(diffFields.length ? diffFields.join(', ') + (msg ? ' — ' + msg : '') : (msg || '—')));
+            $table.find('tbody').append($row);
+        });
+
+        if (pageProducts.length) {
+            $container.append($table);
+        } else {
+            $container.append($('<p class="alert alert-info"></p>').text('No hay productos para el filtro seleccionado.'));
+        }
+
+        var firstItem = filteredProducts.length ? startIndex + 1 : 0;
+        var lastItem = Math.min(startIndex + reconciliationPageSize, filteredProducts.length);
+        var $pagination = $('<div class="clearfix" style="margin-top:10px;"></div>');
+        $pagination.append($('<span class="text-muted"></span>').text(
+            'Mostrando ' + firstItem + '–' + lastItem + ' de ' + filteredProducts.length + ' productos'
+        ));
+        var $nav = $('<div class="pull-right"></div>');
+        var $previous = $('<button type="button" class="btn btn-default btn-sm">Anterior</button>')
+            .prop('disabled', reconciliationPage <= 1)
+            .on('click', function() {
+                reconciliationPage--;
+                renderReconciliationTable();
+            });
+        var $next = $('<button type="button" class="btn btn-default btn-sm" style="margin-left:5px;">Siguiente</button>')
+            .prop('disabled', reconciliationPage >= totalPages)
+            .on('click', function() {
+                reconciliationPage++;
+                renderReconciliationTable();
+            });
+        $nav.append($previous).append($('<span style="margin:0 8px;"></span>').text('Página ' + reconciliationPage + ' de ' + totalPages)).append($next);
+        $pagination.append($nav);
+        $container.append($pagination);
+
+        var syncableCount = 0;
+        $.each(reconciliationActionableProducts, function(i, product) {
+            if (product.syncable && product.yuju_product_id) {
+                syncableCount++;
+            }
+        });
+        if (syncableCount > 0) {
+            $pushBtn.html('<i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju) (' + syncableCount + ')').show();
+        } else {
+            $pushBtn.hide();
+        }
+    }
+
+    function renderReconciliation(report, message) {
+        reconciliationProducts = report.all_products || report.unsynced_products || [];
+        reconciliationActionableProducts = report.unsynced_products || [];
+        reconciliationPage = 1;
+        reconciliationPageSize = 100;
+        reconciliationFilter = 'differences';
+
+        var notInYujuCount = 0;
+        var syncedCount = 0;
+        var differencesCount = 0;
+        $.each(reconciliationProducts, function(index, product) {
+            var status = getProductStatus(product);
+            if (status === 'not_in_yuju') {
+                notInYujuCount++;
+            } else if (status === 'synced') {
+                syncedCount++;
+            } else if (status === 'differences') {
+                differencesCount++;
+            }
+        });
+
+        $('#yuju-products-total').text(report.total !== undefined ? report.total : reconciliationProducts.length);
+        $('#yuju-products-synced').text(syncedCount);
+        $('#yuju-products-unsynced').text(notInYujuCount);
+        $('#yuju-products-differences').text(differencesCount);
 
         var $container = $('#yuju-unsynced-products');
         $container.empty();
+        var $filters = $('<div class="row" style="margin:15px 0;"></div>');
+        var $statusColumn = $('<div class="col-sm-6"></div>');
+        $statusColumn.append('<label for="yuju-reconciliation-filter">Mostrar productos</label>');
+        var $statusSelect = $('<select id="yuju-reconciliation-filter" class="form-control">' +
+            '<option value="differences">Solo con diferencias (predeterminado)</option>' +
+            '<option value="not_in_yuju">En PrestaShop, no en Yuju</option>' +
+            '<option value="synced">Correctamente sincronizados</option>' +
+            '<option value="ambiguous">SKU ambiguo</option>' +
+            '<option value="needs_review">Revisión manual</option>' +
+            '<option value="disabled">Sincronización deshabilitada</option>' +
+            '<option value="all">Todos los productos</option>' +
+            '</select>').val(reconciliationFilter);
+        $statusSelect.on('change', function() {
+            reconciliationFilter = $(this).val();
+            reconciliationPage = 1;
+            renderReconciliationTable();
+        });
+        $statusColumn.append($statusSelect);
+        var $pageSizeColumn = $('<div class="col-sm-3"></div>');
+        $pageSizeColumn.append('<label for="yuju-reconciliation-page-size">Productos por página</label>');
+        var $pageSizeSelect = $('<select id="yuju-reconciliation-page-size" class="form-control">' +
+            '<option value="20">20</option><option value="50">50</option>' +
+            '<option value="100" selected="selected">100</option><option value="500">500</option>' +
+            '</select>');
+        $pageSizeSelect.on('change', function() {
+            reconciliationPageSize = parseInt($(this).val(), 10) || 100;
+            reconciliationPage = 1;
+            renderReconciliationTable();
+        });
+        $pageSizeColumn.append($pageSizeSelect);
+        var $resetColumn = $('<div class="col-sm-3" style="padding-top:25px;"></div>');
+        $('<button type="button" class="btn btn-default">Restablecer filtros</button>').on('click', function() {
+            reconciliationFilter = 'differences';
+            reconciliationPageSize = 100;
+            reconciliationPage = 1;
+            $statusSelect.val(reconciliationFilter);
+            $pageSizeSelect.val(String(reconciliationPageSize));
+            renderReconciliationTable();
+        }).appendTo($resetColumn);
+        $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn);
+        $container.append($filters).append('<div id="yuju-reconciliation-results"></div>');
 
-        if (products.length) {
-            var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
-                '<th>ID PS</th>' +
-                '<th>ID Yuju</th>' +
-                '<th>Producto</th>' +
-                '<th>SKU</th>' +
-                '<th>Estado</th>' +
-                '<th>Diferencias</th>' +
-                '</tr></thead><tbody></tbody></table>');
-
-            $.each(products, function(index, product) {
-                var diffFields = [];
-                $.each(product.differences || [], function(i, d) {
-                    diffFields.push(d.field || '');
-                });
-                var msg = product.message || '';
-                if (product.uncomparable && product.uncomparable.length) {
-                    if (msg) {
-                        msg += ' ';
-                    }
-                    msg += 'No comparable: ' + product.uncomparable.join(', ');
-                }
-
-                var statusLabels = {
-                    synced: 'Sin diferencias',
-                    differences: 'Con diferencias',
-                    not_in_yuju: 'No está en Yuju',
-                    ambiguous: 'SKU ambiguo',
-                    needs_review: 'Revisión manual',
-                    disabled: 'Sincronización deshabilitada'
-                };
-                var reconciliationStatus = product.reconciliation_status || product.status || 'needs_review';
-                var displayStatus = statusLabels[reconciliationStatus] || reconciliationStatus;
-
-                var $row = $('<tr></tr>');
-                // Usar .text() en todas las celdas para evitar inyectar HTML de Yuju.
-                $row.append($('<td></td>').text(product.prestashop_product_id || '—'));
-                $row.append($('<td></td>').text(product.yuju_product_id || '—'));
-                $row.append($('<td></td>').text(product.name || '—'));
-                $row.append($('<td></td>').text(product.sku || '—'));
-                $row.append($('<td></td>').text(displayStatus));
-                $row.append($('<td></td>').text(diffFields.length ? diffFields.join(', ') + (msg ? ' — ' + msg : '') : (msg || '—')));
-                $table.find('tbody').append($row);
-            });
-            $container.append($table);
-
-            var syncableCount = 0;
-            $.each(actionableProducts, function(i, p) {
-                if (p.syncable && p.yuju_product_id) {
-                    syncableCount++;
-                }
-            });
-
-            if (syncableCount > 0) {
-                $pushBtn
-                    .html('<i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju) (' + syncableCount + ')')
-                    .show();
-            } else {
-                $pushBtn.hide();
-            }
-        } else {
-            $container.html('<p class="alert alert-info">No se encontraron productos para mostrar.</p>');
-            $pushBtn.hide();
-        }
-
+        showMessage(
+            message || ('Reconciliación cargada: ' + reconciliationProducts.length + ' productos de PrestaShop. La vista inicial muestra solo los que tienen diferencias.'),
+            reconciliationProducts.length ? 'alert-info' : 'alert-success'
+        );
+        renderReconciliationTable();
         $report.removeClass('hidden');
         $pollBtn.hide();
     }
