@@ -5,6 +5,13 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026-10-11
+
+### Reglas de coordinación (AGENTS.md)
+
+- Se añade `AGENTS.md` con las reglas comunes de desarrollo (fuente: `_sistema/Workflow.md` del vault Obsidian) y los datos del proyecto.
+- Desarrollo en `test` con push silencioso; `main` solo al pedir subir; CHANGELOG obligatorio antes de publicar a `test`.
+
 ## [1.1.5] - 2026-10-10
 
 ### Cambiado
