@@ -22,34 +22,34 @@
 <div class="panel panel-default yuju-sync-info">
     <div class="panel-heading">
         <i class="icon-refresh"></i>
-        {l s='Synchronization Status' mod='prestashopyuju'}
+        Estado de sincronización
         <button type="button" class="btn btn-primary btn-sm pull-right" id="yuju-start-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
-            <i class="icon-refresh"></i> {l s='Iniciar sincronización' mod='prestashopyuju'}
+            <i class="icon-refresh"></i> Iniciar sincronización
         </button>
     </div>
     <div class="panel-body">
         <div id="yuju-product-sync-report" class="hidden" role="status" aria-live="polite" style="margin-bottom: 20px;">
             <div id="yuju-product-sync-message" class="alert alert-info"></div>
             <div class="row">
-                <div class="col-sm-3"><strong>{l s='Total:' mod='prestashopyuju'}</strong> <span id="yuju-products-total">0</span></div>
-                <div class="col-sm-3"><strong>{l s='Synchronized:' mod='prestashopyuju'}</strong> <span id="yuju-products-synced">0</span></div>
-                <div class="col-sm-3"><strong>{l s='Not synchronized:' mod='prestashopyuju'}</strong> <span id="yuju-products-unsynced">0</span></div>
-                <div class="col-sm-3"><strong>{l s='Ready to push:' mod='prestashopyuju'}</strong> <span id="yuju-products-syncable">0</span></div>
+                <div class="col-sm-3"><strong>Total:</strong> <span id="yuju-products-total">0</span></div>
+                <div class="col-sm-3"><strong>Sincronizados:</strong> <span id="yuju-products-synced">0</span></div>
+                <div class="col-sm-3"><strong>No sincronizados:</strong> <span id="yuju-products-unsynced">0</span></div>
+                <div class="col-sm-3"><strong>Listos para enviar:</strong> <span id="yuju-products-syncable">0</span></div>
             </div>
             <div id="yuju-unsynced-products" class="table-responsive" style="margin-top: 15px;"></div>
             <div id="yuju-report-actions" style="margin-top: 15px;">
                 <button type="button" class="btn btn-info" id="yuju-poll-report" style="display: none;">
-                    <i class="icon-clock-o"></i> {l s='Check report progress' mod='prestashopyuju'}
+                    <i class="icon-clock-o"></i> Ver progreso del informe
                 </button>
                 <button type="button" class="btn btn-info" id="yuju-load-reconciliation" style="display: none;">
-                    <i class="icon-eye"></i> {l s='View reconciliation' mod='prestashopyuju'}
+                    <i class="icon-eye"></i> Ver reconciliación
                 </button>
                 <button type="button" class="btn btn-success" id="yuju-push-differences" style="display: none;">
-                    <i class="icon-refresh"></i> {l s='Sincronizar (PrestaShop → Yuju)' mod='prestashopyuju'}
+                    <i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju)
                 </button>
             </div>
             <p class="text-muted" style="margin-top: 10px;">
-                {l s='PrestaShop is the source of truth. Only products already linked to Yuju with differences are sent PS→Yuju. Unmatched products are listed, never created in Yuju.' mod='prestashopyuju'}
+                PrestaShop es la fuente de verdad. Solo los productos already vinculados con diferencias se envían a PS→Yuju. Los productos sin emparejar se listan, nunca se crean en Yuju.
             </p>
         </div>
 
@@ -59,22 +59,22 @@
                     <h4>
                         {if $is_sync_running}
                             <span class="label label-warning">
-                                <i class="icon-spinner icon-spin"></i> {l s='Running' mod='prestashopyuju'}
+                                <i class="icon-spinner icon-spin"></i> Ejecutándose
                             </span>
                         {else}
                             <span class="label label-success">
-                                <i class="icon-check"></i> {l s='Idle' mod='prestashopyuju'}
+                                <i class="icon-check"></i> Inactivo
                             </span>
                         {/if}
                     </h4>
-                    <p class="text-muted">{l s='Current Status' mod='prestashopyuju'}</p>
+                    <p class="text-muted">Estado actual</p>
                 </div>
             </div>
 
             <div class="col-md-3">
                 <div class="sync-status-card">
-                    <h4>{if $last_sync_date}{$last_sync_date|date_format:"%Y-%m-%d %H:%M"|escape:'html':'UTF-8'}{else}{l s='Never' mod='prestashopyuju'}{/if}</h4>
-                    <p class="text-muted">{l s='Last Sync' mod='prestashopyuju'}</p>
+                    <h4>{if $last_sync_date}{$last_sync_date|date_format:"%Y-%m-%d %H:%M"|escape:'html':'UTF-8'}{else}Never{/if}</h4>
+                    <p class="text-muted">Última sincronización</p>
                 </div>
             </div>
 
@@ -82,19 +82,19 @@
                 <div class="sync-status-card">
                     <h4>
                         {if $auto_sync_enabled}
-                            <span class="label label-success">{l s='Enabled' mod='prestashopyuju'}</span>
+                            <span class="label label-success">Habilitado</span>
                         {else}
-                            <span class="label label-default">{l s='Disabled' mod='prestashopyuju'}</span>
+                            <span class="label label-default">Deshabilitado</span>
                         {/if}
                     </h4>
-                    <p class="text-muted">{l s='Auto Sync' mod='prestashopyuju'}</p>
+                    <p class="text-muted">Sincronización automática</p>
                 </div>
             </div>
 
             <div class="col-md-3">
                 <div class="sync-status-card">
                     <h4>{if isset($sync_stats.total_synced)}{$sync_stats.total_synced|intval}{else}0{/if}</h4>
-                    <p class="text-muted">{l s='Total Synced' mod='prestashopyuju'}</p>
+                    <p class="text-muted">Total sincronizado</p>
                 </div>
             </div>
         </div>
@@ -102,42 +102,42 @@
         {if isset($sync_stats)}
             <div class="row" style="margin-top: 20px;">
                 <div class="col-md-12">
-                    <h5>{l s='Sync Statistics' mod='prestashopyuju'}</h5>
+                    <h5>Estadísticas de sincronización</h5>
                     <div class="row">
                         <div class="col-md-2">
                             <div class="text-center">
                                 <strong>{if isset($sync_stats.products_synced)}{$sync_stats.products_synced|intval}{else}0{/if}</strong>
-                                <br><small>{l s='Products' mod='prestashopyuju'}</small>
+                                <br><small>Productos</small>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
                                 <strong>{if isset($sync_stats.categories_synced)}{$sync_stats.categories_synced|intval}{else}0{/if}</strong>
-                                <br><small>{l s='Categories' mod='prestashopyuju'}</small>
+                                <br><small>Categorías</small>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
                                 <strong>{if isset($sync_stats.stock_synced)}{$sync_stats.stock_synced|intval}{else}0{/if}</strong>
-                                <br><small>{l s='Stock Updates' mod='prestashopyuju'}</small>
+                                <br><small>Actualizaciones de stock</small>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
                                 <strong>{if isset($sync_stats.price_synced)}{$sync_stats.price_synced|intval}{else}0{/if}</strong>
-                                <br><small>{l s='Price Updates' mod='prestashopyuju'}</small>
+                                <br><small>Actualizaciones de precio</small>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
                                 <strong>{if isset($sync_stats.errors)}{$sync_stats.errors|intval}{else}0{/if}</strong>
-                                <br><small class="text-danger">{l s='Errors' mod='prestashopyuju'}</small>
+                                <br><small class="text-danger">Errores</small>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
-                                <strong>{if isset($sync_stats.success_rate)}{$sync_stats.success_rate|string_format:"%.1f"|escape:'html':'UTF-8'}%{else}0%{/if}</strong>
-                                <br><small>{l s='Success Rate' mod='prestashopyuju'}</small>
+                                <strong>{if isset($sync_stats.success_rate)}{$sync_stats.success_rate|string_format:"%.1f"|escape:'html':'UTF-8'}%{/if}</strong>
+                                <br><small>Tasa de éxito</small>
                             </div>
                         </div>
                     </div>
@@ -150,7 +150,7 @@
                 <div class="col-md-12">
                     <div class="alert alert-info">
                         <i class="icon-info-circle"></i>
-                        {l s='A synchronization process is currently running. Please wait for it to complete before starting a new sync.' mod='prestashopyuju'}
+                        Un proceso de sincronización está en ejecución. Espere a que complete antes de iniciar uno nuevo.
                     </div>
                 </div>
             </div>
@@ -158,7 +158,6 @@
     </div>
 </div>
 
-{literal}
 <script type="text/javascript">
 $(function() {
     var $startBtn = $('#yuju-start-report');
@@ -168,13 +167,11 @@ $(function() {
     var $report = $('#yuju-product-sync-report');
     var ajaxUrl = $startBtn.data('ajax-url');
     var pollTimer = null;
-    var lastReconciliation = null;
 
     function showMessage(message, type) {
         var $message = $('#yuju-product-sync-message')
             .removeClass('alert-info alert-danger alert-success alert-warning')
             .addClass(type || 'alert-info');
-        // External values HTML-escaped: use .text() to prevent XSS
         $message.text(message);
     }
 
@@ -207,7 +204,7 @@ $(function() {
             if (onError) {
                 onError();
             } else {
-                showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
+                showMessage('Fallo al conectar con Yuju. Revise la conexión e intente nuevamente.', 'alert-danger');
             }
         });
     }
@@ -215,14 +212,14 @@ $(function() {
     function handleReportState(response, startPolling) {
         $report.removeClass('hidden');
         if (!response) {
-            showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
+            showMessage('Fallo al conectar con Yuju. Revise la conexión e intente nuevamente.', 'alert-danger');
             return;
         }
 
         if (response.success) {
             var status = response.status || 'UNKNOWN';
             if (status === 'CREATED' || status === 'PROCESSING') {
-                showMessage('{/literal}{l s='Report in progress. The Yuju report is being generated; it may take a few minutes.' mod='prestashopyuju' js=1}{literal}', 'alert-info');
+                showMessage('Informe en progreso. El informe de Yuju está siendo generado; puede tardar unos minutos.', 'alert-info');
                 $pollBtn.show();
                 $loadBtn.hide();
                 $pushBtn.hide();
@@ -231,7 +228,7 @@ $(function() {
                 }
             } else if (status === 'COMPLETED') {
                 stopAutoPoll();
-                showMessage('{/literal}{l s='Report ready. Load the reconciliation to see differences.' mod='prestashopyuju' js=1}{literal}', 'alert-success');
+                showMessage('Informe listo. Cargue la reconciliación para ver las diferencias.', 'alert-success');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
@@ -240,27 +237,27 @@ $(function() {
                 }
             } else if (status === 'DOWNLOAD_ERROR') {
                 stopAutoPoll();
-                showMessage('{/literal}{l s='Report ready but download failed validation. Retry the download.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
+                showMessage('Informe listo pero falló la validación del descarga. Reintente el descarga.', 'alert-warning');
                 $pollBtn.show();
                 $loadBtn.hide();
                 $pushBtn.hide();
             } else if (status === 'RATE_LIMITED') {
                 stopAutoPoll();
-                showMessage(response.message || '{/literal}{l s='Daily report limit reached (2/day UTC).' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
+                showMessage('Límite diario de informes alcanzado (2/día UTC).', 'alert-warning');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
             } else if (status === 'UNKNOWN') {
                 stopAutoPoll();
-                showMessage(response.message || '{/literal}{l s='Report request could not be confirmed. Avoid duplicate requests.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
+                showMessage('La solicitud de informe no pudo confirmarse. Evite solicitudes duplicadas.', 'alert-warning');
             } else {
                 stopAutoPoll();
-                showMessage(response.message || '{/literal}{l s='Report status unknown.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
+                showMessage('Estado del informe desconocido.', 'alert-warning');
             }
         } else {
             stopAutoPoll();
             showMessage(
-                response.message || '{/literal}{l s='Could not start the Yuju general report.' mod='prestashopyuju' js=1}{literal}',
+                'No se pudo iniciar el informe general de Yuju.',
                 'alert-danger'
             );
         }
@@ -283,7 +280,6 @@ $(function() {
     }
 
     function renderReconciliation(report, message) {
-        lastReconciliation = report;
         var products = report.unsynced_products || [];
         $('#yuju-products-total').text(report.total || 0);
         $('#yuju-products-synced').text(report.synced_count || 0);
@@ -291,7 +287,7 @@ $(function() {
         $('#yuju-products-syncable').text(report.syncable_count || 0);
 
         showMessage(
-            message || '{/literal}{l s='Reconciliation loaded. Only linked products with differences can be pushed PS→Yuju.' mod='prestashopyuju' js=1}{literal}',
+            'Reconciliación cargada. Solo los productos vinculados con diferencias pueden enviarse PS→Yuju.',
             products.length > 0 ? 'alert-info' : 'alert-success'
         );
 
@@ -300,12 +296,12 @@ $(function() {
 
         if (products.length) {
             var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
-                '<th>{/literal}{l s='PS ID' mod='prestashopyuju' js=1}{literal}</th>' +
-                '<th>{/literal}{l s='Yuju ID' mod='prestashopyuju' js=1}{literal}</th>' +
-                '<th>{/literal}{l s='Product' mod='prestashopyuju' js=1}{literal}</th>' +
-                '<th>{/literal}{l s='SKU' mod='prestashopyuju' js=1}{literal}</th>' +
-                '<th>{/literal}{l s='Status' mod='prestashopyuju' js=1}{literal}</th>' +
-                '<th>{/literal}{l s='Differences' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>ID PS</th>' +
+                '<th>ID Yuju</th>' +
+                '<th>Producto</th>' +
+                '<th>SKU</th>' +
+                '<th>Estado</th>' +
+                '<th>Diferencias</th>' +
                 '</tr></thead><tbody></tbody></table>');
 
             $.each(products, function(index, product) {
@@ -318,10 +314,9 @@ $(function() {
                     if (msg) {
                         msg += ' ';
                     }
-                    msg += '{/literal}{l s='Uncomparable:' mod='prestashopyuju' js=1}{literal} ' + product.uncomparable.join(', ');
+                    msg += 'No comparable: ' + product.uncomparable.join(', ');
                 }
                 var $row = $('<tr></tr>');
-                // HTML-escape every cell: external Yuju values must not be injected as HTML
                 $row.append($('<td></td>').text(product.prestashop_product_id || '—'));
                 $row.append($('<td></td>').text(product.yuju_product_id || '—'));
                 $row.append($('<td></td>').text(product.name || '—'));
@@ -341,7 +336,7 @@ $(function() {
 
             if (syncableCount > 0) {
                 $pushBtn
-                    .html('<i class="icon-refresh"></i> {/literal}{l s='Sincronizar (PrestaShop → Yuju)' mod='prestashopyuju' js=1}{literal} (' + syncableCount + ')')
+                    .html('<i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju) (' + syncableCount + ')')
                     .show();
             } else {
                 $pushBtn.hide();
@@ -355,18 +350,18 @@ $(function() {
     }
 
     $startBtn.on('click', function() {
-        setLoading($startBtn, true, '{/literal}{l s='Requesting report...' mod='prestashopyuju' js=1}{literal}');
+        setLoading($startBtn, true, 'Solicitando informe...');
         ajaxAction('startYujuProductReport', null, function(response) {
             handleReportState(response, true);
             setLoading($startBtn, false);
         }, function() {
-            showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
+            showMessage('Fallo al conectar con Yuju. Revise la conexión e intente nuevamente.', 'alert-danger');
             setLoading($startBtn, false);
         });
     });
 
     $pollBtn.on('click', function() {
-        setLoading($pollBtn, true, '{/literal}{l s='Checking...' mod='prestashopyuju' js=1}{literal}');
+        setLoading($pollBtn, true, 'Comprobando...');
         ajaxAction('pollYujuProductReport', null, function(response) {
             handleReportState(response, false);
             setLoading($pollBtn, false);
@@ -376,14 +371,14 @@ $(function() {
     });
 
     $loadBtn.on('click', function() {
-        setLoading($loadBtn, true, '{/literal}{l s='Loading reconciliation...' mod='prestashopyuju' js=1}{literal}');
+        setLoading($loadBtn, true, 'Cargando reconciliación...');
         ajaxAction('getYujuProductSyncReport', null, function(response) {
             setLoading($loadBtn, false);
             if (response && response.success && response.report) {
                 renderReconciliation(response.report, response.message);
             } else {
                 showMessage(
-                    (response && response.message) || '{/literal}{l s='No cached completed report. Start a report first.' mod='prestashopyuju' js=1}{literal}',
+                    'No hay informe completado en caché. Primero inicie un informe.',
                     'alert-danger'
                 );
             }
@@ -393,10 +388,10 @@ $(function() {
     });
 
     $pushBtn.on('click', function() {
-        if (!confirm('{/literal}{l s='Send PrestaShop values to Yuju for linked products with differences? No products will be created in Yuju.' mod='prestashopyuju' js=1}{literal}')) {
+        if (!confirm('¿Desea enviar los valores de PrestaShop a Yuju para productos vinculados con diferencias? No se crearán productos en Yuju.')) {
             return;
         }
-        setLoading($pushBtn, true, '{/literal}{l s='Pushing to Yuju...' mod='prestashopyuju' js=1}{literal}');
+        setLoading($pushBtn, true, 'Enviando a Yuju...');
         ajaxAction('pushDifferencesToYuju', null, function(response) {
             setLoading($pushBtn, false);
             if (response && response.success) {
@@ -409,8 +404,7 @@ $(function() {
                     }
                 });
                 showMessage(
-                    (response.message || '{/literal}{l s='Push completed.' mod='prestashopyuju' js=1}{literal}') +
-                    (failed ? ' ' + failed + ' {/literal}{l s='failed.' mod='prestashopyuju' js=1}{literal}' : ''),
+                    'Sincronización completada' + (failed ? ' falló ' + failed + ' veces' : ''),
                     failed ? 'alert-warning' : 'alert-success'
                 );
                 if (response.report) {
@@ -418,7 +412,7 @@ $(function() {
                 }
             } else {
                 showMessage(
-                    (response && response.message) || '{/literal}{l s='Push to Yuju failed.' mod='prestashopyuju' js=1}{literal}',
+                    'Falló el envío a Yuju.',
                     'alert-danger'
                 );
             }
@@ -434,6 +428,5 @@ $(function() {
         }
     }, 30000);
 });
-{/literal}
 </script>
 {/block}
