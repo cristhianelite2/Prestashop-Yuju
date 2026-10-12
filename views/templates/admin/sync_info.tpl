@@ -53,7 +53,7 @@
             </p>
         </div>
 
-        <div class="row">
+        <div class="row" style="margin-top: 20px;">
             <div class="col-md-3">
                 <div class="sync-status-card">
                     <h4>
@@ -158,6 +158,7 @@
     </div>
 </div>
 
+{literal}
 <script type="text/javascript">
 $(function() {
     var $startBtn = $('#yuju-start-report');
@@ -433,5 +434,6 @@ $(function() {
         }
     }, 30000);
 });
+{/literal}
 </script>
 {/block}
