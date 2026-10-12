@@ -30,6 +30,7 @@ class YujuProductReportManager
      */
     public function startOrResumeReport()
     {
+        $this->file_store->cleanupExpired();
         $state = $this->getStoredState();
 
         $has_cached_report = !empty($state['cache_id'])

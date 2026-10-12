@@ -50,6 +50,11 @@ class FakeYujuProductReportFileStore
     public $cachedRows = [];
     public $failDownloads = false;
 
+    public function cleanupExpired($max_age = 86400)
+    {
+        return 0;
+    }
+
     public function downloadAndValidate($url)
     {
         $this->downloadedUrls[] = $url;
