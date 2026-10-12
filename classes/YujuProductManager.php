@@ -65,18 +65,14 @@ class YujuProductManager
                 $filters['ids'] = $product_ids;
             }
 
-            $yuju_products = $this->api_client->getProducts($filters);
-
-            if (!$yuju_products || !isset($yuju_products['data'])) {
-                throw new Exception('No products received from Yuju API');
-            }
+            $yuju_products = self::extractYujuProducts($this->api_client->getProducts($filters));
 
             $synced_count = 0;
             $created_count = 0;
             $updated_count = 0;
             $errors = [];
 
-            foreach ($yuju_products['data'] as $yuju_product) {
+            foreach ($yuju_products as $yuju_product) {
                 try {
                     $result = $this->syncSingleProductFromYuju($yuju_product, $force_update);
 
@@ -121,6 +117,110 @@ class YujuProductManager
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Compare Yuju products with the IDs stored by this module.
+     */
+    public function getYujuProductSyncReport()
+    {
+        $response = $this->api_client->getProducts();
+        $mappings = Db::getInstance()->executeS('
+            SELECT yuju_product_id, prestashop_product_id, sync_status
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            WHERE yuju_product_id IS NOT NULL AND yuju_product_id != ""
+        ');
+
+        if ($mappings === false) {
+            throw new Exception('Could not read product synchronization mappings from the database.');
+        }
+
+        return self::buildYujuProductSyncReport($response, $mappings);
+    }
+
+    /**
+     * Build a report from Yuju's response and the module's product mappings.
+     *
+     * @param array $response API response from YujuApiClient::getProducts()
+     * @param array $mappings Product status rows containing Yuju IDs
+     *
+     * @return array
+     */
+    protected static function buildYujuProductSyncReport($response, $mappings)
+    {
+        $products = self::extractYujuProducts($response);
+
+        $mapped_products = [];
+
+        foreach ($mappings as $mapping) {
+            if (!empty($mapping['yuju_product_id']) && (int) $mapping['prestashop_product_id'] > 0) {
+                $mapped_products[(string) $mapping['yuju_product_id']] = $mapping;
+            }
+        }
+
+        $report = [
+            'total' => count($products),
+            'synced_count' => 0,
+            'unsynced_count' => 0,
+            'unsynced_products' => [],
+        ];
+
+        foreach ($products as $product) {
+            $yuju_product_id = (string) $product['id'];
+
+            if (isset($mapped_products[$yuju_product_id])) {
+                ++$report['synced_count'];
+                continue;
+            }
+
+            ++$report['unsynced_count'];
+            $report['unsynced_products'][] = [
+                'id' => $yuju_product_id,
+                'name' => isset($product['name']) && is_scalar($product['name']) ? (string) $product['name'] : '',
+                'sku' => isset($product['sku']) && is_scalar($product['sku']) ? (string) $product['sku'] : '',
+            ];
+        }
+
+        return $report;
+    }
+
+    /**
+     * Normalize Yuju's product collection response and reject malformed items.
+     *
+     * @param array $response API response from YujuApiClient::getProducts()
+     *
+     * @return array
+     */
+    protected static function extractYujuProducts($response)
+    {
+        if (empty($response['success'])) {
+            $message = isset($response['message']) ? $response['message'] : 'Could not retrieve products from Yuju.';
+            throw new InvalidArgumentException($message);
+        }
+
+        $products = isset($response['data']) ? $response['data'] : null;
+
+        for ($depth = 0; $depth < 4 && is_array($products); ++$depth) {
+            if (isset($products['data']) && is_array($products['data'])) {
+                $products = $products['data'];
+            } elseif (isset($products['products']) && is_array($products['products'])) {
+                $products = $products['products'];
+            } else {
+                break;
+            }
+        }
+
+        if (!is_array($products)) {
+            throw new InvalidArgumentException('Yuju returned an unexpected products response.');
+        }
+
+        foreach ($products as $product) {
+            if (!is_array($product) || !isset($product['id']) || (string) $product['id'] === '') {
+                throw new InvalidArgumentException('Yuju returned a product without an ID; synchronization was stopped.');
+            }
+        }
+
+        return $products;
     }
 
     /**

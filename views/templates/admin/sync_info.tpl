@@ -23,8 +23,24 @@
     <div class="panel-heading">
         <i class="icon-refresh"></i>
         {l s='Synchronization Status' mod='prestashopyuju'}
+        <button type="button" class="btn btn-primary btn-sm pull-right" id="yuju-inspect-products" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
+            <i class="icon-refresh"></i> {l s='Start synchronization' mod='prestashopyuju'}
+        </button>
     </div>
     <div class="panel-body">
+        <div id="yuju-product-sync-report" class="hidden" role="status" aria-live="polite" style="margin-bottom: 20px;">
+            <div id="yuju-product-sync-message" class="alert alert-info"></div>
+            <div class="row">
+                <div class="col-sm-4"><strong>{l s='Yuju products:' mod='prestashopyuju'}</strong> <span id="yuju-products-total">0</span></div>
+                <div class="col-sm-4"><strong>{l s='Synchronized:' mod='prestashopyuju'}</strong> <span id="yuju-products-synced">0</span></div>
+                <div class="col-sm-4"><strong>{l s='Not synchronized:' mod='prestashopyuju'}</strong> <span id="yuju-products-unsynced">0</span></div>
+            </div>
+            <div id="yuju-unsynced-products" class="table-responsive" style="margin-top: 15px;"></div>
+            <button type="button" class="btn btn-success" id="yuju-sync-unsynced-products" style="display: none; margin-top: 15px;">
+                <i class="icon-refresh"></i> {l s='Synchronize missing products' mod='prestashopyuju'}
+            </button>
+        </div>
+
         <div class="row">
             <div class="col-md-3">
                 <div class="sync-status-card">
@@ -135,6 +151,102 @@
 </div>
 
 <script type="text/javascript">
+$(function() {
+    var $inspectButton = $('#yuju-inspect-products');
+    var $syncButton = $('#yuju-sync-unsynced-products');
+    var $report = $('#yuju-product-sync-report');
+    var ajaxUrl = $inspectButton.data('ajax-url');
+
+    function renderProductReport(report, message, isError) {
+        var products = report.unsynced_products || [];
+        $('#yuju-products-total').text(report.total || 0);
+        $('#yuju-products-synced').text(report.synced_count || 0);
+        $('#yuju-products-unsynced').text(report.unsynced_count || 0);
+        $('#yuju-product-sync-message')
+            .toggleClass('alert-danger', !!isError)
+            .toggleClass('alert-info', !isError && products.length > 0)
+            .toggleClass('alert-success', !isError && products.length === 0)
+            .text(message);
+
+        var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
+            '<th>{l s='Yuju ID' mod='prestashopyuju' js=1}</th>' +
+            '<th>{l s='Product' mod='prestashopyuju' js=1}</th>' +
+            '<th>{l s='SKU' mod='prestashopyuju' js=1}</th>' +
+            '</tr></thead><tbody></tbody></table>');
+        $.each(products, function(index, product) {
+            var $row = $('<tr></tr>');
+            $row.append($('<td></td>').text(product.id));
+            $row.append($('<td></td>').text(product.name || '—'));
+            $row.append($('<td></td>').text(product.sku || '—'));
+            $table.find('tbody').append($row);
+        });
+
+        $('#yuju-unsynced-products').empty();
+        if (products.length) {
+            $('#yuju-unsynced-products').append($table);
+            $syncButton
+                .html('<i class="icon-refresh"></i> {l s='Synchronize missing products' mod='prestashopyuju' js=1} (' + products.length + ')')
+                .show();
+        } else {
+            $syncButton.hide();
+        }
+        $report.removeClass('hidden');
+    }
+
+    function requestProductReport(action, button, loadingText, successHandler) {
+        var originalHtml = button.html();
+        button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> ' + loadingText);
+        $.ajax({
+            url: ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {ajax: 1, action: action}
+        }).done(function(response) {
+            if (!response || !response.success) {
+                var errorMessage = response && response.message ? response.message : '{l s='Could not retrieve products from Yuju.' mod='prestashopyuju' js=1}';
+                if (response && response.report) {
+                    renderProductReport(response.report, errorMessage, true);
+                } else {
+                    $syncButton.hide();
+                    $('#yuju-unsynced-products').empty();
+                    $('#yuju-product-sync-report').removeClass('hidden');
+                    $('#yuju-product-sync-message').removeClass('alert-info alert-success').addClass('alert-danger').text(errorMessage);
+                }
+                return;
+            }
+            successHandler(response);
+        }).fail(function() {
+            $('#yuju-product-sync-report').removeClass('hidden');
+            $('#yuju-product-sync-message').removeClass('alert-info alert-success').addClass('alert-danger')
+                .text('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}');
+        }).always(function() {
+            button.prop('disabled', false).html(originalHtml);
+        });
+    }
+
+    $inspectButton.on('click', function() {
+        requestProductReport(
+            'inspectYujuProducts',
+            $inspectButton,
+            '{l s='Retrieving products...' mod='prestashopyuju' js=1}',
+            function(response) {
+                renderProductReport(response.report, '{l s='Product synchronization status updated.' mod='prestashopyuju' js=1}', false);
+            }
+        );
+    });
+
+    $syncButton.on('click', function() {
+        requestProductReport(
+            'syncUnsyncedProducts',
+            $syncButton,
+            '{l s='Synchronizing products...' mod='prestashopyuju' js=1}',
+            function(response) {
+                renderProductReport(response.report, response.message, false);
+            }
+        );
+    });
+});
+
 function stopSync() {
     if (confirm('{l s='Are you sure you want to stop the current synchronization?' mod='prestashopyuju' js=1}')) {
         $.ajax({

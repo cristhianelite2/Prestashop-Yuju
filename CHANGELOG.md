@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026-10-12
+
+### Añadido
+- En el panel de sincronización, botón para consultar productos de Yuju, ver cuáles tienen un ID vinculado en `yuju_product_status` y cuántos faltan. Se pueden importar únicamente los que no están vinculados.
+
 ## 2026-10-11
 
 ### Reglas de coordinación (AGENTS.md)

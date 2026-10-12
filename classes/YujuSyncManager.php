@@ -127,6 +127,26 @@ class YujuSyncManager
     }
 
     /**
+     * Get Yuju products and compare them with the module's saved product IDs.
+     */
+    public function getYujuProductSyncReport()
+    {
+        return $this->product_manager->getYujuProductSyncReport();
+    }
+
+    /**
+     * Synchronize selected products from Yuju, forcing their import/update.
+     */
+    public function syncYujuProductsById($product_ids)
+    {
+        if ($this->config['max_execution_time'] > 0) {
+            set_time_limit($this->config['max_execution_time']);
+        }
+
+        return $this->product_manager->syncProductsFromYuju($product_ids, true);
+    }
+
+    /**
      * Execute incremental synchronization.
      */
     public function executeIncrementalSync($since_date = null)

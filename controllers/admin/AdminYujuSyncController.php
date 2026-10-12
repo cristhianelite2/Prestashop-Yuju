@@ -480,6 +480,89 @@ class AdminYujuSyncController extends ModuleAdminController
         exit(json_encode($response));
     }
 
+    public function ajaxProcessInspectYujuProducts()
+    {
+        try {
+            $report = $this->sync_manager->getYujuProductSyncReport();
+            $this->respondWithJson(['success' => true, 'report' => $report]);
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function ajaxProcessSyncUnsyncedProducts()
+    {
+        if ($this->sync_manager->isSyncRunning()) {
+            $response = [
+                'success' => false,
+                'message' => $this->trans('A synchronization is already running. Please wait for it to finish.', array(), 'Modules.Prestashopyuju.Admin'),
+            ];
+            $this->respondWithJson($response);
+        }
+
+        $lock_created = false;
+        $response = [];
+
+        try {
+            $report = $this->sync_manager->getYujuProductSyncReport();
+
+            if (empty($report['unsynced_products'])) {
+                $response = [
+                    'success' => true,
+                    'message' => $this->trans('All Yuju products are already synchronized.', array(), 'Modules.Prestashopyuju.Admin'),
+                    'synced_count' => 0,
+                    'errors' => [],
+                    'report' => $report,
+                ];
+            } else {
+                $product_ids = array_column($report['unsynced_products'], 'id');
+                $this->sync_manager->createSyncLock();
+                $lock_created = true;
+                $results = $this->sync_manager->syncYujuProductsById($product_ids);
+
+                if (empty($results['success'])) {
+                    $response = [
+                        'success' => false,
+                        'message' => isset($results['error']) ? $results['error'] : $this->trans('Product synchronization failed.', array(), 'Modules.Prestashopyuju.Admin'),
+                        'report' => $report,
+                    ];
+                } else {
+                    try {
+                        $updated_report = $this->sync_manager->getYujuProductSyncReport();
+                    } catch (Exception $e) {
+                        $updated_report = $report;
+                    }
+
+                    $response = [
+                        'success' => true,
+                        'message' => sprintf(
+                            $this->trans('Synchronization finished. Products imported: %d. Errors: %d.', array(), 'Modules.Prestashopyuju.Admin'),
+                            isset($results['synced_count']) ? (int) $results['synced_count'] : 0,
+                            isset($results['errors']) ? count($results['errors']) : 0
+                        ),
+                        'synced_count' => isset($results['synced_count']) ? (int) $results['synced_count'] : 0,
+                        'errors' => isset($results['errors']) ? $results['errors'] : [],
+                        'report' => $updated_report,
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            $response = ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        if ($lock_created) {
+            $this->sync_manager->removeSyncLock();
+        }
+
+        $this->respondWithJson($response);
+    }
+
+    protected function respondWithJson($response)
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        exit(json_encode($response));
+    }
+
     public function ajaxProcessCleanLogs()
     {
         try {
