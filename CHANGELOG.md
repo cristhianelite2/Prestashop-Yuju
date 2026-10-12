@@ -10,6 +10,9 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Corregido
 - Si Yuju devuelve `COMPLETED` desde la solicitud inicial, el módulo descarga y valida el archivo antes de marcarlo listo; si falta la caché, recupera la descarga de la misma tarea sin crear otro reporte ni consumir cuota.
 - El panel solo habilita la reconciliación cuando el servidor confirma `report_cached: true`.
+- Un archivo HTTP 200 vacío ya no se acepta como reporte cacheado; se registra un diagnóstico seguro y se elimina el archivo inválido.
+- Al cargar la reconciliación se comprueba el resultado de la recuperación y, si se detecta una caché vacía de una versión anterior, se vuelve a descargar la tarea existente antes de mostrar un error preciso.
+- El botón de comprobación ahora reintenta realmente una descarga fallida reutilizando la tarea guardada, y el panel muestra el mensaje diagnóstico del backend en lugar de ocultarlo con un error genérico.
 
 ### Añadido
 - Flujo de sincronización basado en **reporte general asíncrono** de Yuju (`POST /products-gral-report`): "Iniciar sincronización" solicita el reporte, espera a que se complete (polling), descarga el JSONL en caché privada con validación SSRF, y reconcilia catálogo PrestaShop contra Yuju por ID guardado o SKU único.
@@ -85,6 +88,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - Panel **"Intentos de conexión"** en el dashboard del monitor (`/app`): cada intento entrante de `/api/v1/modules/register` queda registrado (nueva tabla `registration_attempts`) con dominio, nombre, versiones, IP, resultado, HTTP y hora —incluidos los rechazados por handshake, API key, tienda ya registrada, campos prohibidos o payload inválido.
 
 ## [Unreleased]
+
+### Cambiado
+- Los informes generales de productos de Yuju se guardan en `var/reports/` dentro del módulo, con permisos restrictivos, en lugar del directorio temporal del sistema.
+
+### Seguridad
+- Se bloquea el acceso HTTP directo a `var/`, donde se almacenan los informes descargados.
+
 
 ### Corregido
 - La reconciliación devuelve todos los productos activos de PrestaShop para mostrar sincronizados sin diferencias, productos con diferencias y productos no encontrados en Yuju; la lista de envío sigue limitada a productos vinculados con diferencias.

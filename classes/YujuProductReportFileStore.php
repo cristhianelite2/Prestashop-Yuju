@@ -13,16 +13,19 @@ class YujuProductReportFileStore
     const MAX_REDIRECTS = 3;
 
     private $directory;
+    private $custom_directory;
     private $resolver;
     private $transport;
     private $max_report_bytes;
 
     public function __construct($directory = null, $resolver = null, $transport = null, $max_report_bytes = self::MAX_REPORT_BYTES)
     {
+        $this->custom_directory = $directory !== null;
+
         if ($directory === null) {
-            $module_root = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
-            $directory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-                . DIRECTORY_SEPARATOR . 'yuju-report-' . substr(hash('sha256', $module_root), 0, 16);
+            // Keep the report with the module so it survives system-temp cleanup/reboots.
+            // The directory is private and protected against direct HTTP access.
+            $directory = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'reports';
         }
 
         $this->directory = $directory;
@@ -71,6 +74,13 @@ class YujuProductReportFileStore
                 $product_count = 0;
                 foreach ($this->readProducts($cache_id) as $product) {
                     ++$product_count;
+                }
+
+                // A successful HTTP response with an empty file is not a usable product report.
+                // Otherwise the UI marks it cached, but reconciliation sees zero rows and reports
+                // a misleading "no cached report" error.
+                if ($product_count === 0) {
+                    throw new RuntimeException('The downloaded Yuju report contains no product rows.');
                 }
 
                 return [
@@ -344,16 +354,15 @@ class YujuProductReportFileStore
         }
 
         $real_directory = realpath($this->directory);
-        $temp_root = realpath(sys_get_temp_dir());
-        if (!$real_directory || !$temp_root
-            || strpos($real_directory, rtrim($temp_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) !== 0
-        ) {
-            throw new RuntimeException('The Yuju report cache must be inside the system temporary directory.');
-        }
+        $module_root = realpath(dirname(__DIR__));
+        $expected_root = $module_root
+            ? $module_root . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'reports'
+            : false;
 
-        $document_root = isset($_SERVER['DOCUMENT_ROOT']) ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
-        if ($document_root && strpos($real_directory, rtrim($document_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) === 0) {
-            throw new RuntimeException('The Yuju report cache cannot be inside the public document root.');
+        if (!$real_directory || is_link($real_directory)
+            || (!$this->custom_directory && (!$module_root || !$expected_root || $real_directory !== $expected_root))
+        ) {
+            throw new RuntimeException('The Yuju report cache directory is invalid.');
         }
 
         @chmod($real_directory, 0700);

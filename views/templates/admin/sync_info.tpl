@@ -384,11 +384,13 @@ $(function() {
     });
 
     $pollBtn.on('click', function() {
-        setLoading($pollBtn, true, 'Comprobando...');
-        ajaxAction('pollYujuProductReport', null, function(response) {
+        setLoading($pollBtn, true, 'Comprobando / reintentando descarga...');
+        // An explicit click also retries DOWNLOAD_ERROR using the same stored task.
+        ajaxAction('pollYujuProductReport', {retry_download: true}, function(response) {
             handleReportState(response, false);
             setLoading($pollBtn, false);
         }, function() {
+            showMessage('No se pudo consultar o recuperar el informe. Inténtelo nuevamente.', 'alert-danger');
             setLoading($pollBtn, false);
         });
     });
@@ -400,13 +402,19 @@ $(function() {
             if (response && response.success && response.report) {
                 renderReconciliation(response.report, response.message);
             } else {
-                showMessage(
-                    'No hay informe completado en caché. Primero inicie un informe.',
-                    'alert-danger'
-                );
+                var message = response && response.message
+                    ? response.message
+                    : 'No hay informe completado en caché. Primero inicie un informe.';
+                showMessage(message, 'alert-danger');
+                if (response && response.status === 'DOWNLOAD_ERROR') {
+                    $pollBtn.show();
+                    $loadBtn.hide();
+                    $pushBtn.hide();
+                }
             }
         }, function() {
             setLoading($loadBtn, false);
+            showMessage('No se pudo cargar la reconciliación. Compruebe la conexión y vuelva a intentarlo.', 'alert-danger');
         });
     });
 

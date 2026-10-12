@@ -246,17 +246,23 @@ class YujuProductReportManager
                 $download = $this->file_store->downloadAndValidate($report_url);
             } catch (Exception $e) {
                 $state['status'] = 'DOWNLOAD_ERROR';
+                $state['cache_id'] = null;
                 $state['download_error'] = 'download_failed';
+                // Keep a short diagnostic, never the signed download URL.
+                $state['download_error_message'] = substr($e->getMessage(), 0, 500);
                 $this->storeJson(self::STATE_CONFIG_KEY, $state);
 
                 return [
                     'success' => false,
                     'status' => 'DOWNLOAD_ERROR',
-                    'message' => 'No se pudo descargar o validar el reporte. Reintenta la descarga; no se volverá a generar el reporte ni a consumir cuota.',
+                    'message' => 'Yuju terminó el informe, pero no se pudo validar su archivo: '
+                        . $state['download_error_message']
+                        . ' Puedes reintentar la descarga sin generar otro informe ni consumir otra solicitud.',
                 ];
             }
 
             $state['status'] = 'COMPLETED';
+            unset($state['download_error'], $state['download_error_message']);
             $state['cache_id'] = $download['cache_id'];
             $state['product_count'] = (int) $download['product_count'];
             $state['report_size_bytes'] = (int) $download['size_bytes'];
@@ -282,6 +288,40 @@ class YujuProductReportManager
             'task_id' => $state['task_id'],
             'message' => isset($data['message']) && is_scalar($data['message']) ? (string) $data['message'] : null,
         ];
+    }
+
+    /**
+     * Force a fresh download for the existing task when the saved cache is unusable.
+     * This never creates another report task or consumes another report quota slot.
+     *
+     * @return array
+     */
+    public function recoverReportDownload()
+    {
+        $state = $this->getStoredState();
+        if (empty($state['task_id'])) {
+            return [
+                'success' => false,
+                'status' => isset($state['status']) ? $state['status'] : 'UNKNOWN',
+                'message' => 'No hay una tarea de informe guardada que se pueda recuperar.',
+            ];
+        }
+
+        if (!empty($state['cache_id']) && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])) {
+            $this->file_store->deleteReport($state['cache_id']);
+        }
+
+        $state['status'] = 'DOWNLOAD_EXPIRED';
+        $state['cache_id'] = null;
+        if (!$this->storeJson(self::STATE_CONFIG_KEY, $state)) {
+            return [
+                'success' => false,
+                'status' => 'ERROR',
+                'message' => 'No se pudo actualizar el estado local para recuperar la descarga.',
+            ];
+        }
+
+        return $this->pollReport(true);
     }
 
     /**
