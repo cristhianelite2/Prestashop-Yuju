@@ -265,11 +265,13 @@ class YujuProductManager
                 $selected_products[(string) $yuju_product_id] = $winner;
                 foreach ($candidates as $prestashop_product_id => $matched_by) {
                     if ((int) $prestashop_product_id !== $winner) {
+                        $results[(int) $prestashop_product_id]['reconciliation_status'] = 'ambiguous';
                         $results[(int) $prestashop_product_id]['message'] = 'La relación SKU apunta a un producto Yuju ya vinculado a otro producto PrestaShop.';
                     }
                 }
             } else {
                 foreach ($candidates as $prestashop_product_id => $matched_by) {
+                    $results[(int) $prestashop_product_id]['reconciliation_status'] = 'ambiguous';
                     $results[(int) $prestashop_product_id]['message'] = 'La relación entre SKU de PrestaShop y producto Yuju es ambigua.';
                 }
             }
