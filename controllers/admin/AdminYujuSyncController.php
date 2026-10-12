@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSyncManager.php';
 require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductReportReconciler.php';
 
 class AdminYujuSyncController extends ModuleAdminController
 {
@@ -99,371 +100,159 @@ class AdminYujuSyncController extends ModuleAdminController
         ],
         ];
 
-        $this->bulk_actions = [
-        'delete' => [
-        'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'icon-trash',
-        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
-        ],
-        ];
+        $this->fields_list['status']['filter_key'] = 'sl!status';
+        $this->fields_list['sync_type']['filter_key'] = 'sl!sync_type';
+        $this->fields_list['sync_direction']['filter_key'] = 'sl!sync_direction';
+
+        $this->_select = 'sl.*';
+        $this->_join = '';
+        $this->_where = '';
+        $this->_group = '';
+        $this->_orderBy = 'sl.start_time';
+        $this->_orderWay = 'DESC';
     }
 
-    public function initContent()
-    {
-        $this->context->smarty->assign('current_controller', 'AdminYujuSync');
-        parent::initContent();
-    }
-
-    public function renderList()
-    {
-        // Add toolbar buttons
-        $this->toolbar_btn['sync_full'] = [
-        'href' => self::$currentIndex . '&action=syncFull&token=' . $this->token,
-        'desc' => $this->trans('Full Sync', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-refresh',
-        ];
-
-        $this->toolbar_btn['sync_incremental'] = [
-        'href' => self::$currentIndex . '&action=syncIncremental&token=' . $this->token,
-        'desc' => $this->trans('Incremental Sync', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-update',
-        ];
-
-        $this->toolbar_btn['sync_categories'] = [
-        'href' => self::$currentIndex . '&action=syncCategories&token=' . $this->token,
-        'desc' => $this->trans('Sync Categories', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-category',
-        ];
-
-        $this->toolbar_btn['sync_products'] = [
-        'href' => self::$currentIndex . '&action=syncProducts&token=' . $this->token,
-        'desc' => $this->trans('Sync Products', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-product',
-        ];
-
-        $this->toolbar_btn['sync_stock'] = [
-        'href' => self::$currentIndex . '&action=syncStock&token=' . $this->token,
-        'desc' => $this->trans('Sync Stock', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-quantity',
-        ];
-
-        $this->toolbar_btn['sync_prices'] = [
-        'href' => self::$currentIndex . '&action=syncPrices&token=' . $this->token,
-        'desc' => $this->trans('Sync Prices', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'process-icon-dollar',
-        ];
-
-        // Add sync status information
-        $sync_stats = $this->sync_manager->getSyncStats();
-        $is_sync_running = $this->sync_manager->isSyncRunning();
-
-        $this->context->smarty->assign([
-        'sync_stats' => $sync_stats,
-        'is_sync_running' => $is_sync_running,
-        'last_sync_date' => Configuration::get('YUJU_LAST_SYNC_DATE'),
-        'auto_sync_enabled' => Configuration::get('YUJU_AUTO_SYNC_ENABLED'),
-        ]);
-
-        $sync_info = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/sync_info.tpl');
-
-        return $sync_info . parent::renderList();
-    }
-
-    public function postProcess()
-    {
-        if (Tools::isSubmit('action')) {
-            $action = Tools::getValue('action');
-
-            switch ($action) {
-                case 'syncFull':
-                    $this->processSyncFull();
-                    break;
-                case 'syncIncremental':
-                    $this->processSyncIncremental();
-                    break;
-                case 'syncCategories':
-                    $this->processSyncCategories();
-                    break;
-                case 'syncProducts':
-                    $this->processSyncProducts();
-                    break;
-                case 'syncStock':
-                    $this->processSyncStock();
-                    break;
-                case 'syncPrices':
-                    $this->processSyncPrices();
-                    break;
-                case 'stopSync':
-                    $this->processStopSync();
-                    break;
-            }
-        }
-
-        return parent::postProcess();
-    }
-
-    protected function processSyncFull()
-    {
-        if ($this->sync_manager->isSyncRunning()) {
-            $this->errors[] = $this->trans('Synchronization is already running. Please wait for it to complete.', array(), 'Modules.Prestashopyuju.Admin');
-
-            return;
-        }
-
-        try {
-            $this->sync_manager->createSyncLock();
-
-            $direction = Tools::getValue('direction', 'prestashop_to_yuju');
-            $force_update = (bool) Tools::getValue('force_update', false);
-
-            $results = $this->sync_manager->executeFullSync($direction, $force_update);
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Full synchronization completed successfully. Categories: %d, Products: %d, Time: %d seconds', array(), 'Modules.Prestashopyuju.Admin'),
-                    isset($results['categories']['synced_count']) ? $results['categories']['synced_count'] : 0,
-                    isset($results['products']['synced_count']) ? $results['products']['synced_count'] : 0,
-                    $results['total_time']
-                );
-            } else {
-                $this->errors[] = $this->trans('Full synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        } finally {
-            $this->sync_manager->removeSyncLock();
-        }
-    }
-
-    protected function processSyncIncremental()
-    {
-        if ($this->sync_manager->isSyncRunning()) {
-            $this->errors[] = $this->trans('Synchronization is already running. Please wait for it to complete.', array(), 'Modules.Prestashopyuju.Admin');
-
-            return;
-        }
-
-        try {
-            $this->sync_manager->createSyncLock();
-
-            $since_date = Tools::getValue('since_date');
-            $results = $this->sync_manager->executeIncrementalSync($since_date);
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Incremental synchronization completed successfully. Categories: %d, Products: %d', array(), 'Modules.Prestashopyuju.Admin'),
-                    $results['categories']['synced_count'],
-                    $results['products']['synced_count']
-                );
-            } else {
-                $this->errors[] = $this->trans('Incremental synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        } finally {
-            $this->sync_manager->removeSyncLock();
-        }
-    }
-
-    protected function processSyncCategories()
-    {
-        try {
-            $direction = Tools::getValue('direction', 'prestashop_to_yuju');
-            $results = $this->sync_manager->syncCategories($direction);
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Category synchronization completed successfully. Synced: %d', array(), 'Modules.Prestashopyuju.Admin'),
-                    isset($results['synced_count']) ? $results['synced_count'] : 0
-                );
-            } else {
-                $this->errors[] = $this->trans('Category synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Category synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        }
-    }
-
-    protected function processSyncProducts()
-    {
-        try {
-            $direction = Tools::getValue('direction', 'bidirectional');
-            $category_ids = Tools::getValue('category_ids');
-
-            if ($category_ids) {
-                $category_ids = explode(',', $category_ids);
-                $results = $this->sync_manager->syncProductsByCategory($category_ids, $direction);
-            } else {
-                $results = $this->sync_manager->syncProducts($direction);
-            }
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Product synchronization completed successfully. Synced: %d', array(), 'Modules.Prestashopyuju.Admin'),
-                    isset($results['synced_count']) ? $results['synced_count'] : 0
-                );
-            } else {
-                $this->errors[] = $this->trans('Product synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . implode(', ', $results['errors']);
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Product synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        }
-    }
-
-    protected function processSyncStock()
-    {
-        try {
-            $product_ids = Tools::getValue('product_ids');
-
-            if ($product_ids) {
-                $product_ids = explode(',', $product_ids);
-            }
-
-            $results = $this->sync_manager->syncStock($product_ids);
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Stock synchronization completed successfully. Updated: %d products', array(), 'Modules.Prestashopyuju.Admin'),
-                    $results['updated_count']
-                );
-            } else {
-                $this->errors[] = $this->trans('Stock synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . $results['error'];
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Stock synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        }
-    }
-
-    protected function processSyncPrices()
-    {
-        try {
-            $product_ids = Tools::getValue('product_ids');
-
-            if ($product_ids) {
-                $product_ids = explode(',', $product_ids);
-            }
-
-            $results = $this->sync_manager->syncPrices($product_ids);
-
-            if ($results['success']) {
-                $this->confirmations[] = sprintf(
-                    $this->trans('Price synchronization completed successfully. Updated: %d products', array(), 'Modules.Prestashopyuju.Admin'),
-                    $results['updated_count']
-                );
-            } else {
-                $this->errors[] = $this->trans('Price synchronization failed: ', array(), 'Modules.Prestashopyuju.Admin') . $results['error'];
-            }
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Price synchronization error: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        }
-    }
-
-    protected function processStopSync()
-    {
-        try {
-            $this->sync_manager->removeSyncLock();
-            $this->confirmations[] = $this->trans('Synchronization stopped successfully.', array(), 'Modules.Prestashopyuju.Admin');
-        } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error stopping synchronization: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-        }
-    }
-
-    public function renderView()
-    {
-        $log_id = (int) Tools::getValue('id');
-
-        if (!$log_id) {
-            $this->errors[] = $this->trans('Invalid log ID', array(), 'Modules.Prestashopyuju.Admin');
-
-            return $this->renderList();
-        }
-
-        $log = Db::getInstance()->getRow(
-            '
-        SELECT * FROM ' . _DB_PREFIX_ . 'yuju_sync_logs
-        WHERE id = ' . (int) $log_id
-        );
-
-        if (!$log) {
-            $this->errors[] = $this->trans('Log not found', array(), 'Modules.Prestashopyuju.Admin');
-
-            return $this->renderList();
-        }
-
-        // Get detailed log entries for this sync
-        $detailed_logs = $this->logger->getLogsByDateRange(
-            $log['created_at'],
-            date('Y-m-d H:i:s', strtotime($log['created_at'] . ' +' . $log['execution_time'] . ' seconds'))
-        );
-
-        $this->context->smarty->assign([
-        'sync_log' => $log,
-        'detailed_logs' => $detailed_logs,
-        'back_url' => self::$currentIndex . '&token=' . $this->token,
-        ]);
-
-        return $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/sync_log_view.tpl');
-    }
-
+    /**
+     * Render configuration form for the synchronization panel.
+     */
     public function renderForm()
     {
-        // Sync configuration form
         $this->fields_form = [
-        'legend' => [
-        'title' => $this->trans('Synchronization Settings', array(), 'Modules.Prestashopyuju.Admin'),
-        'icon' => 'icon-cogs',
-        ],
-        'input' => [
-        [
-        'type' => 'select',
-        'label' => $this->trans('Sync Direction', array(), 'Modules.Prestashopyuju.Admin'),
-        'name' => 'sync_direction',
-        'options' => [
-        'query' => [
-        ['id' => 'bidirectional', 'name' => $this->trans('Bidirectional', array(), 'Modules.Prestashopyuju.Admin')],
-        ['id' => 'yuju_to_ps', 'name' => $this->trans('Yuju to PrestaShop', array(), 'Modules.Prestashopyuju.Admin')],
-        ['id' => 'ps_to_yuju', 'name' => $this->trans('PrestaShop to Yuju', array(), 'Modules.Prestashopyuju.Admin')],
-        ],
-        'id' => 'id',
-        'name' => 'name',
-        ],
-        ],
-        [
-        'type' => 'switch',
-        'label' => $this->trans('Force Update', array(), 'Modules.Prestashopyuju.Admin'),
-        'name' => 'force_update',
-        'is_bool' => true,
-        'values' => [
-        ['id' => 'force_update_on', 'value' => 1, 'label' => $this->trans('Enabled', array(), 'Modules.Prestashopyuju.Admin')],
-        ['id' => 'force_update_off', 'value' => 0, 'label' => $this->trans('Disabled', array(), 'Modules.Prestashopyuju.Admin')],
-        ],
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->trans('Category IDs', array(), 'Modules.Prestashopyuju.Admin'),
-        'name' => 'category_ids',
-        'desc' => $this->trans('Comma-separated list of category IDs (for product sync only)', array(), 'Modules.Prestashopyuju.Admin'),
-        ],
-        [
-        'type' => 'text',
-        'label' => $this->trans('Product IDs', array(), 'Modules.Prestashopyuju.Admin'),
-        'name' => 'product_ids',
-        'desc' => $this->trans('Comma-separated list of product IDs (for stock/price sync only)', array(), 'Modules.Prestashopyuju.Admin'),
-        ],
-        [
-        'type' => 'datetime',
-        'label' => $this->trans('Since Date', array(), 'Modules.Prestashopyuju.Admin'),
-        'name' => 'since_date',
-        'desc' => $this->trans('For incremental sync only', array(), 'Modules.Prestashopyuju.Admin'),
-        ],
-        ],
-        'submit' => [
-        'title' => $this->trans('Execute Sync', array(), 'Modules.Prestashopyuju.Admin'),
-        'class' => 'btn btn-default pull-right',
-        ],
+            'legend' => [
+                'title' => $this->trans('Yuju Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
+                'icon' => 'icon-refresh',
+            ],
+            'input' => [],
+            'submit' => [
+                'title' => $this->trans('Save', array(), 'Modules.Prestashopyuju.Admin'),
+            ],
         ];
 
         return parent::renderForm();
+    }
+
+    /**
+     * Render the list with custom panel.
+     */
+    public function renderList()
+    {
+        $this->addRowAction('view');
+        $this->addRowAction('delete');
+
+        // Add help for the panel
+        $this->toolbar_title = [
+            'title' => $this->trans('Yuju Synchronization', array(), 'Modules.Prestashopyuju.Admin'),
+            'icon' => 'icon-refresh',
+        ];
+
+        $this->toolbar_btn['new'] = [
+            'href' => self::$currentIndex . '&configure=' . $this->module->name . '&token=' . $this->token,
+            'desc' => $this->trans('Configuration', array(), 'Modules.Prestashopyuju.Admin'),
+        ];
+
+        return parent::renderList();
+    }
+
+    /**
+     * Initialize content (panel template).
+     */
+    public function initContent()
+    {
+        parent::initContent();
+
+        $this->context->smarty->assign([
+            'yuju_module_dir' => _PS_MODULE_DIR_ . 'prestashopyuju/',
+            'yuju_module_name' => 'prestashopyuju',
+            'yuju_current_index' => self::$currentIndex,
+            'yuju_token' => $this->token,
+            'yuju_ps_version' => _PS_VERSION_,
+        ]);
+
+        // Include the sync panel template
+        $this->setTemplate('module:prestashopyuju/views/templates/admin/sync_info.tpl');
+    }
+
+    /**
+     * Get sync error guidance for user-friendly messages.
+     */
+    protected function getYujuSyncErrorGuidance($message, $endpoint = '')
+    {
+        $guidance = [];
+
+        // Check for specific error patterns
+        if (stripos($message, 'IncompleteSignatureException') !== false ||
+            stripos($message, 'Authorization header requires') !== false ||
+            stripos($message, 'Credential') !== false ||
+            stripos($message, 'Signature') !== false ||
+            stripos($message, 'SignedHeaders') !== false) {
+            // AWS SigV4 auth errors - likely using the undocumented GET /products endpoint
+            if ($endpoint === 'products' || stripos($message, '/products') !== false) {
+                $guidance[] = $this->trans(
+                    'El endpoint GET /products no está documentado públicamente y requiere autenticación AWS SigV4. '
+                    . 'El módulo ahora usa el reporte general oficial (POST /products-gral-report) en su lugar.',
+                    array(),
+                    'Modules.Prestashopyuju.Admin'
+                );
+            } else {
+                $guidance[] = $this->trans(
+                    'Error de firma de autenticación AWS. Verifica que el token de Yuju sea válido y que la cuenta tenga permisos para el endpoint solicitado.',
+                    array(),
+                    'Modules.Prestashopyuju.Admin'
+                );
+            }
+        }
+
+        if (stripos($message, 'quota') !== false || stripos($message, 'rate limit') !== false || stripos($message, 'too many') !== false) {
+            $guidance[] = $this->trans(
+                'Se ha alcanzado el límite de solicitudes del reporte general (máximo 2 por día UTC). '
+                . 'Intenta nuevamente mañana o reutiliza el reporte anterior si ya está completado.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        if (stripos($message, '401') !== false || stripos($message, 'Unauthorized') !== false) {
+            $guidance[] = $this->trans(
+                'El token de Yuju no es válido o ha expirado. Ve a la pestaña "Conectividad" y pulsa "Conectar" para reautorizar.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        if (stripos($message, '403') !== false || stripos($message, 'Forbidden') !== false) {
+            $guidance[] = $this->trans(
+                'La API de Yuju rechazó la solicitud (HTTP 403). Verifica los permisos de la cuenta Yuju o contacta a soporte de Yuju.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        if (stripos($message, '404') !== false || stripos($message, 'Not Found') !== false) {
+            $guidance[] = $this->trans(
+                'El recurso solicitado no existe en la API de Yuju. Es posible que el endpoint haya cambiado.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        if (stripos($message, '500') !== false || stripos($message, '502') !== false || stripos($message, '503') !== false || stripos($message, '504') !== false) {
+            $guidance[] = $this->trans(
+                'Error interno del servidor de Yuju. El problema es temporal; intenta nuevamente en unos minutos.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        // Generic fallback
+        if (empty($guidance)) {
+            $guidance[] = $this->trans(
+                'Error inesperado. Revisa los logs del módulo (PrestaShop → Parámetros avanzados → Logs) para más detalles.',
+                array(),
+                'Modules.Prestashopyuju.Admin'
+            );
+        }
+
+        return $guidance;
     }
 
     public function ajaxProcessGetSyncStatus()
@@ -478,6 +267,142 @@ class AdminYujuSyncController extends ModuleAdminController
         ];
 
         exit(json_encode($response));
+    }
+
+    public function ajaxProcessStartYujuProductReport()
+    {
+        try {
+            $result = $this->sync_manager->startYujuProductReport();
+            $this->respondWithJson($result);
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function ajaxProcessPollYujuProductReport()
+    {
+        $retry_download = (bool) Tools::getValue('retry_download', false);
+
+        try {
+            $result = $this->sync_manager->pollYujuProductReport($retry_download);
+            $this->respondWithJson($result);
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function ajaxProcessGetYujuProductSyncReport()
+    {
+        try {
+            // Get the cached report from the report manager
+            $report_manager = $this->sync_manager->getProductReportManager();
+            if (!method_exists($report_manager, 'getCachedReportProducts')) {
+                throw new Exception('Report manager does not support cached report access.');
+            }
+
+            $report_index = null;
+            $report_products = null;
+
+            // Get the report index
+            $state = $report_manager->getStoredState();
+            if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+                // We need to access the private method or rebuild the index
+                // For now, get the report and build the index
+                $report_products = $report_manager->getCachedReportProducts();
+
+                if ($report_products instanceof Traversable) {
+                    $report_products = iterator_to_array($report_products);
+                }
+
+                // Build the index
+                if (!empty($report_products)) {
+                    $report_index = YujuProductReportReconciler::indexReportRows($report_products);
+                }
+            }
+
+            if (!$report_index || !$report_products) {
+                $this->respondWithJson([
+                    'success' => false,
+                    'message' => $this->trans('No hay un reporte general completado y cacheado. Inicia un reporte primero.', array(), 'Modules.Prestashopyuju.Admin'),
+                ]);
+                return;
+            }
+
+            $report = $this->sync_manager->getYujuProductSyncReport($report_index, $report_products);
+            $this->respondWithJson(['success' => true, 'report' => $report]);
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function ajaxProcessPushDifferencesToYuju()
+    {
+        if ($this->sync_manager->isSyncRunning()) {
+            $response = [
+                'success' => false,
+                'message' => $this->trans('A synchronization is already running. Please wait for it to finish.', array(), 'Modules.Prestashopyuju.Admin'),
+            ];
+            $this->respondWithJson($response);
+        }
+
+        $lock_created = false;
+        $response = [];
+
+        try {
+            // First get the reconciliation report
+            $report_manager = $this->sync_manager->getProductReportManager();
+            $state = $report_manager->getStoredState();
+
+            if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+                $report_products = $report_manager->getCachedReportProducts();
+
+                if ($report_products instanceof Traversable) {
+                    $report_products = iterator_to_array($report_products);
+                }
+
+                if (!empty($report_products)) {
+                    $report_index = YujuProductReportReconciler::indexReportRows($report_products);
+
+                    $reconciliation_report = $this->sync_manager->getYujuProductSyncReport($report_index, $report_products);
+
+                    $this->sync_manager->createSyncLock();
+                    $lock_created = true;
+
+                    $results = $this->sync_manager->pushDifferencesToYuju($reconciliation_report);
+
+                    $response = [
+                        'success' => true,
+                        'message' => sprintf(
+                            $this->trans('Sincronización finalizada. Productos actualizados: %d. Errores: %d.', array(), 'Modules.Prestashopyuju.Admin'),
+                            isset($results['synced']) ? (int) $results['synced'] : 0,
+                            isset($results['failed']) ? (int) $results['failed'] : 0
+                        ),
+                        'synced_count' => isset($results['synced']) ? (int) $results['synced'] : 0,
+                        'errors' => isset($results['products']) ? array_filter($results['products'], function($p) { return $p['status'] === 'error'; }) : [],
+                        'details' => isset($results['products']) ? $results['products'] : [],
+                        'report' => $reconciliation_report,
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'message' => $this->trans('El reporte cacheado está vacío.', array(), 'Modules.Prestashopyuju.Admin'),
+                    ];
+                }
+            } else {
+                $response = [
+                    'success' => false,
+                    'message' => $this->trans('No hay un reporte general completado y cacheado. Inicia un reporte y espera a que termine.', array(), 'Modules.Prestashopyuju.Admin'),
+                ];
+            }
+        } catch (Exception $e) {
+            $response = ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        if ($lock_created) {
+            $this->sync_manager->removeSyncLock();
+        }
+
+        $this->respondWithJson($response);
     }
 
     public function ajaxProcessInspectYujuProducts()

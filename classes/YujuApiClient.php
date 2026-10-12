@@ -685,6 +685,33 @@ class YujuApiClient
     }
 
     /**
+     * Update a single product variation.
+     *
+     * @param string $product_id
+     * @param string $variation_id
+     * @param array  $variation_data
+     *
+     * @return array
+     */
+    public function updateProductVariation($product_id, $variation_id, $variation_data)
+    {
+        return $this->put('products/' . rawurlencode($product_id) . '/variations/' . rawurlencode($variation_id), $variation_data);
+    }
+
+    /**
+     * Create one or multiple variations for a product.
+     *
+     * @param string $product_id
+     * @param array  $variations
+     *
+     * @return array
+     */
+    public function createProductVariations($product_id, $variations)
+    {
+        return $this->post('products/' . rawurlencode($product_id) . '/variations', $variations);
+    }
+
+    /**
      * Métodos específicos para categorías.
      */
     public function getCategories($params = [])

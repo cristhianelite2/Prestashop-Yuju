@@ -311,7 +311,7 @@ class YujuProductReportManager
         ];
     }
 
-    protected function getStoredState()
+    public function getStoredState()
     {
         $state = json_decode((string) Configuration::get(self::STATE_CONFIG_KEY), true);
 

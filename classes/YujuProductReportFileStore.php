@@ -139,7 +139,8 @@ class YujuProductReportFileStore
                 }
                 $product['id_product'] = (string) $product_id;
 
-                if (!isset($product['variations'])) {
+                $product['_yuju_report_has_variations'] = array_key_exists('variations', $product);
+                if (!$product['_yuju_report_has_variations']) {
                     $product['variations'] = [];
                 } elseif (!is_array($product['variations'])) {
                     throw new RuntimeException('Yuju report line ' . $line_number . ' has invalid variations data.');

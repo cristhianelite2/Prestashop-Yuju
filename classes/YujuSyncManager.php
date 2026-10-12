@@ -148,9 +148,30 @@ class YujuSyncManager
     /**
      * Poll the currently persisted Yuju product report task.
      */
-    public function pollYujuProductReport()
+    public function pollYujuProductReport($retry_download = false)
     {
-        return $this->product_report_manager->pollReport();
+        return $this->product_report_manager->pollReport($retry_download);
+    }
+
+    /**
+     * Get the product report manager for direct access.
+     */
+    public function getProductReportManager()
+    {
+        return $this->product_report_manager;
+    }
+
+    /**
+     * Push PrestaShop → Yuju differences for already-linked products.
+     * This is called when the user clicks "Sincronizar" after reconciliation.
+     *
+     * @param array $report The reconciliation report from getYujuProductSyncReport
+     *
+     * @return array Result with counts and errors
+     */
+    public function pushDifferencesToYuju($report)
+    {
+        return $this->product_manager->pushDifferencesToYuju($report);
     }
 
     /**
@@ -544,7 +565,6 @@ class YujuSyncManager
             $subject,
             ['{message}' => $message],
             $this->config['notification_email'],
-            null,
             null,
             null,
             null,

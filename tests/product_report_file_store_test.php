@@ -46,6 +46,7 @@ assertSameValue(2, $download['product_count'], 'The JSONL report should be count
 $products = iterator_to_array($store->readProducts($download['cache_id']));
 assertSameValue('101', $products[0]['id_product'], 'The parser should normalize the Yuju parent product ID.');
 assertSameValue('TSHIRT-M', $products[0]['variations'][0]['sku'], 'The parser should preserve variation data.');
+assertSameValue(true, $products[0]['_yuju_report_has_variations'], 'The parser should preserve whether the source row actually included variation data.');
 assertSameValue('MUG', $products[1]['sku_simple'], 'The parser should preserve simple product data.');
 
 try {

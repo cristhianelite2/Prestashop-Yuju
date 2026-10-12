@@ -8,6 +8,22 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ## 2026-10-12
 
 ### Añadido
+- Flujo de sincronización basado en **reporte general asíncrono** de Yuju (`POST /products-gral-report`): "Iniciar sincronización" solicita el reporte, espera a que se complete (polling), descarga el JSONL en caché privada con validación SSRF, y reconcilia catálogo PrestaShop contra Yuju por ID guardado o SKU único.
+- Matching determinista: ID Yuju existente tiene prioridad; SKU de padre o variación enlaza solo si es único; SKU ambiguos o duplicados quedan pendientes para resolución manual.
+- Panel de reconciliación con totales (total/sincronizados/no sincronizados/listos para enviar) y tabla de diferencias por campo (padre y variaciones). Productos sin pareja en Yuju se listan, nunca se crean.
+- Botón **"Sincronizar (PrestaShop → Yuju)"** que envía **solo las diferencias** de productos ya vinculados (incluye variaciones). `PUT /products/{id}` para padres, `PUT /products/{id}/variations/{id}` para variantes existentes, `POST /products/{id}/variations` para variantes nuevas bajo padres vinculados. Sin `id_variation` en el reporte, la variante queda pendiente sin duplicarse.
+- Cliente API: `createProductGeneralReport()` (POST sin reintento para no gastar cuota), `getProductGeneralReportStatus()`, `updateProductVariation()`, `createProductVariations()`.
+- Persistencia de estado de reporte y límite diario (2/día UTC) en `Configuration`; reanudación tras recarga; descarga con validación HTTPS/DNS público/redirects/tamaño/TTL; URL firmada y contenido nunca expuestos en logs ni UI.
+- Parser JSONL streaming con validación estricta (`id_product`, `sku`/`sku_simple`, `variations[]` con `sku` obligatorio).
+- Limpieza automática de caché de reportes >24h.
+
+### Corregido
+- `GET /products` ya no se usa en el nuevo flujo; se mantiene solo para compatibilidad del panel antiguo.
+- Credenciales y URLs firmadas redactadas en logs de API.
+
+## 2026-10-12
+
+### Añadido
 - En el panel de sincronización, botón para consultar productos de Yuju, ver cuáles tienen un ID vinculado en `yuju_product_status` y cuántos faltan. Se pueden importar únicamente los que no están vinculados.
 
 ### Corregido
