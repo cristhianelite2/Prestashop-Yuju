@@ -291,6 +291,40 @@ class YujuProductReportManager
     }
 
     /**
+     * Force a fresh download for the existing task when the saved cache is unusable.
+     * This never creates another report task or consumes another report quota slot.
+     *
+     * @return array
+     */
+    public function recoverReportDownload()
+    {
+        $state = $this->getStoredState();
+        if (empty($state['task_id'])) {
+            return [
+                'success' => false,
+                'status' => isset($state['status']) ? $state['status'] : 'UNKNOWN',
+                'message' => 'No hay una tarea de informe guardada que se pueda recuperar.',
+            ];
+        }
+
+        if (!empty($state['cache_id']) && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])) {
+            $this->file_store->deleteReport($state['cache_id']);
+        }
+
+        $state['status'] = 'DOWNLOAD_EXPIRED';
+        $state['cache_id'] = null;
+        if (!$this->storeJson(self::STATE_CONFIG_KEY, $state)) {
+            return [
+                'success' => false,
+                'status' => 'ERROR',
+                'message' => 'No se pudo actualizar el estado local para recuperar la descarga.',
+            ];
+        }
+
+        return $this->pollReport(true);
+    }
+
+    /**
      * Read validated products from the current private report cache.
      *
      * @return Generator
