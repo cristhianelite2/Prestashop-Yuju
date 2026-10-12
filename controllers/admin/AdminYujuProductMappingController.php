@@ -28,6 +28,35 @@ class AdminYujuProductMappingController extends ModuleAdminController
 {
     protected $logger;
 
+    /**
+     * Translate legacy controller labels without relying on the removed l() method.
+     * Keeps the controller compatible with PrestaShop versions exposing the translator
+     * through Context, while avoiding a fatal error when translation services differ.
+     */
+    protected function translate($string)
+    {
+        if (isset($this->context) && is_object($this->context)
+            && method_exists($this->context, 'getTranslator')) {
+            $translator = $this->context->getTranslator();
+            if (is_object($translator) && method_exists($translator, 'trans')) {
+                return $translator->trans($string, [], 'Modules.Prestashopyuju.Admin');
+            }
+        }
+
+        if (class_exists('Context')) {
+            $context = Context::getContext();
+            if (is_object($context) && method_exists($context, 'getTranslator')) {
+                $translator = $context->getTranslator();
+                if (is_object($translator) && method_exists($translator, 'trans')) {
+                    return $translator->trans($string, [], 'Modules.Prestashopyuju.Admin');
+                }
+            }
+        }
+
+        // Last-resort fallback: labels remain visible instead of crashing the page.
+        return $string;
+    }
+
     public function __construct()
     {
         $this->table = 'yuju_product_mapping';
@@ -42,36 +71,36 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         $this->fields_list = [
         'id_mapping' => [
-        'title' => $this->l('ID'),
+        'title' => $this->translate('ID'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'prestashop_field' => [
-        'title' => $this->l('PrestaShop Field'),
+        'title' => $this->translate('PrestaShop Field'),
         'width' => 200,
         ],
         'yuju_field' => [
-        'title' => $this->l('Yuju Field'),
+        'title' => $this->translate('Yuju Field'),
         'width' => 200,
         ],
         'field_type' => [
-        'title' => $this->l('Field Type'),
+        'title' => $this->translate('Field Type'),
         'align' => 'center',
         'width' => 120,
         ],
         'is_required' => [
-        'title' => $this->l('Required'),
+        'title' => $this->translate('Required'),
         'align' => 'center',
         'type' => 'bool',
         'class' => 'fixed-width-sm',
         ],
 
         'transformation_rule' => [
-        'title' => $this->l('Transformation'),
+        'title' => $this->translate('Transformation'),
         'width' => 150,
         ],
         'is_active' => [
-        'title' => $this->l('Active'),
+        'title' => $this->translate('Active'),
         'align' => 'center',
         'active' => 'status',
         'type' => 'bool',
@@ -82,28 +111,28 @@ class AdminYujuProductMappingController extends ModuleAdminController
         $this->actions = ['edit', 'delete'];
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->l('Delete selected'),
-        'confirm' => $this->l('Delete selected items?'),
+        'text' => $this->translate('Delete selected'),
+        'confirm' => $this->translate('Delete selected items?'),
         'icon' => 'icon-trash'
         ],
         'enableMapping' => [
-        'text' => $this->l('Enable mapping'),
+        'text' => $this->translate('Enable mapping'),
         'icon' => 'icon-check'
         ],
         'disableMapping' => [
-        'text' => $this->l('Disable mapping'),
+        'text' => $this->translate('Disable mapping'),
         'icon' => 'icon-remove'
         ],
         ];
 
         $this->toolbar_btn['new'] = [
         'href' => self::$currentIndex . '&add' . $this->table . '&token=' . $this->token,
-        'desc' => $this->l('Add new mapping'),
+        'desc' => $this->translate('Add new mapping'),
         ];
 
         $this->toolbar_btn['load_defaults'] = [
         'href' => self::$currentIndex . '&loadDefaults&token=' . $this->token,
-        'desc' => $this->l('Load Default Mappings'),
+        'desc' => $this->translate('Load Default Mappings'),
         'class' => 'process-icon-download',
         ];
     }
@@ -131,89 +160,89 @@ class AdminYujuProductMappingController extends ModuleAdminController
     {
         // PrestaShop product fields
         $prestashop_fields = [
-        ['id' => 'name', 'name' => $this->l('Product Name')],
-        ['id' => 'description', 'name' => $this->l('Description')],
-        ['id' => 'description_short', 'name' => $this->l('Short Description')],
-        ['id' => 'price', 'name' => $this->l('Price')],
-        ['id' => 'wholesale_price', 'name' => $this->l('Wholesale Price')],
-        ['id' => 'reference', 'name' => $this->l('Reference')],
-        ['id' => 'ean13', 'name' => $this->l('EAN13')],
-        ['id' => 'upc', 'name' => $this->l('UPC')],
-        ['id' => 'weight', 'name' => $this->l('Weight')],
-        ['id' => 'width', 'name' => $this->l('Width')],
-        ['id' => 'height', 'name' => $this->l('Height')],
-        ['id' => 'depth', 'name' => $this->l('Depth')],
-        ['id' => 'quantity', 'name' => $this->l('Quantity')],
-        ['id' => 'minimal_quantity', 'name' => $this->l('Minimal Quantity')],
-        ['id' => 'active', 'name' => $this->l('Active')],
-        ['id' => 'available_for_order', 'name' => $this->l('Available for Order')],
-        ['id' => 'show_price', 'name' => $this->l('Show Price')],
-        ['id' => 'online_only', 'name' => $this->l('Online Only')],
-        ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-        ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-        ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-        ['id' => 'link_rewrite', 'name' => $this->l('Friendly URL')],
-        ['id' => 'available_now', 'name' => $this->l('Available Now Text')],
-        ['id' => 'available_later', 'name' => $this->l('Available Later Text')],
+        ['id' => 'name', 'name' => $this->translate('Product Name')],
+        ['id' => 'description', 'name' => $this->translate('Description')],
+        ['id' => 'description_short', 'name' => $this->translate('Short Description')],
+        ['id' => 'price', 'name' => $this->translate('Price')],
+        ['id' => 'wholesale_price', 'name' => $this->translate('Wholesale Price')],
+        ['id' => 'reference', 'name' => $this->translate('Reference')],
+        ['id' => 'ean13', 'name' => $this->translate('EAN13')],
+        ['id' => 'upc', 'name' => $this->translate('UPC')],
+        ['id' => 'weight', 'name' => $this->translate('Weight')],
+        ['id' => 'width', 'name' => $this->translate('Width')],
+        ['id' => 'height', 'name' => $this->translate('Height')],
+        ['id' => 'depth', 'name' => $this->translate('Depth')],
+        ['id' => 'quantity', 'name' => $this->translate('Quantity')],
+        ['id' => 'minimal_quantity', 'name' => $this->translate('Minimal Quantity')],
+        ['id' => 'active', 'name' => $this->translate('Active')],
+        ['id' => 'available_for_order', 'name' => $this->translate('Available for Order')],
+        ['id' => 'show_price', 'name' => $this->translate('Show Price')],
+        ['id' => 'online_only', 'name' => $this->translate('Online Only')],
+        ['id' => 'meta_title', 'name' => $this->translate('Meta Title')],
+        ['id' => 'meta_description', 'name' => $this->translate('Meta Description')],
+        ['id' => 'meta_keywords', 'name' => $this->translate('Meta Keywords')],
+        ['id' => 'link_rewrite', 'name' => $this->translate('Friendly URL')],
+        ['id' => 'available_now', 'name' => $this->translate('Available Now Text')],
+        ['id' => 'available_later', 'name' => $this->translate('Available Later Text')],
         ];
 
         // Yuju product fields (these would come from API documentation)
         $yuju_fields = [
-        ['id' => 'title', 'name' => $this->l('Title')],
-        ['id' => 'description', 'name' => $this->l('Description')],
-        ['id' => 'short_description', 'name' => $this->l('Short Description')],
-        ['id' => 'price', 'name' => $this->l('Price')],
-        ['id' => 'cost_price', 'name' => $this->l('Cost Price')],
-        ['id' => 'sku', 'name' => $this->l('SKU')],
-        ['id' => 'barcode', 'name' => $this->l('Barcode')],
-        ['id' => 'weight', 'name' => $this->l('Weight')],
-        ['id' => 'dimensions', 'name' => $this->l('Dimensions')],
-        ['id' => 'stock_quantity', 'name' => $this->l('Stock Quantity')],
-        ['id' => 'min_order_quantity', 'name' => $this->l('Min Order Quantity')],
-        ['id' => 'status', 'name' => $this->l('Status')],
-        ['id' => 'visibility', 'name' => $this->l('Visibility')],
-        ['id' => 'seo_title', 'name' => $this->l('SEO Title')],
-        ['id' => 'seo_description', 'name' => $this->l('SEO Description')],
-        ['id' => 'seo_keywords', 'name' => $this->l('SEO Keywords')],
-        ['id' => 'slug', 'name' => $this->l('Slug')],
-        ['id' => 'brand', 'name' => $this->l('Brand')],
-        ['id' => 'category_id', 'name' => $this->l('Category ID')],
-        ['id' => 'tags', 'name' => $this->l('Tags')],
+        ['id' => 'title', 'name' => $this->translate('Title')],
+        ['id' => 'description', 'name' => $this->translate('Description')],
+        ['id' => 'short_description', 'name' => $this->translate('Short Description')],
+        ['id' => 'price', 'name' => $this->translate('Price')],
+        ['id' => 'cost_price', 'name' => $this->translate('Cost Price')],
+        ['id' => 'sku', 'name' => $this->translate('SKU')],
+        ['id' => 'barcode', 'name' => $this->translate('Barcode')],
+        ['id' => 'weight', 'name' => $this->translate('Weight')],
+        ['id' => 'dimensions', 'name' => $this->translate('Dimensions')],
+        ['id' => 'stock_quantity', 'name' => $this->translate('Stock Quantity')],
+        ['id' => 'min_order_quantity', 'name' => $this->translate('Min Order Quantity')],
+        ['id' => 'status', 'name' => $this->translate('Status')],
+        ['id' => 'visibility', 'name' => $this->translate('Visibility')],
+        ['id' => 'seo_title', 'name' => $this->translate('SEO Title')],
+        ['id' => 'seo_description', 'name' => $this->translate('SEO Description')],
+        ['id' => 'seo_keywords', 'name' => $this->translate('SEO Keywords')],
+        ['id' => 'slug', 'name' => $this->translate('Slug')],
+        ['id' => 'brand', 'name' => $this->translate('Brand')],
+        ['id' => 'category_id', 'name' => $this->translate('Category ID')],
+        ['id' => 'tags', 'name' => $this->translate('Tags')],
         ];
 
         $field_types = [
-        ['id' => 'string', 'name' => $this->l('Cadena de texto')],
-        ['id' => 'integer', 'name' => $this->l('Número entero')],
-        ['id' => 'decimal', 'name' => $this->l('Número decimal')],
-        ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
-        ['id' => 'date', 'name' => $this->l('Fecha')],
-        ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
-        ['id' => 'array', 'name' => $this->l('Lista')],
-        ['id' => 'object', 'name' => $this->l('Objeto')],
+        ['id' => 'string', 'name' => $this->translate('Cadena de texto')],
+        ['id' => 'integer', 'name' => $this->translate('Número entero')],
+        ['id' => 'decimal', 'name' => $this->translate('Número decimal')],
+        ['id' => 'boolean', 'name' => $this->translate('Verdadero/Falso')],
+        ['id' => 'date', 'name' => $this->translate('Fecha')],
+        ['id' => 'datetime', 'name' => $this->translate('Fecha y Hora')],
+        ['id' => 'array', 'name' => $this->translate('Lista')],
+        ['id' => 'object', 'name' => $this->translate('Objeto')],
         ];
 
 
 
         $transformation_rules = [
-        ['id' => 'none', 'name' => $this->l('Ninguna')],
-        ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
-        ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
-        ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
-        ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
-        ['id' => 'currency_convert', 'name' => $this->l('Convertir Moneda')],
-        ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
-        ['id' => 'custom', 'name' => $this->l('Función Personalizada')],
+        ['id' => 'none', 'name' => $this->translate('Ninguna')],
+        ['id' => 'uppercase', 'name' => $this->translate('Mayúsculas')],
+        ['id' => 'lowercase', 'name' => $this->translate('Minúsculas')],
+        ['id' => 'capitalize', 'name' => $this->translate('Capitalizar')],
+        ['id' => 'strip_html', 'name' => $this->translate('Eliminar HTML')],
+        ['id' => 'currency_convert', 'name' => $this->translate('Convertir Moneda')],
+        ['id' => 'date_format', 'name' => $this->translate('Formato de Fecha')],
+        ['id' => 'custom', 'name' => $this->translate('Función Personalizada')],
         ];
 
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Mapeo de Campos de Producto'),
+        'title' => $this->translate('Mapeo de Campos de Producto'),
         'icon' => 'icon-cogs',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->l('Campo PrestaShop'),
+        'label' => $this->translate('Campo PrestaShop'),
         'name' => 'prestashop_field',
         'required' => true,
         'options' => [
@@ -224,7 +253,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Campo Yuju'),
+        'label' => $this->translate('Campo Yuju'),
         'name' => 'yuju_field',
         'required' => true,
         'options' => [
@@ -235,7 +264,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Tipo de Campo'),
+        'label' => $this->translate('Tipo de Campo'),
         'name' => 'field_type',
         'required' => true,
         'options' => [
@@ -247,7 +276,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         [
         'type' => 'select',
-        'label' => $this->l('Regla de Transformación'),
+        'label' => $this->translate('Regla de Transformación'),
         'name' => 'transformation_rule',
         'options' => [
         'query' => $transformation_rules,
@@ -257,55 +286,55 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'textarea',
-        'label' => $this->l('Transformación Personalizada'),
+        'label' => $this->translate('Transformación Personalizada'),
         'name' => 'custom_transformation',
-        'desc' => $this->l('Código PHP para transformación personalizada (solo si la regla de transformación es \'custom\')'),
+        'desc' => $this->translate('Código PHP para transformación personalizada (solo si la regla de transformación es \'custom\')'),
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Valor por Defecto'),
+        'label' => $this->translate('Valor por Defecto'),
         'name' => 'default_value',
-        'desc' => $this->l('Valor por defecto si el campo origen está vacío'),
+        'desc' => $this->translate('Valor por defecto si el campo origen está vacío'),
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Campo Requerido'),
+        'label' => $this->translate('Campo Requerido'),
         'name' => 'is_required',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_required_on',
         'value' => 1,
-        'label' => $this->l('Sí'),
+        'label' => $this->translate('Sí'),
         ],
         [
         'id' => 'is_required_off',
         'value' => 0,
-        'label' => $this->l('No'),
+        'label' => $this->translate('No'),
         ],
         ],
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Activo'),
+        'label' => $this->translate('Activo'),
         'name' => 'is_active',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_active_on',
         'value' => 1,
-        'label' => $this->l('Habilitado'),
+        'label' => $this->translate('Habilitado'),
         ],
         [
         'id' => 'is_active_off',
         'value' => 0,
-        'label' => $this->l('Deshabilitado'),
+        'label' => $this->translate('Deshabilitado'),
         ],
         ],
         ],
         ],
         'submit' => [
-        'title' => $this->l('Guardar'),
+        'title' => $this->translate('Guardar'),
         ],
         ];
 
@@ -339,7 +368,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         );
 
         if ($existing) {
-            $this->errors[] = $this->l('This PrestaShop field is already mapped.');
+            $this->errors[] = $this->translate('This PrestaShop field is already mapped.');
 
             return false;
         }
@@ -371,12 +400,12 @@ class AdminYujuProductMappingController extends ModuleAdminController
         }
 
         if ($result) {
-            $this->confirmations[] = $this->l('Product mapping saved successfully.');
+            $this->confirmations[] = $this->translate('Product mapping saved successfully.');
             $this->logger->log('Product mapping saved: ' . $prestashop_field . ' -> ' . $yuju_field, 'info');
 
             return true;
         } else {
-            $this->errors[] = $this->l('Error saving product mapping.');
+            $this->errors[] = $this->translate('Error saving product mapping.');
 
             return false;
         }
@@ -472,10 +501,10 @@ class AdminYujuProductMappingController extends ModuleAdminController
         }
 
         if ($inserted > 0) {
-            $this->confirmations[] = sprintf($this->l('%d default mappings loaded successfully.'), $inserted);
+            $this->confirmations[] = sprintf($this->translate('%d default mappings loaded successfully.'), $inserted);
             $this->logger->log('Default product mappings loaded: ' . $inserted . ' mappings', 'info');
         } else {
-            $this->warnings[] = $this->l('No new default mappings to load.');
+            $this->warnings[] = $this->translate('No new default mappings to load.');
         }
     }
 
@@ -491,7 +520,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Selected mappings enabled.');
+                $this->confirmations[] = $this->translate('Selected mappings enabled.');
             }
         }
     }
@@ -508,7 +537,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Selected mappings disabled.');
+                $this->confirmations[] = $this->translate('Selected mappings disabled.');
             }
         }
     }
@@ -532,7 +561,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             // Validation
             if (empty($prestashop_field) || empty($yuju_field) || empty($field_type)) {
-                throw new Exception($this->l('Required fields are missing.'));
+                throw new Exception($this->translate('Required fields are missing.'));
             }
 
             // Check if mapping already exists (for different mapping)
@@ -546,7 +575,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             $existing = Db::getInstance()->getRow($existing_query);
             if ($existing) {
-                throw new Exception($this->l('This PrestaShop field is already mapped.'));
+                throw new Exception($this->translate('This PrestaShop field is already mapped.'));
             }
 
             $data = [
@@ -569,12 +598,12 @@ class AdminYujuProductMappingController extends ModuleAdminController
                     $data,
                     'id_mapping = ' . $id_mapping
                 );
-                $message = $this->l('Product mapping updated successfully.');
+                $message = $this->translate('Product mapping updated successfully.');
             } else {
                 // Create new mapping
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $result = Db::getInstance()->insert('yuju_product_mapping', $data);
-                $message = $this->l('Product mapping created successfully.');
+                $message = $this->translate('Product mapping created successfully.');
             }
 
             if ($result) {
@@ -582,7 +611,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 $response['message'] = $message;
                 $this->logger->log('Product mapping saved: ' . $prestashop_field . ' -> ' . $yuju_field, 'info');
             } else {
-                throw new Exception($this->l('Error saving product mapping.'));
+                throw new Exception($this->translate('Error saving product mapping.'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -599,7 +628,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         try {
             $id_mapping = (int) Tools::getValue('id_mapping');
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->translate('Invalid mapping ID.'));
             }
 
             $mapping = Db::getInstance()->getRow('
@@ -611,7 +640,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 $response['success'] = true;
                 $response['data'] = $mapping;
             } else {
-                throw new Exception($this->l('Mapping not found.'));
+                throw new Exception($this->translate('Mapping not found.'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -627,7 +656,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         try {
             $id_mapping = (int) Tools::getValue('id_mapping');
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->translate('Invalid mapping ID.'));
             }
 
             $result = Db::getInstance()->delete(
@@ -637,10 +666,10 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             if ($result) {
                 $response['success'] = true;
-                $response['message'] = $this->l('Product mapping deleted successfully.');
+                $response['message'] = $this->translate('Product mapping deleted successfully.');
                 $this->logger->log('Product mapping deleted: ID ' . $id_mapping, 'info');
             } else {
-                throw new Exception($this->l('Error deleting product mapping.'));
+                throw new Exception($this->translate('Error deleting product mapping.'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -659,7 +688,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             $is_active = (int) Tools::getValue('is_active');
 
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->translate('Invalid mapping ID.'));
             }
 
             $result = Db::getInstance()->update(
@@ -671,11 +700,11 @@ class AdminYujuProductMappingController extends ModuleAdminController
             if ($result) {
                 $response['success'] = true;
                 $response['message'] = $is_active ? 
-                    $this->l('Product mapping enabled successfully.') : 
-                    $this->l('Product mapping disabled successfully.');
+                    $this->translate('Product mapping enabled successfully.') : 
+                    $this->translate('Product mapping disabled successfully.');
                 $this->logger->log('Product mapping toggled: ID ' . $id_mapping . ' -> ' . ($is_active ? 'enabled' : 'disabled'), 'info');
             } else {
-                throw new Exception($this->l('Error updating product mapping status.'));
+                throw new Exception($this->translate('Error updating product mapping status.'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -696,7 +725,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             
             $response['success'] = true;
             $response['data'] = $yuju_fields;
-            $response['message'] = $this->l('Yuju fields refreshed successfully.');
+            $response['message'] = $this->translate('Yuju fields refreshed successfully.');
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
             $this->logger->log('Error refreshing Yuju fields: ' . $e->getMessage(), 'error');
@@ -717,80 +746,80 @@ class AdminYujuProductMappingController extends ModuleAdminController
     protected function getPrestashopFields()
     {
         return [
-            ['id' => 'name', 'name' => $this->l('Product Name')],
-            ['id' => 'description', 'name' => $this->l('Description')],
-            ['id' => 'description_short', 'name' => $this->l('Short Description')],
-            ['id' => 'price', 'name' => $this->l('Price')],
-            ['id' => 'wholesale_price', 'name' => $this->l('Wholesale Price')],
-            ['id' => 'reference', 'name' => $this->l('Reference/SKU')],
-            ['id' => 'ean13', 'name' => $this->l('EAN13')],
-            ['id' => 'upc', 'name' => $this->l('UPC')],
-            ['id' => 'isbn', 'name' => $this->l('ISBN')],
-            ['id' => 'mpn', 'name' => $this->l('MPN')],
-            ['id' => 'quantity', 'name' => $this->l('Quantity')],
-            ['id' => 'minimal_quantity', 'name' => $this->l('Minimal Quantity')],
-            ['id' => 'weight', 'name' => $this->l('Weight')],
-            ['id' => 'width', 'name' => $this->l('Width')],
-            ['id' => 'height', 'name' => $this->l('Height')],
-            ['id' => 'depth', 'name' => $this->l('Depth')],
-            ['id' => 'active', 'name' => $this->l('Active')],
-            ['id' => 'available_for_order', 'name' => $this->l('Available for Order')],
-            ['id' => 'show_price', 'name' => $this->l('Show Price')],
-            ['id' => 'online_only', 'name' => $this->l('Online Only')],
-            ['id' => 'condition', 'name' => $this->l('Condition')],
-            ['id' => 'visibility', 'name' => $this->l('Visibility')],
-            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-            ['id' => 'link_rewrite', 'name' => $this->l('Friendly URL')],
-            ['id' => 'available_now', 'name' => $this->l('Available Now Text')],
-            ['id' => 'available_later', 'name' => $this->l('Available Later Text')],
+            ['id' => 'name', 'name' => $this->translate('Product Name')],
+            ['id' => 'description', 'name' => $this->translate('Description')],
+            ['id' => 'description_short', 'name' => $this->translate('Short Description')],
+            ['id' => 'price', 'name' => $this->translate('Price')],
+            ['id' => 'wholesale_price', 'name' => $this->translate('Wholesale Price')],
+            ['id' => 'reference', 'name' => $this->translate('Reference/SKU')],
+            ['id' => 'ean13', 'name' => $this->translate('EAN13')],
+            ['id' => 'upc', 'name' => $this->translate('UPC')],
+            ['id' => 'isbn', 'name' => $this->translate('ISBN')],
+            ['id' => 'mpn', 'name' => $this->translate('MPN')],
+            ['id' => 'quantity', 'name' => $this->translate('Quantity')],
+            ['id' => 'minimal_quantity', 'name' => $this->translate('Minimal Quantity')],
+            ['id' => 'weight', 'name' => $this->translate('Weight')],
+            ['id' => 'width', 'name' => $this->translate('Width')],
+            ['id' => 'height', 'name' => $this->translate('Height')],
+            ['id' => 'depth', 'name' => $this->translate('Depth')],
+            ['id' => 'active', 'name' => $this->translate('Active')],
+            ['id' => 'available_for_order', 'name' => $this->translate('Available for Order')],
+            ['id' => 'show_price', 'name' => $this->translate('Show Price')],
+            ['id' => 'online_only', 'name' => $this->translate('Online Only')],
+            ['id' => 'condition', 'name' => $this->translate('Condition')],
+            ['id' => 'visibility', 'name' => $this->translate('Visibility')],
+            ['id' => 'meta_title', 'name' => $this->translate('Meta Title')],
+            ['id' => 'meta_description', 'name' => $this->translate('Meta Description')],
+            ['id' => 'meta_keywords', 'name' => $this->translate('Meta Keywords')],
+            ['id' => 'link_rewrite', 'name' => $this->translate('Friendly URL')],
+            ['id' => 'available_now', 'name' => $this->translate('Available Now Text')],
+            ['id' => 'available_later', 'name' => $this->translate('Available Later Text')],
         ];
     }
 
     protected function getYujuFields()
     {
         return [
-            ['id' => 'title', 'name' => $this->l('Title')],
-            ['id' => 'description', 'name' => $this->l('Description')],
-            ['id' => 'short_description', 'name' => $this->l('Short Description')],
-            ['id' => 'price', 'name' => $this->l('Price')],
-            ['id' => 'cost_price', 'name' => $this->l('Cost Price')],
-            ['id' => 'sku', 'name' => $this->l('SKU')],
-            ['id' => 'barcode', 'name' => $this->l('Barcode')],
-            ['id' => 'gtin', 'name' => $this->l('GTIN')],
-            ['id' => 'mpn', 'name' => $this->l('MPN')],
-            ['id' => 'stock_quantity', 'name' => $this->l('Stock Quantity')],
-            ['id' => 'min_stock', 'name' => $this->l('Minimum Stock')],
-            ['id' => 'weight', 'name' => $this->l('Weight')],
-            ['id' => 'width', 'name' => $this->l('Width')],
-            ['id' => 'height', 'name' => $this->l('Height')],
-            ['id' => 'length', 'name' => $this->l('Length')],
-            ['id' => 'status', 'name' => $this->l('Status')],
-            ['id' => 'visibility', 'name' => $this->l('Visibility')],
-            ['id' => 'condition', 'name' => $this->l('Condition')],
-            ['id' => 'brand', 'name' => $this->l('Brand')],
-            ['id' => 'category', 'name' => $this->l('Category')],
-            ['id' => 'tags', 'name' => $this->l('Tags')],
-            ['id' => 'meta_title', 'name' => $this->l('Meta Title')],
-            ['id' => 'meta_description', 'name' => $this->l('Meta Description')],
-            ['id' => 'meta_keywords', 'name' => $this->l('Meta Keywords')],
-            ['id' => 'slug', 'name' => $this->l('URL Slug')],
+            ['id' => 'title', 'name' => $this->translate('Title')],
+            ['id' => 'description', 'name' => $this->translate('Description')],
+            ['id' => 'short_description', 'name' => $this->translate('Short Description')],
+            ['id' => 'price', 'name' => $this->translate('Price')],
+            ['id' => 'cost_price', 'name' => $this->translate('Cost Price')],
+            ['id' => 'sku', 'name' => $this->translate('SKU')],
+            ['id' => 'barcode', 'name' => $this->translate('Barcode')],
+            ['id' => 'gtin', 'name' => $this->translate('GTIN')],
+            ['id' => 'mpn', 'name' => $this->translate('MPN')],
+            ['id' => 'stock_quantity', 'name' => $this->translate('Stock Quantity')],
+            ['id' => 'min_stock', 'name' => $this->translate('Minimum Stock')],
+            ['id' => 'weight', 'name' => $this->translate('Weight')],
+            ['id' => 'width', 'name' => $this->translate('Width')],
+            ['id' => 'height', 'name' => $this->translate('Height')],
+            ['id' => 'length', 'name' => $this->translate('Length')],
+            ['id' => 'status', 'name' => $this->translate('Status')],
+            ['id' => 'visibility', 'name' => $this->translate('Visibility')],
+            ['id' => 'condition', 'name' => $this->translate('Condition')],
+            ['id' => 'brand', 'name' => $this->translate('Brand')],
+            ['id' => 'category', 'name' => $this->translate('Category')],
+            ['id' => 'tags', 'name' => $this->translate('Tags')],
+            ['id' => 'meta_title', 'name' => $this->translate('Meta Title')],
+            ['id' => 'meta_description', 'name' => $this->translate('Meta Description')],
+            ['id' => 'meta_keywords', 'name' => $this->translate('Meta Keywords')],
+            ['id' => 'slug', 'name' => $this->translate('URL Slug')],
         ];
     }
 
     protected function getFieldTypes()
     {
         return [
-            ['id' => 'string', 'name' => $this->l('Cadena de texto')],
-            ['id' => 'integer', 'name' => $this->l('Número entero')],
-            ['id' => 'decimal', 'name' => $this->l('Número decimal')],
-            ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
-            ['id' => 'date', 'name' => $this->l('Fecha')],
-            ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
-            ['id' => 'text', 'name' => $this->l('Texto')],
-            ['id' => 'html', 'name' => $this->l('HTML')],
-            ['id' => 'json', 'name' => $this->l('JSON')],
+            ['id' => 'string', 'name' => $this->translate('Cadena de texto')],
+            ['id' => 'integer', 'name' => $this->translate('Número entero')],
+            ['id' => 'decimal', 'name' => $this->translate('Número decimal')],
+            ['id' => 'boolean', 'name' => $this->translate('Verdadero/Falso')],
+            ['id' => 'date', 'name' => $this->translate('Fecha')],
+            ['id' => 'datetime', 'name' => $this->translate('Fecha y Hora')],
+            ['id' => 'text', 'name' => $this->translate('Texto')],
+            ['id' => 'html', 'name' => $this->translate('HTML')],
+            ['id' => 'json', 'name' => $this->translate('JSON')],
         ];
     }
 
@@ -799,17 +828,17 @@ class AdminYujuProductMappingController extends ModuleAdminController
     protected function getTransformationRules()
     {
         return [
-            ['id' => 'none', 'name' => $this->l('Ninguna')],
-            ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
-            ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
-            ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
-            ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
-            ['id' => 'strip_tags', 'name' => $this->l('Eliminar Etiquetas')],
-            ['id' => 'trim', 'name' => $this->l('Recortar Espacios')],
-            ['id' => 'number_format', 'name' => $this->l('Formato de Número')],
-            ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
-            ['id' => 'boolean_convert', 'name' => $this->l('Convertir a Booleano')],
-            ['id' => 'custom', 'name' => $this->l('Código PHP Personalizado')],
+            ['id' => 'none', 'name' => $this->translate('Ninguna')],
+            ['id' => 'uppercase', 'name' => $this->translate('Mayúsculas')],
+            ['id' => 'lowercase', 'name' => $this->translate('Minúsculas')],
+            ['id' => 'capitalize', 'name' => $this->translate('Capitalizar')],
+            ['id' => 'strip_html', 'name' => $this->translate('Eliminar HTML')],
+            ['id' => 'strip_tags', 'name' => $this->translate('Eliminar Etiquetas')],
+            ['id' => 'trim', 'name' => $this->translate('Recortar Espacios')],
+            ['id' => 'number_format', 'name' => $this->translate('Formato de Número')],
+            ['id' => 'date_format', 'name' => $this->translate('Formato de Fecha')],
+            ['id' => 'boolean_convert', 'name' => $this->translate('Convertir a Booleano')],
+            ['id' => 'custom', 'name' => $this->translate('Código PHP Personalizado')],
         ];
     }
 }
