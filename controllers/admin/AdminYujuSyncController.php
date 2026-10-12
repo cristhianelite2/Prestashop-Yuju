@@ -104,7 +104,6 @@ class AdminYujuSyncController extends ModuleAdminController
         
         
 
-         = 'sl.*';
         $this->_join = '';
         $this->_where = '';
         $this->_group = '';
