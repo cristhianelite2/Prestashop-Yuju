@@ -16,9 +16,13 @@ const guidance = getGuidance(
 
 assert.ok(guidance, 'AWS SigV4 errors should produce actionable instructions.');
 assert.ok(guidance.steps.length >= 3, 'The guidance should tell the site owner what to do.');
-assert.match(guidance.documentationUrl, /^https:\/\/api-docs\.yuju\.io\//);
+assert.match(guidance.explanation, /GET \/products/);
+assert.match(guidance.offerReportUrl, /obtener-oferta-de-productos/);
+assert.match(guidance.generalReportUrl, /obtener-informacion-general/);
 assert.match(guidance.supportUrl, /^https:\/\/help\.yuju\.io\//);
 assert.match(guidance.supportEmail, /^mailto:soporte@yuju\.io$/);
+assert.match(guidance.steps.join(' '), /12 horas/);
+assert.match(guidance.steps.join(' '), /dos veces al día/);
 assert.strictEqual(
     getGuidance('A different API error'),
     null,

@@ -165,15 +165,16 @@ $(function() {
         }
 
         return {
-            title: 'Yuju está rechazando la autenticación del endpoint de productos.',
-            explanation: 'GET https://api.tp.yuju.io/products exige una firma AWS SigV4, pero esta integración usa el token de Yuju indicado en su documentación. El dueño del sitio no puede corregir esta configuración desde PrestaShop; debe revisarla Yuju.',
+            title: 'El módulo está intentando listar productos por un endpoint que no está documentado.',
+            explanation: 'La prueba de conectividad confirma que el token funciona con account y webhook-sub. La solicitud que falla es GET /products; la documentación pública de Yuju no describe ese endpoint como listado de catálogo. No es motivo para cambiar las credenciales.',
             steps: [
-                'No cambies el Client ID ni el Secret, y no regeneres el token: este error no indica que las credenciales de la tienda estén mal.',
-                'Contacta a soporte de Yuju y pide revisar la autenticación del endpoint GET /products en producción. Solicita que habiliten el token documentado o que proporcionen el endpoint y las instrucciones oficiales si migraron a SigV4.',
-                'Incluye el mensaje de error, la hora del intento y el ID de cuenta/tienda. No envíes el token, el Client Secret ni el código OAuth.',
-                'Cuando Yuju confirme que corrigió el endpoint, vuelve a pulsar «Iniciar sincronización».'
+                'No cambies el Client ID ni el Secret, y no regeneres el token: la conexión con Yuju ya funciona.',
+                'Para obtener ID de producto, SKU, stock y precio, Yuju documenta GET /products-offer-report. Ese reporte está limitado a una solicitud cada 12 horas.',
+                'Para obtener datos generales de productos y variaciones, Yuju documenta POST /products-gral-report. Es asíncrono: se consulta el estado por id_task y el reporte puede solicitarse como máximo dos veces al día. PrestaShop debe adaptarse a ese flujo antes de importar el catálogo completo.',
+                'Si otros conectores de tu cuenta listan el catálogo directamente, pide a Yuju el endpoint GET oficialmente soportado para ese fin. No compartas el token, Client Secret ni el código OAuth.'
             ],
-            documentationUrl: 'https://api-docs.yuju.io/docs/conexi%C3%B3n-a-la-api',
+            offerReportUrl: 'https://api-docs.yuju.io/docs/obtener-oferta-de-productos',
+            generalReportUrl: 'https://api-docs.yuju.io/docs/obtener-informacion-general',
             supportUrl: 'https://help.yuju.io/es/',
             supportEmail: 'mailto:soporte@yuju.io'
         };
@@ -203,10 +204,16 @@ $(function() {
 
         var $links = $('<p></p>');
         $links.append($('<a></a>')
-            .attr('href', guidance.documentationUrl)
+            .attr('href', guidance.offerReportUrl)
             .attr('target', '_blank')
             .attr('rel', 'noopener noreferrer')
-            .text('Documentación de autenticación de Yuju'));
+            .text('Reporte de oferta (SKU/stock/precio)'));
+        $links.append(document.createTextNode(' · '));
+        $links.append($('<a></a>')
+            .attr('href', guidance.generalReportUrl)
+            .attr('target', '_blank')
+            .attr('rel', 'noopener noreferrer')
+            .text('Reporte de datos generales'));
         $links.append(document.createTextNode(' · '));
         $links.append($('<a></a>')
             .attr('href', guidance.supportUrl)
