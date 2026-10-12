@@ -73,6 +73,13 @@ class YujuProductReportFileStore
                     ++$product_count;
                 }
 
+                // A successful HTTP response with an empty file is not a usable product report.
+                // Otherwise the UI marks it cached, but reconciliation sees zero rows and reports
+                // a misleading "no cached report" error.
+                if ($product_count === 0) {
+                    throw new RuntimeException('The downloaded Yuju report contains no product rows.');
+                }
+
                 return [
                     'cache_id' => $cache_id,
                     'product_count' => $product_count,
