@@ -207,7 +207,7 @@ $(function() {
             if (onError) {
                 onError();
             } else {
-                showMessage('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}', 'alert-danger');
+                showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
             }
         });
     }
@@ -215,14 +215,14 @@ $(function() {
     function handleReportState(response, startPolling) {
         $report.removeClass('hidden');
         if (!response) {
-            showMessage('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}', 'alert-danger');
+            showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
             return;
         }
 
         if (response.success) {
             var status = response.status || 'UNKNOWN';
             if (status === 'CREATED' || status === 'PROCESSING') {
-                showMessage('{l s='Report in progress. The Yuju report is being generated; it may take a few minutes.' mod='prestashopyuju' js=1}', 'alert-info');
+                showMessage('{/literal}{l s='Report in progress. The Yuju report is being generated; it may take a few minutes.' mod='prestashopyuju' js=1}{literal}', 'alert-info');
                 $pollBtn.show();
                 $loadBtn.hide();
                 $pushBtn.hide();
@@ -231,7 +231,7 @@ $(function() {
                 }
             } else if (status === 'COMPLETED') {
                 stopAutoPoll();
-                showMessage('{l s='Report ready. Load the reconciliation to see differences.' mod='prestashopyuju' js=1}', 'alert-success');
+                showMessage('{/literal}{l s='Report ready. Load the reconciliation to see differences.' mod='prestashopyuju' js=1}{literal}', 'alert-success');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
@@ -240,27 +240,27 @@ $(function() {
                 }
             } else if (status === 'DOWNLOAD_ERROR') {
                 stopAutoPoll();
-                showMessage('{l s='Report ready but download failed validation. Retry the download.' mod='prestashopyuju' js=1}', 'alert-warning');
+                showMessage('{/literal}{l s='Report ready but download failed validation. Retry the download.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
                 $pollBtn.show();
                 $loadBtn.hide();
                 $pushBtn.hide();
             } else if (status === 'RATE_LIMITED') {
                 stopAutoPoll();
-                showMessage(response.message || '{l s='Daily report limit reached (2/day UTC).' mod='prestashopyuju' js=1}', 'alert-warning');
+                showMessage(response.message || '{/literal}{l s='Daily report limit reached (2/day UTC).' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
             } else if (status === 'UNKNOWN') {
                 stopAutoPoll();
-                showMessage(response.message || '{l s='Report request could not be confirmed. Avoid duplicate requests.' mod='prestashopyuju' js=1}', 'alert-warning');
+                showMessage(response.message || '{/literal}{l s='Report request could not be confirmed. Avoid duplicate requests.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
             } else {
                 stopAutoPoll();
-                showMessage(response.message || '{l s='Report status unknown.' mod='prestashopyuju' js=1}', 'alert-warning');
+                showMessage(response.message || '{/literal}{l s='Report status unknown.' mod='prestashopyuju' js=1}{literal}', 'alert-warning');
             }
         } else {
             stopAutoPoll();
             showMessage(
-                response.message || '{l s='Could not start the Yuju general report.' mod='prestashopyuju' js=1}',
+                response.message || '{/literal}{l s='Could not start the Yuju general report.' mod='prestashopyuju' js=1}{literal}',
                 'alert-danger'
             );
         }
@@ -291,7 +291,7 @@ $(function() {
         $('#yuju-products-syncable').text(report.syncable_count || 0);
 
         showMessage(
-            message || '{l s='Reconciliation loaded. Only linked products with differences can be pushed PS→Yuju.' mod='prestashopyuju' js=1}',
+            message || '{/literal}{l s='Reconciliation loaded. Only linked products with differences can be pushed PS→Yuju.' mod='prestashopyuju' js=1}{literal}',
             products.length > 0 ? 'alert-info' : 'alert-success'
         );
 
@@ -300,12 +300,12 @@ $(function() {
 
         if (products.length) {
             var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
-                '<th>{l s='PS ID' mod='prestashopyuju' js=1}</th>' +
-                '<th>{l s='Yuju ID' mod='prestashopyuju' js=1}</th>' +
-                '<th>{l s='Product' mod='prestashopyuju' js=1}</th>' +
-                '<th>{l s='SKU' mod='prestashopyuju' js=1}</th>' +
-                '<th>{l s='Status' mod='prestashopyuju' js=1}</th>' +
-                '<th>{l s='Differences' mod='prestashopyuju' js=1}</th>' +
+                '<th>{/literal}{l s='PS ID' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>{/literal}{l s='Yuju ID' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>{/literal}{l s='Product' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>{/literal}{l s='SKU' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>{/literal}{l s='Status' mod='prestashopyuju' js=1}{literal}</th>' +
+                '<th>{/literal}{l s='Differences' mod='prestashopyuju' js=1}{literal}</th>' +
                 '</tr></thead><tbody></tbody></table>');
 
             $.each(products, function(index, product) {
@@ -318,7 +318,7 @@ $(function() {
                     if (msg) {
                         msg += ' ';
                     }
-                    msg += '{l s='Uncomparable:' mod='prestashopyuju' js=1} ' + product.uncomparable.join(', ');
+                    msg += '{/literal}{l s='Uncomparable:' mod='prestashopyuju' js=1}{literal} ' + product.uncomparable.join(', ');
                 }
                 var $row = $('<tr></tr>');
                 // HTML-escape every cell: external Yuju values must not be injected as HTML
@@ -341,7 +341,7 @@ $(function() {
 
             if (syncableCount > 0) {
                 $pushBtn
-                    .html('<i class="icon-refresh"></i> {l s='Sincronizar (PrestaShop → Yuju)' mod='prestashopyuju' js=1} (' + syncableCount + ')')
+                    .html('<i class="icon-refresh"></i> {/literal}{l s='Sincronizar (PrestaShop → Yuju)' mod='prestashopyuju' js=1}{literal} (' + syncableCount + ')')
                     .show();
             } else {
                 $pushBtn.hide();
@@ -355,18 +355,18 @@ $(function() {
     }
 
     $startBtn.on('click', function() {
-        setLoading($startBtn, true, '{l s='Requesting report...' mod='prestashopyuju' js=1}');
+        setLoading($startBtn, true, '{/literal}{l s='Requesting report...' mod='prestashopyuju' js=1}{literal}');
         ajaxAction('startYujuProductReport', null, function(response) {
             handleReportState(response, true);
             setLoading($startBtn, false);
         }, function() {
-            showMessage('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}', 'alert-danger');
+            showMessage('{/literal}{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}{literal}', 'alert-danger');
             setLoading($startBtn, false);
         });
     });
 
     $pollBtn.on('click', function() {
-        setLoading($pollBtn, true, '{l s='Checking...' mod='prestashopyuju' js=1}');
+        setLoading($pollBtn, true, '{/literal}{l s='Checking...' mod='prestashopyuju' js=1}{literal}');
         ajaxAction('pollYujuProductReport', null, function(response) {
             handleReportState(response, false);
             setLoading($pollBtn, false);
@@ -376,14 +376,14 @@ $(function() {
     });
 
     $loadBtn.on('click', function() {
-        setLoading($loadBtn, true, '{l s='Loading reconciliation...' mod='prestashopyuju' js=1}');
+        setLoading($loadBtn, true, '{/literal}{l s='Loading reconciliation...' mod='prestashopyuju' js=1}{literal}');
         ajaxAction('getYujuProductSyncReport', null, function(response) {
             setLoading($loadBtn, false);
             if (response && response.success && response.report) {
                 renderReconciliation(response.report, response.message);
             } else {
                 showMessage(
-                    (response && response.message) || '{l s='No cached completed report. Start a report first.' mod='prestashopyuju' js=1}',
+                    (response && response.message) || '{/literal}{l s='No cached completed report. Start a report first.' mod='prestashopyuju' js=1}{literal}',
                     'alert-danger'
                 );
             }
@@ -393,10 +393,10 @@ $(function() {
     });
 
     $pushBtn.on('click', function() {
-        if (!confirm('{l s='Send PrestaShop values to Yuju for linked products with differences? No products will be created in Yuju.' mod='prestashopyuju' js=1}')) {
+        if (!confirm('{/literal}{l s='Send PrestaShop values to Yuju for linked products with differences? No products will be created in Yuju.' mod='prestashopyuju' js=1}{literal}')) {
             return;
         }
-        setLoading($pushBtn, true, '{l s='Pushing to Yuju...' mod='prestashopyuju' js=1}');
+        setLoading($pushBtn, true, '{/literal}{l s='Pushing to Yuju...' mod='prestashopyuju' js=1}{literal}');
         ajaxAction('pushDifferencesToYuju', null, function(response) {
             setLoading($pushBtn, false);
             if (response && response.success) {
@@ -409,8 +409,8 @@ $(function() {
                     }
                 });
                 showMessage(
-                    (response.message || '{l s='Push completed.' mod='prestashopyuju' js=1}') +
-                    (failed ? ' ' + failed + ' {l s='failed.' mod='prestashopyuju' js=1}' : ''),
+                    (response.message || '{/literal}{l s='Push completed.' mod='prestashopyuju' js=1}{literal}') +
+                    (failed ? ' ' + failed + ' {/literal}{l s='failed.' mod='prestashopyuju' js=1}{literal}' : ''),
                     failed ? 'alert-warning' : 'alert-success'
                 );
                 if (response.report) {
@@ -418,7 +418,7 @@ $(function() {
                 }
             } else {
                 showMessage(
-                    (response && response.message) || '{l s='Push to Yuju failed.' mod='prestashopyuju' js=1}',
+                    (response && response.message) || '{/literal}{l s='Push to Yuju failed.' mod='prestashopyuju' js=1}{literal}',
                     'alert-danger'
                 );
             }
