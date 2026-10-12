@@ -386,7 +386,7 @@ $(function() {
     $pollBtn.on('click', function() {
         setLoading($pollBtn, true, 'Comprobando / reintentando descarga...');
         // An explicit click also retries DOWNLOAD_ERROR using the same stored task.
-        ajaxAction('pollYujuProductReport', {retry_download: true}, function(response) {
+        ajaxAction('pollYujuProductReport', {ldelim}retry_download: true{rdelim}, function(response) {
             handleReportState(response, false);
             setLoading($pollBtn, false);
         }, function() {
