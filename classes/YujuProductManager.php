@@ -64,8 +64,8 @@ class YujuProductManager
             list($ps_field, $old_yuju_field, $new_yuju_field) = $legacy;
             Db::getInstance()->execute('
                 UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping old_mapping
-                SET old_mapping.yuju_field = "' . pSQL($new_yuju_field) . '",
-                    old_mapping.updated_at = NOW()
+                SET yuju_field = "' . pSQL($new_yuju_field) . '",
+                    updated_at = NOW()
                 WHERE old_mapping.prestashop_field = "' . pSQL($ps_field) . '"
                   AND old_mapping.yuju_field = "' . pSQL($old_yuju_field) . '"
                   AND NOT EXISTS (
@@ -87,6 +87,18 @@ class YujuProductManager
             UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
             SET sync_direction = "prestashop_to_yuju", updated_at = NOW()
             WHERE sync_direction = "ps_to_yuju"
+        ');
+
+        // If a valid mapping already existed, disable rather than compare a stale legacy alias.
+        Db::getInstance()->execute('
+            UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
+            SET is_active = 0, updated_at = NOW()
+            WHERE (prestashop_field = "name" AND yuju_field = "title")
+               OR (prestashop_field = "ean13" AND yuju_field = "barcode")
+               OR (prestashop_field = "quantity" AND yuju_field = "stock_quantity")
+               OR (prestashop_field = "width" AND yuju_field = "width")
+               OR (prestashop_field = "height" AND yuju_field = "height")
+               OR (prestashop_field = "depth" AND yuju_field IN ("depth", "length"))
         ');
 
         $this->field_mappings = Db::getInstance()->executeS('
