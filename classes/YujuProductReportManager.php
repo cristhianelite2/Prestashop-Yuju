@@ -58,18 +58,17 @@ class YujuProductReportManager
         }
 
         if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !$has_cached_report) {
+            // Remote completion is not enough: recover the existing task's download before creating another report.
             $state['status'] = 'DOWNLOAD_EXPIRED';
             $state['cache_id'] = null;
             $this->storeJson(self::STATE_CONFIG_KEY, $state);
+
+            return $this->pollReport(true);
         }
 
-        if ($state['status'] === 'DOWNLOAD_ERROR' && !empty($state['task_id'])) {
-            return [
-                'success' => false,
-                'status' => 'DOWNLOAD_ERROR',
-                'task_id' => $state['task_id'],
-                'message' => 'El reporte ya está listo, pero su descarga falló la validación. Reintenta la descarga del reporte; no inicies otra tarea.',
-            ];
+        if (in_array($state['status'], ['DOWNLOAD_ERROR', 'DOWNLOAD_EXPIRED'], true) && !empty($state['task_id'])) {
+            // Retry the saved task/download only; never spend quota by creating a replacement task.
+            return $this->pollReport(true);
         }
 
         $requested_at = isset($state['requested_at']) ? (int) $state['requested_at'] : 0;
@@ -169,6 +168,12 @@ class YujuProductReportManager
                 'message' => 'Yuju creó el reporte, pero no se pudo guardar su estado local. No vuelvas a iniciarlo; revisa el registro antes de consumir otra solicitud.',
                 'requested_at' => $state['requested_at'],
             ];
+        }
+
+        // Yuju can return COMPLETED in the initial POST response. Download and cache the
+        // completed report now, instead of advertising a report the reconciler cannot read.
+        if ($state['status'] === 'COMPLETED') {
+            return $this->pollReport();
         }
 
         return [
