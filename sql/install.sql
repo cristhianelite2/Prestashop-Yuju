@@ -386,42 +386,8 @@ INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_fiel
 ('height', 'shipping_height', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('depth', 'shipping_depth', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW());
 
--- Repair only known legacy defaults. Each update avoids unique-key conflicts.
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'name', `updated_at` = NOW()
-WHERE `prestashop_field` = 'name' AND `yuju_field` = 'title'
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'name' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'ean', `updated_at` = NOW()
-WHERE `prestashop_field` = 'ean13' AND `yuju_field` = 'barcode'
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'ean' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'stock', `updated_at` = NOW()
-WHERE `prestashop_field` = 'quantity' AND `yuju_field` = 'stock_quantity'
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'stock' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'shipping_width', `updated_at` = NOW()
-WHERE `prestashop_field` = 'width' AND `yuju_field` = 'width'
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'shipping_width' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'shipping_height', `updated_at` = NOW()
-WHERE `prestashop_field` = 'height' AND `yuju_field` = 'height'
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'shipping_height' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-UPDATE `PREFIX_yuju_product_mapping` old_mapping
-SET `yuju_field` = 'shipping_depth', `updated_at` = NOW()
-WHERE `prestashop_field` = 'depth' AND `yuju_field` IN ('depth', 'length')
-AND NOT EXISTS (SELECT 1 FROM (SELECT `id_mapping`, `prestashop_field`, `yuju_field` FROM `PREFIX_yuju_product_mapping`) valid_mapping
-    WHERE valid_mapping.`prestashop_field` = old_mapping.`prestashop_field` AND valid_mapping.`yuju_field` = 'shipping_depth' AND valid_mapping.`id_mapping` != old_mapping.`id_mapping`);
-
-UPDATE `PREFIX_yuju_product_mapping`
-SET `sync_direction` = 'prestashop_to_yuju', `updated_at` = NOW()
-WHERE `sync_direction` = 'ps_to_yuju';
-
+-- Deactivate only obsolete Yuju field names. Existing mappings are normalized safely
+-- at runtime by YujuProductManager::loadFieldMappings().
 UPDATE `PREFIX_yuju_product_mapping`
 SET `is_active` = 0, `updated_at` = NOW()
 WHERE (`prestashop_field` = 'name' AND `yuju_field` = 'title')
