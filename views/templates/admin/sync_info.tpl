@@ -157,16 +157,73 @@ $(function() {
     var $report = $('#yuju-product-sync-report');
     var ajaxUrl = $inspectButton.data('ajax-url');
 
+    function getYujuSyncErrorGuidance(message) {
+        var signatureError = /IncompleteSignatureException|Authorization header requires ['"](?:Credential|Signature|SignedHeaders)['"] parameter/i.test(message || '');
+
+        if (!signatureError) {
+            return null;
+        }
+
+        return {
+            title: 'Yuju está rechazando la autenticación del endpoint de productos.',
+            explanation: 'GET https://api.tp.yuju.io/products exige una firma AWS SigV4, pero esta integración usa el token de Yuju indicado en su documentación. El dueño del sitio no puede corregir esta configuración desde PrestaShop; debe revisarla Yuju.',
+            steps: [
+                'No cambies el Client ID ni el Secret, y no regeneres el token: este error no indica que las credenciales de la tienda estén mal.',
+                'Contacta a soporte de Yuju y pide revisar la autenticación del endpoint GET /products en producción. Solicita que habiliten el token documentado o que proporcionen el endpoint y las instrucciones oficiales si migraron a SigV4.',
+                'Incluye el mensaje de error, la hora del intento y el ID de cuenta/tienda. No envíes el token, el Client Secret ni el código OAuth.',
+                'Cuando Yuju confirme que corrigió el endpoint, vuelve a pulsar «Iniciar sincronización».'
+            ],
+            documentationUrl: 'https://api-docs.yuju.io/docs/conexi%C3%B3n-a-la-api',
+            supportUrl: 'https://help.yuju.io/es/',
+            supportEmail: 'mailto:soporte@yuju.io'
+        };
+    }
+
+    function renderProductSyncMessage(message, isError, hasUnsyncedProducts) {
+        var $message = $('#yuju-product-sync-message')
+            .toggleClass('alert-danger', !!isError)
+            .toggleClass('alert-info', !isError && hasUnsyncedProducts)
+            .toggleClass('alert-success', !isError && !hasUnsyncedProducts);
+        var guidance = isError ? getYujuSyncErrorGuidance(message) : null;
+
+        if (!guidance) {
+            $message.text(message);
+            return;
+        }
+
+        $message.empty()
+            .append($('<strong></strong>').text(guidance.title))
+            .append($('<p></p>').text(guidance.explanation));
+
+        var $steps = $('<ol></ol>');
+        $.each(guidance.steps, function(index, step) {
+            $steps.append($('<li></li>').text(step));
+        });
+        $message.append($steps);
+
+        var $links = $('<p></p>');
+        $links.append($('<a></a>')
+            .attr('href', guidance.documentationUrl)
+            .attr('target', '_blank')
+            .attr('rel', 'noopener noreferrer')
+            .text('Documentación de autenticación de Yuju'));
+        $links.append(document.createTextNode(' · '));
+        $links.append($('<a></a>')
+            .attr('href', guidance.supportUrl)
+            .attr('target', '_blank')
+            .attr('rel', 'noopener noreferrer')
+            .text('Centro de soporte de Yuju'));
+        $links.append(document.createTextNode(' · '));
+        $links.append($('<a></a>').attr('href', guidance.supportEmail).text('Escribir a soporte de Yuju'));
+        $message.append($links);
+    }
+
     function renderProductReport(report, message, isError) {
         var products = report.unsynced_products || [];
         $('#yuju-products-total').text(report.total || 0);
         $('#yuju-products-synced').text(report.synced_count || 0);
         $('#yuju-products-unsynced').text(report.unsynced_count || 0);
-        $('#yuju-product-sync-message')
-            .toggleClass('alert-danger', !!isError)
-            .toggleClass('alert-info', !isError && products.length > 0)
-            .toggleClass('alert-success', !isError && products.length === 0)
-            .text(message);
+        renderProductSyncMessage(message, isError, products.length > 0);
 
         var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
             '<th>{l s='Yuju ID' mod='prestashopyuju' js=1}</th>' +
@@ -210,15 +267,14 @@ $(function() {
                     $syncButton.hide();
                     $('#yuju-unsynced-products').empty();
                     $('#yuju-product-sync-report').removeClass('hidden');
-                    $('#yuju-product-sync-message').removeClass('alert-info alert-success').addClass('alert-danger').text(errorMessage);
+                    renderProductSyncMessage(errorMessage, true, false);
                 }
                 return;
             }
             successHandler(response);
         }).fail(function() {
             $('#yuju-product-sync-report').removeClass('hidden');
-            $('#yuju-product-sync-message').removeClass('alert-info alert-success').addClass('alert-danger')
-                .text('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}');
+            renderProductSyncMessage('{l s='Request failed. Check the connection to Yuju and try again.' mod='prestashopyuju' js=1}', true, false);
         }).always(function() {
             button.prop('disabled', false).html(originalHtml);
         });
