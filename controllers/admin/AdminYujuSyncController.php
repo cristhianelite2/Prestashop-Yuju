@@ -306,34 +306,69 @@ class AdminYujuSyncController extends ModuleAdminController
             $report_index = null;
             $report_products = null;
 
-            // Recover the existing download if a completed task lost its local cache.
-            // This reuses the same task and returns immediately when the cache is still valid.
+            // Recover the existing task's download when its local cache is missing.
+            // Check the result explicitly so a failed recovery cannot be reported as ready.
             $state = $report_manager->getStoredState();
             if (!empty($state['task_id']) && in_array($state['status'], ['COMPLETED', 'DOWNLOAD_ERROR', 'DOWNLOAD_EXPIRED'], true)) {
-                $report_manager->pollReport(true);
+                $recovery_result = $report_manager->pollReport(true);
                 $state = $report_manager->getStoredState();
+
+                if (empty($recovery_result['success']) || $state['status'] !== 'COMPLETED' || empty($state['cache_id'])) {
+                    $this->respondWithJson([
+                        'success' => false,
+                        'status' => isset($recovery_result['status']) ? $recovery_result['status'] : $state['status'],
+                        'report_cached' => false,
+                        'message' => !empty($recovery_result['message'])
+                            ? $recovery_result['message']
+                            : 'Yuju terminó el informe, pero no se pudo recuperar su archivo local. Reintenta la descarga del informe existente.',
+                    ]);
+                    return;
+                }
             }
 
-            // Get the report index
+            // Read the cached rows and build the index.
             if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
-                // We need to access the private method or rebuild the index
-                // For now, get the report and build the index
                 $report_products = $report_manager->getCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
                     $report_products = iterator_to_array($report_products);
                 }
 
-                // Build the index
+                // A previous module version could have accepted an empty file as a valid cache.
+                // Force a fresh download for the same task instead of returning a misleading cache error.
+                if (empty($report_products) && method_exists($report_manager, 'recoverReportDownload')) {
+                    $recovery_result = $report_manager->recoverReportDownload();
+                    $state = $report_manager->getStoredState();
+
+                    if (!empty($recovery_result['success']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+                        $report_products = $report_manager->getCachedReportProducts();
+                        if ($report_products instanceof Traversable) {
+                            $report_products = iterator_to_array($report_products);
+                        }
+                    } else {
+                        $this->respondWithJson([
+                            'success' => false,
+                            'status' => isset($recovery_result['status']) ? $recovery_result['status'] : $state['status'],
+                            'report_cached' => false,
+                            'message' => !empty($recovery_result['message'])
+                                ? $recovery_result['message']
+                                : 'El informe guardado no contiene productos y no se pudo recuperar la descarga de la tarea existente.',
+                        ]);
+                        return;
+                    }
+                }
+
                 if (!empty($report_products)) {
                     $report_index = YujuProductReportReconciler::indexReportRows($report_products);
                 }
             }
 
-            if (!$report_index || !$report_products) {
+            if (empty($report_products) || !$report_index || empty($report_index['product_count'])) {
                 $this->respondWithJson([
                     'success' => false,
-                    'message' => $this->trans('No hay un reporte general completado y cacheado. Inicia un reporte primero.', array(), 'Modules.Prestashopyuju.Admin'),
+                    'status' => isset($state['status']) ? $state['status'] : 'UNKNOWN',
+                    'report_cached' => false,
+                    'message' => 'El informe de Yuju se descargó, pero contiene 0 productos válidos. No se puede reconciliar el catálogo de PrestaShop hasta recuperar un archivo con productos.',
                 ]);
                 return;
             }
