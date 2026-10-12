@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Se separan diferencias urgentes (nombre, stock y precio) de las no urgentes; se agregan selección individual/masiva y actualización limitada a esos campos, con reconciliación automática posterior.
+- El resumen de reconciliación desglosa el número de productos con diferencias urgentes y no urgentes, además del total general de productos con diferencias.
 - Se añaden filtros interactivos a la reconciliación (diferencias por defecto, productos ausentes en Yuju, sincronizados, revisión manual, SKU ambiguo, deshabilitados y todos), paginación de 100 por defecto con opciones 20/50/500 y contadores de catálogo.
 
 - Se corrige el reenvío del índice y los productos del reporte JSONL validado desde `YujuSyncManager` hacia `YujuProductManager`, para que AdminYujuSync pueda construir y mostrar la reconciliación en lugar de descartar el reporte y lanzar un error.
