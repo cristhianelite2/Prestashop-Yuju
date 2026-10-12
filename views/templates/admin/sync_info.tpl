@@ -287,14 +287,16 @@ $(function() {
     }
 
     function renderReconciliation(report, message) {
-        var products = report.unsynced_products || [];
+        // Mostrar todo el catálogo de PrestaShop; conservar aparte el subconjunto accionable.
+        var products = report.all_products || report.unsynced_products || [];
+        var actionableProducts = report.unsynced_products || [];
         $('#yuju-products-total').text(report.total || 0);
         $('#yuju-products-synced').text(report.synced_count || 0);
         $('#yuju-products-unsynced').text(report.unsynced_count || 0);
         $('#yuju-products-syncable').text(report.syncable_count || 0);
 
         showMessage(
-            'Reconciliación cargada. Solo los productos vinculados con diferencias pueden enviarse PS→Yuju.',
+            message || ('Reconciliación cargada: ' + products.length + ' productos en la tabla. Solo los vinculados con diferencias pueden enviarse a Yuju.'),
             products.length > 0 ? 'alert-info' : 'alert-success'
         );
 
@@ -323,19 +325,32 @@ $(function() {
                     }
                     msg += 'No comparable: ' + product.uncomparable.join(', ');
                 }
+
+                var statusLabels = {
+                    synced: 'Sin diferencias',
+                    differences: 'Con diferencias',
+                    not_in_yuju: 'No está en Yuju',
+                    ambiguous: 'SKU ambiguo',
+                    needs_review: 'Revisión manual',
+                    disabled: 'Sincronización deshabilitada'
+                };
+                var reconciliationStatus = product.reconciliation_status || product.status || 'needs_review';
+                var displayStatus = statusLabels[reconciliationStatus] || reconciliationStatus;
+
                 var $row = $('<tr></tr>');
+                // Usar .text() en todas las celdas para evitar inyectar HTML de Yuju.
                 $row.append($('<td></td>').text(product.prestashop_product_id || '—'));
                 $row.append($('<td></td>').text(product.yuju_product_id || '—'));
                 $row.append($('<td></td>').text(product.name || '—'));
                 $row.append($('<td></td>').text(product.sku || '—'));
-                $row.append($('<td></td>').text(product.status || '—'));
+                $row.append($('<td></td>').text(displayStatus));
                 $row.append($('<td></td>').text(diffFields.length ? diffFields.join(', ') + (msg ? ' — ' + msg : '') : (msg || '—')));
                 $table.find('tbody').append($row);
             });
             $container.append($table);
 
             var syncableCount = 0;
-            $.each(products, function(i, p) {
+            $.each(actionableProducts, function(i, p) {
                 if (p.syncable && p.yuju_product_id) {
                     syncableCount++;
                 }
@@ -349,6 +364,7 @@ $(function() {
                 $pushBtn.hide();
             }
         } else {
+            $container.html('<p class="alert alert-info">No se encontraron productos para mostrar.</p>');
             $pushBtn.hide();
         }
 

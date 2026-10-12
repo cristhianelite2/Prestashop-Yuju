@@ -265,11 +265,13 @@ class YujuProductManager
                 $selected_products[(string) $yuju_product_id] = $winner;
                 foreach ($candidates as $prestashop_product_id => $matched_by) {
                     if ((int) $prestashop_product_id !== $winner) {
+                        $results[(int) $prestashop_product_id]['reconciliation_status'] = 'ambiguous';
                         $results[(int) $prestashop_product_id]['message'] = 'La relación SKU apunta a un producto Yuju ya vinculado a otro producto PrestaShop.';
                     }
                 }
             } else {
                 foreach ($candidates as $prestashop_product_id => $matched_by) {
+                    $results[(int) $prestashop_product_id]['reconciliation_status'] = 'ambiguous';
                     $results[(int) $prestashop_product_id]['message'] = 'La relación entre SKU de PrestaShop y producto Yuju es ambigua.';
                 }
             }
@@ -294,6 +296,7 @@ class YujuProductManager
             $status_row = $context['status_row'];
             if ($status_row && empty($status_row['sync_enabled'])) {
                 $result['status'] = 'disabled';
+                $result['reconciliation_status'] = 'disabled';
                 $result['syncable'] = false;
                 $result['message'] = 'La sincronización de este producto está deshabilitada en el módulo.';
             }
@@ -330,16 +333,24 @@ class YujuProductManager
             'unsynced_count' => 0,
             'disabled_count' => 0,
             'syncable_count' => 0,
+            'all_products' => [],
             'unsynced_products' => [],
         ];
 
         foreach ($results as $result) {
+            // Keep every PrestaShop product for the table; actions use the separate pending subset.
+            $report['all_products'][] = $result;
+
             if ($result['status'] === 'synced') {
                 ++$report['synced_count'];
             } elseif ($result['status'] === 'disabled') {
                 ++$report['disabled_count'];
             } else {
                 ++$report['unsynced_count'];
+            }
+
+            // Never queue disabled products or products without a match for PS→Yuju writes.
+            if ($result['status'] !== 'synced' && $result['status'] !== 'disabled') {
                 $report['unsynced_products'][] = $result;
             }
 
@@ -364,12 +375,25 @@ class YujuProductManager
             $message = 'No se encontró un producto Yuju con un SKU único para enlazar.';
         }
 
+        $reconciliation_status = 'not_in_yuju';
+        if ($match['status'] === 'ambiguous' || !empty($duplicate_skus)) {
+            $reconciliation_status = 'ambiguous';
+        } elseif ($match['status'] === 'matched') {
+            $reconciliation_status = 'needs_review';
+        }
+
+        $status = $status_row && empty($status_row['sync_enabled']) ? 'disabled' : 'pending';
+        if ($status === 'disabled') {
+            $reconciliation_status = 'disabled';
+        }
+
         return [
             'prestashop_product_id' => (int) $context['id'],
             'yuju_product_id' => $yuju_product_id,
             'sku' => $context['display_sku'],
             'name' => $this->getProductDisplayName($context['product']),
-            'status' => $status_row && empty($status_row['sync_enabled']) ? 'disabled' : 'pending',
+            'status' => $status,
+            'reconciliation_status' => $reconciliation_status,
             'differences' => [],
             'uncomparable' => [],
             'message' => $message,
@@ -479,6 +503,7 @@ class YujuProductManager
         $uncomparable = array_values(array_unique($uncomparable));
         $has_differences = !empty($differences);
         $status = !$has_differences && empty($uncomparable) ? 'synced' : 'pending';
+        $reconciliation_status = $has_differences ? 'differences' : (empty($uncomparable) ? 'synced' : 'needs_review');
         $syncable = ($has_differences && empty($uncomparable));
         $message = null;
 
@@ -490,6 +515,7 @@ class YujuProductManager
 
         return [
             'status' => $status,
+            'reconciliation_status' => $reconciliation_status,
             'differences' => $differences,
             'uncomparable' => $uncomparable,
             'message' => $message,

@@ -87,6 +87,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ## [Unreleased]
 
 ### Corregido
+- La reconciliación devuelve todos los productos activos de PrestaShop para mostrar sincronizados sin diferencias, productos con diferencias y productos no encontrados en Yuju; la lista de envío sigue limitada a productos vinculados con diferencias.
+- Al abrir la reconciliación se intenta recuperar la descarga de un informe completado si falta la caché local, reutilizando la tarea existente.
+
+
+### Corregido
 - Botón **"Probar Conectividad"** de la configuración sin efecto en PrestaShop 9: el JS del módulo solo se cargaba vía hooks (`displayBackOfficeHeader`/`actionAdminControllerSetMedia`), que pueden no estar registrados o ejecutarse tarde. `AdminYujuConfigurationController` ahora define `setMedia()` y carga `admin.js`/`admin.css` de forma determinista, y la plantilla inyecta `yujuAdminConfig` (URL AJAX + token) para no depender de los globales `window.currentIndex`/`window.token`.
 
 ### Cambiado
