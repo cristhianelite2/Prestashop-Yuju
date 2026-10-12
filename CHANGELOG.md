@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Se añaden filtros interactivos a la reconciliación (diferencias por defecto, productos ausentes en Yuju, sincronizados, revisión manual, SKU ambiguo, deshabilitados y todos), paginación de 100 por defecto con opciones 20/50/500 y contadores de catálogo.
+
 - Se corrige el reenvío del índice y los productos del reporte JSONL validado desde `YujuSyncManager` hacia `YujuProductManager`, para que AdminYujuSync pueda construir y mostrar la reconciliación en lugar de descartar el reporte y lanzar un error.
 
 - La reconciliación de AdminYujuSync carga automáticamente el último reporte JSONL local validado, incluso si falta el ID de tarea guardado.
