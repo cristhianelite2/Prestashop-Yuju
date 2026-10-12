@@ -359,10 +359,31 @@ class YujuProductReportManager
     public function getStoredState()
     {
         $state = json_decode((string) Configuration::get(self::STATE_CONFIG_KEY), true);
-
-        return is_array($state)
+        $state = is_array($state)
             ? array_merge(['status' => '', 'task_id' => null], $state)
             : ['status' => '', 'task_id' => null];
+
+        $saved_cache_is_readable = !empty($state['cache_id'])
+            && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
+            && $this->file_store->reportExists($state['cache_id']);
+
+        if ($saved_cache_is_readable) {
+            return $state;
+        }
+
+        // Recover a local JSONL without changing PrestaShop Configuration or
+        // issuing another request to Yuju. The report file is the source of truth.
+        $local_report = $this->file_store->discoverLatestValidReport();
+        if ($local_report !== null) {
+            $state['status'] = 'COMPLETED';
+            $state['cache_id'] = $local_report['cache_id'];
+            $state['product_count'] = (int) $local_report['product_count'];
+            $state['report_size_bytes'] = (int) $local_report['size_bytes'];
+            $state['report_downloaded_at'] = (int) $local_report['downloaded_at'];
+            $state['local_report_recovered'] = true;
+        }
+
+        return $state;
     }
 
     protected function getDailyQuota($today)
