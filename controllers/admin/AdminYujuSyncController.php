@@ -160,6 +160,7 @@ class AdminYujuSyncController extends ModuleAdminController
         parent::initContent();
 
         $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuSync',
             'yuju_module_dir' => _PS_MODULE_DIR_ . 'prestashopyuju/',
             'yuju_module_name' => 'prestashopyuju',
             'yuju_current_index' => self::$currentIndex,
