@@ -349,7 +349,7 @@ class YujuProductManager
 
             // Preserve the actionable subset separately: only linked products with differences
             // can be sent to Yuju. Unmatched products must never be created automatically.
-            if ($result['status'] !== 'synced') {
+            if ($result['status'] !== 'synced' && $result['status'] !== 'disabled') {
                 $report['unsynced_products'][] = $result;
             }
 
