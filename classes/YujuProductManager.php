@@ -50,6 +50,45 @@ class YujuProductManager
      */
     protected function loadFieldMappings()
     {
+        // Repair only known legacy defaults. Never overwrite an existing valid/custom mapping.
+        $legacy_mappings = [
+            ['name', 'title', 'name'],
+            ['ean13', 'barcode', 'ean'],
+            ['quantity', 'stock_quantity', 'stock'],
+            ['width', 'width', 'shipping_width'],
+            ['height', 'height', 'shipping_height'],
+            ['depth', 'length', 'shipping_depth'],
+            ['depth', 'depth', 'shipping_depth'],
+        ];
+        foreach ($legacy_mappings as $legacy) {
+            list($ps_field, $old_yuju_field, $new_yuju_field) = $legacy;
+            Db::getInstance()->execute('
+                UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping old_mapping
+                SET old_mapping.yuju_field = "' . pSQL($new_yuju_field) . '",
+                    old_mapping.updated_at = NOW()
+                WHERE old_mapping.prestashop_field = "' . pSQL($ps_field) . '"
+                  AND old_mapping.yuju_field = "' . pSQL($old_yuju_field) . '"
+                  AND NOT EXISTS (
+                    SELECT 1 FROM ' . _DB_PREFIX_ . 'yuju_product_mapping valid_mapping
+                    WHERE valid_mapping.prestashop_field = old_mapping.prestashop_field
+                      AND valid_mapping.yuju_field = "' . pSQL($new_yuju_field) . '"
+                      AND valid_mapping.id_mapping != old_mapping.id_mapping
+                  )
+            ');
+        }
+        Db::getInstance()->execute('
+            UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
+            SET is_active = 0, updated_at = NOW()
+            WHERE (prestashop_field = "description_short" AND yuju_field = "short_description")
+               OR (prestashop_field = "active" AND yuju_field = "status")
+               OR (prestashop_field = "wholesale_price" AND yuju_field = "cost_price")
+        ');
+        Db::getInstance()->execute('
+            UPDATE ' . _DB_PREFIX_ . 'yuju_product_mapping
+            SET sync_direction = "prestashop_to_yuju", updated_at = NOW()
+            WHERE sync_direction = "ps_to_yuju"
+        ');
+
         $this->field_mappings = Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
             WHERE is_active = 1
@@ -926,8 +965,11 @@ class YujuProductManager
         }
 
         // Set category if mapped
-        if (isset($yuju_product['category_id'])) {
-            $category_mapping = $this->getCategoryMappingByYujuId($yuju_product['category_id']);
+        $yuju_category_id = isset($yuju_product['id_category'])
+            ? $yuju_product['id_category']
+            : (isset($yuju_product['category_id']) ? $yuju_product['category_id'] : null);
+        if ($yuju_category_id !== null) {
+            $category_mapping = $this->getCategoryMappingByYujuId($yuju_category_id);
 
             if ($category_mapping) {
                 $product->id_category_default = $category_mapping['prestashop_category_id'];
@@ -960,8 +1002,12 @@ class YujuProductManager
             $ps_field = $mapping['prestashop_field'];
             $yuju_field = $mapping['yuju_field'];
 
-            // Get value from PrestaShop product
-            if (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'])) {
+            // StockAvailable is the source of truth for product quantity in PrestaShop.
+            if ($ps_field === 'quantity') {
+                $value = class_exists('StockAvailable')
+                    ? (int) StockAvailable::getQuantityAvailableByProduct((int) $product->id, 0)
+                    : 0;
+            } elseif (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'], true)) {
                 $value = isset($product->{$ps_field}[$default_lang]) ? $product->{$ps_field}[$default_lang] : '';
             } else {
                 $value = isset($product->{$ps_field}) ? $product->{$ps_field} : '';
@@ -983,7 +1029,7 @@ class YujuProductManager
             $category_mapping = $this->getCategoryMappingByPrestashopId($product->id_category_default);
 
             if ($category_mapping) {
-                $data['category_id'] = $category_mapping['yuju_category_id'];
+                $data['id_category'] = (int) $category_mapping['yuju_category_id'];
             }
         }
 
