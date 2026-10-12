@@ -168,7 +168,7 @@ class AdminYujuSyncController extends ModuleAdminController
         ]);
 
         // Include the sync panel template
-        $this->setTemplate('module:prestashopyuju/views/templates/admin/sync_info.tpl');
+        $this->setTemplate('sync_info.tpl');
     }
 
     /**
