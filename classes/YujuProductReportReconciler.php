@@ -100,7 +100,7 @@ class YujuProductReportReconciler
 
         foreach ($mappings as $mapping) {
             if (empty($mapping['is_active'])
-                || !in_array($mapping['sync_direction'], ['ps_to_yuju', 'bidirectional'], true)
+                || !in_array($mapping['sync_direction'], ['ps_to_yuju', 'prestashop_to_yuju', 'bidirectional'], true)
             ) {
                 continue;
             }

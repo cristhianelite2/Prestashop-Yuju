@@ -372,24 +372,30 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_reports` (
 
 -- Los datos por defecto ya se insertan arriba después de la creación de la tabla
 
--- Insert default product field mappings (ignore if already exist)
--- Solo campos aceptados por POST /products (docs Yuju create único / con variaciones)
+-- Default mappings use the field names defined by Yuju's official product model.
 INSERT IGNORE INTO `PREFIX_yuju_product_mapping` (`prestashop_field`, `yuju_field`, `field_type`, `sync_direction`, `transformation_rule`, `is_required`, `is_active`, `created_at`, `updated_at`) VALUES
 ('name', 'name', 'string', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('description', 'description', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('price', 'price', 'decimal', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
-('reference', 'sku', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
+('reference', 'sku', 'string', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('ean13', 'ean', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
+('upc', 'upc', 'string', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
+('quantity', 'stock', 'integer', 'bidirectional', 'none', 1, 1, NOW(), NOW()),
 ('weight', 'weight', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('width', 'shipping_width', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('height', 'shipping_height', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW()),
 ('depth', 'shipping_depth', 'decimal', 'bidirectional', 'none', 0, 1, NOW(), NOW());
 
--- Desactivar mapeos inválidos en instalaciones existentes (API Yuju no acepta estos campos)
+-- Deactivate only obsolete Yuju field names. Existing mappings are normalized safely
+-- at runtime by YujuProductManager::loadFieldMappings().
 UPDATE `PREFIX_yuju_product_mapping`
 SET `is_active` = 0, `updated_at` = NOW()
-WHERE `yuju_field` IN ('cost_price', 'active', 'stock_quantity', 'short_description', 'width', 'height', 'depth')
-   OR (`prestashop_field` = 'wholesale_price' AND `yuju_field` = 'cost_price')
+WHERE (`prestashop_field` = 'name' AND `yuju_field` = 'title')
+   OR (`prestashop_field` = 'ean13' AND `yuju_field` = 'barcode')
    OR (`prestashop_field` = 'quantity' AND `yuju_field` = 'stock_quantity')
-   OR (`prestashop_field` = 'active' AND `yuju_field` = 'active')
-   OR (`prestashop_field` = 'description_short' AND `yuju_field` = 'short_description');
+   OR (`prestashop_field` = 'width' AND `yuju_field` = 'width')
+   OR (`prestashop_field` = 'height' AND `yuju_field` = 'height')
+   OR (`prestashop_field` = 'depth' AND `yuju_field` IN ('depth', 'length'))
+   OR (`prestashop_field` = 'description_short' AND `yuju_field` = 'short_description')
+   OR (`prestashop_field` = 'active' AND `yuju_field` = 'status')
+   OR (`prestashop_field` = 'wholesale_price' AND `yuju_field` = 'cost_price');
