@@ -368,6 +368,8 @@ class YujuProductReportManager
             && $this->file_store->reportExists($state['cache_id']);
 
         if ($saved_cache_is_readable) {
+            $this->saveReportMetadata($state);
+
             return $state;
         }
 
@@ -384,6 +386,90 @@ class YujuProductReportManager
         }
 
         return $state;
+    }
+
+    /**
+     * Index a validated report in the module-owned table.
+     *
+     * The JSONL remains the source of truth and stays inside var/reports.
+     * No signed URL, product payload, or absolute server path is stored.
+     */
+    protected function saveReportMetadata($state)
+    {
+        if (empty($state['cache_id']) || !preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])) {
+            return false;
+        }
+
+        try {
+            $db = Db::getInstance();
+            $table = _DB_PREFIX_ . 'yuju_product_reports';
+            $table_sql = chr(96) . bqSQL($table) . chr(96);
+            $create_sql = "CREATE TABLE IF NOT EXISTS {$table_sql} (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `id_task` varchar(64) DEFAULT NULL,
+                `report_type` varchar(32) NOT NULL DEFAULT 'gral',
+                `trigger` enum('scheduled','manual','webhook') NOT NULL DEFAULT 'manual',
+                `status` enum('pending','processing','completed','failed','rejected','limit_reached') NOT NULL DEFAULT 'pending',
+                `products_count` int(11) NOT NULL DEFAULT 0,
+                `file_path` varchar(512) DEFAULT NULL,
+                `file_size` int(11) NOT NULL DEFAULT 0,
+                `download_url` text,
+                `error_message` text,
+                `meta_json` longtext,
+                `requested_at` datetime DEFAULT NULL,
+                `completed_at` datetime DEFAULT NULL,
+                `utc_day` char(10) DEFAULT NULL,
+                `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `unique_id_task` (`id_task`),
+                KEY `idx_status` (`status`),
+                KEY `idx_utc_day` (`utc_day`),
+                KEY `idx_report_type` (`report_type`),
+                KEY `idx_requested_at` (`requested_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+            if (!$db->execute($create_sql)) {
+                return false;
+            }
+
+            $relative_path = 'var/reports/' . $state['cache_id'] . '.jsonl';
+            $task_id = !empty($state['task_id']) ? (string) $state['task_id'] : null;
+            $where = "file_path = '" . pSQL($relative_path) . "'";
+            if ($task_id !== null) {
+                $where .= " OR id_task = '" . pSQL($task_id) . "'";
+            }
+            $existing_id = (int) $db->getValue('SELECT id FROM ' . $table_sql . ' WHERE (' . $where . ') ORDER BY id DESC');
+
+            $downloaded_at = isset($state['report_downloaded_at']) ? (int) $state['report_downloaded_at'] : time();
+            $meta = [
+                'cache_id' => $state['cache_id'],
+                'local_report_recovered' => !empty($state['local_report_recovered']),
+                'downloaded_at' => $downloaded_at,
+            ];
+            $row = [
+                'id_task' => $task_id,
+                'report_type' => 'gral',
+                'trigger' => 'manual',
+                'status' => 'completed',
+                'products_count' => isset($state['product_count']) ? (int) $state['product_count'] : 0,
+                'file_path' => pSQL($relative_path),
+                'file_size' => isset($state['report_size_bytes']) ? (int) $state['report_size_bytes'] : 0,
+                'error_message' => null,
+                'meta_json' => pSQL(json_encode($meta)),
+                'completed_at' => date('Y-m-d H:i:s', $downloaded_at),
+                'utc_day' => gmdate('Y-m-d', $downloaded_at),
+            ];
+
+            if ($existing_id > 0) {
+                return $db->update('yuju_product_reports', $row, 'id = ' . $existing_id);
+            }
+
+            return $db->insert('yuju_product_reports', $row);
+        } catch (Exception $e) {
+            // Report display must remain available even if the metadata table is unavailable.
+            return false;
+        }
     }
 
     protected function getDailyQuota($today)
