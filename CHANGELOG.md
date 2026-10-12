@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Añadido
+- La tabla de reconciliación permite filtrar por estado (por defecto, solo productos con diferencias), mostrar productos que no existen en Yuju, sincronizados correctamente, ambiguos, pendientes de revisión, deshabilitados o todos.
+- Paginación interactiva de 20, 50, 100 (predeterminado) o 500 productos por página, con navegación anterior/siguiente y conteo de resultados filtrados.
+- Contadores diferenciados para el total de productos en PrestaShop, productos correctamente sincronizados, productos que no están en Yuju y productos con diferencias o pendientes.
+
+### Seguridad y alcance
+- Los filtros y la paginación operan sobre el reporte de reconciliación en memoria; no crean productos en Yuju ni modifican tablas generales de PrestaShop.
+
+
 Todos los cambios notables de este proyecto serán documentados en este archivo.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
