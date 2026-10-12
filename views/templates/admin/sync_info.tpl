@@ -452,6 +452,26 @@ $(function() {
         });
     });
 
+    // Automatically load a validated local report when opening AdminYujuSync,
+    // so the user does not need to click "Ver reconciliación" on every visit.
+    ajaxAction('getYujuProductSyncReport', null, function(response) {
+        if (response && response.success && response.report) {
+            renderReconciliation(response.report, response.message || 'Informe local validado y reconciliación cargada.');
+            return;
+        }
+
+        // Keep the panel visible with actionable feedback instead of silently showing zeroes.
+        $report.removeClass('hidden');
+        showMessage(
+            response && response.message
+                ? response.message
+                : 'No hay un informe local validado disponible. Inicie un informe para cargar la reconciliación.',
+            'alert-info'
+        );
+        $loadBtn.hide();
+        $pushBtn.hide();
+    });
+
     // Auto-poll every 20s when report panel visible and polling is active
     setInterval(function() {
         if (typeof refreshSyncStatus === 'function') {
