@@ -228,15 +228,22 @@ $(function() {
                 if (startPolling) {
                     startAutoPoll();
                 }
-            } else if (status === 'COMPLETED') {
+            } else if (status === 'COMPLETED' && response.report_cached === true) {
                 stopAutoPoll();
-                showMessage('{l s='Report ready. Load the reconciliation to see differences.' mod='prestashopyuju' js=1}', 'alert-success');
+                showMessage('{l s='Report downloaded and ready. Load the reconciliation to see differences.' mod='prestashopyuju' js=1}', 'alert-success');
                 $pollBtn.hide();
                 $loadBtn.show();
                 $pushBtn.hide();
                 if (response.product_count !== undefined) {
                     $('#yuju-products-total').text(response.product_count);
                 }
+            } else if (status === 'COMPLETED') {
+                // Fail closed: remote status alone does not mean the local report is readable.
+                stopAutoPoll();
+                showMessage(response.message || '{l s='Yuju finished the report, but it is not available in the local cache yet. Check the download before reconciling.' mod='prestashopyuju' js=1}', 'alert-warning');
+                $pollBtn.show();
+                $loadBtn.hide();
+                $pushBtn.hide();
             } else if (status === 'DOWNLOAD_ERROR') {
                 stopAutoPoll();
                 showMessage('{l s='Report ready but download failed validation. Retry the download.' mod='prestashopyuju' js=1}', 'alert-warning');
