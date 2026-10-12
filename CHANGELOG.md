@@ -7,6 +7,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## 2026-10-12
 
+### Corregido
+- La reconciliación ahora devuelve todos los productos de PrestaShop para mostrar en la tabla los sincronizados sin diferencias, los que tienen diferencias y los que no se encuentran en Yuju; la lista de envío sigue limitada a productos vinculados con diferencias.
+- Al abrir la reconciliación se intenta recuperar la descarga del informe completado si la caché local falta, reutilizando la tarea existente.
+
+
 ### Añadido
 - Flujo de sincronización basado en **reporte general asíncrono** de Yuju (`POST /products-gral-report`): "Iniciar sincronización" solicita el reporte, espera a que se complete (polling), descarga el JSONL en caché privada con validación SSRF, y reconcilia catálogo PrestaShop contra Yuju por ID guardado o SKU único.
 - Matching determinista: ID Yuju existente tiene prioridad; SKU de padre o variación enlaza solo si es único; SKU ambiguos o duplicados quedan pendientes para resolución manual.
