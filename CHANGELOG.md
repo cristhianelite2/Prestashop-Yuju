@@ -89,6 +89,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Cambiado
+- Los informes generales de productos de Yuju se guardan en `var/reports/` dentro del módulo, con permisos restrictivos, en lugar del directorio temporal del sistema.
+
+### Seguridad
+- Se bloquea el acceso HTTP directo a `var/`, donde se almacenan los informes descargados.
+
+
 ### Corregido
 - La reconciliación devuelve todos los productos activos de PrestaShop para mostrar sincronizados sin diferencias, productos con diferencias y productos no encontrados en Yuju; la lista de envío sigue limitada a productos vinculados con diferencias.
 - Al abrir la reconciliación se intenta recuperar la descarga de un informe completado si falta la caché local, reutilizando la tarea existente.
