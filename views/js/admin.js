@@ -35,6 +35,11 @@ var YujuAdmin = {
         logInterval: null
     },
 
+    getStoreId: function(store) {
+        return store.id_account || store.id || store.store_id || store.shop_id
+            || store.storeId || store.shopId || store.uuid || store.code || 'N/A';
+    },
+
     /**
      * Initialize the admin interface
      */
@@ -212,6 +217,9 @@ var YujuAdmin = {
                 var needsAuth = !!data.needs_auth;
                 var state = data.state || null;
                 var audit = data.credential_audit;
+                var escapeHtml = function(value) {
+                    return $('<div>').text(value == null ? '' : String(value)).html();
+                };
 
                 // Auditoría de credenciales guardadas (solo longitudes, sin valores).
                 var renderAudit = function() {
@@ -237,7 +245,7 @@ var YujuAdmin = {
                     // hay token utilizable: Yuju solo lo emite con el `code`.
                     html += '<strong>Conectividad con Yuju: OK</strong><br>';
                     html += '<div style="margin-top: 10px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;">'
-                        + (response.message || 'Sin token de acceso todavía.') + '</div>';
+                        + escapeHtml(response.message || 'Sin token de acceso todavía.') + '</div>';
                     html += renderAudit();
                     $result.removeClass().addClass('alert alert-success').html(html).show();
                     return;
@@ -253,35 +261,6 @@ var YujuAdmin = {
                             : (authLevel === 'token' ? 'token de API' : 'n/d'))
                         + '</small><br>';
 
-                    // Estado de la vinculación con el monitor de telemetría.
-                    var monitor = data.monitor;
-                    if (monitor) {
-                        html += '<small>Monitor de telemetría: '
-                            + (monitor.success
-                                ? (monitor.already_registered ? 'registrada (clave recuperada)' : 'vinculada')
-                                : (monitor.attempted ? 'no se pudo vincular' : 'sin cambios'))
-                            + (monitor.message ? ' — ' + monitor.message : '')
-                            + '</small><br>';
-                    }
-                    
-                    // Show debug info
-                    if (response.data && response.data.debug_info) {
-                        var debug = response.data.debug_info;
-                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">';
-                        html += '<strong>Información de Debug:</strong><br>';
-                        html += '<small>';
-                        html += 'URL Base: ' + (debug.base_url || 'N/A') + '<br>';
-                        html += 'Entorno: ' + (debug.environment || 'N/A') + '<br>';
-                        html += 'Conexión exitosa: ' + (debug.connection_test_result && debug.connection_test_result.success ? 'Sí' : 'No') + '<br>';
-                        html += 'Cantidad de tiendas: ' + (debug.stores_count || 0) + '<br>';
-                        if (typeof debug.stores_raw !== 'undefined') {
-                            html += 'Respuesta cruda de Yuju (account): <code style="font-size:11px; word-break:break-all;">'
-                                + JSON.stringify(debug.stores_raw) + '</code><br>';
-                        }
-                        html += '</small>';
-                        html += '</div>';
-                    }
-                    
                     var stores = (response.data && response.data.stores) || [];
                     if (!Array.isArray(stores)) {
                         stores = [stores];
@@ -289,19 +268,16 @@ var YujuAdmin = {
                     if (stores.length > 0) {
                         html += '<div style="margin-top: 10px;"><strong>Tiendas disponibles:</strong><ul>';
                         stores.forEach(function(store) {
-                            // Forma no reconocida (p. ej. un listado anidado):
-                            // se muestra el JSON tal cual para poder ajustarlo.
+                            // Evita insertar directamente valores de Yuju en el HTML.
                             if (store === null || typeof store !== 'object' || Array.isArray(store)) {
-                                html += '<li><code style="font-size:11px; word-break:break-all;">'
-                                    + JSON.stringify(store) + '</code></li>';
+                                html += '<li>' + escapeHtml('Tienda no reconocida') + '</li>';
                                 return;
                             }
                             var name = store.name || store.title || store.shop || store.shop_name
                                 || store.store_name || store.storeName || store.shopName
                                 || store.company_name || store.account_name || 'Sin nombre';
-                            var id = store.id || store.store_id || store.shop_id
-                                || store.storeId || store.shopId || store.uuid || store.code || 'N/A';
-                            html += '<li>' + name + ' (ID: ' + id + ')</li>';
+                            var id = self.getStoreId(store);
+                            html += '<li>' + escapeHtml(name) + ' (ID: ' + escapeHtml(id) + ')</li>';
                         });
                         html += '</ul></div>';
                     } else {
@@ -319,43 +295,15 @@ var YujuAdmin = {
                         heading = 'Yuju devolvió un error interno:';
                     }
 
-                    html += '<strong>' + heading + '</strong> ' + (response.message || 'Error desconocido') + '<br>';
+                    html += '<strong>' + heading + '</strong> ' + escapeHtml(response.message || 'Error desconocido') + '<br>';
                     html += renderAudit();
-                    
-                    // Show debug info for errors
-                    if (response.debug_info) {
-                        var debug = response.debug_info;
-                        html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
-                        html += '<strong>Información de Debug:</strong><br>';
-                        html += '<small>';
-                        if (debug.base_url) html += 'URL Base: ' + debug.base_url + '<br>';
-                        if (debug.environment) html += 'Entorno: ' + debug.environment + '<br>';
-                        if (debug.connection_test_result) {
-                            html += 'Resultado de conexión: ' + JSON.stringify(debug.connection_test_result) + '<br>';
-                        }
-                        if (debug.exception) {
-                            html += 'Error: ' + debug.exception.message + '<br>';
-                            html += 'Archivo: ' + debug.exception.file + ':' + debug.exception.line + '<br>';
-                        }
-                        html += '</small>';
-                        html += '</div>';
-                    }
                     
                     $result.removeClass().addClass('alert ' + (needsAuth ? 'alert-warning' : 'alert-danger')).html(html).show();
                 }
             },
-            error: function(xhr, status, error) {
-                var html = '<strong>Error:</strong> No se pudo conectar con la API de Yuju<br>';
-                html += '<div class="debug-info" style="margin-top: 10px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">';
-                html += '<strong>Error AJAX:</strong><br>';
-                html += '<small>';
-                html += 'Status: ' + status + '<br>';
-                html += 'Error: ' + error + '<br>';
-                html += 'Response: ' + (xhr.responseText || 'N/A') + '<br>';
-                html += '</small>';
-                html += '</div>';
-                
-                $result.removeClass().addClass('alert alert-danger').html(html).show();
+            error: function() {
+                $result.removeClass().addClass('alert alert-danger')
+                    .text('No se pudo completar la prueba de conectividad. Inténtalo de nuevo.').show();
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-plug"></i> Probar Conectividad');

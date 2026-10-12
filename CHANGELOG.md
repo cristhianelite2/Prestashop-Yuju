@@ -12,6 +12,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ### Corregido
 - Se escapan en Smarty las llaves del objeto AJAX del panel de sincronización para evitar un error de compilación de la plantilla.
+- La prueba de conectividad muestra `id_account` como ID de tienda y ya no expone en pantalla el resultado de telemetría ni el bloque de depuración/respuesta cruda de Yuju.
 
 ## 2026-10-11
 

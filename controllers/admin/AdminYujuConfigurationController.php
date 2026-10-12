@@ -289,19 +289,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
             // Registro autorizado en el monitor: solo cuando la validación
             // existente fue satisfactoria (state=connected sin needs_auth).
-            // El monitor nunca altera la respuesta de esta petición, pero el
-            // resultado sí se devuelve en `data.monitor` para que el panel muestre
-            // si la vinculación se completó y qué respondió el monitor.
+            // El intento es best-effort y su resultado no se muestra en el panel.
             try {
-                $monitor_result = YujuMonitor::attemptRegistration($connection_test, true);
+                YujuMonitor::attemptRegistration($connection_test, true);
             } catch (Throwable $e) {
                 // Best-effort: un monitor caído no interrumpe la configuración.
-                $monitor_result = [
-                    'attempted' => false,
-                    'success' => false,
-                    'already_registered' => false,
-                    'message' => 'No se pudo intentar la vinculación con el monitor.',
-                ];
             }
 
             $response = [
@@ -311,8 +303,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     'connection' => $connection_test,
                     'stores' => $stores_list,
                     'stores_count' => count($stores_list),
-                    // Estado de la vinculación con el monitor de telemetría.
-                    'monitor' => $monitor_result,
                     // Auditoría de credenciales guardadas (solo longitudes, sin valores):
                     // permite diagnosticar sin gastar un code de un solo uso.
                     'credential_audit' => (new YujuOAuth())->getCredentialAudit(),
@@ -321,14 +311,6 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     'auth_level' => isset($connection_test['data']['auth_level'])
                         ? $connection_test['data']['auth_level']
                         : null,
-                    'debug_info' => [
-                        'environment' => (string) Configuration::get('YUJU_ENVIRONMENT'),
-                        'stores_count' => count($stores_list),
-                        // Respuesta cruda del endpoint `account` de Yuju: permite
-                        // ver el esquema real de las tiendas cuando los campos
-                        // mostrados no coinciden con lo que devuelve la API.
-                        'stores_raw' => $stores,
-                    ],
                 ],
             ];
         } catch (Exception $e) {
