@@ -10,6 +10,9 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Añadido
 - En el panel de sincronización, botón para consultar productos de Yuju, ver cuáles tienen un ID vinculado en `yuju_product_status` y cuántos faltan. Se pueden importar únicamente los que no están vinculados.
 
+### Corregido
+- Se escapan en Smarty las llaves del objeto AJAX del panel de sincronización para evitar un error de compilación de la plantilla.
+
 ## 2026-10-11
 
 ### Reglas de coordinación (AGENTS.md)

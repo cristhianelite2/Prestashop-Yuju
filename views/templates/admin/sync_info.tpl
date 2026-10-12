@@ -200,7 +200,7 @@ $(function() {
             url: ajaxUrl,
             type: 'POST',
             dataType: 'json',
-            data: {ajax: 1, action: action}
+            data: {ldelim}ajax: 1, action: action{rdelim}
         }).done(function(response) {
             if (!response || !response.success) {
                 var errorMessage = response && response.message ? response.message : '{l s='Could not retrieve products from Yuju.' mod='prestashopyuju' js=1}';
