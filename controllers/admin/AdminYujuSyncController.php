@@ -327,7 +327,9 @@ class AdminYujuSyncController extends ModuleAdminController
             }
 
             // Read the cached rows and build the index.
-            if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+            if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+                // A discovered local report is valid even when its original task ID
+                // was lost from Configuration. The private JSONL is the source of truth.
                 $report_products = $report_manager->getCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
@@ -336,7 +338,11 @@ class AdminYujuSyncController extends ModuleAdminController
 
                 // A previous module version could have accepted an empty file as a valid cache.
                 // Force a fresh download for the same task instead of returning a misleading cache error.
-                if (empty($report_products) && method_exists($report_manager, 'recoverReportDownload')) {
+                if (empty($report_products)
+                    && empty($state['local_report_recovered'])
+                    && !empty($state['task_id'])
+                    && method_exists($report_manager, 'recoverReportDownload')
+                ) {
                     $recovery_result = $report_manager->recoverReportDownload();
                     $state = $report_manager->getStoredState();
 
