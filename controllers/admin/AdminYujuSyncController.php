@@ -161,6 +161,9 @@ class AdminYujuSyncController extends ModuleAdminController
 
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuSync',
+            'is_sync_running' => $this->sync_manager->isSyncRunning(),
+            'last_sync_date' => Configuration::get('YUJU_LAST_SYNC_DATE'),
+            'auto_sync_enabled' => (bool) Configuration::get('YUJU_AUTO_SYNC'),
             'yuju_module_dir' => _PS_MODULE_DIR_ . 'prestashopyuju/',
             'yuju_module_name' => 'prestashopyuju',
             'yuju_current_index' => self::$currentIndex,
