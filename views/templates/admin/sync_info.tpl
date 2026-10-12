@@ -313,7 +313,7 @@ $(function() {
     }
 
     function canSelectUrgentUpdate(product) {
-        return getProductStatus(product) === 'differences' && !!product.syncable && !!product.yuju_product_id &&
+        return getProductStatus(product) === 'differences' && !!product.yuju_product_id &&
             !!product.prestashop_product_id && getUrgentDifferences(product).length > 0;
     }
 
