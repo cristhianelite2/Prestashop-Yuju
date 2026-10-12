@@ -14,4 +14,8 @@ if (strpos($template, 'data: {ldelim}ajax: 1, action: action{rdelim}') === false
     throw new RuntimeException('The AJAX data object must use Smarty delimiter escapes.');
 }
 
+if (strpos($template, 'report.all_products || report.unsynced_products') === false) {
+    throw new RuntimeException('The reconciliation table must render all products, not only unsynchronized products.');
+}
+
 echo "Synchronization template Smarty test passed.\n";
