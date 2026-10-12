@@ -101,6 +101,8 @@ class YujuConfig
             'YUJU_ENABLE_CATEGORY_SYNC' => true,
             'YUJU_ENABLE_PRODUCT_SYNC' => true,
             'YUJU_ENABLE_ORDER_SYNC' => true,
+            'YUJU_PRODUCTS_REPORT_STATE' => '',
+            'YUJU_PRODUCTS_REPORT_QUOTA' => '',
 
             // Notification Settings
             'YUJU_ENABLE_EMAIL_NOTIFICATIONS' => true,

@@ -75,18 +75,45 @@ class YujuApiClient
     }
 
     /**
+     * Create a Yuju general-products report without retrying the quota-limited POST.
+     */
+    public function createProductGeneralReport()
+    {
+        return $this->makeRequest('POST', 'products-gral-report', [], [], 0);
+    }
+
+    /**
+     * Check the status of a Yuju general-products report.
+     *
+     * @param string $task_id
+     *
+     * @return array
+     */
+    public function getProductGeneralReportStatus($task_id)
+    {
+        $task_id = (string) $task_id;
+
+        if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $task_id)) {
+            throw new InvalidArgumentException('Invalid Yuju report task ID.');
+        }
+
+        return $this->get('products-gral-report/' . rawurlencode($task_id));
+    }
+
+    /**
      * Método principal para realizar peticiones HTTP.
      */
-    private function makeRequest($method, $endpoint, $data = null, $params = [])
+    protected function makeRequest($method, $endpoint, $data = null, $params = [], $max_retries = null)
     {
         $url = $this->buildUrl($endpoint, $params);
         $headers = $this->getHeaders();
+        $retry_limit = $max_retries === null ? $this->max_retries : max(0, (int) $max_retries);
 
         $this->logger->info('Making API request', [
             'method' => $method,
             'endpoint' => $endpoint,
             'url' => $url,
-            'headers' => $headers,
+            'headers' => self::sanitizeHeadersForLog($headers),
             'data' => $data,
             'params' => $params
         ]);
@@ -97,13 +124,14 @@ class YujuApiClient
         do {
             $response = $this->executeRequest($method, $url, $headers, $data);
 
+            $safe_response = self::sanitizeResponseForLog($endpoint, $response);
             $this->logger->info('API response received', [
                 'method' => $method,
                 'endpoint' => $endpoint,
                 'retry_count' => $retry_count,
                 'http_code' => $response['http_code'] ?? 'unknown',
                 'success' => $response['success'] ?? false,
-                'response' => $response
+                'response' => $safe_response
             ]);
 
             // Un error de autenticación no se resuelve reintentando: se corta
@@ -111,7 +139,7 @@ class YujuApiClient
             $http_code = (int) ($response['http_code'] ?? 0);
 
             if ($response['success']
-                || $retry_count >= $this->max_retries
+                || $retry_count >= $retry_limit
                 || $http_code === 401
                 || $http_code === 403
             ) {
@@ -124,12 +152,12 @@ class YujuApiClient
                 'max_retries' => $this->max_retries
             ]);
             sleep(pow(2, $retry_count)); // Exponential backoff
-        } while ($retry_count <= $this->max_retries);
+        } while ($retry_count <= $retry_limit);
 
         $execution_time = microtime(true) - $start_time;
 
         // Log de la petición
-        $this->logRequest($method, $endpoint, $data, $response, $execution_time);
+        $this->logRequest($method, $endpoint, $data, self::sanitizeResponseForLog($endpoint, $response), $execution_time);
 
         YujuMonitor::emit('api.request', [
             'method' => $method,
@@ -138,6 +166,60 @@ class YujuApiClient
             'status' => !empty($response['success']) ? 'success' : 'error',
             'durationMs' => (int) round($execution_time * 1000),
         ]);
+
+        return $response;
+    }
+
+    /**
+     * Redact bearer-like credentials before writing request metadata to logs.
+     *
+     * @param array $headers
+     *
+     * @return array
+     */
+    protected static function sanitizeHeadersForLog($headers)
+    {
+        foreach ($headers as &$header) {
+            if (stripos($header, 'Authorization:') === 0) {
+                $header = 'Authorization: [REDACTED]';
+            }
+        }
+        unset($header);
+
+        return $headers;
+    }
+
+    /**
+     * Redact report download links; they may contain short-lived signatures.
+     *
+     * @param string $endpoint
+     * @param array $response
+     *
+     * @return array
+     */
+    protected static function sanitizeResponseForLog($endpoint, $response)
+    {
+        if (strpos(ltrim($endpoint, '/'), 'products-gral-report') !== 0 || empty($response['data'])) {
+            return $response;
+        }
+
+        $redact_links = function ($value) use (&$redact_links) {
+            if (!is_array($value)) {
+                return $value;
+            }
+
+            foreach ($value as $key => $item) {
+                if (in_array(strtolower((string) $key), ['url', 'download_url', 'report_url', 'signed_url'], true)) {
+                    $value[$key] = '[REDACTED]';
+                } else {
+                    $value[$key] = $redact_links($item);
+                }
+            }
+
+            return $value;
+        };
+
+        $response['data'] = $redact_links($response['data']);
 
         return $response;
     }

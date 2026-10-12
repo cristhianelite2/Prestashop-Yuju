@@ -24,6 +24,7 @@ require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuCategoryManager.php';
 require_once dirname(__FILE__) . '/YujuProductManager.php';
+require_once dirname(__FILE__) . '/YujuProductReportManager.php';
 
 class YujuSyncManager
 {
@@ -31,6 +32,7 @@ class YujuSyncManager
     private $logger;
     private $category_manager;
     private $product_manager;
+    private $product_report_manager;
     private $config;
 
     public function __construct()
@@ -39,6 +41,7 @@ class YujuSyncManager
         $this->logger = new YujuLogger();
         $this->category_manager = new YujuCategoryManager();
         $this->product_manager = new YujuProductManager();
+        $this->product_report_manager = new YujuProductReportManager($this->api_client);
         $this->loadConfig();
     }
 
@@ -132,6 +135,22 @@ class YujuSyncManager
     public function getYujuProductSyncReport()
     {
         return $this->product_manager->getYujuProductSyncReport();
+    }
+
+    /**
+     * Start or resume Yuju's quota-limited general product report.
+     */
+    public function startYujuProductReport()
+    {
+        return $this->product_report_manager->startOrResumeReport();
+    }
+
+    /**
+     * Poll the currently persisted Yuju product report task.
+     */
+    public function pollYujuProductReport()
+    {
+        return $this->product_report_manager->pollReport();
     }
 
     /**
