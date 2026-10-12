@@ -157,21 +157,21 @@ $(function() {
     var $report = $('#yuju-product-sync-report');
     var ajaxUrl = $inspectButton.data('ajax-url');
 
-    function getYujuSyncErrorGuidance(message) {
+    function getYujuSyncErrorGuidance(message, endpoint) {
         var signatureError = /IncompleteSignatureException|Authorization header requires ['"](?:Credential|Signature|SignedHeaders)['"] parameter/i.test(message || '');
 
-        if (!signatureError) {
+        if (!signatureError || endpoint !== 'GET /products') {
             return null;
         }
 
         return {
-            title: 'El módulo está intentando listar productos por un endpoint que no está documentado.',
-            explanation: 'La prueba de conectividad confirma que el token funciona con account y webhook-sub. La solicitud que falla es GET /products; la documentación pública de Yuju no describe ese endpoint como listado de catálogo. No es motivo para cambiar las credenciales.',
+            title: 'No se pudo consultar el listado de productos.',
+            explanation: 'GET /products devolvió un error al procesar Authorization. Si «Probar Conectividad» acaba de pasar, el token funciona con GET /account y GET /webhook-sub; eso no confirma qué autenticación o permisos exige el endpoint de productos. La documentación pública consultada no describe GET /products como listado de catálogo.',
             steps: [
-                'No cambies el Client ID ni el Secret, y no regeneres el token: la conexión con Yuju ya funciona.',
-                'Para obtener ID de producto, SKU, stock y precio, Yuju documenta GET /products-offer-report. Ese reporte está limitado a una solicitud cada 12 horas.',
-                'Para obtener datos generales de productos y variaciones, Yuju documenta POST /products-gral-report. Es asíncrono: se consulta el estado por id_task y el reporte puede solicitarse como máximo dos veces al día. PrestaShop debe adaptarse a ese flujo antes de importar el catálogo completo.',
-                'Si otros conectores de tu cuenta listan el catálogo directamente, pide a Yuju el endpoint GET oficialmente soportado para ese fin. No compartas el token, Client Secret ni el código OAuth.'
+                'No cambies el Client ID ni el Secret, ni regeneres el token solo por este error: la prueba ya confirmó conexión con otros endpoints de Yuju.',
+                'Si necesitas comparar ID, SKU, stock y precio, puedes usar GET /products-offer-report. El reporte está limitado a una solicitud cada 12 horas y no contiene todos los datos para crear un producto completo en PrestaShop.',
+                'Para obtener datos generales y variaciones, existe POST /products-gral-report. Es asíncrono: se consulta el estado con id_task y tiene un máximo de dos solicitudes al día. PrestaShop tendría que adaptarse a ese flujo antes de importar el catálogo completo.',
+                'Si necesitas el listado directo, consulta con Yuju qué endpoint, método, esquema de autorización y permisos deben usarse. Comparte método, URL, error HTTP, hora y Request ID si está disponible; nunca envíes tokens, Client Secret ni código OAuth.'
             ],
             offerReportUrl: 'https://api-docs.yuju.io/docs/obtener-oferta-de-productos',
             generalReportUrl: 'https://api-docs.yuju.io/docs/obtener-informacion-general',
@@ -185,7 +185,7 @@ $(function() {
             .toggleClass('alert-danger', !!isError)
             .toggleClass('alert-info', !isError && hasUnsyncedProducts)
             .toggleClass('alert-success', !isError && !hasUnsyncedProducts);
-        var guidance = isError ? getYujuSyncErrorGuidance(message) : null;
+        var guidance = isError ? getYujuSyncErrorGuidance(message, 'GET /products') : null;
 
         if (!guidance) {
             $message.text(message);

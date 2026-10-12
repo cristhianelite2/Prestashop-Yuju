@@ -3,7 +3,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 const template = fs.readFileSync('views/templates/admin/sync_info.tpl', 'utf8');
-const start = template.indexOf('function getYujuSyncErrorGuidance(message) {');
+const start = template.indexOf('function getYujuSyncErrorGuidance(message, endpoint) {');
 const end = template.indexOf('function renderProductSyncMessage(', start);
 assert.notStrictEqual(start, -1, 'The synchronization template should define its actionable error helper.');
 assert.notStrictEqual(end, -1, 'The synchronization template should keep the helper beside error rendering.');
@@ -11,23 +11,30 @@ const helperSource = template.slice(start, end).trim();
 const getGuidance = vm.runInNewContext('(' + helperSource + ')');
 
 const guidance = getGuidance(
-    "Authorization header requires 'Credential' parameter. Authorization header requires 'Signature' parameter."
+    "Authorization header requires 'Credential' parameter. Authorization header requires 'Signature' parameter.",
+    'GET /products'
 );
 
 assert.ok(guidance, 'AWS SigV4 errors should produce actionable instructions.');
 assert.ok(guidance.steps.length >= 3, 'The guidance should tell the site owner what to do.');
 assert.match(guidance.explanation, /GET \/products/);
+assert.match(guidance.explanation, /no confirma|no demuestra/i);
 assert.match(guidance.offerReportUrl, /obtener-oferta-de-productos/);
 assert.match(guidance.generalReportUrl, /obtener-informacion-general/);
 assert.match(guidance.supportUrl, /^https:\/\/help\.yuju\.io\//);
 assert.match(guidance.supportEmail, /^mailto:soporte@yuju\.io$/);
 assert.match(guidance.steps.join(' '), /12 horas/);
-assert.match(guidance.steps.join(' '), /dos veces al día/);
+assert.match(guidance.steps.join(' '), /dos (?:veces|solicitudes) al día/);
 assert.strictEqual(
-    getGuidance('A different API error'),
+    getGuidance("Authorization header requires 'Credential' parameter.", 'GET /account'),
+    null,
+    'SigV4 guidance should only appear for the product-list request.'
+);
+assert.strictEqual(
+    getGuidance('A different API error', 'GET /products'),
     null,
     'Unrelated API errors should keep their original message.'
 );
-assert.match(template, /getYujuSyncErrorGuidance\(message\)/, 'The synchronization error view should render the guidance.');
+assert.match(template, /getYujuSyncErrorGuidance\(message, 'GET \/products'\)/, 'The synchronization error view should render the guidance only for product listing.');
 
 console.log('Yuju sync error guidance tests passed.');
