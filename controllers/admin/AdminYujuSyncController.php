@@ -418,7 +418,7 @@ class AdminYujuSyncController extends ModuleAdminController
             $report_manager = $this->sync_manager->getProductReportManager();
             $state = $report_manager->getStoredState();
 
-            if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
+            if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
                 $report_products = $report_manager->getCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
