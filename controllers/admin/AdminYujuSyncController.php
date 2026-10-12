@@ -303,8 +303,15 @@ class AdminYujuSyncController extends ModuleAdminController
             $report_index = null;
             $report_products = null;
 
-            // Get the report index
+            // Recover the existing report download if its state says completed but the local cache is missing.
+            // pollReport(true) returns immediately when the cache is valid and reuses the same task otherwise.
             $state = $report_manager->getStoredState();
+            if (!empty($state['task_id']) && in_array($state['status'], ['COMPLETED', 'DOWNLOAD_ERROR', 'DOWNLOAD_EXPIRED'], true)) {
+                $report_manager->pollReport(true);
+                $state = $report_manager->getStoredState();
+            }
+
+            // Get the report index
             if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
                 // We need to access the private method or rebuild the index
                 // For now, get the report and build the index
