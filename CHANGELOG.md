@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- La reconciliación de AdminYujuSync carga automáticamente el último reporte JSONL local validado, incluso si falta el ID de tarea guardado.
+- Los metadatos del reporte local se registran o actualizan en la tabla propia `yuju_product_reports`; el archivo y sus productos permanecen en `var/reports/`.
+- Se crea la tabla de metadatos del módulo si no existe, sin modificar tablas generales de PrestaShop ni almacenar URLs firmadas o rutas absolutas.
+
+
+## [Unreleased]
+
 - Recuperación de informes JSONL válidos desde `var/reports/` cuando el estado guardado ya no referencia el archivo, sin sobrescribir configuración ni solicitar un nuevo reporte a Yuju.
 - La recuperación local valida cada candidato y omite archivos incompletos, vacíos, inválidos o fuera del límite de tamaño.
 - Se conserva `yuju_product_reports` como candidata para metadatos de reportes; no se eliminan tablas automáticamente sin verificar datos y referencias en cada instalación.
