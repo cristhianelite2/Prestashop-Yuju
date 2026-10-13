@@ -410,7 +410,7 @@ $(function() {
                 });
                 showMessage(
                     (response.message || '{l s='Envío completado.' mod='prestashopyuju' js=1}') +
-                    (failed ? ' ' + failed + ' {l s='failed.' mod='prestashopyuju' js=1}' : ''),
+                    (failed ? ' ' + failed + ' {l s='falló.' mod='prestashopyuju' js=1}' : ''),
                     failed ? 'alert-warning' : 'alert-success'
                 );
                 if (response.report) {
