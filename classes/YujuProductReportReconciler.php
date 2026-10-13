@@ -123,7 +123,7 @@ class YujuProductReportReconciler
             }
 
             // A report may legitimately omit fields that its endpoint does not expose.
-            // Do not block an update of comparable urgent fields (for example name) just
+            // Do not block an update of comparable fields (for example stock) just
             // because price or stock was not included in this particular report payload.
             if (!array_key_exists($field, $yuju_data)) {
                 continue;
