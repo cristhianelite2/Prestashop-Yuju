@@ -378,7 +378,6 @@
     $(function () {
         var ajaxUrl = '{$ajax_url|escape:'javascript':'UTF-8'}';
         var token = '{$token|escape:'javascript':'UTF-8'}';
-        var adminYujuToken = '{$admin_yuju_token|escape:'javascript':'UTF-8'}';
 
         function showUpdateAlert(type, message) {
             $('#yuju-update-alert')
