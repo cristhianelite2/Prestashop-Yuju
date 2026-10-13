@@ -69,6 +69,12 @@
                                 Estado de Productos
                             </a>
                         </li>
+                        <li class="{if $current_controller == 'AdminYujuOrderStatusMapping'}active{/if}">
+                            <a href="{$link->getAdminLink('AdminYujuOrderStatusMapping')|escape:'html':'UTF-8'}">
+                                <i class="icon-exchange"></i>
+                                Mapeo de estados de pedidos
+                            </a>
+                        </li>
                         <li class="{if $current_controller == 'AdminYujuWebhook'}active{/if}">
                             <a href="{$link->getAdminLink('AdminYujuWebhook')|escape:'html':'UTF-8'}">
                                 <i class="icon-link"></i>
