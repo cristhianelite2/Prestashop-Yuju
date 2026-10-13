@@ -320,6 +320,61 @@ class YujuProductReportFileStore
     }
 
 
+    /**
+     * Find the newest valid offer report already stored locally.
+     *
+     * This lets the module recover after an upgrade or a missing Configuration
+     * pointer without requesting another report URL from Yuju.
+     *
+     * @return array|null
+     */
+    public function discoverLatestValidOfferReport()
+    {
+        $this->ensurePrivateDirectory();
+        $paths = glob($this->directory . DIRECTORY_SEPARATOR . '*.json');
+
+        if (!is_array($paths) || !$paths) {
+            return null;
+        }
+
+        usort($paths, function ($left, $right) {
+            return (int) filemtime($right) <=> (int) filemtime($left);
+        });
+
+        foreach ($paths as $path) {
+            $cache_id = basename($path, '.json');
+            if (is_link($path) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+                continue;
+            }
+
+            $size = filesize($path);
+            if ($size === false || $size <= 0 || $size > $this->max_report_bytes) {
+                continue;
+            }
+
+            try {
+                $products = $this->readOfferProducts($cache_id);
+            } catch (Exception $e) {
+                // Ignore old URL-response payloads, invalid JSON and partial files.
+                continue;
+            }
+
+            if (!$products) {
+                continue;
+            }
+
+            return [
+                'cache_id' => $cache_id,
+                'product_count' => count($products),
+                'report_size_bytes' => (int) $size,
+                'report_downloaded_at' => (int) filemtime($path),
+                'saved_at' => (int) filemtime($path),
+            ];
+        }
+
+        return null;
+    }
+
     /** Parse the downloaded offer JSON. Supports Yuju's JSON array and JSONL. */
     public function readOfferProducts($cache_id)
     {
