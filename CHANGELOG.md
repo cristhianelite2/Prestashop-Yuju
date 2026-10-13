@@ -1,3 +1,16 @@
+## [1.1.6] - 2026-10-13
+
+### Corregido
+- El catálogo de estados se reconcilia desde Yuju: incluye productos padre y variaciones, enlaza por SKU cuando la coincidencia es única y deja `prestashop_product_id` en `NULL` cuando no existe una relación segura.
+- Se guarda el nombre de Yuju y la combinación de PrestaShop asociada a cada variación.
+- Una sincronización enviada correctamente queda en estado `synced`; la reconciliación posterior puede volver a señalar diferencias detectadas por un reporte actualizado.
+
+### Cambiado
+- `ps_yuju_product_status` permite múltiples filas por producto PrestaShop, ya que cada variación de Yuju tiene su propia fila.
+- Se elimina `sync_direction` de la tabla de estados y de su interfaz.
+- La reconciliación elimina filas obsoletas que no están en el reporte actual de Yuju.
+- Se añade migración para tiendas existentes al actualizar el módulo a 1.1.6.
+
 # Changelog
 
 ## [Unreleased]
