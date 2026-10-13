@@ -645,7 +645,6 @@ $(function() {
                 $startBtn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Generando informe general...');
             } else if (response && response.success && response.status === 'COMPLETED' && response.report_cached === true) {
                 $startBtn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Completando reportes...');
-                finishCombinedWorkflow();
             } else {
                 workflowRunning = false;
                 setLoading($startBtn, false);
