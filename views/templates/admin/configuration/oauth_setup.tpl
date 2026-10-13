@@ -29,7 +29,7 @@
                     <i class="icon-check"></i>
                     {l s='Conexión exitosa con la API de Yuju' mod='prestashopyuju'}
                     <br>
-                    <small>{l s='Conectado como:' mod='prestashopyuju'} {$oauth_status.user_info.name|default:'Unknown'|escape:'html':'UTF-8'}</small>
+                    <small>{l s='Conectado como:' mod='prestashopyuju'} {$oauth_status.user_info.name|default:'Desconocido'|escape:'html':'UTF-8'}</small>
                 </div>
                 
                 <div class="row">
@@ -39,7 +39,7 @@
                             <dt>{l s='Entorno:' mod='prestashopyuju'}</dt>
                             <dd><span class="label label-info">{$oauth_status.environment|upper|escape:'html':'UTF-8'}</span></dd>
                             
-                            <dt>{l s='Client ID:' mod='prestashopyuju'}</dt>
+                            <dt>{l s='ID de cliente:' mod='prestashopyuju'}</dt>
                             <dd><code>{$oauth_status.client_id|escape:'html':'UTF-8'}</code></dd>
                             
                             <dt>{l s='Conectado el:' mod='prestashopyuju'}</dt>
