@@ -186,7 +186,7 @@ var YujuAdmin = {
                 self.showAlert('No se pudo probar la conexión con la API', 'error');
             },
             complete: function() {
-                $button.prop('disabled', false).html('<i class="icon-check"></i> Test Connection');
+                $button.prop('disabled', false).html('<i class="icon-check"></i> Probar conexión');
             }
         });
     },
