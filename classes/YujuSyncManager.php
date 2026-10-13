@@ -260,27 +260,9 @@ class YujuSyncManager
      */
     protected function syncSingleProductStock($product_data)
     {
-        // Get current stock from Yuju
-        $yuju_product = $this->api_client->getProduct($product_data['yuju_product_id']);
-
-        if (!$yuju_product || !isset($yuju_product['stock_quantity'])) {
-            throw new Exception('Could not get stock information from Yuju');
-        }
-
-        // Update PrestaShop stock
-        $product = new Product($product_data['id_product']);
-
-        if (!Validate::isLoadedObject($product)) {
-            throw new Exception('Product not found in PrestaShop');
-        }
-
-        StockAvailable::setQuantity(
-            $product->id,
-            0, // id_product_attribute
-            (int) $yuju_product['stock_quantity']
-        );
-
-        $this->logger->log('Stock updated for product ' . $product->id . ': ' . $yuju_product['stock_quantity'], 'info');
+        // Método legado retenido por compatibilidad: nunca importar stock desde Yuju.
+        $this->logger->log('Se bloqueó una operación de stock Yuju → PrestaShop por política unidireccional.', 'warning');
+        return false;
     }
 
     /**
@@ -288,31 +270,9 @@ class YujuSyncManager
      */
     protected function syncSingleProductPrice($product_data)
     {
-        // Get current price from Yuju
-        $yuju_product = $this->api_client->getProduct($product_data['yuju_product_id']);
-
-        if (!$yuju_product || !isset($yuju_product['price'])) {
-            throw new Exception('Could not get price information from Yuju');
-        }
-
-        // Update PrestaShop price
-        $product = new Product($product_data['id_product']);
-
-        if (!Validate::isLoadedObject($product)) {
-            throw new Exception('Product not found in PrestaShop');
-        }
-
-        $product->price = (float) $yuju_product['price'];
-
-        if (isset($yuju_product['cost_price'])) {
-            $product->wholesale_price = (float) $yuju_product['cost_price'];
-        }
-
-        if (!$product->save()) {
-            throw new Exception('Failed to save product price');
-        }
-
-        $this->logger->log('Price updated for product ' . $product->id . ': ' . $yuju_product['price'], 'info');
+        // Método legado retenido por compatibilidad: nunca importar precios desde Yuju.
+        $this->logger->log('Se bloqueó una operación de precio Yuju → PrestaShop por política unidireccional.', 'warning');
+        return false;
     }
 
     /**
