@@ -1491,6 +1491,153 @@ class YujuOfferAuditor
      * @param array $detailIds
      * @return array
      */
+    /**
+     * Histórico persistente de tareas de ofertas masivas en un único archivo.
+     * El mismo archivo se actualiza cuando cambia el estado de cada tarea.
+     */
+    protected static function bulkOfferTaskFile()
+    {
+        $dir = dirname(__FILE__) . '/../logs/';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        return $dir . 'yuju_bulk_offer_tasks.json';
+    }
+
+    protected static function readBulkOfferTaskStore()
+    {
+        $file = self::bulkOfferTaskFile();
+        if (!is_file($file)) {
+            return ['tasks' => [], 'history' => []];
+        }
+        $raw = @file_get_contents($file);
+        $store = json_decode((string) $raw, true);
+        if (!is_array($store)) {
+            return ['tasks' => [], 'history' => []];
+        }
+        $store['tasks'] = isset($store['tasks']) && is_array($store['tasks']) ? $store['tasks'] : [];
+        $store['history'] = isset($store['history']) && is_array($store['history']) ? $store['history'] : [];
+        return $store;
+    }
+
+    protected static function writeBulkOfferTaskStore(array $store)
+    {
+        $file = self::bulkOfferTaskFile();
+        $json = json_encode($store, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        return $json !== false && @file_put_contents($file, $json . PHP_EOL, LOCK_EX) !== false;
+    }
+
+    public static function recordBulkOfferTask(array $task)
+    {
+        $store = self::readBulkOfferTaskStore();
+        $id = (string) ($task['id_task'] ?? '');
+        if ($id === '') {
+            return false;
+        }
+        $now = date('Y-m-d H:i:s');
+        $task['id_task'] = $id;
+        $task['submitted_at'] = $task['submitted_at'] ?? $now;
+        $task['updated_at'] = $now;
+        $task['status'] = $task['status'] ?? 'CREATED';
+        $task['history'] = [[
+            'at' => $now,
+            'status' => $task['status'],
+            'message' => $task['message'] ?? 'Tarea creada en Yuju.',
+        ]];
+        $store['tasks'][$id] = $task;
+        $store['history'][] = [
+            'at' => $now,
+            'id_task' => $id,
+            'status' => $task['status'],
+            'message' => $task['message'] ?? 'Tarea creada en Yuju.',
+        ];
+        return self::writeBulkOfferTaskStore($store);
+    }
+
+    /**
+     * Actualiza el estado de las tareas activas y guarda el histórico en el mismo archivo.
+     */
+    public static function refreshBulkOfferTaskHistory()
+    {
+        $store = self::readBulkOfferTaskStore();
+        if (empty($store['tasks'])) {
+            return array_values($store['tasks']);
+        }
+        $api = new YujuApiClient();
+        $active = ['CREATED', 'PENDING', 'PROCESSING', 'IN_PROGRESS', 'RUNNING', 'QUEUED'];
+        $changed = false;
+        foreach ($store['tasks'] as $id => &$task) {
+            if (!in_array(strtoupper((string) ($task['status'] ?? '')), $active, true)) {
+                continue;
+            }
+            $response = $api->getBulkOfferTaskStatus($id);
+            if (empty($response['success']) || !is_array($response['data'] ?? null)) {
+                $task['last_check_error'] = (string) ($response['message'] ?? 'No se pudo consultar el estado.');
+                $task['last_checked_at'] = date('Y-m-d H:i:s');
+                $changed = true;
+                continue;
+            }
+            $data = $response['data'];
+            $status = strtoupper((string) ($data['status'] ?? ($data['data']['status'] ?? $task['status'])));
+            $normalized = [
+                'status' => $status,
+                'total_rows' => (int) ($data['total_rows'] ?? $data['data']['total_rows'] ?? ($task['total_rows'] ?? 0)),
+                'found_skus' => (int) ($data['found_skus'] ?? $data['data']['found_skus'] ?? ($task['found_skus'] ?? 0)),
+                'success_count' => (int) ($data['success'] ?? $data['data']['success'] ?? ($task['success_count'] ?? 0)),
+                'errors_count' => (int) ($data['errors'] ?? $data['data']['errors'] ?? ($task['errors_count'] ?? 0)),
+                'details' => $data['details'] ?? $data['data']['details'] ?? ($task['details'] ?? []),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            $oldStatus = strtoupper((string) ($task['status'] ?? ''));
+            $oldSummary = json_encode([
+                $task['total_rows'] ?? 0, $task['found_skus'] ?? 0,
+                $task['success_count'] ?? 0, $task['errors_count'] ?? 0,
+            ]);
+            $newSummary = json_encode([
+                $normalized['total_rows'], $normalized['found_skus'],
+                $normalized['success_count'], $normalized['errors_count'],
+            ]);
+            $task = array_merge($task, $normalized);
+            unset($task['last_check_error']);
+            $task['last_checked_at'] = $normalized['updated_at'];
+            if ($oldStatus !== $status || $oldSummary !== $newSummary) {
+                $message = 'Estado consultado en Yuju';
+                $event = [
+                    'at' => $normalized['updated_at'],
+                    'id_task' => (string) $id,
+                    'status' => $status,
+                    'message' => $message,
+                    'success_count' => $normalized['success_count'],
+                    'errors_count' => $normalized['errors_count'],
+                ];
+                $store['history'][] = $event;
+                if (!isset($task['history']) || !is_array($task['history'])) {
+                    $task['history'] = [];
+                }
+                $task['history'][] = $event;
+                $changed = true;
+            }
+        }
+        unset($task);
+        if ($changed) {
+            self::writeBulkOfferTaskStore($store);
+        }
+        return array_values($store['tasks']);
+    }
+
+    public static function getBulkOfferTaskHistory($refresh = false)
+    {
+        if ($refresh) {
+            return self::refreshBulkOfferTaskHistory();
+        }
+        return array_values(self::readBulkOfferTaskStore()['tasks']);
+    }
+
+    /**
+     * Envía stock/precio de todos los productos seleccionados en una sola tarea masiva.
+     * Las imágenes, cuando están habilitadas, se actualizan aparte porque no forman parte
+     * del endpoint de ofertas masivas. PrestaShop sigue siendo la fuente de verdad.
+     */
     public function updateSelectedFromPrestaShop($runId, array $detailIds)
     {
         $runId = (int) $runId;
@@ -1498,13 +1645,14 @@ class YujuOfferAuditor
         if ($runId <= 0 || empty($detailIds)) {
             return ['success' => false, 'message' => 'Seleccione al menos un producto de la auditoría.'];
         }
-
         $run = $this->getRun($runId);
         if (!$run) {
             return ['success' => false, 'message' => 'La auditoría seleccionada no existe.'];
         }
 
-        $results = ['updated' => 0, 'failed' => 0, 'skipped' => 0, 'items' => []];
+        $results = ['updated' => 0, 'failed' => 0, 'skipped' => 0, 'submitted' => 0, 'task_id' => null, 'items' => []];
+        $bulkOffers = [];
+        $bulkDetailIds = [];
         $idLang = (int) Configuration::get('PS_LANG_DEFAULT');
         $idShop = (int) Context::getContext()->shop->id;
 
@@ -1515,14 +1663,14 @@ class YujuOfferAuditor
             );
             if (!$row) {
                 $results['skipped']++;
+                $results['items'][] = ['sku' => '', 'success' => false, 'message' => 'El registro seleccionado no pertenece a esta auditoría.'];
                 continue;
             }
-
             $sku = trim((string) ($row['sku'] ?? ''));
             $yujuId = trim((string) ($row['yuju_product_id'] ?? ''));
-            if ($sku === '' || $yujuId === '') {
+            if ($sku === '') {
                 $results['skipped']++;
-                $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'Falta SKU o ID de Yuju.'];
+                $results['items'][] = ['sku' => '', 'success' => false, 'message' => 'El registro no tiene SKU.'];
                 continue;
             }
 
@@ -1541,16 +1689,15 @@ class YujuOfferAuditor
                      WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
                 );
             }
-
             if ($idProduct <= 0) {
                 $results['skipped']++;
                 $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No existe una referencia equivalente en PrestaShop.'];
                 continue;
             }
 
-            $payload = [];
+            $offer = ['sku' => $sku];
             if (!empty($run['audit_stock'])) {
-                $payload['stock'] = (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop);
+                $offer['stock'] = (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop);
             }
             if (!empty($run['audit_price'])) {
                 $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6);
@@ -1560,53 +1707,88 @@ class YujuOfferAuditor
                     $results['items'][] = [
                         'sku' => $sku,
                         'success' => false,
-                        'message' => self::PRICE_SECURITY_MSG . ' No se envió el precio; los demás campos se procesarán si aplica.',
+                        'message' => self::PRICE_SECURITY_MSG . ' Se omitió únicamente el precio por seguridad.',
                     ];
-                    unset($payload['price']);
-                    if (!empty($run['audit_images'])) {
-                        $payload['images'] = $this->getPrestaShopImageUrls($idProduct, $idLang, new Product($idProduct, false, $idLang));
-                    }
-                    if (empty($payload)) {
-                        continue;
-                    }
                 } else {
-                    $payload['price'] = $psPrice;
+                    $offer['price'] = $psPrice;
                 }
             }
-            if (!empty($run['audit_images'])) {
-                $product = new Product($idProduct, false, $idLang);
-                $payload['images'] = $this->getPrestaShopImageUrls($idProduct, $idLang, $product);
-            }
-
-            if (empty($payload)) {
-                $results['skipped']++;
-                $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No hay campos habilitados para enviar.'];
-                continue;
-            }
-
-            // Única escritura de este flujo: petición a Yuju con datos obtenidos de PrestaShop.
-            $response = $this->api->updateProduct($yujuId, $payload);
-            $ok = !empty($response['success']);
-            if ($ok) {
-                $results['updated']++;
-                Db::getInstance()->update('yuju_audit_run_details', [
-                    'result' => 'diff_fixed',
-                    'message' => pSQL('Actualizado en Yuju desde PrestaShop: ' . implode(', ', array_keys($payload))),
-                ], 'id = ' . (int) $detailId . ' AND id_audit_run = ' . (int) $runId);
+            if (count($offer) > 1) {
+                $bulkOffers[] = $offer;
+                $bulkDetailIds[$sku] = (int) $detailId;
             } else {
-                $results['failed']++;
+                $results['skipped']++;
+                if (empty($run['audit_images'])) {
+                    $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No hay campos de stock/precio habilitados para enviar.'];
+                }
             }
-            $results['items'][] = [
-                'sku' => $sku,
-                'success' => $ok,
-                'message' => $ok
-                    ? 'Actualizado en Yuju desde PrestaShop.'
-                    : (string) ($response['message'] ?? ('HTTP ' . ($response['http_code'] ?? '?'))),
-            ];
+
+            if (!empty($run['audit_images'])) {
+                if ($yujuId === '') {
+                    $results['skipped']++;
+                    $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No hay ID de Yuju para actualizar las imágenes.'];
+                } else {
+                    $product = new Product($idProduct, false, $idLang);
+                    $imagePayload = ['images' => $this->getPrestaShopImageUrls($idProduct, $idLang, $product)];
+                    $imageResponse = $this->api->updateProduct($yujuId, $imagePayload);
+                    $imageOk = !empty($imageResponse['success']);
+                    if (!$imageOk) {
+                        $results['failed']++;
+                    }
+                    $results['items'][] = [
+                        'sku' => $sku,
+                        'success' => $imageOk,
+                        'message' => $imageOk ? 'Imágenes actualizadas en Yuju.' : (string) ($imageResponse['message'] ?? 'Falló la actualización de imágenes.'),
+                    ];
+                }
+            }
         }
 
-        $results['success'] = $results['failed'] === 0 && $results['updated'] > 0;
-        $results['message'] = 'Actualizados: ' . $results['updated'] . '; errores: ' . $results['failed'] . '; omitidos: ' . $results['skipped'] . '.';
+        if (!empty($bulkOffers)) {
+            $response = $this->api->createBulkOfferTask($bulkOffers);
+            $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+            $taskId = trim((string) ($data['id_task'] ?? ''));
+            if (!empty($response['success']) && $taskId !== '') {
+                $results['task_id'] = $taskId;
+                $results['submitted'] = count($bulkOffers);
+                $results['updated'] += count($bulkOffers);
+                $status = strtoupper((string) ($data['status'] ?? 'CREATED'));
+                self::recordBulkOfferTask([
+                    'id_task' => $taskId,
+                    'run_id' => $runId,
+                    'status' => $status,
+                    'sku_count' => count($bulkOffers),
+                    'total_rows' => count($bulkOffers),
+                    'success_count' => 0,
+                    'errors_count' => 0,
+                    'message' => (string) ($data['message'] ?? 'Tarea masiva aceptada por Yuju.'),
+                    'skus' => array_column($bulkOffers, 'sku'),
+                ]);
+                foreach ($bulkDetailIds as $sku => $detailId) {
+                    Db::getInstance()->update('yuju_audit_run_details', [
+                        'message' => pSQL('Enviado a tarea masiva de Yuju #' . $taskId . ' (pendiente de confirmación).'),
+                    ], 'id = ' . (int) $detailId . ' AND id_audit_run = ' . (int) $runId);
+                }
+                $results['items'][] = [
+                    'sku' => '',
+                    'success' => true,
+                    'message' => count($bulkOffers) . ' SKU enviados en una sola tarea masiva. ID de tarea: ' . $taskId,
+                ];
+            } else {
+                $results['failed'] += count($bulkOffers);
+                $results['items'][] = [
+                    'sku' => '',
+                    'success' => false,
+                    'message' => (string) ($response['message'] ?? 'Yuju no aceptó la tarea masiva.'),
+                ];
+            }
+        }
+
+        $results['success'] = $results['failed'] === 0 && ($results['submitted'] > 0 || $results['updated'] > 0);
+        $results['message'] = 'Enviados a tarea masiva: ' . $results['submitted'] . '; errores: ' . $results['failed'] . '; omitidos/advertencias: ' . $results['skipped'] . '.';
+        if ($results['task_id']) {
+            $results['message'] .= ' ID de tarea Yuju: ' . $results['task_id'] . ' (el resultado final se actualizará en Registros).';
+        }
         return $results;
     }
 
