@@ -3675,7 +3675,7 @@ textarea#yuju-cron-manager-output.form-control:focus,
 }
 #content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card .btn-primary:hover { background: #1d4ed8; }
 #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar {
-    display: flex !important;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
