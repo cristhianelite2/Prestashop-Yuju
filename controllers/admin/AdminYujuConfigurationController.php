@@ -1788,7 +1788,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ],
             'actionUpdateQuantity' => [
                 'label' => 'Stock actualizado',
-                'description' => 'Encola cambios de stock de productos simples sin bloquear el checkout.',
+                'description' => 'Encola stock de productos simples y de cada variación identificada por id_product_attribute, sin bloquear el checkout.',
+                'critical' => true,
+            ],
+            'actionProductAttributeUpdate' => [
+                'label' => 'Variación actualizada',
+                'description' => 'Valida y encola el precio y stock de cada variación de forma independiente.',
                 'critical' => true,
             ],
             'displayBackOfficeHeader' => [
