@@ -197,7 +197,7 @@
             </div>
 
             <script type="application/json" id="yuju-audit-config">{$audit_js_config nofilter}</script>
-            <script type="text/javascript" src="{$module_dir|escape:'html':'UTF-8'}views/js/audit_run.js?v=20261013h"></script>
+            <script type="text/javascript" src="{$module_dir|escape:'html':'UTF-8'}views/js/audit_run.js?v=20261013i"></script>
         {/if}
     </div>
 </div>
