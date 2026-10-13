@@ -209,24 +209,30 @@ class YujuOfferAuditor
 
             $sku = trim((string) ($offer['sku'] ?? ($offer['sku_simple'] ?? '')));
             $psProductId = null;
+            $psProductAttributeId = null;
             if ($sku !== '') {
-                $psProductId = (int) $db->getValue(
-                    "SELECT id_product FROM " . _DB_PREFIX_ . "product WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                $attribute = $db->getRow(
+                    "SELECT id_product, id_product_attribute FROM " . _DB_PREFIX_ . "product_attribute WHERE TRIM(reference) = '" . pSQL($sku) . "' ORDER BY id_product_attribute ASC"
                 );
-                if ($psProductId <= 0) {
-                    $psProductId = (int) $db->getValue(
-                        "SELECT id_product FROM " . _DB_PREFIX_ . "product_attribute WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                if (!empty($attribute)) {
+                    $psProductId = (int) $attribute['id_product'];
+                    $psProductAttributeId = (int) $attribute['id_product_attribute'];
+                } else {
+                    $productId = (int) $db->getValue(
+                        "SELECT id_product FROM " . _DB_PREFIX_ . "product WHERE TRIM(reference) = '" . pSQL($sku) . "' ORDER BY id_product ASC"
                     );
-                }
-                if ($psProductId <= 0) {
-                    $psProductId = null;
+                    if ($productId > 0) {
+                        $psProductId = $productId;
+                    }
                 }
             }
 
             $now = date('Y-m-d H:i:s');
             $data = [
                 'prestashop_product_id' => $psProductId,
+                'prestashop_product_attribute_id' => $psProductAttributeId,
                 'yuju_product_id' => pSQL($yujuId),
+                'parent_yuju_product_id' => isset($offer['parent_id']) && is_scalar($offer['parent_id']) ? pSQL((string) $offer['parent_id']) : null,
                 'sync_status' => 'synced',
                 'last_sync_at' => null,
                 'last_sync_data' => pSQL(json_encode([
@@ -234,6 +240,7 @@ class YujuOfferAuditor
                     'sku' => $sku !== '' ? $sku : null,
                     'name' => (string) ($offer['name'] ?? ''),
                     'parent_yuju_id' => isset($offer['parent_id']) ? (string) $offer['parent_id'] : null,
+                    'prestashop_product_attribute_id' => $psProductAttributeId,
                 ], JSON_UNESCAPED_UNICODE)),
                 'last_error' => null,
                 'error_count' => 0,
