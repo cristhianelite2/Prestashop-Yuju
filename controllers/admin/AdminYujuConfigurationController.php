@@ -71,13 +71,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
             date('Y-m-d H:i:s') . " - AdminYujuConfigurationController initContent called\n", 
             FILE_APPEND | LOCK_EX);
 
-        try {
-            $oauth = new YujuOAuth();
-            $api_client = new YujuApiClient();
-            $logger = new YujuLogger();
-        } catch (Throwable $e) {
-            throw $e;
-        }
+        $oauth = new YujuOAuth();
+        $api_client = new YujuApiClient();
+        $logger = new YujuLogger();
 
         // Verificar si se está procesando el callback de OAuth
         if (Tools::getValue('code') && Tools::getValue('state')) {
