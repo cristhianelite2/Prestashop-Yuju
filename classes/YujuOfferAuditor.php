@@ -1922,15 +1922,24 @@ class YujuOfferAuditor
                 $results['task_id'] = $results['task_id'] ?: $taskId;
                 $count = count($task['offers']);
                 $results['submitted'] += $count;
-                $results['updated'] += $count;
+                // La creación de la tarea no confirma actualizaciones; solo la consulta de estado
+                // permite conocer cuántos SKU terminaron correctamente.
 
                 foreach ($task['offers'] as $offer) {
                     $sku = (string) ($offer['sku'] ?? '');
+                    $pendingMessage = 'Solicitud aceptada en tarea Yuju #' . $taskId . '; actualización pendiente de confirmación.';
                     if (isset($bulkDetailIds[$sku])) {
                         Db::getInstance()->update('yuju_audit_run_details', [
-                            'message' => pSQL('Enviado a tarea masiva de Yuju #' . $taskId . ' (pendiente de confirmación).'),
+                            'message' => pSQL($pendingMessage),
                         ], 'id = ' . (int) $bulkDetailIds[$sku] . ' AND id_audit_run = ' . (int) $runId);
                     }
+                    $results['items'][] = [
+                        'sku' => $sku,
+                        'success' => true,
+                        'pending' => true,
+                        'task_id' => $taskId,
+                        'message' => $pendingMessage,
+                    ];
                 }
 
                 if (empty($task['history_saved'])) {
@@ -1941,11 +1950,6 @@ class YujuOfferAuditor
                         'message' => 'Yuju aceptó la tarea #' . $taskId . ', pero no se pudo guardar su histórico en logs/yuju_bulk_offer_tasks.json. Verifique permisos de escritura del directorio logs.',
                     ];
                 }
-                $results['items'][] = [
-                    'sku' => '',
-                    'success' => true,
-                    'message' => $count . ' SKU enviados en una tarea masiva. ID de tarea: ' . $taskId,
-                ];
             }
 
             foreach ($bulkResult['failed'] as $failedItem) {
