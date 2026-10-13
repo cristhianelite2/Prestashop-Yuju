@@ -3825,3 +3825,37 @@ textarea#yuju-cron-manager-output.form-control:focus,
     #content.bootstrap .yuju-admin-layout .yuju-audit-pagination { align-items: stretch; flex-direction: column; }
     #content.bootstrap .yuju-admin-layout .yuju-audit-pagination-controls { flex-wrap: wrap; justify-content: space-between; }
 }
+
+/* Auditoría: selector de tamaño de página compacto y alineado con la paginación. */
+#content.bootstrap .yuju-admin-layout .yuju-audit-page-size-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 3px 9px;
+    color: #667085;
+    background: #f8fafc;
+    border: 1px solid #e4e7ec;
+    border-radius: 5px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-page-size {
+    min-width: 62px;
+    height: 27px;
+    padding: 3px 22px 3px 8px;
+    color: #344054;
+    background-color: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: none;
+    cursor: pointer;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-page-size:focus {
+    border-color: #84adff;
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+}
