@@ -216,14 +216,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $per_page = (int)Tools::getValue('per_page', 25);
         $products_data = $this->getProductsWithFilters($page, $per_page);
         
-        // Add statistics
-        $stats = $this->getProductStatusStats();
+        // La plantilla actual no consume product_status_stats. No ejecutar agregados globales
+        // de yuju_product_status/yuju_sync_queue en cada apertura del listado.
 
         // Generate AJAX URL for the controller
         $ajax_url = $this->context->link->getAdminLink('AdminYujuProductStatus', true);
 
         $this->context->smarty->assign([
-        'product_status_stats' => $stats,
         'sync_running' => $this->sync_manager->isSyncRunning(),
         'prestashop_stores' => $prestashop_stores,
         'mapped_categories' => $mapped_categories,
