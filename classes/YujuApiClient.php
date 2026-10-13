@@ -207,7 +207,7 @@ class YujuApiClient
      */
     protected static function sanitizeResponseForLog($endpoint, $response)
     {
-        if (strpos(ltrim($endpoint, '/'), 'products-gral-report') !== 0 || empty($response['data'])) {
+        if (strpos(ltrim($endpoint, '/'), 'products-gral-report') !== 0 && strpos(ltrim($endpoint, '/'), 'products-offer-report') !== 0 || empty($response['data'])) {
             return $response;
         }
 
