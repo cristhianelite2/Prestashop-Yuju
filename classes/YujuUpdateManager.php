@@ -403,7 +403,7 @@ class YujuUpdateManager
     {
         $excludeTopLevel = [
             '.git', '.github', 'logs', 'cache', 'exports', 'vendor',
-            'node_modules', '.idea', '.vscode', '.trae',
+            'node_modules', '.idea', '.vscode', '.trae', 'deployment',
         ];
         $copied = 0;
         $iterator = new RecursiveIteratorIterator(
