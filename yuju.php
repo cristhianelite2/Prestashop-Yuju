@@ -123,6 +123,10 @@ class Yuju extends Module
     {
         $message = '[Yuju install] Falló el paso "' . $stage . '": ' . $detail;
 
+        // El error_log del servidor sirve como respaldo si la tabla de logs de
+        // PrestaShop no existe o la base de datos está causando el fallo.
+        error_log($message);
+
         try {
             PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
         } catch (Throwable $loggingError) {
@@ -170,7 +174,13 @@ class Yuju extends Module
             if (!empty($query)) {
                 if (!Db::getInstance()->execute($query)) {
                     // Use PrestaShop's error logging instead of $this->logger during installation
-                    PrestaShopLogger::addLog('Failed to execute query: ' . $query, 3);
+                    $dbError = Db::getInstance()->getMsgError();
+                    PrestaShopLogger::addLog(
+                        '[Yuju install] Error SQL: ' . ($dbError !== '' ? $dbError : 'error no especificado')
+                        . ' | Consulta: ' . substr(preg_replace('/\\s+/', ' ', $query), 0, 1200),
+                        3
+                    );
+                    error_log('[Yuju install] Error SQL: ' . $dbError . ' | Consulta: ' . substr($query, 0, 1200));
 
                     return false;
                 }
