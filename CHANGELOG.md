@@ -1,3 +1,8 @@
+## [1.1.13] - 2026-10-12
+
+### Corregido
+- El actualizador registra y activa la pestaña `AdminYujuOrderStatusMapping` después de copiar los archivos, antes de marcar la actualización como instalada. Evita que el enlace del menú lateral abra «Página no encontrada» en tiendas existentes.
+
 ## [1.1.12] - 2026-10-12
 
 ### Corregido
