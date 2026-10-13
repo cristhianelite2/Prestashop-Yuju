@@ -27,6 +27,22 @@ require_once dirname(__FILE__) . '/../../config/config.php';
 
 class AdminYujuConfigurationController extends ModuleAdminController
 {
+    /**
+     * Emite una respuesta JSON y termina la petición AJAX.
+     * PrestaShop 9 ya no expone ajaxDie() en este controlador.
+     *
+     * @param string $content JSON serializado
+     */
+    protected function yujuAjaxDie($content)
+    {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
+        echo (string) $content;
+        exit;
+    }
+
     public function __construct()
     {
         $this->bootstrap = true;
@@ -392,7 +408,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             
             // Validar respuesta
             if (!$result['success']) {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxDie(json_encode([
                     'success' => false,
                     'message' => 'Error al crear producto de prueba',
                     'error' => $result['message'],
@@ -405,7 +421,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $errors = $result['data']['errors'] ?? [];
             
             if (empty($created_products) && !empty($errors)) {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxDie(json_encode([
                     'success' => false,
                     'message' => 'Yuju reportó errores al crear el producto',
                     'errors' => $errors
@@ -414,7 +430,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             
             $first_product = reset($created_products);
             
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => true,
                 'message' => '✅ Producto creado exitosamente en Yuju',
                 'product' => [
@@ -426,7 +442,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]));
             
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Error al procesar la prueba',
                 'error' => $e->getMessage()
@@ -753,7 +769,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ];
         }
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => true,
             'crons' => $rows,
         ]));
@@ -777,7 +793,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
 
         if ($script === '' || !isset($allowed[$script])) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Cron no válido.',
             ]));
@@ -785,7 +801,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $path = dirname(__FILE__) . '/../../cron/' . $script;
         if (!is_file($path)) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Archivo de cron no encontrado.',
             ]));
@@ -793,7 +809,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $phpBin = $this->resolvePhpCliBinary();
         if (!$phpBin) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se encontró un binario PHP CLI válido para ejecutar crons.',
             ]));
@@ -804,7 +820,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $started = $runner->start($script, $phpBin);
 
         if (empty($started['success'])) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'async' => true,
                 'job_id' => isset($started['job_id']) ? $started['job_id'] : null,
@@ -812,7 +828,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]));
         }
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => true,
             'async' => true,
             'job_id' => $started['job_id'],
@@ -836,7 +852,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $job = $runner->getJob($jobId);
 
         if (!$job) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Job no encontrado.',
             ]));
@@ -845,7 +861,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $status = isset($job['status']) ? (string) $job['status'] : '';
         $done = in_array($status, ['success', 'error'], true);
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => true,
             'done' => $done,
             'job' => [
@@ -1892,13 +1908,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     break;
                 }
             }
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => true,
                 'hooks' => $hooks,
                 'all_active' => $all_ok,
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
             ]));
@@ -1914,14 +1930,14 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $allowed_hooks = array_column($this->getYujuHooksStatus(), 'name');
 
         if ($hook_name === '' || !in_array($hook_name, $allowed_hooks, true)) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Hook no válido o no permitido.',
             ]));
         }
 
         if (!isset($this->module) || !$this->module) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se pudo cargar la instancia del módulo Yuju.',
             ]));
@@ -1940,7 +1956,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 }
             }
 
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => !empty($status_after['registered']),
                 'message' => !empty($status_after['registered'])
                     ? 'Hook activado correctamente.'
@@ -1950,7 +1966,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'status' => $status_after,
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Excepción al registrar el hook: ' . $e->getMessage(),
                 'hook' => $hook_name,
@@ -2111,13 +2127,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     break;
                 }
             }
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => true,
                 'tables' => $tables,
                 'all_present' => $all_present,
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
             ]));
@@ -2148,13 +2164,13 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 ];
             }
 
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => true,
                 'tables' => $catalog,
                 'total' => count($catalog),
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
             ]));
@@ -2170,7 +2186,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $allowed = array_column($this->getYujuTablesStatus(), 'name');
 
         if ($table === '' || !in_array($table, $allowed, true)) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Tabla no válida o no permitida.',
             ]));
@@ -2180,12 +2196,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
             require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSchemaRepair.php';
             $repair = new YujuSchemaRepair();
             $report = $repair->repairTable($table);
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => !empty($report['success']),
                 'report' => $report,
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
                 'report' => [
@@ -2207,7 +2223,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $allowed = array_column($this->getYujuTablesStatus(), 'name');
 
         if ($table === '' || !in_array($table, $allowed, true)) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'Tabla no válida o no permitida.',
             ]));
@@ -2215,7 +2231,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $sql_file = _PS_MODULE_DIR_ . 'yuju/sql/install.sql';
         if (!is_readable($sql_file)) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se pudo leer sql/install.sql en el módulo.',
             ]));
@@ -2226,7 +2242,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $statement = $this->extractCreateTableStatement($sql, _DB_PREFIX_ . $table);
         if ($statement === null) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se encontró la definición de la tabla en install.sql.',
             ]));
@@ -2253,7 +2269,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             // ignore
         }
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => $exists_now,
             'message' => $exists_now
                 ? 'Tabla creada correctamente.'
@@ -2270,7 +2286,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
     public function ajaxProcessCreateAllYujuTables()
     {
         if (!isset($this->module) || !$this->module || !method_exists($this->module, 'ensureAllYujuTables')) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se pudo cargar el módulo Yuju.',
             ]));
@@ -2287,7 +2303,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             }
         }
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => $all_present,
             'message' => $all_present
                 ? 'Todas las tablas requeridas están presentes.'
@@ -2341,7 +2357,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
     public function ajaxProcessRegisterAllYujuHooks()
     {
         if (!isset($this->module) || !$this->module) {
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxDie(json_encode([
                 'success' => false,
                 'message' => 'No se pudo cargar la instancia del módulo Yuju.',
             ]));
@@ -2369,7 +2385,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             }
         }
 
-        $this->ajaxDie(json_encode([
+        $this->yujuAjaxDie(json_encode([
             'success' => true,
             'attempted' => $attempted,
             'hooks' => $after,
