@@ -31,7 +31,7 @@ class AdminYujuLogsController extends ModuleAdminController
         parent::__construct();
 
         $this->bootstrap = true;
-        $this->meta_title = $this->l('Yuju Logs');
+        $this->meta_title = 'Yuju Logs';
         $this->logger = new YujuLogger();
     }
 
