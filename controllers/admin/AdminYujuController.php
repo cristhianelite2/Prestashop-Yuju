@@ -43,6 +43,13 @@ class AdminYujuController extends ModuleAdminController
             return;
         }
 
+        // Reuse the registered AdminYuju route for category statistics too.
+        // Existing shops may not have the separate legacy controller registered as a Tab.
+        if (Tools::getValue('yuju_view') === 'product_category_status') {
+            $this->renderProductCategoryStatus();
+            return;
+        }
+
         $stats = $this->getDashboardStats();
         $recentSyncs = $this->getRecentSyncItems();
         $lastSyncDate = $this->getLastSyncDate();
@@ -126,6 +133,72 @@ class AdminYujuController extends ModuleAdminController
         }
 
         return parent::postProcess();
+    }
+
+    /**
+     * Render category sync statistics through the already registered AdminYuju route.
+     */
+    protected function renderProductCategoryStatus()
+    {
+        $db = Db::getInstance();
+
+        // Consolidate combination rows into one status per PrestaShop product.
+        $productStatusSql = '
+            SELECT
+                prestashop_product_id,
+                CASE
+                    WHEN SUM(sync_status IN ("error", "synced_with_errors")) > 0 THEN "error"
+                    WHEN SUM(sync_status IN ("synced", "synced_with_warnings")) > 0 THEN "synced"
+                    WHEN SUM(sync_status = "disabled") > 0 THEN "disabled"
+                    ELSE "pending"
+                END AS product_sync_status
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            WHERE prestashop_product_id IS NOT NULL
+              AND prestashop_product_id > 0
+            GROUP BY prestashop_product_id
+        ';
+
+        $categoryStats = $db->executeS('
+            SELECT
+                c.id_category AS category_id,
+                cl.name AS category_name,
+                COUNT(DISTINCT p.id_product) AS total,
+                COUNT(DISTINCT CASE
+                    WHEN ps.product_sync_status = "synced" THEN p.id_product
+                    ELSE NULL
+                END) AS synced,
+                COUNT(DISTINCT CASE
+                    WHEN ps.prestashop_product_id IS NULL
+                      OR ps.product_sync_status = "pending" THEN p.id_product
+                    ELSE NULL
+                END) AS pending,
+                COUNT(DISTINCT CASE
+                    WHEN ps.product_sync_status = "error" THEN p.id_product
+                    ELSE NULL
+                END) AS errors
+            FROM ' . _DB_PREFIX_ . 'category_product cp
+            INNER JOIN ' . _DB_PREFIX_ . 'product p
+                ON p.id_product = cp.id_product AND p.active = 1
+            INNER JOIN ' . _DB_PREFIX_ . 'category c
+                ON c.id_category = cp.id_category
+            INNER JOIN ' . _DB_PREFIX_ . 'category_lang cl
+                ON cl.id_category = c.id_category
+               AND cl.id_lang = ' . (int) $this->context->language->id . '
+               AND cl.id_shop = ' . (int) $this->context->shop->id . '
+            LEFT JOIN (' . $productStatusSql . ') ps
+                ON ps.prestashop_product_id = p.id_product
+            GROUP BY c.id_category, cl.name
+            ORDER BY cl.name ASC
+        ');
+
+        $this->context->smarty->assign([
+            'current_controller' => 'AdminYujuProductCategoryStatus',
+            'stats' => [
+                'category_stats' => is_array($categoryStats) ? $categoryStats : [],
+            ],
+        ]);
+
+        $this->setTemplate('product_category_status.tpl');
     }
 
     /**
