@@ -123,6 +123,9 @@
         <i class="icon-exchange"></i>
         Campos Mapeados
         <span class="panel-heading-action">
+            <button type="button" id="btn-import-yuju-fields" class="btn btn-info btn-sm">
+                <i class="icon-download"></i> Importar campos de Yuju
+            </button>
             <button class="btn btn-success btn-sm" onclick="addNewMapping(); return false;">
                 <i class="icon-plus"></i> Nuevo Mapeo de Campo
             </button>
@@ -350,6 +353,38 @@ function validateYujuDuplicates() {
     
     return !hasDuplicates;
 }
+
+
+    // Importación aditiva de campos del modelo oficial de Yuju.
+    // El servidor solo inserta filas faltantes en yuju_product_mapping.
+    $('#btn-import-yuju-fields').on('click', function() {
+        var button = $(this);
+        if (!confirm('Se agregarán los mapeos de campos de Yuju que aún no existan. Los mapeos existentes no se modificarán ni eliminarán. ¿Deseas continuar?')) {
+            return;
+        }
+
+        button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Importando...');
+        $.ajax({
+            url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+            method: 'POST',
+            dataType: 'json',
+            data: { ajax: true, action: 'importFields' },
+            success: function(response) {
+                if (response && response.success) {
+                    showToast(response.message || 'Importación completada.', 'success');
+                    window.location.reload();
+                } else {
+                    showToast((response && response.message) || 'No fue posible importar los campos.', 'error');
+                    button.prop('disabled', false).html('<i class="icon-download"></i> Importar campos de Yuju');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error importando campos Yuju:', xhr.responseText);
+                showToast('Error de conexión al importar campos: ' + error, 'error');
+                button.prop('disabled', false).html('<i class="icon-download"></i> Importar campos de Yuju');
+            }
+        });
+    });
 
 $(document).ready(function() {
     initializeSelect2();
