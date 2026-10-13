@@ -27,12 +27,6 @@
     
     <div class="panel-body">
         {if isset($oauth_status) && $oauth_status.is_connected}
-            <div class="alert alert-success">
-                <i class="icon-check"></i>
-                Conectado exitosamente a la API de Yuju
-                <br>
-                <small>Conectado como: {$oauth_status.user_info.name|default:'Desconocido'|escape:'html':'UTF-8'}</small>
-            </div>
         {else}
             <div class="alert alert-warning">
                 <i class="icon-warning"></i>
@@ -101,10 +95,6 @@
                     </h3>
                 </div>
                 <div class="panel-body">
-                    <div class="alert alert-info">
-                        <i class="icon-info-circle"></i>
-                        Complete el formulario "Crear aplicacion" de Yuju con estos valores sugeridos. Todos los campos se pueden copiar con un clic.
-                    </div>
 
                     <div class="form-group">
                         <label class="control-label col-lg-3">
@@ -831,15 +821,6 @@
                     </h3>
                 </div>
                 <div class="panel-body">
-                    <div class="alert alert-info">
-                        Usa el endpoint <code>POST /products-gral-report</code>
-                        (<a href="https://api-docs.yuju.io/docs/obtener-informacion-general" target="_blank" rel="noopener">
-                            (documentación Yuju)
-                        </a>.
-                        Genera un JSONL con campos generales (nombre, descripción, imágenes, variaciones…).
-                        <strong>Límite de la API: máximo 2 veces por día</strong> (créditos a las 00:00 UTC).
-                        Cada descarga se guarda en el histórico y se puede revisar en el visualizador del monitoreo.
-                    </div>
 
                     <div class="form-group">
                         <label class="control-label col-lg-3">Habilitar solicitud programada</label>
@@ -948,10 +929,6 @@
                     </h3>
                 </div>
                 <div class="panel-body">
-                    <div class="alert alert-info">
-                        Compara stock, precio e imágenes entre Yuju y PrestaShop.
-                        <strong>PrestaShop es la fuente de verdad</strong>: si hay diferencias, se corrige solo en Yuju (nunca se modifican productos en PrestaShop).
-                    </div>
 
                     <div class="form-group">
                         <label class="control-label col-lg-3">Habilitar auditoría programada</label>
