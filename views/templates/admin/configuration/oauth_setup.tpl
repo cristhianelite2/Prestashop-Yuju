@@ -51,7 +51,7 @@
                     </div>
                     
                     <div class="col-lg-6">
-                        <h4>{l s='API Statistics' mod='prestashopyuju'}</h4>
+                        <h4>{l s='Estadísticas de la API' mod='prestashopyuju'}</h4>
                         {if isset($api_stats)}
                             <dl class="dl-horizontal">
                                 <dt>{l s='Total Requests:' mod='prestashopyuju'}</dt>
@@ -71,8 +71,8 @@
                 </div>
                 
                 <div class="panel-footer">
-                    <button type="button" class="btn btn-warning" onclick="if(confirm('{l s='Are you sure you want to revoke the OAuth token?' mod='prestashopyuju'}')) { window.location.href = '{$current_index|escape:'javascript':'UTF-8'}&token={$token|escape:'javascript':'UTF-8'}&revokeToken=1'; }">
-                        <i class="icon-unlink"></i> {l s='Revoke Token' mod='prestashopyuju'}
+                    <button type="button" class="btn btn-warning" onclick="if(confirm('{l s='¿Seguro que deseas revocar el token de OAuth?' mod='prestashopyuju'}')) { window.location.href = '{$current_index|escape:'javascript':'UTF-8'}&token={$token|escape:'javascript':'UTF-8'}&revokeToken=1'; }">
+                        <i class="icon-unlink"></i> {l s='Revocar token' mod='prestashopyuju'}
                     </button>
                     
                     <button type="button" class="btn btn-info" id="yuju-test-api">
@@ -159,7 +159,7 @@
             <form action="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" method="post" class="form-horizontal">
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Auto Sync' mod='prestashopyuju'}
+                        {l s='Sincronización automática' mod='prestashopyuju'}
                     </label>
                     <div class="col-lg-9">
                         <span class="switch prestashop-switch fixed-width-lg">
