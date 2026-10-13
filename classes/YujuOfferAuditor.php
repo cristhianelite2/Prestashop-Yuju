@@ -1534,6 +1534,30 @@ class YujuOfferAuditor
         return $dir . 'yuju_bulk_offer_tasks.json';
     }
 
+    /**
+     * Lock separado para serializar toda la operación leer-modificar-escribir.
+     * LOCK_EX en file_put_contents por sí solo no protege la lectura previa.
+     */
+    protected static function withBulkOfferTaskStoreLock(callable $callback)
+    {
+        $file = self::bulkOfferTaskFile();
+        $lock = @fopen($file . '.lock', 'c');
+        if (!$lock || !@flock($lock, LOCK_EX)) {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
+            error_log('[Yuju] No se pudo bloquear el histórico de tareas masivas: ' . $file);
+            return false;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+    }
+
     protected static function readBulkOfferTaskStore()
     {
         $file = self::bulkOfferTaskFile();
@@ -1541,9 +1565,16 @@ class YujuOfferAuditor
             return ['tasks' => [], 'history' => []];
         }
         $raw = @file_get_contents($file);
+        if ($raw === false) {
+            error_log('[Yuju] No se pudo leer el histórico de tareas masivas: ' . $file);
+            return ['tasks' => [], 'history' => [], '_store_error' => 'read_failed'];
+        }
         $store = json_decode((string) $raw, true);
-        if (!is_array($store)) {
-            return ['tasks' => [], 'history' => []];
+        if (!is_array($store) || json_last_error() !== JSON_ERROR_NONE) {
+            // Nunca tratar un archivo dañado como historial vacío: podría sobrescribirse
+            // y perder registros previos. Se conserva intacto para recuperación manual.
+            error_log('[Yuju] JSON inválido en el histórico de tareas masivas; no se sobrescribirá: ' . $file);
+            return ['tasks' => [], 'history' => [], '_store_error' => 'invalid_json'];
         }
         $store['tasks'] = isset($store['tasks']) && is_array($store['tasks']) ? $store['tasks'] : [];
         $store['history'] = isset($store['history']) && is_array($store['history']) ? $store['history'] : [];
@@ -1553,35 +1584,103 @@ class YujuOfferAuditor
     protected static function writeBulkOfferTaskStore(array $store)
     {
         $file = self::bulkOfferTaskFile();
+        $dir = dirname($file);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            error_log('[Yuju] Directorio de histórico de tareas masivas inexistente o no escribible: ' . $dir);
+            return false;
+        }
+
         $json = json_encode($store, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-        return $json !== false && @file_put_contents($file, $json . PHP_EOL, LOCK_EX) !== false;
+        if ($json === false) {
+            error_log('[Yuju] No se pudo codificar el histórico de tareas masivas: ' . json_last_error_msg());
+            return false;
+        }
+
+        $tmp = $file . '.tmp.' . getmypid() . '.' . str_replace('.', '', uniqid('', true));
+        $bytes = @file_put_contents($tmp, $json . PHP_EOL);
+        if ($bytes === false || $bytes !== strlen($json . PHP_EOL)) {
+            @unlink($tmp);
+            error_log('[Yuju] Escritura incompleta del histórico de tareas masivas: ' . $file);
+            return false;
+        }
+        @chmod($tmp, 0644);
+        if (!@rename($tmp, $file)) {
+            @unlink($tmp);
+            error_log('[Yuju] No se pudo reemplazar atómicamente el histórico de tareas masivas: ' . $file);
+            return false;
+        }
+
+        // Verificar que el archivo final se pueda leer y decodificar.
+        $saved = @file_get_contents($file);
+        $decoded = json_decode((string) $saved, true);
+        if ($saved === false || !is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+            error_log('[Yuju] Verificación posterior al guardado falló: ' . $file);
+            return false;
+        }
+        return true;
     }
 
     public static function recordBulkOfferTask(array $task)
     {
-        $store = self::readBulkOfferTaskStore();
-        $id = (string) ($task['id_task'] ?? '');
+        $id = trim((string) ($task['id_task'] ?? ''));
         if ($id === '') {
+            error_log('[Yuju] Se intentó registrar una tarea masiva sin id_task.');
             return false;
         }
-        $now = date('Y-m-d H:i:s');
-        $task['id_task'] = $id;
-        $task['submitted_at'] = $task['submitted_at'] ?? $now;
-        $task['updated_at'] = $now;
-        $task['status'] = $task['status'] ?? 'CREATED';
-        $task['history'] = [[
-            'at' => $now,
-            'status' => $task['status'],
-            'message' => $task['message'] ?? 'Tarea creada en Yuju.',
-        ]];
-        $store['tasks'][$id] = $task;
-        $store['history'][] = [
-            'at' => $now,
-            'id_task' => $id,
-            'status' => $task['status'],
-            'message' => $task['message'] ?? 'Tarea creada en Yuju.',
-        ];
-        return self::writeBulkOfferTaskStore($store);
+
+        return self::withBulkOfferTaskStoreLock(static function () use ($task, $id) {
+            $store = self::readBulkOfferTaskStore();
+            if (!empty($store['_store_error'])) {
+                // Dejar una copia recuperable sin tocar ni sobrescribir el archivo original.
+                $journal = self::bulkOfferTaskFile() . '.recovery.jsonl';
+                $line = json_encode([
+                    'recorded_at' => date('Y-m-d H:i:s'),
+                    'reason' => $store['_store_error'],
+                    'task' => $task,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($line !== false) {
+                    @file_put_contents($journal, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+                }
+                return false;
+            }
+
+            $now = date('Y-m-d H:i:s');
+            $existing = $store['tasks'][$id] ?? [];
+            $task['id_task'] = $id;
+            $task['submitted_at'] = $existing['submitted_at'] ?? ($task['submitted_at'] ?? $now);
+            $task['updated_at'] = $now;
+            $task['status'] = $task['status'] ?? 'CREATED';
+            $task['history'] = isset($existing['history']) && is_array($existing['history']) ? $existing['history'] : [];
+            $task['history'][] = [
+                'at' => $now,
+                'status' => $task['status'],
+                'message' => $task['message'] ?? 'Tarea creada en Yuju.',
+            ];
+            $store['tasks'][$id] = $task;
+            $store['history'][] = [
+                'at' => $now,
+                'id_task' => $id,
+                'status' => $task['status'],
+                'message' => $task['message'] ?? 'Tarea creada en Yuju.',
+            ];
+
+            if (self::writeBulkOfferTaskStore($store)) {
+                return true;
+            }
+
+            // El ID y la respuesta de creación quedan en un diario de recuperación
+            // aunque falle el archivo principal. No volver a enviar la tarea a Yuju.
+            $journal = self::bulkOfferTaskFile() . '.recovery.jsonl';
+            $line = json_encode([
+                'recorded_at' => $now,
+                'reason' => 'store_write_failed',
+                'task' => $task,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($line !== false && @file_put_contents($journal, $line . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+                error_log('[Yuju] Falló también el diario de recuperación para la tarea #' . $id);
+            }
+            return false;
+        });
     }
 
     /**
