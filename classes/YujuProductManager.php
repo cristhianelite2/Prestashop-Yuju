@@ -938,7 +938,7 @@ class YujuProductManager
     {
         $db = Db::getInstance();
         $existing = $db->getRow('
-            SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            SELECT id, last_sync_at FROM ' . _DB_PREFIX_ . 'yuju_product_status
             WHERE prestashop_product_id = ' . (int) $prestashop_product_id
         );
         $difference_fields = [];
@@ -948,6 +948,14 @@ class YujuProductManager
             }
         }
 
+        $uncomparable = isset($result['uncomparable']) && is_array($result['uncomparable'])
+            ? $result['uncomparable']
+            : [];
+        $verified_synced = isset($result['status'])
+            && $result['status'] === 'synced'
+            && empty($difference_fields)
+            && empty($uncomparable);
+
         $error = isset($result['message']) ? (string) $result['message'] : null;
         $data = [
             'yuju_product_id' => $yuju_product_id !== null && $yuju_product_id !== '' ? pSQL($yuju_product_id) : null,
@@ -955,11 +963,17 @@ class YujuProductManager
             'last_error' => $error !== null ? pSQL($error) : null,
             'last_sync_data' => pSQL(json_encode([
                 'differences' => array_values(array_unique($difference_fields)),
-                'uncomparable' => isset($result['uncomparable']) ? $result['uncomparable'] : [],
+                'uncomparable' => $uncomparable,
                 'checked_at' => gmdate('Y-m-d H:i:s'),
             ])),
             'updated_at' => date('Y-m-d H:i:s'),
         ];
+
+        // Record the time only when reconciliation verifies that all comparable fields match.
+        // A report with differences or uncomparable fields must not look like a successful sync.
+        if ($verified_synced) {
+            $data['last_sync_at'] = date('Y-m-d H:i:s');
+        }
 
         if ($existing) {
             return $db->update('yuju_product_status', $data, 'prestashop_product_id = ' . (int) $prestashop_product_id);
@@ -967,7 +981,9 @@ class YujuProductManager
 
         $data['prestashop_product_id'] = (int) $prestashop_product_id;
         $data['created_at'] = date('Y-m-d H:i:s');
-        $data['last_sync_at'] = null;
+        if (!$verified_synced) {
+            $data['last_sync_at'] = null;
+        }
 
         return $db->insert('yuju_product_status', $data);
     }
