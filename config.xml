@@ -3,7 +3,7 @@
     <name>yuju</name>
     <displayName><![CDATA[Yuju]]></displayName>
     <version><![CDATA[1.0.0]]></version>
-    <description><![CDATA[Sincroniza tu tienda PrestaShop con la plataforma Yuju para una gestión perfecta de inventario, productos y pedidos.]]></description>
+    <description><![CDATA[Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.]]></description>
     <author><![CDATA[Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>
     <logo><![CDATA[logo.png]]></logo>
