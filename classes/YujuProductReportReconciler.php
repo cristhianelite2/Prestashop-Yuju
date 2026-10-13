@@ -289,7 +289,18 @@ class YujuProductReportReconciler
     private static function normalizeValue($value)
     {
         if (is_string($value)) {
-            return trim($value);
+            // Reportes de Yuju pueden serializar el mismo texto con entidades HTML,
+            // espacios repetidos o saltos de línea. Normalizar antes de declarar diferencias.
+            $value = html_entity_decode($value, ENT_QUOTES, 'UTF-8');
+            $value = preg_replace('/\\s+/u', ' ', trim($value));
+            if (class_exists('Normalizer')) {
+                $normalized = Normalizer::normalize($value, Normalizer::FORM_C);
+                if ($normalized !== false) {
+                    $value = $normalized;
+                }
+            }
+
+            return $value;
         }
 
         if (!is_array($value)) {
