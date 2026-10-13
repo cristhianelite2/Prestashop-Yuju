@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>yuju</name>
+    <displayName><![CDATA[Yuju]]></displayName>
+    <version><![CDATA[1.0.0]]></version>
+    <description><![CDATA[Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.]]></description>
+    <author><![CDATA[Yuju]]></author>
+    <tab><![CDATA[market_place]]></tab>
+    <logo><![CDATA[logo.png]]></logo>
+    <confirmUninstall><![CDATA[¿Seguro que deseas desinstalar el módulo Yuju? Se eliminarán los datos de sincronización.]]></confirmUninstall>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+    <limited_countries></limited_countries>
+    <compatible_versions_min>8.0.0</compatible_versions_min>
+    <compatible_versions_max>9.99.99</compatible_versions_max>
+</module>
