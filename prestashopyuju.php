@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.15';
+        $this->version = '1.1.16';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -214,7 +214,14 @@ class Prestashopyuju extends Module
         ],
         [
         'class_name' => 'AdminYujuProductStatus',
-        'name' => $this->trans('Product Status', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => 'Estado de productos',
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
+        'class_name' => 'AdminYujuProductCategoryStatus',
+        'name' => 'Estado de productos por categoría',
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
@@ -268,6 +275,7 @@ class Prestashopyuju extends Module
         'AdminYujuLogs',
         'AdminYujuWebhook',
         'AdminYujuOrderStatusMapping',
+        'AdminYujuProductCategoryStatus',
         'AdminYujuProductStatus',
         'AdminYujuAttributeMapping',
         'AdminYujuProductMapping',
