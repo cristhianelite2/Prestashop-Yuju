@@ -240,9 +240,18 @@ class YujuLogger
             }
         }
 
-        // Crear archivo .htaccess para proteger los logs
-        $htaccess_content = 'Order deny,allow\nDeny from all';
-        file_put_contents($this->log_directory . '.htaccess', $htaccess_content);
+        // Proteger los logs sin sobrescribir un archivo existente ni emitir warnings
+        // si el hosting impide escribir en el directorio.
+        $htaccess_path = $this->log_directory . '.htaccess';
+        if (!file_exists($htaccess_path) && is_dir($this->log_directory) && is_writable($this->log_directory)) {
+            $htaccess_content = "Require all denied\n";
+            $written = @file_put_contents($htaccess_path, $htaccess_content, LOCK_EX);
+            if ($written === false) {
+                error_log('[Yuju] No se pudo crear la protección .htaccess en el directorio de logs.');
+            }
+        } elseif (file_exists($htaccess_path) && !is_file($htaccess_path)) {
+            error_log('[Yuju] La ruta .htaccess del directorio de logs existe pero no es un archivo regular.');
+        }
     }
 
     /**
