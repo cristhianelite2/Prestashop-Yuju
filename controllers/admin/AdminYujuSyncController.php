@@ -487,7 +487,8 @@ class AdminYujuSyncController extends ModuleAdminController
                     // the just-saved "synced" state back to "pending".
                     $updated_reconciliation_report = $reconciliation_report;
                     $successfully_synced_ids = [];
-                    foreach (isset($results['products']) && is_array($results['products']) ? $results['products'] : [] as $sync_result) {
+                    $sync_results = isset($results['products']) && is_array($results['products']) ? $results['products'] : [];
+                    foreach ($sync_results as $sync_result) {
                         if (isset($sync_result['status'], $sync_result['prestashop_product_id'])
                             && $sync_result['status'] === 'synced'
                         ) {
