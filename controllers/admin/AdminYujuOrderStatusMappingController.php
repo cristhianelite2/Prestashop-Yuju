@@ -43,6 +43,7 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
             'madkting_status_available' => $source['available'],
             'madkting_status_count' => $source['count'],
             'import_status_url' => $this->context->link->getAdminLink('AdminYujuOrderStatusMapping'),
+            'token' => $this->token,
             'yuju_status_docs_url' => 'https://api-docs.yuju.io/docs/estados-de-un-pedido',
         ]);
 
