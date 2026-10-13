@@ -605,7 +605,7 @@ $(function() {
     }
 
     function finishCombinedWorkflow() {
-        showMessage('Informe general listo. Descargando el reporte de stock/precio...', 'alert-info');
+        showMessage('Informe general listo. Verificando si el reporte de stock/precio ya está guardado...', 'alert-info');
         ajaxAction('downloadYujuOfferReport', null, function(offerResponse) {
             if (!offerResponse || !offerResponse.success) {
                 workflowRunning = false;
@@ -613,13 +613,13 @@ $(function() {
                 showMessage(offerResponse && offerResponse.message ? offerResponse.message : 'No se pudo descargar el reporte de stock/precio. La reconciliación no se ejecutó.', 'alert-danger');
                 return;
             }
-            showMessage('Reporte de stock/precio guardado (' + (offerResponse.products_count || 0) + ' productos). Combinando ambos reportes y detectando diferencias...', 'alert-info');
+            showMessage((offerResponse.reused ? 'Reporte de stock/precio reutilizado' : 'Reporte de stock/precio disponible') + ' (' + (offerResponse.products_count || 0) + ' productos). Combinando los reportes guardados y detectando diferencias...', 'alert-info');
             ajaxAction('getYujuProductSyncReport', null, function(reportResponse) {
                 workflowRunning = false;
                 $startBtn.prop('disabled', false).html($startBtn.data('original-html'));
                 if (reportResponse && reportResponse.success && reportResponse.report) {
                     renderReconciliation(reportResponse.report, 'Sincronización de informes completada: catálogo general + stock/precio.');
-                    showMessage('Proceso terminado. Ambos reportes se descargaron, combinaron y reconciliaron.', 'alert-success');
+                    showMessage('Proceso terminado. Se reutilizaron o recuperaron los archivos existentes, se combinaron y se reconciliaron sin solicitar un nuevo reporte si ya había uno guardado.', 'alert-success');
                 } else {
                     showMessage(reportResponse && reportResponse.message ? reportResponse.message : 'Los reportes se descargaron, pero no se pudo completar la reconciliación.', 'alert-danger');
                 }
