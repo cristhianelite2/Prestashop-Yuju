@@ -1520,14 +1520,33 @@ class YujuApiClient
      */
     public function getOrder($order_id, $channel_id = null)
     {
-        // Según documentación: GET /orders/?id_channel={id_channel}&id_order={id_order}
+        // Estructura normal: GET /orders/?id_channel={id_channel}&id_order={id_order}
         $params = ['id_order' => $order_id];
-        
+
         if ($channel_id) {
             $params['id_channel'] = $channel_id;
         }
-        
+
         return $this->get('orders/', $params);
+    }
+
+    /**
+     * Obtener una orden con la estructura estandarizada de Yuju.
+     * Esta función requiere que Yuju haya habilitado std-orders para la cuenta.
+     *
+     * @param string|int $order_id ID de orden o pack_id indicado por el webhook
+     * @param string|int|null $channel_id ID del canal
+     * @return array
+     */
+    public function getStandardOrder($order_id, $channel_id = null)
+    {
+        $params = ['id_order' => $order_id];
+
+        if ($channel_id) {
+            $params['id_channel'] = $channel_id;
+        }
+
+        return $this->get('std-orders/', $params);
     }
 
     public function updateOrderStatus($order_id, $status_data)
