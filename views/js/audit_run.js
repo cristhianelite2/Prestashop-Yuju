@@ -1002,7 +1002,7 @@
         var selectedAvailableCount = Object.keys(availableIds).filter(function (id) {
             return !!selectedDetailIds[id];
         }).length;
-        $('#yuju-audit-select-all-results')
+        $('.yuju-audit-select-all-results')
             .text(availableCount > 0 && selectedAvailableCount === availableCount
                 ? 'Quitar selección de resultados'
                 : 'Seleccionar todos los resultados')
@@ -1022,7 +1022,7 @@
             html += '<option value="' + size + '"' + (size === pageSize ? ' selected' : '') + '>' + size + '</option>';
         });
         html += '</select><span>por página</span></div>' +
-            '<button type="button" id="yuju-audit-select-all-results" class="yuju-audit-select-all-results" title="Selecciona todos los productos del resultado actual, no solo los visibles en esta página">Seleccionar todos los resultados</button>' +
+            '<button type="button" class="yuju-audit-select-all-results" title="Selecciona todos los productos del resultado actual, no solo los visibles en esta página">Seleccionar todos los resultados</button>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage - 1) + '"' + (currentPage <= 1 ? ' disabled' : '') + ' aria-label="Página anterior"><i class="icon-angle-left"></i> Anterior</button>' +
             '<span class="yuju-audit-page-current">Página ' + currentPage + ' de ' + totalPages + '</span>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage + 1) + '"' + (currentPage >= totalPages ? ' disabled' : '') + ' aria-label="Página siguiente">Siguiente <i class="icon-angle-right"></i></button>' +
@@ -1171,7 +1171,7 @@
             e.preventDefault();
             updateSelectedToYuju();
         });
-        $(document).on('click', '#yuju-audit-select-all-results', function () {
+        $(document).on('click', '.yuju-audit-select-all-results', function () {
             var availableIds = {};
             allRows.forEach(function (row) {
                 var id = parseInt(row && row.detail_id, 10) || 0;
