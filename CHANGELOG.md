@@ -1,3 +1,8 @@
+## [1.1.16] - 2026-10-13
+### Corregido
+- Se separa el listado detallado de estado de productos del resumen por categoría, con una sección de menú y vista independientes para cada uno.
+- Se fuerzan etiquetas en español en las dos vistas de estado de productos.
+
 ## [1.1.15] - 2026-10-13
 ### Corregido
 - Se restaura el panel de estadísticas de productos: contadores, actividad reciente, errores y estado agrupado por categoría. Se alinea la estructura que entrega el controlador con las variables que consume la plantilla y se cuentan productos únicos aunque tengan combinaciones.
