@@ -29,6 +29,9 @@ class Yuju extends Module
 {
     protected $config_form = false;
 
+    /** @var string Detalle del último fallo durante la instalación. */
+    protected $installFailureDetail = '';
+
     protected $logger;
 
     protected $api_client;
@@ -72,6 +75,7 @@ class Yuju extends Module
      */
     public function install()
     {
+        $this->installFailureDetail = '';
         $stage = 'preparar contexto de tiendas';
         $baseInstalled = false;
 
@@ -102,7 +106,8 @@ class Yuju extends Module
             foreach ($steps as $label => $method) {
                 $stage = $label;
                 if (!$this->{$method}()) {
-                    $this->logInstallFailure($stage, 'El paso devolvió false.');
+                    $detail = $this->installFailureDetail !== '' ? $this->installFailureDetail : 'El paso devolvió false.';
+                    $this->logInstallFailure($stage, $detail);
                     $this->rollbackFailedInstall();
                     return false;
                 }
@@ -794,7 +799,9 @@ class Yuju extends Module
             $carrierId = (int) $manager->ensureYujuCarrierPublic();
 
             if ($carrierId <= 0) {
-                $message = '[Yuju install] No se creó el transportista Yuju. Revisa el registro de errores del módulo para ver el motivo.';
+                $carrierError = method_exists($manager, 'getLastCarrierError') ? trim((string) $manager->getLastCarrierError()) : '';
+                $this->installFailureDetail = $carrierError !== '' ? $carrierError : 'No se pudo crear el transportista Yuju; no se recibió un motivo detallado.';
+                $message = '[Yuju install] No se creó el transportista Yuju. ' . $this->installFailureDetail;
                 error_log($message);
                 try {
                     PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
@@ -807,9 +814,9 @@ class Yuju extends Module
             $done = true;
             return true;
         } catch (Throwable $e) {
-            $message = '[Yuju install] Error al crear el transportista: '
-                . get_class($e) . ': ' . $e->getMessage()
+            $this->installFailureDetail = get_class($e) . ': ' . $e->getMessage()
                 . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
+            $message = '[Yuju install] Error al crear el transportista: ' . $this->installFailureDetail;
             error_log($message);
             try {
                 PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
