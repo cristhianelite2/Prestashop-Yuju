@@ -228,7 +228,7 @@ class Prestashopyuju extends Module
         ],
         [
         'class_name' => 'AdminYujuWebhook',
-        'name' => $this->trans('Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => 'Webhooks',
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
