@@ -105,6 +105,27 @@ class Yuju extends Module
 
             foreach ($steps as $label => $method) {
                 $stage = $label;
+
+                // La creación del transportista es opcional para instalar el módulo:
+                // si PrestaShop no permite crearlo, el resto de la integración debe instalarse.
+                if ($method === 'ensureYujuCarrier') {
+                    try {
+                        if (!$this->{$method}()) {
+                            $detail = $this->installFailureDetail !== ''
+                                ? $this->installFailureDetail
+                                : 'No se pudo crear el transportista Yuju; la instalación continuará sin él.';
+                            $this->logOptionalInstallFailure($stage, $detail);
+                        }
+                    } catch (Throwable $carrierError) {
+                        $detail = get_class($carrierError) . ': ' . $carrierError->getMessage()
+                            . ' en ' . basename($carrierError->getFile()) . ':' . $carrierError->getLine();
+                        $this->logOptionalInstallFailure($stage, $detail);
+                    }
+
+                    // No ejecutar rollbackFailedInstall() ni devolver false por este paso.
+                    continue;
+                }
+
                 if (!$this->{$method}()) {
                     $detail = $this->installFailureDetail !== '' ? $this->installFailureDetail : 'El paso devolvió false.';
                     $this->logInstallFailure($stage, $detail);
@@ -124,6 +145,22 @@ class Yuju extends Module
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Registra un fallo no crítico de instalación sin marcar el módulo como fallido.
+     * No añade el error a $this->_errors ni revierte la instalación base.
+     */
+    protected function logOptionalInstallFailure($stage, $detail)
+    {
+        $message = '[Yuju install] Aviso: falló el paso opcional "' . $stage . '": ' . $detail;
+        error_log($message);
+
+        try {
+            PrestaShopLogger::addLog($message, 2, null, 'Module', (int) $this->id, true);
+        } catch (Throwable $loggingError) {
+            // El fallo del registro no debe convertir este paso opcional en fatal.
         }
     }
 
