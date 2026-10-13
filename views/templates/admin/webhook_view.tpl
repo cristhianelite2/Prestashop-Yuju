@@ -20,7 +20,7 @@
 
 {block name="content"}
 <div class="yuju-webhook-detail-container">
-    <!-- Header Section -->
+    <!-- Sección de encabezado -->
     <div class="detail-header">
         <div class="header-content">
             <div class="header-left">
@@ -45,7 +45,7 @@
         </div>
     </div>
 
-    <!-- Main Content -->
+    <!-- Contenido principal -->
     <div class="detail-content">
         <div class="row detail-row">
             <div class="col-lg-6">
@@ -267,7 +267,7 @@
                             <div class="invalid-payload">
                                 <div class="warning-header">
                                     <i class="icon-exclamation-triangle"></i>
-                                    <strong>JSON Contenido Inválido</strong>
+                                    <strong>Contenido JSON no válido</strong>
                                 </div>
                                 <div class="raw-payload">
                                     <pre class="code-block">{$webhook_log.payload|escape:'html':'UTF-8'}</pre>
@@ -874,7 +874,7 @@ pre {
     border-bottom-left-radius: 0;
 }
 
-/* Success/Error Messages */
+/* Mensajes de éxito y error */
 .message {
     position: fixed;
     top: 20px;
@@ -904,7 +904,7 @@ pre {
     border-color: #d43f3a;
 }
 
-/* Responsive adjustments */
+/* Ajustes para pantallas adaptables */
 @media (max-width: 768px) {
     .dl-horizontal dt {
         float: none;
