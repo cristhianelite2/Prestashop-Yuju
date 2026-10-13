@@ -436,7 +436,7 @@
                 type: 'POST',
                 dataType: 'json',
                 timeout: 60000,
-                data: { ajax: 1, action: 'CheckUpdate', token: adminYujuToken }
+                data: { ajax: 1, action: 'CheckUpdate' }
             }).done(function (response) {
                 if (response && response.success) {
                     applyUpdateStatus(response.data);
@@ -469,7 +469,7 @@
                 type: 'POST',
                 dataType: 'json',
                 timeout: 300000,
-                data: { ajax: 1, action: 'PerformUpdate', token: adminYujuToken }
+                data: { ajax: 1, action: 'PerformUpdate' }
             }).done(function (response) {
                 if (response && response.success) {
                     showUpdateAlert('success', response.message || 'Actualización completada.');
