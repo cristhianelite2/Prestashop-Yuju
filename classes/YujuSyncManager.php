@@ -211,8 +211,29 @@ class YujuSyncManager
         if (!$this->config['sync_stock']) {
             return ['success' => false, 'error' => 'Stock synchronization is disabled'];
         }
-        // El stock se toma de PrestaShop y se envía a Yuju con el payload de producto.
-        return $this->product_manager->syncProductsToYuju($product_ids);
+
+        $results = ['success' => true, 'updated_count' => 0, 'errors' => []];
+        try {
+            foreach ($this->getProductsForStockSync($product_ids) as $row) {
+                $productId = (int) $row['id_product'];
+                $yujuId = trim((string) ($row['yuju_product_id'] ?? ''));
+                if ($productId <= 0 || $yujuId === '') {
+                    continue;
+                }
+                $stock = (int) StockAvailable::getQuantityAvailableByProduct($productId);
+                $response = $this->api_client->updateProduct($yujuId, ['stock' => $stock]);
+                if (!empty($response['success'])) {
+                    ++$results['updated_count'];
+                } else {
+                    $results['errors'][] = 'Producto ' . $productId . ': ' . ($response['message'] ?? 'No se pudo enviar stock a Yuju');
+                }
+            }
+        } catch (Exception $e) {
+            $results['success'] = false;
+            $results['errors'][] = $e->getMessage();
+        }
+        $results['success'] = $results['success'] && empty($results['errors']);
+        return $results;
     }
 
     /**
@@ -223,8 +244,29 @@ class YujuSyncManager
         if (!$this->config['sync_prices']) {
             return ['success' => false, 'error' => 'Price synchronization is disabled'];
         }
-        // El precio se toma de PrestaShop y se envía a Yuju con el payload de producto.
-        return $this->product_manager->syncProductsToYuju($product_ids);
+
+        $results = ['success' => true, 'updated_count' => 0, 'errors' => []];
+        try {
+            foreach ($this->getProductsForPriceSync($product_ids) as $row) {
+                $productId = (int) $row['id_product'];
+                $yujuId = trim((string) ($row['yuju_product_id'] ?? ''));
+                $product = new Product($productId);
+                if ($productId <= 0 || $yujuId === '' || !Validate::isLoadedObject($product)) {
+                    continue;
+                }
+                $response = $this->api_client->updateProduct($yujuId, ['price' => round((float) $product->price, 2)]);
+                if (!empty($response['success'])) {
+                    ++$results['updated_count'];
+                } else {
+                    $results['errors'][] = 'Producto ' . $productId . ': ' . ($response['message'] ?? 'No se pudo enviar precio a Yuju');
+                }
+            }
+        } catch (Exception $e) {
+            $results['success'] = false;
+            $results['errors'][] = $e->getMessage();
+        }
+        $results['success'] = $results['success'] && empty($results['errors']);
+        return $results;
     }
 
     /**
@@ -232,13 +274,18 @@ class YujuSyncManager
      */
     protected function getProductsForStockSync($product_ids = null)
     {
+        $hasAttributeColumn = Db::getInstance()->executeS(
+            'SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'yuju_product_status` LIKE \'prestashop_product_attribute_id\''
+        );
+        $attributeFilter = !empty($hasAttributeColumn)
+            ? ' AND (ps.prestashop_product_attribute_id IS NULL OR ps.prestashop_product_attribute_id = 0)'
+            : '';
         $sql = '
             SELECT p.id_product, ps.yuju_product_id
             FROM ' . _DB_PREFIX_ . 'product p
             JOIN ' . _DB_PREFIX_ . 'yuju_product_status ps ON p.id_product = ps.prestashop_product_id
             WHERE p.active = 1 AND ps.yuju_product_id IS NOT NULL
-              AND (ps.prestashop_product_attribute_id IS NULL OR ps.prestashop_product_attribute_id = 0)
-        ';
+        ' . $attributeFilter;
 
         if ($product_ids && is_array($product_ids)) {
             $sql .= ' AND p.id_product IN (' . implode(',', array_map('intval', $product_ids)) . ')';
