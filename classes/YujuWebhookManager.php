@@ -400,9 +400,8 @@ class YujuWebhookManager
         if ($topic === '' && !empty($webhook_data['event'])) {
             $legacy = (string) $webhook_data['event'];
             if ($legacy === 'product.created' || $legacy === 'product.updated') {
-                $product_data = $webhook_data['data'] ?? [];
-
-                return $this->product_manager->syncSingleProductFromYuju($product_data, true);
+                $this->logger->log('Webhook legacy de producto recibido e ignorado: el catálogo se sincroniza desde PrestaShop hacia Yuju.', 'warning');
+                return ['success' => true, 'direction_blocked' => true, 'message' => 'No se importaron cambios de producto desde Yuju.'];
             }
             if ($legacy === 'product.deleted') {
                 $this->logger->log('Webhook legacy product.deleted ignorado por política unidireccional.', 'warning');
