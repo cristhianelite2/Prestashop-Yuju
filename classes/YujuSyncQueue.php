@@ -32,8 +32,8 @@ class YujuSyncQueue
             }
             $forceResend = !empty($data['force_resend_create']);
 
-            // Si es prioridad alta (precio/stock), procesar inmediatamente
-            if ($priority === 'high') {
+            // defer=1 permite que el worker ejecute la API fuera del hook de PrestaShop.
+            if ($priority === 'high' && empty($data['defer'])) {
                 $this->logger->info('Cola: Prioridad ALTA - Procesando inmediatamente', [
                     'product_id' => $product_id,
                     'action' => $action
@@ -463,16 +463,44 @@ class YujuSyncQueue
                     return;
                 }
             } else {
-                // create: siempre throttle antes (1 request = 1 envío).
-                // update: throttle solo si el gap vs la última API aún no se cumplió;
-                // los skip sin diff no renuevan lastApiAt, así no frenan el drenaje.
-                if ($action === 'create' || $lastApiAt !== null) {
-                    $this->waitForApiGap($lastApiAt, $apiGapUs);
-                }
                 $start_time = microtime(true);
-                $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
-                $sync_duration = microtime(true) - $start_time;
-                $result = is_array($send_res) && !empty($send_res['success']);
+                if (!empty($data['direct_update']) && $action === 'update') {
+                    if ($lastApiAt !== null) { $this->waitForApiGap($lastApiAt, $apiGapUs); }
+                    $productId = (int) $item['prestashop_product_id'];
+                    $yujuId = trim((string) Db::getInstance()->getValue(
+                        'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                         WHERE prestashop_product_id = ' . $productId
+                    ));
+                    $payload = [];
+                    foreach (['stock', 'price', 'name', 'sku_simple', 'weight', 'description', 'short_description', 'ean'] as $field) {
+                        if (array_key_exists($field, $data)) { $payload[$field] = $data[$field]; }
+                    }
+                    if (array_key_exists('stock', $payload)) { $payload['stock'] = max(0, (int) $payload['stock']); }
+                    if (array_key_exists('price', $payload)) {
+                        $price = (float) $payload['price'];
+                        if (!is_finite($price) || $price <= 0) { unset($payload['price']); }
+                    }
+                    if ($yujuId === '' || empty($payload)) {
+                        $send_res = [
+                            'success' => false,
+                            'message' => $yujuId === '' ? 'El producto ya no tiene vínculo con Yuju.' : 'No hay campos válidos para enviar.',
+                            'http_code' => 0,
+                        ];
+                    } else {
+                        require_once dirname(__FILE__) . '/YujuApiClient.php';
+                        $api = new YujuApiClient();
+                        $send_res = $api->updateProduct($yujuId, $payload);
+                        $lastApiAt = microtime(true);
+                        $madeApiCall = true;
+                    }
+                    $sync_duration = microtime(true) - $start_time;
+                    $result = is_array($send_res) && !empty($send_res['success']);
+                } else {
+                    if ($action === 'create' || $lastApiAt !== null) { $this->waitForApiGap($lastApiAt, $apiGapUs); }
+                    $send_res = $product_manager->sendProductToYuju((int) $item['prestashop_product_id'], $data);
+                    $sync_duration = microtime(true) - $start_time;
+                    $result = is_array($send_res) && !empty($send_res['success']);
+                }
             }
 
             $itemDetail['duration_s'] = round($sync_duration, 3);
@@ -515,6 +543,12 @@ class YujuSyncQueue
             }
 
             if ($result) {
+                if (!empty($data['direct_update'])) {
+                    Db::getInstance()->update('yuju_product_status', [
+                        'sync_status' => pSQL('synced'), 'last_error' => null,
+                        'last_sync_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
+                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id']);
+                }
                 $this->updateQueueStatus($item['id'], 'completed');
                 $stats['success']++;
                 $stats['by_action'][$action]['success']++;
@@ -530,6 +564,13 @@ class YujuSyncQueue
                     'timings' => $itemDetail['timings'],
                 ]);
             } else {
+                if (!empty($data['direct_update'])) {
+                    Db::getInstance()->update('yuju_product_status', [
+                        'sync_status' => pSQL('synced_with_errors'),
+                        'last_error' => pSQL($itemDetail['error'] ?: 'Error al procesar producto'),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id']);
+                }
                 $this->handleQueueError($item['id'], $itemDetail['error'] ?: 'Error al procesar producto');
                 $stats['failed']++;
                 $stats['by_action'][$action]['failed']++;
