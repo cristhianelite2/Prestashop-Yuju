@@ -76,10 +76,11 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_mapping` (
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_product_id` int(11) DEFAULT NULL,
+    `prestashop_product_id` int(11) DEFAULT NULL COMMENT 'ID del producto padre en PrestaShop',
+    `prestashop_product_attribute_id` int(11) DEFAULT NULL COMMENT 'ID de combinación; NULL para producto simple',
     `yuju_product_id` varchar(255),
+    `parent_yuju_product_id` varchar(255) DEFAULT NULL COMMENT 'ID del producto padre en Yuju para variaciones',
     `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued', 'creating_in_yuju', 'updating_in_yuju', 'deleting_in_yuju') DEFAULT 'pending',
-    `sync_direction` enum('prestashop_to_yuju', 'yuju_to_prestashop', 'bidirectional') DEFAULT 'bidirectional',
     `last_sync_at` datetime,
     `last_sync_data` text,
     `last_error` text,
