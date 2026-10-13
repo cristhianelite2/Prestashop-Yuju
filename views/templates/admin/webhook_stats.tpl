@@ -25,16 +25,16 @@
     </div>
     <div class="panel-body">
         <!-- Statistics Cards -->
-        <div class="row">
+        <div class="row yuju-webhook-stats">
             <div class="col-md-3">
-                <div class="panel panel-default">
-                    <div class="panel-body text-center">
+                <div class="panel panel-default yuju-webhook-stat-card yuju-stat-total">
+                    <div class="panel-body">
                         <div class="row">
-                            <div class="col-xs-3">
-                                <i class="icon-list icon-3x text-primary"></i>
+                            <div class="col-xs-3 yuju-stat-icon">
+                                <i class="icon-list"></i>
                             </div>
-                            <div class="col-xs-9 text-right">
-                                <div class="huge">{$webhook_stats.total_received|default:0|escape:'html':'UTF-8'}</div>
+                            <div class="col-xs-9 text-right yuju-stat-copy">
+                                <div class="huge yuju-stat-number">{$webhook_stats.total_received|default:0|escape:'html':'UTF-8'}</div>
                                 <div>Total de Webhooks</div>
                             </div>
                         </div>
@@ -43,14 +43,14 @@
             </div>
             
             <div class="col-md-3">
-                <div class="panel panel-success">
-                    <div class="panel-body text-center">
+                <div class="panel panel-default yuju-webhook-stat-card yuju-stat-processed">
+                    <div class="panel-body">
                         <div class="row">
-                            <div class="col-xs-3">
-                                <i class="icon-check icon-3x"></i>
+                            <div class="col-xs-3 yuju-stat-icon">
+                                <i class="icon-check"></i>
                             </div>
-                            <div class="col-xs-9 text-right">
-                                <div class="huge">
+                            <div class="col-xs-9 text-right yuju-stat-copy">
+                                <div class="huge yuju-stat-number">
                                     {assign var="processed" value=0}
                                     {if $webhook_stats.by_status}
                                         {foreach from=$webhook_stats.by_status item=status}
@@ -69,14 +69,14 @@
             </div>
             
             <div class="col-md-3">
-                <div class="panel panel-danger">
-                    <div class="panel-body text-center">
+                <div class="panel panel-default yuju-webhook-stat-card yuju-stat-failed">
+                    <div class="panel-body">
                         <div class="row">
-                            <div class="col-xs-3">
-                                <i class="icon-times icon-3x"></i>
+                            <div class="col-xs-3 yuju-stat-icon">
+                                <i class="icon-times"></i>
                             </div>
-                            <div class="col-xs-9 text-right">
-                                <div class="huge">
+                            <div class="col-xs-9 text-right yuju-stat-copy">
+                                <div class="huge yuju-stat-number">
                                     {assign var="failed" value=0}
                                     {if $webhook_stats.by_status}
                                         {foreach from=$webhook_stats.by_status item=status}
@@ -95,14 +95,14 @@
             </div>
             
             <div class="col-md-3">
-                <div class="panel panel-warning">
-                    <div class="panel-body text-center">
+                <div class="panel panel-default yuju-webhook-stat-card yuju-stat-processing">
+                    <div class="panel-body">
                         <div class="row">
-                            <div class="col-xs-3">
-                                <i class="icon-clock-o icon-3x"></i>
+                            <div class="col-xs-3 yuju-stat-icon">
+                                <i class="icon-clock-o"></i>
                             </div>
-                            <div class="col-xs-9 text-right">
-                                <div class="huge">
+                            <div class="col-xs-9 text-right yuju-stat-copy">
+                                <div class="huge yuju-stat-number">
                                     {assign var="processing" value=0}
                                     {if $webhook_stats.by_status}
                                         {foreach from=$webhook_stats.by_status item=status}
@@ -211,29 +211,29 @@
                             </div>
                         {elseif isset($yuju_webhook_subscription_configs) && $yuju_webhook_subscription_configs && count($yuju_webhook_subscription_configs) > 0}
                             {foreach from=$yuju_webhook_subscription_configs item=config}
-                                <div class="panel panel-default" style="margin-bottom:12px;">
+                                <div class="panel panel-default yuju-config-card">
                                     <div class="panel-heading">
                                         <div class="row">
-                                            <div class="col-md-8">
-                                                <strong>Configuración #{$config.id|default:'-'|escape:'html':'UTF-8'}</strong>
-                                                <div><small>{$config.url|default:'-'|escape:'html':'UTF-8'}</small></div>
+                                            <div class="col-md-7 yuju-config-identity">
+                                                <strong class="yuju-config-title">Configuración #{$config.id|default:'-'|escape:'html':'UTF-8'}</strong>
+                                                <div class="yuju-config-url"><small>{$config.url|default:'-'|escape:'html':'UTF-8'}</small></div>
                                             </div>
-                                            <div class="col-md-4 text-right">
+                                            <div class="col-md-5 yuju-config-actions">
                                                 {if $config.is_active}
                                                     <span class="label label-success"><i class="icon-check"></i> Activa</span>
-                                                    <a class="btn btn-xs btn-warning" style="margin-left:8px;"
+                                                    <a class="btn btn-xs btn-warning yuju-config-action"
                                                        href="{$yuju_webhook_toggle_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&enable=0">
                                                         <i class="icon-pause"></i> Deshabilitar
                                                     </a>
                                                 {else}
                                                     <span class="label label-default"><i class="icon-power-off"></i> Inactiva</span>
-                                                    <a class="btn btn-xs btn-success" style="margin-left:8px;"
+                                                    <a class="btn btn-xs btn-success yuju-config-action"
                                                        href="{$yuju_webhook_toggle_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}&enable=1">
                                                         <i class="icon-play"></i> Habilitar
                                                     </a>
                                                 {/if}
                                                 {if isset($yuju_webhook_delete_config_base) && $config.id}
-                                                    <a class="btn btn-xs btn-danger" style="margin-left:8px;"
+                                                    <a class="btn btn-xs btn-danger yuju-config-action"
                                                        href="{$yuju_webhook_delete_config_base|escape:'html':'UTF-8'}&subscription_id={$config.id|escape:'url'}"
                                                        onclick="return confirm('¿Eliminar la configuración #{$config.id|escape:'javascript':'UTF-8'} de Yuju?\n\nEsto borra la suscripción completa con todos sus topics. Esta acción no se puede deshacer.');">
                                                         <i class="icon-trash"></i> Eliminar
