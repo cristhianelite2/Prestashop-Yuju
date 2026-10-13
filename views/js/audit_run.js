@@ -1027,9 +1027,10 @@
             });
 
             var issueCount = lastUpdateIssues.length;
-            var summaryHtml = '<strong>' +
-                (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.') +
-                '</strong> ' + escapeHtml(resp.message || '');
+            var summaryTitle = resp.task_id
+                ? 'Tarea masiva creada en Yuju; pendiente de resultado.'
+                : (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.');
+            var summaryHtml = '<strong>' + summaryTitle + '</strong> ' + escapeHtml(resp.message || '');
 
             if (issueCount > 0 || Number(resp.failed || 0) > 0 || Number(resp.skipped || 0) > 0) {
                 summaryHtml += ' <button type="button" class="btn btn-xs btn-warning yuju-audit-update-errors" style="margin-left:8px;">' +
