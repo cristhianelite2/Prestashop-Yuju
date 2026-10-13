@@ -376,14 +376,41 @@ class YujuOfferAuditor
             'updated_at' => pSQL($now),
         ];
 
-        if (!Db::getInstance()->insert('yuju_audit_runs', $insert)) {
-            return [
-                'success' => false,
-                'message' => 'No se pudo crear el registro de auditoría.',
-            ];
-        }
+        // Reutilizar la misma ejecución para el mismo reporte y tipo de auditoría.
+        // Así, reanalizar un reporte actualiza sus detalles en lugar de crear miles de filas
+        // nuevas en cada intento. Solo se reutilizan ejecuciones ya terminadas.
+        $reportIdNeedle = '"report_id":' . (int) $reportId . ',';
+        $reportTypeNeedle = '"report_type":"' . pSQL($reportType) . '"';
+        $existingRun = Db::getInstance()->getRow(
+            'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_audit_runs`
+             WHERE status IN (\'completed\', \'failed\')
+               AND summary_json LIKE \'%' . pSQL($reportIdNeedle) . '%\'
+               AND summary_json LIKE \'%' . pSQL($reportTypeNeedle) . '%\'
+             ORDER BY id DESC LIMIT 1'
+        );
 
-        $runId = (int) Db::getInstance()->Insert_ID();
+        if (!empty($existingRun['id'])) {
+            $runId = (int) $existingRun['id'];
+            if (!Db::getInstance()->update('yuju_audit_runs', $insert, 'id = ' . $runId)) {
+                return [
+                    'success' => false,
+                    'message' => 'No se pudo actualizar la auditoría existente del reporte.',
+                ];
+            }
+            $this->logger->info('Reutilizando auditoría existente para reanalizar reporte', [
+                'run_id' => $runId,
+                'report_id' => (int) $reportId,
+                'report_type' => $reportType,
+            ]);
+        } else {
+            if (!Db::getInstance()->insert('yuju_audit_runs', $insert)) {
+                return [
+                    'success' => false,
+                    'message' => 'No se pudo crear el registro de auditoría.',
+                ];
+            }
+            $runId = (int) Db::getInstance()->Insert_ID();
+        }
         $this->writeRunOffersJsonl($runId, $offers, [
             'apply_fixes' => $applyFixes,
             'report_id' => (int) $reportId,
@@ -2947,41 +2974,62 @@ class YujuOfferAuditor
             return;
         }
 
-        $now = date('Y-m-d H:i:s');
-        $chunks = array_chunk($details, 80);
-        foreach ($chunks as $chunk) {
-            $values = [];
-            foreach ($chunk as $detail) {
-                $values[] = '(' .
-                    (int) $detail['id_audit_run'] . ',' .
-                    ($detail['prestashop_product_id'] !== null ? (int) $detail['prestashop_product_id'] : 'NULL') . ',' .
-                    ($detail['yuju_product_id'] !== null ? '\'' . pSQL($detail['yuju_product_id']) . '\'' : 'NULL') . ',' .
-                    ($detail['sku'] !== null ? '\'' . pSQL($detail['sku']) . '\'' : 'NULL') . ',' .
-                    (!empty($detail['product_name']) ? '\'' . pSQL($detail['product_name']) . '\'' : 'NULL') . ',' .
-                    ($detail['ps_stock'] !== null ? (int) $detail['ps_stock'] : 'NULL') . ',' .
-                    ($detail['yuju_stock'] !== null ? (int) $detail['yuju_stock'] : 'NULL') . ',' .
-                    ($detail['ps_price'] !== null ? (float) $detail['ps_price'] : 'NULL') . ',' .
-                    ($detail['yuju_price'] !== null ? (float) $detail['yuju_price'] : 'NULL') . ',' .
-                    ($detail['ps_images_count'] !== null ? (int) $detail['ps_images_count'] : 'NULL') . ',' .
-                    ($detail['yuju_images_count'] !== null ? (int) $detail['yuju_images_count'] : 'NULL') . ',' .
-                    ($detail['diffs_json'] !== null ? '\'' . pSQL($detail['diffs_json'], true) . '\'' : 'NULL') . ',' .
-                    '\'' . pSQL($detail['result']) . '\',' .
-                    '\'' . pSQL($detail['message'], true) . '\',' .
-                    '\'' . pSQL($now) . '\'' .
-                ')';
+        // Un detalle se identifica por ejecución + SKU (y, como respaldo, producto PS).
+        // Si el mismo reporte se reanaliza, actualizamos la fila existente conservando su ID
+        // en vez de insertar otra copia. Las filas sin SKU no se pueden reconciliar con seguridad.
+        foreach ($details as $detail) {
+            $existingId = 0;
+            $runId = (int) ($detail['id_audit_run'] ?? 0);
+            $sku = trim((string) ($detail['sku'] ?? ''));
+            $productId = isset($detail['prestashop_product_id']) ? (int) $detail['prestashop_product_id'] : 0;
+
+            if ($runId > 0 && $sku !== '') {
+                $existingId = (int) Db::getInstance()->getValue(
+                    'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details`
+                     WHERE id_audit_run = ' . $runId . '
+                       AND sku = \' ' . pSQL($sku) . '\'
+                     ORDER BY id ASC LIMIT 1'
+                );
+            }
+            if ($existingId <= 0 && $runId > 0 && $productId > 0) {
+                $existingId = (int) Db::getInstance()->getValue(
+                    'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details`
+                     WHERE id_audit_run = ' . $runId . '
+                       AND prestashop_product_id = ' . $productId . '
+                       AND (sku IS NULL OR sku = \'\')
+                     ORDER BY id ASC LIMIT 1'
+                );
             }
 
-            $sql = 'INSERT INTO `' . _DB_PREFIX_ . 'yuju_audit_run_details`
-                (`id_audit_run`,`prestashop_product_id`,`yuju_product_id`,`sku`,`product_name`,
-                 `ps_stock`,`yuju_stock`,`ps_price`,`yuju_price`,`ps_images_count`,`yuju_images_count`,
-                 `diffs_json`,`result`,`message`,`created_at`)
-                VALUES ' . implode(',', $values);
-
-            // Fallback si aún no existe product_name
-            if (!Db::getInstance()->execute($sql)) {
-                foreach ($chunk as $detail) {
-                    $this->insertDetail($detail);
+            if ($existingId > 0) {
+                $row = [
+                    'prestashop_product_id' => $detail['prestashop_product_id'] !== null ? (int) $detail['prestashop_product_id'] : null,
+                    'yuju_product_id' => $detail['yuju_product_id'] !== null ? pSQL($detail['yuju_product_id']) : null,
+                    'sku' => $detail['sku'] !== null ? pSQL($detail['sku']) : null,
+                    'product_name' => !empty($detail['product_name']) ? pSQL($detail['product_name']) : null,
+                    'ps_stock' => $detail['ps_stock'] !== null ? (int) $detail['ps_stock'] : null,
+                    'yuju_stock' => $detail['yuju_stock'] !== null ? (int) $detail['yuju_stock'] : null,
+                    'ps_price' => $detail['ps_price'] !== null ? (float) $detail['ps_price'] : null,
+                    'yuju_price' => $detail['yuju_price'] !== null ? (float) $detail['yuju_price'] : null,
+                    'ps_images_count' => $detail['ps_images_count'] !== null ? (int) $detail['ps_images_count'] : null,
+                    'yuju_images_count' => $detail['yuju_images_count'] !== null ? (int) $detail['yuju_images_count'] : null,
+                    'diffs_json' => $detail['diffs_json'] !== null ? pSQL($detail['diffs_json'], true) : null,
+                    'result' => pSQL($detail['result']),
+                    'message' => pSQL($detail['message'], true),
+                    'created_at' => date('Y-m-d H:i:s'),
+                ];
+                foreach ($row as $key => $value) {
+                    if ($value === null) {
+                        unset($row[$key]);
+                    }
                 }
+                Db::getInstance()->update(
+                    'yuju_audit_run_details',
+                    $row,
+                    'id = ' . $existingId
+                );
+            } else {
+                $this->insertDetail($detail);
             }
         }
     }
