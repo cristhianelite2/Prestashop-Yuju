@@ -1755,9 +1755,13 @@ class YujuOfferAuditor
      */
     public static function refreshBulkOfferTaskHistory()
     {
-        return self::withBulkOfferTaskStoreLock(static function () {
+        $tasks = self::withBulkOfferTaskStoreLock(static function () {
             return self::refreshBulkOfferTaskHistoryLocked();
         });
+
+        // Si no fue posible adquirir el lock, devolver el último estado legible
+        // para que el endpoint AJAX no intente serializar false como una lista.
+        return is_array($tasks) ? $tasks : array_values(self::readBulkOfferTaskStore()['tasks']);
     }
 
     protected static function refreshBulkOfferTaskHistoryLocked()
