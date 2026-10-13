@@ -721,7 +721,9 @@
         runId = resp.run_id;
         reportId = resp.report_id || reportId;
         allRows = [];
-        groupExpanded = {};
+        selectedDetailIds = {};
+        currentPage = 1;
+        groupExpanded = {}
         // Durante el stream solo llegan diffs; el filtro total se carga al final desde BD
         activeFilter = 'diff';
         startedAtMs = Date.now();
