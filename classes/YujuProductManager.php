@@ -1033,11 +1033,28 @@ class YujuProductManager
      *
      * @return array<string, mixed>|null
      */
+    protected function hasProductAttributeStatusColumn()
+    {
+        static $hasColumn = null;
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+        $rows = Db::getInstance()->executeS(
+            'SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'yuju_product_status` LIKE \'prestashop_product_attribute_id\''
+        );
+        $hasColumn = !empty($rows);
+        return $hasColumn;
+    }
+
     public function getProductYujuStatusRow($prestashop_product_id)
     {
+        $attributeFilter = $this->hasProductAttributeStatusColumn()
+            ? ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'
+            : '';
         $row = Db::getInstance()->getRow(
             'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_status
-             WHERE prestashop_product_id = ' . (int) $prestashop_product_id
+             WHERE prestashop_product_id = ' . (int) $prestashop_product_id . $attributeFilter . '
+             ORDER BY id ASC'
         );
 
         return $row ?: null;
@@ -1169,16 +1186,20 @@ class YujuProductManager
             $data['last_sync_data'] = $last_sync_data === null ? null : pSQL($last_sync_data, true);
         }
 
-        $existing = Db::getInstance()->getRow('
-            SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
-            WHERE prestashop_product_id = ' . (int) $prestashop_product_id . '
-        ');
+        $attributeFilter = $this->hasProductAttributeStatusColumn()
+            ? ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'
+            : '';
+        $existing = Db::getInstance()->getRow(
+            'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
+             WHERE prestashop_product_id = ' . (int) $prestashop_product_id . $attributeFilter . '
+             ORDER BY id ASC'
+        );
 
         if ($existing) {
             return Db::getInstance()->update(
                 'yuju_product_status',
                 $data,
-                'prestashop_product_id = ' . (int) $prestashop_product_id
+                'prestashop_product_id = ' . (int) $prestashop_product_id . $attributeFilter
             );
         } else {
             $data['prestashop_product_id'] = (int) $prestashop_product_id;
