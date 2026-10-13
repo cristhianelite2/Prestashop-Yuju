@@ -38,32 +38,125 @@
 </div>
 
 <style>
+/* Estilo alineado con el resto del módulo Yuju: neutro, compacto y sin degradados. */
+.yuju-webhook-container {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+}
+.yuju-webhook-header {
+    margin: 0 0 15px;
+    padding: 0 0 14px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+.yuju-page-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    color: #444;
+    font-size: 20px;
+    font-weight: 500;
+}
+.yuju-page-title i {
+    color: #777;
+    font-size: 18px;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+}
+.yuju-page-subtitle {
+    margin: 6px 0 0;
+    color: #777;
+    font-size: 13px;
+    font-weight: 400;
+}
+.yuju-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 9px;
+    background: #f7f7f7;
+    border: 1px solid #e5e5e5;
+    border-radius: 3px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: none;
+}
+.status-dot.status-active {
+    background: #5cb85c;
+    box-shadow: none;
+}
+.status-text {
+    color: #555;
+    font-size: 12px;
+    font-weight: 500;
+}
+@keyframes pulse {
+    0%, 70%, 100% { box-shadow: none; }
+}
+.yuju-webhook-content {
+    overflow: visible;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+.yuju-webhook-content .panel {
+    margin-bottom: 15px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    box-shadow: none;
+}
+.yuju-webhook-content .panel-heading {
+    padding: 10px 15px;
+    color: #555;
+    background: #f7f7f7;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    font-weight: 500;
+}
+.yuju-webhook-content .panel-body {
+    padding: 15px;
+    background: #fff;
+}
 .yuju-order-search-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin: 0 0 10px;
-    padding: 8px 12px;
-    background: #f8f8f8;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: #fafafa;
     border: 1px solid #e5e5e5;
-    border-radius: 4px;
+    border-radius: 3px;
 }
 .yuju-order-search-bar label {
     margin: 0 4px 0 0;
-    font-weight: 600;
-    font-size: 12px;
     color: #555;
+    font-size: 12px;
+    font-weight: 500;
 }
 .yuju-order-search-bar .form-control {
-    height: 28px;
-    padding: 2px 8px;
-    font-size: 12px;
-    width: 140px;
     display: inline-block;
+    width: 160px;
+    height: 30px;
+    padding: 4px 8px;
+    font-size: 12px;
 }
 .yuju-order-search-bar .btn {
-    padding: 4px 10px;
+    padding: 5px 10px;
     font-size: 12px;
     line-height: 1.3;
 }
@@ -73,139 +166,11 @@
     font-size: 12px;
     font-weight: normal;
 }
-.yuju-webhook-container {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 20px;
-    margin: -20px;
-}
-
-.yuju-webhook-header {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 15px;
-    padding: 30px;
-    margin-bottom: 25px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
-}
-
-.yuju-page-title {
-    color: #2c3e50;
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.yuju-page-title i {
-    background: linear-gradient(45deg, #667eea, #764ba2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-size: 2.2rem;
-}
-
-.yuju-page-subtitle {
-    color: #7f8c8d;
-    font-size: 1.1rem;
-    margin: 10px 0 0 0;
-    font-weight: 400;
-}
-
-.yuju-status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(46, 204, 113, 0.1);
-    padding: 12px 20px;
-    border-radius: 25px;
-    border: 2px solid rgba(46, 204, 113, 0.3);
-}
-
-.status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-.status-dot.status-active {
-    background: #2ecc71;
-    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
-}
-
-.status-text {
-    color: #27ae60;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(46, 204, 113, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
-    }
-}
-
-.yuju-webhook-content {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 15px;
-    padding: 0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
-    overflow: hidden;
-}
-
-/* Override default panel styles */
-.yuju-webhook-content .panel {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    margin: 0;
-}
-
-.yuju-webhook-content .panel-heading {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    padding: 20px 30px;
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-
-.yuju-webhook-content .panel-body {
-    padding: 30px;
-    background: transparent;
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-    .yuju-webhook-container {
-        padding: 10px;
-        margin: -10px;
-    }
-    
-    .yuju-webhook-header {
-        padding: 20px;
-        text-align: center;
-    }
-    
-    .yuju-page-title {
-        font-size: 2rem;
-        justify-content: center;
-    }
-    
-    .yuju-status-indicator {
-        justify-content: center;
-        margin-top: 15px;
-    }
+    .yuju-webhook-header { padding-bottom: 10px; }
+    .yuju-page-title { font-size: 18px; }
+    .yuju-webhook-content .panel-body { padding: 10px; }
+    .yuju-order-search-bar .form-control { width: 100%; }
 }
 </style>
 {/block}
