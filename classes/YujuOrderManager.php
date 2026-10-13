@@ -1,6 +1,6 @@
 <?php
 /**
- * 2024 Yuju Integration.
+ * 2024 Yuju.
  *
  * NOTICE OF LICENSE
  *
@@ -12,8 +12,8 @@
  * obtain it through the world-wide-web, please send an email
  * to license@prestashop.com so we can send you a copy immediately.
  *
- * @author    Yuju Integration Team
- * @copyright 2024 Yuju Integration
+ * @author    Yuju
+ * @copyright 2024 Yuju
  * @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  */
 if (!defined('_PS_VERSION_')) {
