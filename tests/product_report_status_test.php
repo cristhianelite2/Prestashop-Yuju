@@ -255,6 +255,7 @@ $status101 = $db->findStatusByYujuId('101');
 assertSameValue(null, $status101['last_error'], 'Status updates should use the schema last_error column.');
 assertSameValue(false, isset($status101['error_message']), 'Status updates must not write a nonexistent error_message column.');
 assertSameValue('VAR-M', $db->findStatusByYujuId('104', 'id:1041')['yuju_variation_sku'], 'Each reported Yuju variation should have its own status row.');
+assertSameValue(1401, (int) $db->findStatusByYujuId('104', 'id:1041')['prestashop_product_attribute_id'], 'A Yuju variation SKU should link to its matching PrestaShop combination.');
 assertSameValue(5, $result['yuju_total'], 'The Yuju catalog total should include parents, unlinked products, and nested variations.');
 
 echo "Product report status reconciliation tests passed.\n";
