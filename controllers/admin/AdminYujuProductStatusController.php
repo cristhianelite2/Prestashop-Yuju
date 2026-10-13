@@ -182,9 +182,20 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'disabled' => 'Deshabilitado',
         ];
 
-        // La vista de estado de productos muestra únicamente el listado detallado.
-        // Las estadísticas por categoría tienen su propio controlador y sección.
-        return parent::renderList();
+        // Restaurar el panel de resumen antes del listado detallado de productos.
+        // La pantalla por categoría tiene su propia vista y no se incluye aquí.
+        $stats = $this->getProductStatusStats();
+        $this->context->smarty->assign([
+            'stats' => $stats,
+            'product_status_stats' => $stats,
+            'sync_running' => $this->sync_manager->isSyncRunning(),
+        ]);
+
+        $statsHtml = $this->context->smarty->fetch(
+            _PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/product_status_stats.tpl'
+        );
+
+        return $statsHtml . parent::renderList();
     }
 
     public function postProcess()
