@@ -741,8 +741,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
     
     protected function getCategoryMappings()
     {
+        $languageId = (int) $this->context->language->id;
         $sql = '
-            SELECT 
+            SELECT
                 cm.id,
                 cm.prestashop_category_id,
                 cm.yuju_category_id,
@@ -750,12 +751,21 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 cm.sync_enabled,
                 cm.last_sync_at,
                 cm.created_at,
-                cl.name as prestashop_category_name
+                cl.name AS prestashop_category_name,
+                parent_lang.name AS parent_category_name,
+                CASE WHEN parent_mapping.id IS NULL THEN 0 ELSE 1 END AS parent_synced
             FROM ' . _DB_PREFIX_ . 'yuju_category_mapping cm
-            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl ON (cm.prestashop_category_id = cl.id_category AND cl.id_lang = ' . (int) $this->context->language->id . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl
+                ON (cm.prestashop_category_id = cl.id_category AND cl.id_lang = ' . $languageId . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'category category
+                ON (category.id_category = cm.prestashop_category_id)
+            LEFT JOIN ' . _DB_PREFIX_ . 'category_lang parent_lang
+                ON (parent_lang.id_category = category.id_parent AND parent_lang.id_lang = ' . $languageId . ')
+            LEFT JOIN ' . _DB_PREFIX_ . 'yuju_category_mapping parent_mapping
+                ON (parent_mapping.prestashop_category_id = category.id_parent)
             ORDER BY cm.created_at DESC
         ';
-        
+
         return Db::getInstance()->executeS($sql) ?: [];
     }
     
