@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) NOT NULL,
+    `prestashop_product_attribute_id` int(11) NOT NULL DEFAULT 0 COMMENT '0 para producto simple; id_product_attribute para variaciones',
     `action` enum('create','update','delete') NOT NULL,
     `priority` enum('high','normal') NOT NULL DEFAULT 'normal',
     `status` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
