@@ -185,11 +185,106 @@ class AdminYujuProductMappingController extends ModuleAdminController
             case 'saveMappings':
                 $this->ajaxSaveMappings();
                 break;
+            case 'importFields':
+                $this->ajaxImportFields();
+                break;
             default:
                 die(json_encode(['success' => false, 'message' => 'Acción no válida']));
         }
     }
     
+
+    /**
+     * Importa el mapeo inicial de campos del modelo oficial de producto de Yuju.
+     *
+     * Operación estrictamente aditiva: solo consulta e inserta en
+     * _DB_PREFIX_ . 'yuju_product_mapping'. No borra ni modifica filas existentes
+     * y no consulta ni altera tablas ajenas al módulo Yuju.
+     */
+    private function ajaxImportFields()
+    {
+        $response = [
+            'success' => false,
+            'message' => '',
+            'imported' => 0,
+            'skipped_existing' => 0,
+            'failed' => 0,
+        ];
+
+        try {
+            $mappings = [
+                ['prestashop_field' => 'reference', 'yuju_field' => 'sku_simple', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'reference', 'yuju_field' => 'sku', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'name', 'yuju_field' => 'name', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'description', 'yuju_field' => 'description', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'id_category_default', 'yuju_field' => 'id_category', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'quantity', 'yuju_field' => 'stock', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => '0'],
+                ['prestashop_field' => 'price', 'yuju_field' => 'price', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '0'],
+                ['prestashop_field' => 'manufacturer_name', 'yuju_field' => 'brand', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'shipping_cost', 'yuju_field' => 'shipping', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'unit_dimension', 'yuju_field' => 'dimensions_unit', 'field_type' => 'string', 'is_required' => 1, 'default_value' => 'cm'],
+                ['prestashop_field' => 'width', 'yuju_field' => 'shipping_width', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'depth', 'yuju_field' => 'shipping_depth', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'height', 'yuju_field' => 'shipping_height', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'unit_weight', 'yuju_field' => 'weight_unit', 'field_type' => 'string', 'is_required' => 1, 'default_value' => 'kg'],
+                ['prestashop_field' => 'weight', 'yuju_field' => 'weight', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'images', 'yuju_field' => 'images', 'field_type' => 'array', 'is_required' => 1, 'default_value' => ''],
+                ['prestashop_field' => 'condition', 'yuju_field' => 'condition', 'field_type' => 'string', 'is_required' => 0, 'default_value' => 'new'],
+                ['prestashop_field' => 'ean13', 'yuju_field' => 'ean', 'field_type' => 'string', 'is_required' => 0, 'default_value' => ''],
+                ['prestashop_field' => 'upc', 'yuju_field' => 'upc', 'field_type' => 'string', 'is_required' => 0, 'default_value' => ''],
+                ['prestashop_field' => 'isbn', 'yuju_field' => 'isbn_10', 'field_type' => 'string', 'is_required' => 0, 'default_value' => ''],
+                ['prestashop_field' => 'isbn', 'yuju_field' => 'isbn_13', 'field_type' => 'string', 'is_required' => 0, 'default_value' => ''],
+                ['prestashop_field' => 'mpn', 'yuju_field' => 'mpn', 'field_type' => 'string', 'is_required' => 0, 'default_value' => ''],
+            ];
+
+            foreach ($mappings as $mapping) {
+                // Idempotencia por campo destino: nunca sobrescribir una configuración existente.
+                $exists = Db::getInstance()->getValue(
+                    'SELECT id_mapping FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`'
+                    . ' WHERE yuju_field = "' . pSQL($mapping['yuju_field']) . '"'
+                );
+
+                if ($exists) {
+                    ++$response['skipped_existing'];
+                    continue;
+                }
+
+                $now = date('Y-m-d H:i:s');
+                $data = [
+                    'prestashop_field' => pSQL($mapping['prestashop_field']),
+                    'yuju_field' => pSQL($mapping['yuju_field']),
+                    'default_value' => pSQL($mapping['default_value']),
+                    'field_type' => pSQL($mapping['field_type']),
+                    'sync_direction' => 'bidirectional',
+                    'transformation_rule' => 'none',
+                    'is_required' => (int) $mapping['is_required'],
+                    'is_active' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+
+                if (Db::getInstance()->insert('yuju_product_mapping', $data)) {
+                    ++$response['imported'];
+                } else {
+                    ++$response['failed'];
+                }
+            }
+
+            $response['success'] = $response['failed'] === 0;
+            $response['message'] = 'Importación finalizada. Nuevos: ' . $response['imported']
+                . '; existentes sin cambios: ' . $response['skipped_existing']
+                . '; errores: ' . $response['failed'] . '.';
+            $this->logger->log('Importación aditiva de campos de producto Yuju: ' . $response['message'], 'info');
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error importando campos de producto Yuju: ' . $e->getMessage(), 'error');
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        $this->ajaxRender(json_encode($response));
+    }
+
+
     /**
      * Save mappings via AJAX
      */
