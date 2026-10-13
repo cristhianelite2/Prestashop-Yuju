@@ -113,7 +113,7 @@ class TestDb
 
     public function update($table, $data, $where)
     {
-        if (preg_match('/id\\s*=\\s*(\\d+)/', $where, $match)) {
+        if (preg_match('/\\bid\\s*=\\s*(\\d+)/', $where, $match)) {
             $id = (int) $match[1];
             if (!isset($this->statuses[$id])) {
                 return false;
