@@ -237,6 +237,7 @@ class YujuSyncManager
             FROM ' . _DB_PREFIX_ . 'product p
             JOIN ' . _DB_PREFIX_ . 'yuju_product_status ps ON p.id_product = ps.prestashop_product_id
             WHERE p.active = 1 AND ps.yuju_product_id IS NOT NULL
+              AND (ps.prestashop_product_attribute_id IS NULL OR ps.prestashop_product_attribute_id = 0)
         ';
 
         if ($product_ids && is_array($product_ids)) {
