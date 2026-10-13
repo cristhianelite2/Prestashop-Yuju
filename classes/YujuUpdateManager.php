@@ -207,9 +207,8 @@ class YujuUpdateManager
 
             $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
-            // Register the legacy ModuleAdminController tab before users open its URL.
-            // The custom updater does not execute PrestaShop's install/upgrade tab registration.
-            $this->ensureOrderStatusMappingTab();
+            // Order-status mapping now uses the existing AdminYuju route and does not
+            // require a separate Tab record to be created during updates.
 
             // The custom updater copies files but does not execute PrestaShop's
             // upgrade scripts automatically. Apply the module-owned local schema
