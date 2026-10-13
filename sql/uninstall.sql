@@ -1,5 +1,5 @@
 -- =============================================================================
--- prestashopyuju — desinstalación (elimina todas las tablas del módulo)
+-- yuju — desinstalación (elimina todas las tablas del módulo)
 -- =============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;

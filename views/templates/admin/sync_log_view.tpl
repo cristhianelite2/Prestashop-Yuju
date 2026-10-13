@@ -22,66 +22,66 @@
 <div class="panel panel-default yuju-module">
     <div class="panel-heading">
         <i class="icon-file-text"></i>
-        {l s='Sync Log Details' mod='prestashopyuju'} - ID: {$sync_log.id_log|escape:'html':'UTF-8'}
+        {l s='Sync Log Details' mod='yuju'} - ID: {$sync_log.id_log|escape:'html':'UTF-8'}
     </div>
     <div class="panel-body">
         <div class="row">
             <div class="col-md-6">
-                <h4>{l s='General Information' mod='prestashopyuju'}</h4>
+                <h4>{l s='General Information' mod='yuju'}</h4>
                 <table class="table table-striped">
                     <tr>
-                        <td><strong>{l s='Log ID' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Log ID' mod='yuju'}</strong></td>
                         <td>{$sync_log.id_log|escape:'html':'UTF-8'}</td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Sync Type' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Sync Type' mod='yuju'}</strong></td>
                         <td>
                             <span class="label label-info">{$sync_log.sync_type|escape:'html':'UTF-8'}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Sync Direction' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Sync Direction' mod='yuju'}</strong></td>
                         <td>
                             {if $sync_log.sync_direction == 'prestashop_to_yuju'}
                                 <span class="label label-primary">
-                                    <i class="icon-arrow-right"></i> {l s='PrestaShop → Yuju' mod='prestashopyuju'}
+                                    <i class="icon-arrow-right"></i> {l s='PrestaShop → Yuju' mod='yuju'}
                                 </span>
                             {elseif $sync_log.sync_direction == 'yuju_to_prestashop'}
                                 <span class="label label-success">
-                                    <i class="icon-arrow-left"></i> {l s='Yuju → PrestaShop' mod='prestashopyuju'}
+                                    <i class="icon-arrow-left"></i> {l s='Yuju → PrestaShop' mod='yuju'}
                                 </span>
                             {else}
                                 <span class="label label-default">
-                                    <i class="icon-exchange"></i> {l s='Bidirectional' mod='prestashopyuju'}
+                                    <i class="icon-exchange"></i> {l s='Bidirectional' mod='yuju'}
                                 </span>
                             {/if}
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Status' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Status' mod='yuju'}</strong></td>
                         <td>
                             {if $sync_log.success}
                                 <span class="label label-success">
-                                    <i class="icon-check"></i> {l s='Success' mod='prestashopyuju'}
+                                    <i class="icon-check"></i> {l s='Success' mod='yuju'}
                                 </span>
                             {else}
                                 <span class="label label-danger">
-                                    <i class="icon-remove"></i> {l s='Failed' mod='prestashopyuju'}
+                                    <i class="icon-remove"></i> {l s='Failed' mod='yuju'}
                                 </span>
                             {/if}
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Started At' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Started At' mod='yuju'}</strong></td>
                         <td>{$sync_log.created_at|date_format:"%Y-%m-%d %H:%M:%S"|escape:'html':'UTF-8'}</td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Execution Time' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Execution Time' mod='yuju'}</strong></td>
                         <td>
                             {if $sync_log.execution_time}
-                                <strong>{$sync_log.execution_time|string_format:"%.2f"|escape:'html':'UTF-8'} {l s='seconds' mod='prestashopyuju'}</strong>
+                                <strong>{$sync_log.execution_time|string_format:"%.2f"|escape:'html':'UTF-8'} {l s='seconds' mod='yuju'}</strong>
                             {else}
-                                <span class="text-muted">{l s='N/A' mod='prestashopyuju'}</span>
+                                <span class="text-muted">{l s='N/A' mod='yuju'}</span>
                             {/if}
                         </td>
                     </tr>
@@ -89,40 +89,40 @@
             </div>
             
             <div class="col-md-6">
-                <h4>{l s='Statistics' mod='prestashopyuju'}</h4>
+                <h4>{l s='Statistics' mod='yuju'}</h4>
                 <table class="table table-striped">
                     <tr>
-                        <td><strong>{l s='Products Synced' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Products Synced' mod='yuju'}</strong></td>
                         <td>
                             <span class="badge badge-primary">{$sync_log.products_synced|intval}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Categories Synced' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Categories Synced' mod='yuju'}</strong></td>
                         <td>
                             <span class="badge badge-info">{if isset($sync_log.categories_synced)}{$sync_log.categories_synced|intval}{else}0{/if}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Stock Updates' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Stock Updates' mod='yuju'}</strong></td>
                         <td>
                             <span class="badge badge-warning">{if isset($sync_log.stock_synced)}{$sync_log.stock_synced|intval}{else}0{/if}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Price Updates' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Price Updates' mod='yuju'}</strong></td>
                         <td>
                             <span class="badge badge-success">{if isset($sync_log.price_synced)}{$sync_log.price_synced|intval}{else}0{/if}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Error Count' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Error Count' mod='yuju'}</strong></td>
                         <td>
                             <span class="badge badge-danger">{$sync_log.error_count|intval}</span>
                         </td>
                     </tr>
                     <tr>
-                        <td><strong>{l s='Success Rate' mod='prestashopyuju'}</strong></td>
+                        <td><strong>{l s='Success Rate' mod='yuju'}</strong></td>
                         <td>
                             {assign var="total_items" value=($sync_log.products_synced + $sync_log.error_count)}
                             {if $total_items > 0}
@@ -142,7 +142,7 @@
         {if isset($sync_log.sync_details) && $sync_log.sync_details}
             <div class="row" style="margin-top: 20px;">
                 <div class="col-md-12">
-                    <h4>{l s='Sync Details' mod='prestashopyuju'}</h4>
+                    <h4>{l s='Sync Details' mod='yuju'}</h4>
                     <div class="well">
                         <pre style="max-height: 300px; overflow-y: auto;">{$sync_log.sync_details|escape:'html':'UTF-8'}</pre>
                     </div>
@@ -153,7 +153,7 @@
         {if isset($sync_log.error_details) && $sync_log.error_details}
             <div class="row" style="margin-top: 20px;">
                 <div class="col-md-12">
-                    <h4 class="text-danger">{l s='Error Details' mod='prestashopyuju'}</h4>
+                    <h4 class="text-danger">{l s='Error Details' mod='yuju'}</h4>
                     <div class="alert alert-danger">
                         <pre style="max-height: 300px; overflow-y: auto;">{$sync_log.error_details|escape:'html':'UTF-8'}</pre>
                     </div>
@@ -164,16 +164,16 @@
         {if isset($sync_log.processed_items) && count($sync_log.processed_items) > 0}
             <div class="row" style="margin-top: 20px;">
                 <div class="col-md-12">
-                    <h4>{l s='Processed Items' mod='prestashopyuju'}</h4>
+                    <h4>{l s='Processed Items' mod='yuju'}</h4>
                     <div class="table-responsive">
                         <table class="table table-striped table-condensed">
                             <thead>
                                 <tr>
-                                    <th>{l s='Item Type' mod='prestashopyuju'}</th>
-                                    <th>{l s='Item ID' mod='prestashopyuju'}</th>
-                                    <th>{l s='Item Name' mod='prestashopyuju'}</th>
-                                    <th>{l s='Status' mod='prestashopyuju'}</th>
-                                    <th>{l s='Message' mod='prestashopyuju'}</th>
+                                    <th>{l s='Item Type' mod='yuju'}</th>
+                                    <th>{l s='Item ID' mod='yuju'}</th>
+                                    <th>{l s='Item Name' mod='yuju'}</th>
+                                    <th>{l s='Status' mod='yuju'}</th>
+                                    <th>{l s='Message' mod='yuju'}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -187,15 +187,15 @@
                                         <td>
                                             {if $item.status == 'success'}
                                                 <span class="label label-success">
-                                                    <i class="icon-check"></i> {l s='Success' mod='prestashopyuju'}
+                                                    <i class="icon-check"></i> {l s='Success' mod='yuju'}
                                                 </span>
                                             {elseif $item.status == 'error'}
                                                 <span class="label label-danger">
-                                                    <i class="icon-remove"></i> {l s='Error' mod='prestashopyuju'}
+                                                    <i class="icon-remove"></i> {l s='Error' mod='yuju'}
                                                 </span>
                                             {elseif $item.status == 'skipped'}
                                                 <span class="label label-warning">
-                                                    <i class="icon-minus"></i> {l s='Skipped' mod='prestashopyuju'}
+                                                    <i class="icon-minus"></i> {l s='Skipped' mod='yuju'}
                                                 </span>
                                             {else}
                                                 <span class="label label-info">
@@ -223,21 +223,21 @@
             <div class="col-md-12">
                 <div class="btn-group">
                     <a href="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}" class="btn btn-default">
-                        <i class="icon-arrow-left"></i> {l s='Back to Sync Logs' mod='prestashopyuju'}
+                        <i class="icon-arrow-left"></i> {l s='Back to Sync Logs' mod='yuju'}
                     </a>
                     
                     {if !$sync_log.success}
                         <button type="button" class="btn btn-warning" onclick="retrySync({$sync_log.id_log|escape:'javascript':'UTF-8'})">
-                            <i class="icon-refresh"></i> {l s='Retry Sync' mod='prestashopyuju'}
+                            <i class="icon-refresh"></i> {l s='Retry Sync' mod='yuju'}
                         </button>
                     {/if}
                     
                     <button type="button" class="btn btn-info" onclick="exportLog({$sync_log.id_log|escape:'javascript':'UTF-8'})">
-                        <i class="icon-download"></i> {l s='Export Log' mod='prestashopyuju'}
+                        <i class="icon-download"></i> {l s='Export Log' mod='yuju'}
                     </button>
                     
                     <button type="button" class="btn btn-danger" onclick="deleteLog({$sync_log.id_log|escape:'javascript':'UTF-8'})">
-                        <i class="icon-trash"></i> {l s='Delete Log' mod='prestashopyuju'}
+                        <i class="icon-trash"></i> {l s='Delete Log' mod='yuju'}
                     </button>
                 </div>
             </div>
@@ -247,7 +247,7 @@
 
 <script type="text/javascript">
 function retrySync(logId) {
-    if (confirm('{l s='Are you sure you want to retry this sync operation?' mod='prestashopyuju' js=1}')) {
+    if (confirm('{l s='Are you sure you want to retry this sync operation?' mod='yuju' js=1}')) {
         $.ajax({
             url: '{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}',
             type: 'POST',
@@ -258,16 +258,16 @@ function retrySync(logId) {
             },
             success: function(response) {
                 if (response.success) {
-                    showSuccessMessage('{l s='Sync retry initiated successfully' mod='prestashopyuju' js=1}');
+                    showSuccessMessage('{l s='Sync retry initiated successfully' mod='yuju' js=1}');
                     setTimeout(function() {
                         location.reload();
                     }, 2000);
                 } else {
-                    showErrorMessage(response.message || '{l s='Failed to retry sync' mod='prestashopyuju' js=1}');
+                    showErrorMessage(response.message || '{l s='Failed to retry sync' mod='yuju' js=1}');
                 }
             },
             error: function() {
-                showErrorMessage('{l s='An error occurred while retrying the sync' mod='prestashopyuju' js=1}');
+                showErrorMessage('{l s='An error occurred while retrying the sync' mod='yuju' js=1}');
             }
         });
     }
@@ -278,7 +278,7 @@ function exportLog(logId) {
 }
 
 function deleteLog(logId) {
-    if (confirm('{l s='Are you sure you want to delete this log? This action cannot be undone.' mod='prestashopyuju' js=1}')) {
+    if (confirm('{l s='Are you sure you want to delete this log? This action cannot be undone.' mod='yuju' js=1}')) {
         $.ajax({
             url: '{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}',
             type: 'POST',
@@ -289,16 +289,16 @@ function deleteLog(logId) {
             },
             success: function(response) {
                 if (response.success) {
-                    showSuccessMessage('{l s='Log deleted successfully' mod='prestashopyuju' js=1}');
+                    showSuccessMessage('{l s='Log deleted successfully' mod='yuju' js=1}');
                     setTimeout(function() {
                         window.location.href = '{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}';
                     }, 1500);
                 } else {
-                    showErrorMessage(response.message || '{l s='Failed to delete log' mod='prestashopyuju' js=1}');
+                    showErrorMessage(response.message || '{l s='Failed to delete log' mod='yuju' js=1}');
                 }
             },
             error: function() {
-                showErrorMessage('{l s='An error occurred while deleting the log' mod='prestashopyuju' js=1}');
+                showErrorMessage('{l s='An error occurred while deleting the log' mod='yuju' js=1}');
             }
         });
     }

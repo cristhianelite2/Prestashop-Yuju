@@ -639,7 +639,7 @@ class YujuOAuth extends ObjectModel
     private function getRedirectUri()
     {
         $link = new Link();
-        return $link->getModuleLink('prestashopyuju', 'oauth', [], true);
+        return $link->getModuleLink('yuju', 'oauth', [], true);
     }
 
     private function createErrorResponse($message, $http_code = null, $debug = null)

@@ -14,7 +14,7 @@ require_once dirname(__FILE__, 2) . '/config/config.inc.php';
 require_once dirname(__FILE__, 2) . '/init.php';
 
 // Cargar clase YujuConfig
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/config/config.php';
+require_once _PS_MODULE_DIR_ . 'yuju/config/config.php';
 
 echo "<h1>Migración de Configuración Yuju</h1>\n";
 echo "<p>Moviendo configuraciones de ps_configuration a ps_yuju_configuration...</p>\n";

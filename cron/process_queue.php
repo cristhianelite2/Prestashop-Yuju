@@ -6,7 +6,7 @@
  * Respeta YUJU_BATCH_SIZE (máx. envíos reales a Yuju por corrida).
  *
  * Crontab ejemplo:
- *   * /5 * * * * php /ruta/modules/prestashopyuju/cron/process_queue.php
+ *   * /5 * * * * php /ruta/modules/yuju/cron/process_queue.php
  *
  * Opciones CLI:
  *   --loops=N     Repetir hasta N lotes si hay pendientes (default 1)

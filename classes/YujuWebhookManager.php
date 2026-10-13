@@ -960,7 +960,7 @@ class YujuWebhookManager
 
         $protocol = $ssl ? 'https://' : 'http://';
 
-        return $protocol . $shop_url . '/modules/prestashopyuju/webhook.php';
+        return $protocol . $shop_url . '/modules/yuju/webhook.php';
     }
 
     /**

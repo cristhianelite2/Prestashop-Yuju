@@ -511,7 +511,7 @@ class YujuSyncManager
             null,
             null,
             null,
-            _PS_MODULE_DIR_ . 'prestashopyuju/mails/'
+            _PS_MODULE_DIR_ . 'yuju/mails/'
         );
     }
 
@@ -546,7 +546,7 @@ class YujuSyncManager
      */
     public function isSyncRunning()
     {
-        $lock_file = _PS_MODULE_DIR_ . 'prestashopyuju/logs/sync.lock';
+        $lock_file = _PS_MODULE_DIR_ . 'yuju/logs/sync.lock';
 
         if (file_exists($lock_file)) {
             $lock_time = filemtime($lock_file);
@@ -568,7 +568,7 @@ class YujuSyncManager
      */
     public function createSyncLock()
     {
-        $lock_file = _PS_MODULE_DIR_ . 'prestashopyuju/logs/sync.lock';
+        $lock_file = _PS_MODULE_DIR_ . 'yuju/logs/sync.lock';
         file_put_contents($lock_file, time());
     }
 
@@ -577,7 +577,7 @@ class YujuSyncManager
      */
     public function removeSyncLock()
     {
-        $lock_file = _PS_MODULE_DIR_ . 'prestashopyuju/logs/sync.lock';
+        $lock_file = _PS_MODULE_DIR_ . 'yuju/logs/sync.lock';
 
         if (file_exists($lock_file)) {
             unlink($lock_file);

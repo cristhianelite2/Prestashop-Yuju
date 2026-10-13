@@ -7,13 +7,13 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/config/config.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuOAuth.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuOfferAuditor.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductGralReport.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductOfferReport.php';
+require_once _PS_MODULE_DIR_ . 'yuju/config/config.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOAuth.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuApiClient.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductGralReport.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductOfferReport.php';
 
 class AdminYujuAuditMonitoringController extends ModuleAdminController
 {

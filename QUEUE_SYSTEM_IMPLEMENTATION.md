@@ -26,7 +26,7 @@ Se ha implementado un sistema de **sincronización por lotes** que:
 ---
 
 ### 2. **Hook Actualizado: `hookActionProductUpdate`**
-📁 `prestashopyuju.php` (líneas ~928-1180)
+📁 `yuju.php` (líneas ~928-1180)
 
 **Cambios:**
 ```php
@@ -195,7 +195,7 @@ mysql -u root -p prestashop_yuju < sql/install.sql
 ## 🔍 Monitoreo
 
 ### Vista Web del Cron
-🔗 `https://yuju.ceballosleon.com/modules/prestashopyuju/cron/cron.php`
+🔗 `https://yuju.ceballosleon.com/modules/yuju/cron/cron.php`
 
 **Sección "Cola de Sincronización por Lotes":**
 - Total de elementos en cola
@@ -234,7 +234,7 @@ SELECT COUNT(*) FROM ps_yuju_product_status WHERE sync_status = 'queued';
 
 ### 1. Esquema unificado
 ```bash
-cd f:\xampp82\htdocs\html\yuju\prestashopyuju
+cd f:\xampp82\htdocs\html\yuju\yuju
 # Preferible: reinstalar módulo o Schema Repair en BO.
 # Opcional (reemplaza PREFIX_ / ENGINE_TYPE antes):
 # Get-Content sql\install.sql | & "f:\xampp82\mysql\bin\mysql.exe" -u root prestashop_yuju
@@ -254,10 +254,10 @@ DESCRIBE ps_yuju_sync_queue;
 ### 4. Ejecutar Cron Manualmente
 ```bash
 # Por URL (navegador)
-https://yuju.ceballosleon.com/modules/prestashopyuju/cron/cron.php
+https://yuju.ceballosleon.com/modules/yuju/cron/cron.php
 
 # Por CLI
-php f:\xampp82\htdocs\html\yuju\prestashopyuju\cron\cron.php
+php f:\xampp82\htdocs\html\yuju\yuju\cron\cron.php
 ```
 
 ### 5. Verificar Procesamiento
@@ -300,7 +300,7 @@ SELECT sync_status FROM ps_yuju_product_status WHERE prestashop_product_id = [ID
 
 ⚠️ **Cron debe ejecutarse cada 5 minutos** para procesar lotes regularmente:
 ```bash
-*/5 * * * * /usr/bin/php /ruta/a/prestashop/modules/prestashopyuju/cron/cron.php
+*/5 * * * * /usr/bin/php /ruta/a/prestashop/modules/yuju/cron/cron.php
 ```
 
 ⚠️ **Precio y stock NUNCA van a la cola** - Se sincronizan inmediatamente

@@ -43,7 +43,7 @@ Si tienes problemas para reconectar o necesitas asistencia, consulta:
 
 - Documentación oficial de Yuju API: https://api-docs.yuju.io/docs/introduccion
 - Guía de conexión OAuth: https://api-docs.yuju.io/docs/conexión-a-la-api
-- Logs del módulo en: /modules/prestashopyuju/logs/
+- Logs del módulo en: /modules/yuju/logs/
 
 ========================================
 

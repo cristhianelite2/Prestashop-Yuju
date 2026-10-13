@@ -20,8 +20,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductManager.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSyncManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncManager.php';
 
 class AdminYujuProductStatusController extends ModuleAdminController
 {
@@ -231,7 +231,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'yuju_sync_history_table_name' => _DB_PREFIX_ . 'yuju_product_sync_history',
         ]);
 
-        $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/product_status_stats.tpl');
+        $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'yuju/views/templates/admin/product_status_stats.tpl');
 
         return $stats_html;
     }

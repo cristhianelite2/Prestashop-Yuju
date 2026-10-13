@@ -53,7 +53,7 @@ if (php_sapi_name() === 'cli') {
 
 try {
     if (class_exists('Module')) {
-        $mod = Module::getInstanceByName('prestashopyuju');
+        $mod = Module::getInstanceByName('yuju');
         if ($mod && method_exists($mod, 'ensureProductReportsTable')) {
             $mod->ensureProductReportsTable();
         }

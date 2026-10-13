@@ -20,7 +20,7 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-class PrestashopyujuTermsModuleFrontController extends ModuleFrontController
+class YujuTermsModuleFrontController extends ModuleFrontController
 {
     public $ssl = true;
     public $display_column_left = false;
@@ -52,7 +52,7 @@ class PrestashopyujuTermsModuleFrontController extends ModuleFrontController
             'module_version' => $this->module->version,
         ]);
 
-        $this->setTemplate('module:prestashopyuju/views/templates/front/terms.tpl');
+        $this->setTemplate('module:yuju/views/templates/front/terms.tpl');
     }
 
     public function getBreadcrumbLinks()
@@ -60,8 +60,8 @@ class PrestashopyujuTermsModuleFrontController extends ModuleFrontController
         $breadcrumb = parent::getBreadcrumbLinks();
         
         $breadcrumb['links'][] = [
-            'title' => $this->trans('Términos y Condiciones - Integración Yuju', [], 'Modules.Prestashopyuju.Shop'),
-            'url' => $this->context->link->getModuleLink('prestashopyuju', 'terms'),
+            'title' => $this->trans('Términos y Condiciones - Integración Yuju', [], 'Modules.Yuju.Shop'),
+            'url' => $this->context->link->getModuleLink('yuju', 'terms'),
         ];
 
         return $breadcrumb;
@@ -70,9 +70,9 @@ class PrestashopyujuTermsModuleFrontController extends ModuleFrontController
     public function getTemplateVarPage()
     {
         $page = parent::getTemplateVarPage();
-        $page['meta']['title'] = $this->trans('Términos y Condiciones - Integración Yuju', [], 'Modules.Prestashopyuju.Shop');
-        $page['meta']['description'] = $this->trans('Términos y condiciones para el uso de la integración con Yuju', [], 'Modules.Prestashopyuju.Shop');
-        $page['meta']['keywords'] = $this->trans('términos, condiciones, yuju, integración', [], 'Modules.Prestashopyuju.Shop');
+        $page['meta']['title'] = $this->trans('Términos y Condiciones - Integración Yuju', [], 'Modules.Yuju.Shop');
+        $page['meta']['description'] = $this->trans('Términos y condiciones para el uso de la integración con Yuju', [], 'Modules.Yuju.Shop');
+        $page['meta']['keywords'] = $this->trans('términos, condiciones, yuju, integración', [], 'Modules.Yuju.Shop');
         
         return $page;
     }

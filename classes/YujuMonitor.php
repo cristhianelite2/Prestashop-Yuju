@@ -502,7 +502,7 @@ class YujuMonitor
         $prestashop_version = defined('_PS_VERSION_') ? _PS_VERSION_ : null;
 
         if (class_exists('Module')) {
-            $module = Module::getInstanceByName('prestashopyuju');
+            $module = Module::getInstanceByName('yuju');
 
             if ($module && isset($module->version)) {
                 $module_version = $module->version;

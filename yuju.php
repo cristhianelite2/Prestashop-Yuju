@@ -25,7 +25,7 @@ require_once dirname(__FILE__) . '/config/config.php';
 // Puente de telemetría nativo hacia el monitor Yuju.
 require_once dirname(__FILE__) . '/classes/YujuMonitor.php';
 
-class Prestashopyuju extends Module
+class Yuju extends Module
 {
     protected $config_form = false;
 
@@ -41,9 +41,9 @@ class Prestashopyuju extends Module
 
     public function __construct()
     {
-        $this->name = 'prestashopyuju';
+        $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.2';
+        $this->version = '1.1.0';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -54,9 +54,9 @@ class Prestashopyuju extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
-        $this->description = $this->trans('Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.', array(), 'Modules.Prestashopyuju.Admin');
-        $this->confirmUninstall = $this->trans('Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.', array(), 'Modules.Prestashopyuju.Admin');
+        $this->displayName = $this->trans('Yuju Integration', array(), 'Modules.Yuju.Admin');
+        $this->description = $this->trans('Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.', array(), 'Modules.Yuju.Admin');
+        $this->confirmUninstall = $this->trans('Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.', array(), 'Modules.Yuju.Admin');
 
         // Initialize components
         // Temporarily commented for installation
@@ -446,77 +446,77 @@ class Prestashopyuju extends Module
         $tabs = [
         [
         'class_name' => 'AdminYuju',
-        'name' => $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Yuju Integration', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'CONFIGURE',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuConfiguration',
-        'name' => $this->trans('Configuration', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Configuration', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuProductMapping',
-        'name' => $this->trans('Product Mapping', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Product Mapping', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuAttributeMapping',
-        'name' => $this->trans('Attribute Mapping', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Attribute Mapping', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuOrderStatusMapping',
-        'name' => $this->trans('Mapeo de Estados', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Mapeo de Estados', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuProductStatus',
-        'name' => $this->trans('Product Status', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Product Status', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuCategoryBulk',
-        'name' => $this->trans('Acciones por categoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Acciones por categoría', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuAudit',
-        'name' => $this->trans('Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Auditoría', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuAuditMonitoring',
-        'name' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuWebhook',
-        'name' => $this->trans('Webhooks', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Webhooks', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
         ],
         [
         'class_name' => 'AdminYujuLogs',
-        'name' => $this->trans('Logs', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => $this->trans('Logs', array(), 'Modules.Yuju.Admin'),
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
@@ -577,7 +577,7 @@ class Prestashopyuju extends Module
             $parentTab->module = $this->name;
             $parentTab->active = true;
             $parentTab->id_parent = (int) $root->id;
-            $parentName = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
+            $parentName = $this->trans('Yuju Integration', array(), 'Modules.Yuju.Admin');
             foreach (Language::getLanguages(false) as $language) {
                 $parentTab->name[$language['id_lang']] = $parentName;
             }
@@ -591,7 +591,7 @@ class Prestashopyuju extends Module
         $tab->module = $this->name;
         $tab->active = true;
         $tab->id_parent = (int) $parentTab->id;
-        $name = $this->trans('Acciones por categoría', array(), 'Modules.Prestashopyuju.Admin');
+        $name = $this->trans('Acciones por categoría', array(), 'Modules.Yuju.Admin');
         foreach (Language::getLanguages(false) as $language) {
             $tab->name[$language['id_lang']] = $name;
         }
@@ -620,8 +620,8 @@ class Prestashopyuju extends Module
         }
 
         $tabs = [
-            'AdminYujuAudit' => $this->trans('Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
-            'AdminYujuAuditMonitoring' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Prestashopyuju.Admin'),
+            'AdminYujuAudit' => $this->trans('Auditoría', array(), 'Modules.Yuju.Admin'),
+            'AdminYujuAuditMonitoring' => $this->trans('Monitoreo Auditoría', array(), 'Modules.Yuju.Admin'),
         ];
 
         foreach ($tabs as $className => $name) {
@@ -674,7 +674,7 @@ class Prestashopyuju extends Module
         $tab->module = $this->name;
         $tab->active = true;
         $tab->id_parent = (int) $parentTab->id;
-        $name = $this->trans('Mapeo de Estados', array(), 'Modules.Prestashopyuju.Admin');
+        $name = $this->trans('Mapeo de Estados', array(), 'Modules.Yuju.Admin');
         foreach (Language::getLanguages(false) as $language) {
             $tab->name[$language['id_lang']] = $name;
         }

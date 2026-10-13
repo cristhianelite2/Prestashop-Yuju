@@ -57,7 +57,7 @@ try {
                 // Construir URL automáticamente
                 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
                 $domain = $_SERVER['HTTP_HOST'];
-                $webhook_url = $protocol . $domain . '/modules/prestashopyuju/webhook.php';
+                $webhook_url = $protocol . $domain . '/modules/yuju/webhook.php';
             }
             
             // Validar SSL

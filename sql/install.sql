@@ -1,5 +1,5 @@
 -- =============================================================================
--- prestashopyuju — esquema unificado (instalación limpia)
+-- yuju — esquema unificado (instalación limpia)
 -- Incluye todo el historial de migraciones (cola, historial sync, auditoría,
 -- reportes, outbound de órdenes, estados intermedios, etc.).
 -- No hay scripts incrementales: SchemaRepair / ensure* leen este archivo.

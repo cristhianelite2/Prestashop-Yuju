@@ -282,17 +282,17 @@
                         </label>
                         <div class="col-lg-9">
                             <div class="input-group" style="margin-bottom:8px;">
-                                <input type="text" class="form-control" value="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php" readonly>
+                                <input type="text" class="form-control" value="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/yuju/cron/cron.php" readonly>
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/cron.php">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/5 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/yuju/cron/cron.php">
                                         <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>
                             </div>
                             <div class="input-group">
-                                <input type="text" class="form-control" value="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/process_queue.php" readonly>
+                                <input type="text" class="form-control" value="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/yuju/cron/process_queue.php" readonly>
                                 <span class="input-group-btn">
-                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/prestashopyuju/cron/process_queue.php">
+                                    <button class="btn btn-default yuju-copy-button" type="button" data-copy-text="*/2 * * * * php {$smarty.server.DOCUMENT_ROOT}/modules/yuju/cron/process_queue.php">
                                         <i class="icon-copy"></i> Copiar
                                     </button>
                                 </span>

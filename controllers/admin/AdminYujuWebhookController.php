@@ -20,10 +20,10 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuWebhookManager.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuWebhookLog.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuWebhookManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuWebhookLog.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuApiClient.php';
 
 class AdminYujuWebhookController extends ModuleAdminController
 {
@@ -49,39 +49,39 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         $this->fields_list = [
         'id' => [
-        'title' => $this->trans('ID', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('ID', array(), 'Modules.Yuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'event_type' => [
-        'title' => $this->trans('Event Type', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Event Type', array(), 'Modules.Yuju.Admin'),
         'width' => 140,
         'filter_key' => 'a!event_type',
         ],
         'entity_id' => [
-        'title' => $this->trans('Entity ID', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Entity ID', array(), 'Modules.Yuju.Admin'),
         'width' => 100,
         'filter_key' => 'a!entity_id',
         ],
         'status' => [
-        'title' => $this->trans('Status', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Status', array(), 'Modules.Yuju.Admin'),
         'width' => 80,
         'type' => 'select',
         'list' => [
-        'processing' => $this->trans('Processing', array(), 'Modules.Prestashopyuju.Admin'),
-        'processed' => $this->trans('Processed', array(), 'Modules.Prestashopyuju.Admin'),
-        'failed' => $this->trans('Failed', array(), 'Modules.Prestashopyuju.Admin'),
+        'processing' => $this->trans('Processing', array(), 'Modules.Yuju.Admin'),
+        'processed' => $this->trans('Processed', array(), 'Modules.Yuju.Admin'),
+        'failed' => $this->trans('Failed', array(), 'Modules.Yuju.Admin'),
         ],
         'filter_key' => 'a!status',
         'callback' => 'displayStatus',
         ],
         'received_at' => [
-        'title' => $this->trans('Received At', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Received At', array(), 'Modules.Yuju.Admin'),
         'width' => 160,
         'type' => 'datetime',
         ],
         'processed_at' => [
-        'title' => $this->trans('Processed At', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Processed At', array(), 'Modules.Yuju.Admin'),
         'width' => 160,
         'type' => 'datetime',
         ],
@@ -89,9 +89,9 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
+        'text' => $this->trans('Delete selected', array(), 'Modules.Yuju.Admin'),
         'icon' => 'icon-trash',
-        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
+        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Yuju.Admin'),
         ],
         ];
 
@@ -180,7 +180,7 @@ class AdminYujuWebhookController extends ModuleAdminController
         'yuju_webhook_delete_config_base' => self::$currentIndex . '&action=deleteWebhookConfiguration&token=' . $this->token,
         ]);
 
-        $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/webhook_stats.tpl');
+        $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'yuju/views/templates/admin/webhook_stats.tpl');
         $status_alert_html = '';
         if (empty($subscription_status['has_required_subscription'])) {
             $missing_topics = [];
@@ -343,7 +343,7 @@ class AdminYujuWebhookController extends ModuleAdminController
         );
 
         if (!$webhook_log) {
-            $this->errors[] = $this->trans('Webhook log not found', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Webhook log not found', array(), 'Modules.Yuju.Admin');
 
             return $this->renderList();
         }
@@ -373,7 +373,7 @@ class AdminYujuWebhookController extends ModuleAdminController
             'is_order_webhook' => $this->isOrderWebhookEvent($webhook_log['event_type'] ?? ''),
         ]);
 
-        return $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/webhook_view.tpl');
+        return $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'yuju/views/templates/admin/webhook_view.tpl');
     }
 
     /**
@@ -476,14 +476,14 @@ class AdminYujuWebhookController extends ModuleAdminController
 
             if ($success_count > 0) {
                 $this->confirmations[] = sprintf(
-                    $this->trans('Successfully registered %d webhooks', array(), 'Modules.Prestashopyuju.Admin'),
+                    $this->trans('Successfully registered %d webhooks', array(), 'Modules.Yuju.Admin'),
                     $success_count
                 );
             }
 
             if ($error_count > 0) {
                 $this->warnings[] = sprintf(
-                    $this->trans('Failed to register %d webhooks', array(), 'Modules.Prestashopyuju.Admin'),
+                    $this->trans('Failed to register %d webhooks', array(), 'Modules.Yuju.Admin'),
                     $error_count
                 );
                 foreach ($results as $result) {
@@ -493,7 +493,7 @@ class AdminYujuWebhookController extends ModuleAdminController
                 }
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error registering webhooks: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->errors[] = $this->trans('Error registering webhooks: ', array(), 'Modules.Yuju.Admin') . $e->getMessage();
         }
     }
 
@@ -503,11 +503,11 @@ class AdminYujuWebhookController extends ModuleAdminController
             $count = $this->webhook_manager->unregisterWebhooks();
 
             $this->confirmations[] = sprintf(
-                $this->trans('Successfully unregistered %d webhooks', array(), 'Modules.Prestashopyuju.Admin'),
+                $this->trans('Successfully unregistered %d webhooks', array(), 'Modules.Yuju.Admin'),
                 $count
             );
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error unregistering webhooks: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->errors[] = $this->trans('Error unregistering webhooks: ', array(), 'Modules.Yuju.Admin') . $e->getMessage();
         }
     }
 
@@ -589,9 +589,9 @@ class AdminYujuWebhookController extends ModuleAdminController
             // Process test webhook
             $result = $this->webhook_manager->processWebhook($test_payload, $test_headers);
 
-            $this->confirmations[] = $this->trans('Test webhook processed successfully', array(), 'Modules.Prestashopyuju.Admin');
+            $this->confirmations[] = $this->trans('Test webhook processed successfully', array(), 'Modules.Yuju.Admin');
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Test webhook failed: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->errors[] = $this->trans('Test webhook failed: ', array(), 'Modules.Yuju.Admin') . $e->getMessage();
         }
     }
 
@@ -602,12 +602,12 @@ class AdminYujuWebhookController extends ModuleAdminController
             $deleted_count = $this->webhook_manager->cleanOldWebhookLogs($days);
 
             $this->confirmations[] = sprintf(
-                $this->trans('Cleaned %d old webhook logs (older than %d days)', array(), 'Modules.Prestashopyuju.Admin'),
+                $this->trans('Cleaned %d old webhook logs (older than %d days)', array(), 'Modules.Yuju.Admin'),
                 $deleted_count,
                 $days
             );
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error cleaning logs: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->errors[] = $this->trans('Error cleaning logs: ', array(), 'Modules.Yuju.Admin') . $e->getMessage();
         }
     }
 
@@ -631,7 +631,7 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         $protocol = $ssl ? 'https://' : 'http://';
 
-        return $protocol . $shop_url . '/modules/prestashopyuju/webhook.php';
+        return $protocol . $shop_url . '/modules/yuju/webhook.php';
     }
 
     public function ajaxProcessGetWebhookStats()

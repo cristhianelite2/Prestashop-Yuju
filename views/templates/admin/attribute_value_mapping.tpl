@@ -22,13 +22,13 @@
 <div class="panel panel-default yuju-module">
     <div class="panel-heading">
         <i class="icon-cogs"></i>
-        {l s='Attribute Value Mapping' mod='prestashopyuju'}: {$mapping.prestashop_attribute_name|escape:'html':'UTF-8'}
+        {l s='Attribute Value Mapping' mod='yuju'}: {$mapping.prestashop_attribute_name|escape:'html':'UTF-8'}
     </div>
     <div class="panel-body">
         <div class="row">
             <div class="col-md-12">
                 <p class="help-block">
-                    {l s='Map PrestaShop attribute values to Yuju attribute values for' mod='prestashopyuju'} 
+                    {l s='Map PrestaShop attribute values to Yuju attribute values for' mod='yuju'}
                     <strong>{$mapping.prestashop_attribute_name|escape:'html':'UTF-8'}</strong>
                 </p>
             </div>
@@ -39,10 +39,10 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>{l s='PrestaShop Value' mod='prestashopyuju'}</th>
-                            <th>{l s='Yuju Value' mod='prestashopyuju'}</th>
-                            <th>{l s='Status' mod='prestashopyuju'}</th>
-                            <th>{l s='Actions' mod='prestashopyuju'}</th>
+                            <th>{l s='PrestaShop Value' mod='yuju'}</th>
+                            <th>{l s='Yuju Value' mod='yuju'}</th>
+                            <th>{l s='Status' mod='yuju'}</th>
+                            <th>{l s='Actions' mod='yuju'}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -65,7 +65,7 @@
                                     </td>
                                     <td>
                                         <select name="yuju_value[{$ps_value.id_attribute|escape:'html':'UTF-8'}]" class="form-control">
-                                            <option value="">{l s='-- Select Yuju Value --' mod='prestashopyuju'}</option>
+                                            <option value="">{l s='-- Select Yuju Value --' mod='yuju'}</option>
                                             {if $yuju_values && count($yuju_values) > 0}
                                                 {foreach from=$yuju_values item=yuju_value}
                                                     <option value="{$yuju_value.yuju_value_id|escape:'html':'UTF-8'}" 
@@ -79,11 +79,11 @@
                                     <td>
                                         {if $is_mapped}
                                             <span class="label label-success">
-                                                <i class="icon-check"></i> {l s='Mapped' mod='prestashopyuju'}
+                                                <i class="icon-check"></i> {l s='Mapped' mod='yuju'}
                                             </span>
                                         {else}
                                             <span class="label label-warning">
-                                                <i class="icon-warning"></i> {l s='Not Mapped' mod='prestashopyuju'}
+                                                <i class="icon-warning"></i> {l s='Not Mapped' mod='yuju'}
                                             </span>
                                         {/if}
                                     </td>
@@ -91,7 +91,7 @@
                                         {if $is_mapped}
                                             <button type="button" class="btn btn-danger btn-xs" 
                                                 onclick="removeMapping({$ps_value.id_attribute|escape:'javascript':'UTF-8'})">
-                                                <i class="icon-trash"></i> {l s='Remove' mod='prestashopyuju'}
+                                                <i class="icon-trash"></i> {l s='Remove' mod='yuju'}
                                             </button>
                                         {/if}
                                     </td>
@@ -100,7 +100,7 @@
                         {else}
                             <tr>
                                 <td colspan="4" class="text-center text-muted">
-                                    {l s='No PrestaShop attribute values found for this attribute.' mod='prestashopyuju'}
+                                    {l s='No PrestaShop attribute values found for this attribute.' mod='yuju'}
                                 </td>
                             </tr>
                         {/if}
@@ -111,19 +111,19 @@
             <div class="panel-footer">
                 <div class="btn-group">
                     <button type="submit" name="submitValueMapping" class="btn btn-primary">
-                        <i class="icon-save"></i> {l s='Save Mappings' mod='prestashopyuju'}
+                        <i class="icon-save"></i> {l s='Save Mappings' mod='yuju'}
                     </button>
                     <a href="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" class="btn btn-default">
-                        <i class="icon-arrow-left"></i> {l s='Back to Attribute Mappings' mod='prestashopyuju'}
+                        <i class="icon-arrow-left"></i> {l s='Back to Attribute Mappings' mod='yuju'}
                     </a>
                 </div>
                 
                 <div class="btn-group pull-right">
                     <button type="button" class="btn btn-info" onclick="autoMapValues()">
-                        <i class="icon-magic"></i> {l s='Auto Map by Name' mod='prestashopyuju'}
+                        <i class="icon-magic"></i> {l s='Auto Map by Name' mod='yuju'}
                     </button>
                     <button type="button" class="btn btn-warning" onclick="clearAllMappings()">
-                        <i class="icon-eraser"></i> {l s='Clear All' mod='prestashopyuju'}
+                        <i class="icon-eraser"></i> {l s='Clear All' mod='yuju'}
                     </button>
                 </div>
             </div>
@@ -133,14 +133,14 @@
 
 <script type="text/javascript">
 function removeMapping(psValueId) {
-    if (confirm('{l s='Are you sure you want to remove this mapping?' mod='prestashopyuju' js=1}')) {
+    if (confirm('{l s='Are you sure you want to remove this mapping?' mod='yuju' js=1}')) {
         $('select[name="yuju_value[' + psValueId + ']"]').val('');
-        showSuccessMessage('{l s='Mapping removed. Click Save to apply changes.' mod='prestashopyuju' js=1}');
+        showSuccessMessage('{l s='Mapping removed. Click Save to apply changes.' mod='yuju' js=1}');
     }
 }
 
 function autoMapValues() {
-    if (confirm('{l s='This will automatically map values with similar names. Continue?' mod='prestashopyuju' js=1}')) {
+    if (confirm('{l s='This will automatically map values with similar names. Continue?' mod='yuju' js=1}')) {
         var mapped = 0;
         
         $('select[name^="yuju_value["]').each(function() {
@@ -158,17 +158,17 @@ function autoMapValues() {
         });
         
         if (mapped > 0) {
-            showSuccessMessage(mapped + ' {l s='values mapped automatically. Click Save to apply changes.' mod='prestashopyuju' js=1}');
+            showSuccessMessage(mapped + ' {l s='values mapped automatically. Click Save to apply changes.' mod='yuju' js=1}');
         } else {
-            showInfoMessage('{l s='No automatic mappings found based on name similarity.' mod='prestashopyuju' js=1}');
+            showInfoMessage('{l s='No automatic mappings found based on name similarity.' mod='yuju' js=1}');
         }
     }
 }
 
 function clearAllMappings() {
-    if (confirm('{l s='Are you sure you want to clear all mappings?' mod='prestashopyuju' js=1}')) {
+    if (confirm('{l s='Are you sure you want to clear all mappings?' mod='yuju' js=1}')) {
         $('select[name^="yuju_value["]').val('');
-        showSuccessMessage('{l s='All mappings cleared. Click Save to apply changes.' mod='prestashopyuju' js=1}');
+        showSuccessMessage('{l s='All mappings cleared. Click Save to apply changes.' mod='yuju' js=1}');
     }
 }
 </script>

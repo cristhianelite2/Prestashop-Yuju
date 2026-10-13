@@ -932,7 +932,7 @@ class YujuOrderManager
             $order->id_carrier = $this->getCarrierId('Yuju');
             $details['carrier_id'] = (int) $order->id_carrier;
             $order->payment = isset($adapted_data['payment_method']) ? $adapted_data['payment_method'] : 'Yuju';
-            $order->module = 'prestashopyuju';
+            $order->module = 'yuju';
             $order->secure_key = $customer->secure_key; // Clave de seguridad del cliente
             $order->total_paid = (float) $adapted_data['total_amount'];
             $order->total_paid_tax_incl = (float) $adapted_data['total_amount'];
@@ -2370,7 +2370,7 @@ class YujuOrderManager
             $carrier->active = 1;
             $carrier->deleted = 0;
             $carrier->is_module = 1;
-            $carrier->external_module_name = 'prestashopyuju';
+            $carrier->external_module_name = 'yuju';
             $carrier->shipping_external = 0;
             $carrier->need_range = 1;
             $carrier->shipping_handling = 0;

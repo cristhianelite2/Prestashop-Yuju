@@ -67,7 +67,7 @@ $debug_info = [
 
 try {
     // Check if module is active (usando clase Module de PrestaShop)
-    if (!class_exists('Module') || !Module::isEnabled('prestashopyuju')) {
+    if (!class_exists('Module') || !Module::isEnabled('yuju')) {
         throw new Exception('Yuju module is not active');
     }
 

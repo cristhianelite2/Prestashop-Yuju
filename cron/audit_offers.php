@@ -54,7 +54,7 @@ function yuju_audit_log($message, $type = 'info', $is_web = false)
 
 try {
     if (class_exists('Module')) {
-        $module = Module::getInstanceByName('prestashopyuju');
+        $module = Module::getInstanceByName('yuju');
         if ($module && method_exists($module, 'ensureAuditTables')) {
             $module->ensureAuditTables();
         }

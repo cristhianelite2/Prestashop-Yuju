@@ -9,7 +9,7 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-$yujuAuditModuleBase = _PS_MODULE_DIR_ . 'prestashopyuju/';
+$yujuAuditModuleBase = _PS_MODULE_DIR_ . 'yuju/';
 $yujuAuditRequired = [
     'config/config.php',
     'classes/YujuLogger.php',
@@ -72,7 +72,7 @@ class AdminYujuAuditController extends ModuleAdminController
         $missing = $this->missingAuditClasses();
         if (!empty($missing)) {
             $loadError = 'Faltan clases/archivos en el servidor: ' . implode(', ', $missing)
-                . '. Suba esos archivos del módulo prestashopyuju.';
+                . '. Suba esos archivos del módulo yuju.';
         }
 
         try {

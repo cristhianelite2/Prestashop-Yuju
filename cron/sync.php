@@ -36,7 +36,7 @@ $logger = new YujuLogger();
 try {
     // Check if module is active
 
-    if (!Module::isEnabled('prestashopyuju')) {
+    if (!Module::isEnabled('yuju')) {
         throw new Exception('Yuju module is not active');
     }
 

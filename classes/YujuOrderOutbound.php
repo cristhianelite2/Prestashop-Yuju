@@ -16,9 +16,9 @@ require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOrderOutbound
 {
-    const MODULE_NAME = 'prestashopyuju';
+    const MODULE_NAME = 'yuju';
     const TYPE_ORDER = 'order';
-    const INTEGRATION_LABEL = 'PrestaShop ↔ Yuju (módulo prestashopyuju)';
+    const INTEGRATION_LABEL = 'PrestaShop ↔ Yuju (módulo yuju)';
 
     /** @var YujuApiClient */
     protected $api;

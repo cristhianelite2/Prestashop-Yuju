@@ -20,10 +20,10 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuWebhookManager.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuWebhookManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
 
-class PrestashopyujuWebhookModuleFrontController extends ModuleFrontController
+class YujuWebhookModuleFrontController extends ModuleFrontController
 {
     public $ssl = true;
 
@@ -68,7 +68,7 @@ class PrestashopyujuWebhookModuleFrontController extends ModuleFrontController
         try {
             // Check if module is active
 
-            if (!Module::isEnabled('prestashopyuju')) {
+            if (!Module::isEnabled('yuju')) {
                 throw new Exception('Yuju module is not active');
             }
 

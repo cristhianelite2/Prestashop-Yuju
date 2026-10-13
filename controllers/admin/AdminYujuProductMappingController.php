@@ -20,9 +20,9 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductMapping.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuApiClient.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductMapping.php';
 
 class AdminYujuProductMappingController extends ModuleAdminController
 {

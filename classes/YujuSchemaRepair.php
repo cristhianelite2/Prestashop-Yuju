@@ -218,7 +218,7 @@ class YujuSchemaRepair
 
     protected function loadSql()
     {
-        $path = _PS_MODULE_DIR_ . 'prestashopyuju/sql/install.sql';
+        $path = _PS_MODULE_DIR_ . 'yuju/sql/install.sql';
         if (!is_readable($path)) {
             return;
         }
@@ -408,7 +408,7 @@ class YujuSchemaRepair
         }
 
         if ($shortName === 'yuju_category_mapping') {
-            require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
+            require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
             $ok = YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
             $actions[] = [
                 'type' => $ok ? 'patch' : 'patch_skip',

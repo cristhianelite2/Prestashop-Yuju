@@ -18,10 +18,10 @@
  * Ejecutar cada 5 minutos
  * 
  * Por CLI:
- * Cada 5 minutos: php /ruta/a/prestashop/modules/prestashopyuju/cron/cron.php
+ * Cada 5 minutos: php /ruta/a/prestashop/modules/yuju/cron/cron.php
  * 
  * Por URL (recomendado para servicios externos):
- * https://tutienda.com/modules/prestashopyuju/cron/cron.php
+ * https://tutienda.com/modules/yuju/cron/cron.php
  */
 
 // Configuración de PrestaShop
@@ -319,7 +319,7 @@ try {
     try {
         require_once dirname(__FILE__) . '/../classes/YujuOfferAuditor.php';
         if (class_exists('Module')) {
-            $yuju_mod = Module::getInstanceByName('prestashopyuju');
+            $yuju_mod = Module::getInstanceByName('yuju');
             if ($yuju_mod && method_exists($yuju_mod, 'ensureAuditTables')) {
                 $yuju_mod->ensureAuditTables();
             }
@@ -362,7 +362,7 @@ try {
     try {
         require_once dirname(__FILE__) . '/../classes/YujuProductGralReport.php';
         if (class_exists('Module')) {
-            $yuju_mod = Module::getInstanceByName('prestashopyuju');
+            $yuju_mod = Module::getInstanceByName('yuju');
             if ($yuju_mod && method_exists($yuju_mod, 'ensureProductReportsTable')) {
                 $yuju_mod->ensureProductReportsTable();
             }
@@ -1303,7 +1303,7 @@ try {
                     <strong>URL del webhook:</strong> 
                     <?php 
                     // Yuju requiere HTTPS para webhooks
-                    $webhook_url = 'https://' . $_SERVER['HTTP_HOST'] . '/modules/prestashopyuju/webhook.php';
+                    $webhook_url = 'https://' . $_SERVER['HTTP_HOST'] . '/modules/yuju/webhook.php';
                     echo '<code class="bg-white px-2 py-1 rounded">' . htmlspecialchars($webhook_url) . '</code>';
                     ?>
                     <button 
@@ -3128,7 +3128,7 @@ try {
         // Suscripción rápida a un topic individual
         async function quickSubscribeTopic(topic) {
             try {
-                const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/prestashopyuju/webhook.php`;
+                const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/yuju/webhook.php`;
                 
                 const response = await fetch('webhook_manager.php?action=subscribe', {
                     method: 'POST',
@@ -3195,7 +3195,7 @@ try {
             }
             
             try {
-                const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/prestashopyuju/webhook.php`;
+                const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/yuju/webhook.php`;
                 
                 const response = await fetch('webhook_manager.php?action=subscribe', {
                     method: 'POST',

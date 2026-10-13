@@ -15,10 +15,10 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuProductManager.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuSyncQueue.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/config/config.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncQueue.php';
+require_once _PS_MODULE_DIR_ . 'yuju/config/config.php';
 
 class AdminYujuCategoryBulkController extends ModuleAdminController
 {
@@ -38,7 +38,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         parent::__construct();
 
-        $this->meta_title = $this->trans('Acciones masivas por categoría', [], 'Modules.Prestashopyuju.Admin');
+        $this->meta_title = $this->trans('Acciones masivas por categoría', [], 'Modules.Yuju.Admin');
         $this->toolbar_title = $this->meta_title;
 
         $this->product_manager = new YujuProductManager();
@@ -240,7 +240,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
      */
     protected function ensureCategoryMappingAllowsSharedYujuCategory()
     {
-        require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuCategoryMapping.php';
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
         YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
     }
 
@@ -252,7 +252,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         $byId = [];
 
         // 1) Fuente oficial local del módulo (completa): config/yuju_allowed_values.json
-        $jsonPath = _PS_MODULE_DIR_ . 'prestashopyuju/config/yuju_allowed_values.json';
+        $jsonPath = _PS_MODULE_DIR_ . 'yuju/config/yuju_allowed_values.json';
         if (is_readable($jsonPath)) {
             $raw = @file_get_contents($jsonPath);
             $decoded = json_decode((string) $raw, true);

@@ -2609,8 +2609,8 @@ class YujuProductManager
         $yuju_data = [];
         $result = [];
 
-        if (Module::isInstalled('prestashopyuju')) {
-            $m = Module::getInstanceByName('prestashopyuju');
+        if (Module::isInstalled('yuju')) {
+            $m = Module::getInstanceByName('yuju');
             if ($m && method_exists($m, 'ensureProductStatusIntermediateWebhookStates')) {
                 $m->ensureProductStatusIntermediateWebhookStates();
             }
@@ -3709,8 +3709,8 @@ class YujuProductManager
             return ['success' => true, 'skipped' => false, 'message' => 'Registro local eliminado (sin ID Yuju)'];
         }
 
-        if (Module::isInstalled('prestashopyuju')) {
-            $m = Module::getInstanceByName('prestashopyuju');
+        if (Module::isInstalled('yuju')) {
+            $m = Module::getInstanceByName('yuju');
             if ($m && method_exists($m, 'ensureProductStatusIntermediateWebhookStates')) {
                 $m->ensureProductStatusIntermediateWebhookStates();
             }

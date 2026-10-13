@@ -20,9 +20,9 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuApiClient.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuAttributeMapping.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuApiClient.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuAttributeMapping.php';
 
 class AdminYujuAttributeMappingController extends ModuleAdminController
 {
@@ -42,36 +42,36 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
         $this->fields_list = [
             'id' => [
-                'title' => $this->trans('ID', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('ID', array(), 'Modules.Yuju.Admin'),
                 'align' => 'center',
                 'class' => 'fixed-width-xs',
             ],
             'prestashop_attribute_name' => [
-                'title' => $this->trans('PrestaShop Attribute', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('PrestaShop Attribute', array(), 'Modules.Yuju.Admin'),
                 'width' => 200,
             ],
             'yuju_attribute_id' => [
-                'title' => $this->trans('Yuju Attribute ID', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Yuju Attribute ID', array(), 'Modules.Yuju.Admin'),
                 'align' => 'center',
                 'width' => 150,
             ],
             'yuju_attribute_name' => [
-                'title' => $this->trans('Yuju Attribute Name', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Yuju Attribute Name', array(), 'Modules.Yuju.Admin'),
                 'width' => 200,
             ],
             'attribute_type' => [
-                'title' => $this->trans('Type', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Type', array(), 'Modules.Yuju.Admin'),
                 'align' => 'center',
                 'width' => 100,
             ],
 
             'value_mapping_count' => [
-                'title' => $this->trans('Value Mappings', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Value Mappings', array(), 'Modules.Yuju.Admin'),
                 'align' => 'center',
                 'width' => 100,
             ],
             'is_active' => [
-                'title' => $this->trans('Active', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Active', array(), 'Modules.Yuju.Admin'),
                 'align' => 'center',
                 'active' => 'status',
                 'type' => 'bool',
@@ -82,27 +82,27 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         $this->actions = ['edit', 'delete', 'manage_values'];
         $this->bulk_actions = [
             'delete' => [
-                'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
-                'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
+                'text' => $this->trans('Delete selected', array(), 'Modules.Yuju.Admin'),
+                'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Yuju.Admin'),
             ],
             'enableMapping' => [
-                'text' => $this->trans('Enable mapping', array(), 'Modules.Prestashopyuju.Admin'),
+                'text' => $this->trans('Enable mapping', array(), 'Modules.Yuju.Admin'),
                 'icon' => 'icon-check'
             ],
             'disableMapping' => [
-                'text' => $this->trans('Disable mapping', array(), 'Modules.Prestashopyuju.Admin'),
+                'text' => $this->trans('Disable mapping', array(), 'Modules.Yuju.Admin'),
                 'icon' => 'icon-remove'
             ],
         ];
 
         $this->toolbar_btn['new'] = [
             'href' => self::$currentIndex . '&add' . $this->table . '&token=' . $this->token,
-            'desc' => $this->trans('Add new mapping', array(), 'Modules.Prestashopyuju.Admin'),
+            'desc' => $this->trans('Add new mapping', array(), 'Modules.Yuju.Admin'),
         ];
 
         $this->toolbar_btn['sync_attributes'] = [
             'href' => self::$currentIndex . '&syncYujuAttributes&token=' . $this->token,
-            'desc' => $this->trans('Sync Yuju Attributes', array(), 'Modules.Prestashopyuju.Admin'),
+            'desc' => $this->trans('Sync Yuju Attributes', array(), 'Modules.Yuju.Admin'),
             'class' => 'process-icon-refresh',
         ];
     }
@@ -198,23 +198,23 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
         // Attribute types
         $attribute_types = [
-            ['id' => 'select', 'name' => $this->trans('Select', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'text', 'name' => $this->trans('Text', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'number', 'name' => $this->trans('Number', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'boolean', 'name' => $this->trans('Boolean', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'select', 'name' => $this->trans('Select', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Text', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'number', 'name' => $this->trans('Number', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Boolean', array(), 'Modules.Yuju.Admin')],
         ];
 
 
 
         $this->fields_form = [
             'legend' => [
-                'title' => $this->trans('Mapeo de Atributos', array(), 'Modules.Prestashopyuju.Admin'),
+                'title' => $this->trans('Mapeo de Atributos', array(), 'Modules.Yuju.Admin'),
                 'icon' => 'icon-list-alt',
             ],
             'input' => [
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Atributo PrestaShop', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Atributo PrestaShop', array(), 'Modules.Yuju.Admin'),
                     'name' => 'prestashop_attribute_id',
                     'required' => true,
                     'options' => [
@@ -225,7 +225,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 ],
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Atributo Yuju', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Atributo Yuju', array(), 'Modules.Yuju.Admin'),
                     'name' => 'yuju_attribute_id',
                     'required' => true,
                     'options' => [
@@ -236,7 +236,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 ],
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Tipo de Atributo', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Tipo de Atributo', array(), 'Modules.Yuju.Admin'),
                     'name' => 'attribute_type',
                     'required' => true,
                     'options' => [
@@ -248,9 +248,9 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
                 [
                     'type' => 'switch',
-                    'label' => $this->trans('Crear Valores Automáticamente', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Crear Valores Automáticamente', array(), 'Modules.Yuju.Admin'),
                     'name' => 'auto_create_values',
-                    'desc' => $this->trans('Crear automáticamente valores de atributos faltantes durante la sincronización', array(), 'Modules.Prestashopyuju.Admin'),
+                    'desc' => $this->trans('Crear automáticamente valores de atributos faltantes durante la sincronización', array(), 'Modules.Yuju.Admin'),
                     'is_bool' => true,
                     'values' => [
                         [
@@ -267,7 +267,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 ],
                 [
                     'type' => 'switch',
-                    'label' => $this->trans('Activo', array(), 'Modules.Prestashopyuju.Admin'),
+                    'label' => $this->trans('Activo', array(), 'Modules.Yuju.Admin'),
                     'name' => 'is_active',
                     'is_bool' => true,
                     'values' => [
@@ -305,7 +305,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         ');
 
         if ($existing) {
-            $this->errors[] = $this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Yuju.Admin');
 
             return false;
         }
@@ -314,7 +314,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         $yuju_attribute_name = $this->getYujuAttributeName($yuju_attribute_id);
 
         if (!$yuju_attribute_name) {
-            $this->errors[] = $this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Yuju.Admin');
 
             return false;
         }
@@ -344,10 +344,10 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         }
 
         if ($result) {
-            $this->confirmations[] = $this->trans('Attribute mapping saved successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->confirmations[] = $this->trans('Attribute mapping saved successfully.', array(), 'Modules.Yuju.Admin');
             $this->logger->log('Attribute mapping saved: PS Attribute ' . $prestashop_attribute_id . ' -> Yuju Attribute ' . $yuju_attribute_id, 'info');
         } else {
-            $this->errors[] = $this->trans('Error saving attribute mapping.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Error saving attribute mapping.', array(), 'Modules.Yuju.Admin');
 
             return false;
         }
@@ -356,7 +356,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     public function displayManageValuesLink($token, $id)
     {
         return '<a class="btn btn-default" href="' . self::$currentIndex . '&manageValues&id=' . $id . '&token=' . $token . '">
-            <i class="icon-cogs"></i> ' . $this->trans('Manage Values', array(), 'Modules.Prestashopyuju.Admin') . '
+            <i class="icon-cogs"></i> ' . $this->trans('Manage Values', array(), 'Modules.Yuju.Admin') . '
         </a>';
     }
 
@@ -437,12 +437,12 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             if (!empty($items)) {
                 $this->persistYujuAttributesInCache($items);
 
-                $this->confirmations[] = $this->trans('Yuju attributes synchronized successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Yuju attributes synchronized successfully.', array(), 'Modules.Yuju.Admin');
                 $this->logger->log('Yuju attributes synchronized: ' . count($items) . ' attributes', 'info');
             } else {
                 $loaded_from_json = $this->loadFallbackAttributesFromJson();
                 if (!$loaded_from_json) {
-                    $this->errors[] = $this->trans('No attributes found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
+                    $this->errors[] = $this->trans('No attributes found in Yuju.', array(), 'Modules.Yuju.Admin');
                     if (is_array($apiResult) && !empty($apiResult['message'])) {
                         $this->errors[] = $apiResult['message'];
                     }
@@ -451,7 +451,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         } catch (Exception $e) {
             $loaded_from_json = $this->loadFallbackAttributesFromJson();
             if (!$loaded_from_json) {
-                $this->errors[] = $this->trans('Error synchronizing Yuju attributes: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+                $this->errors[] = $this->trans('Error synchronizing Yuju attributes: ', array(), 'Modules.Yuju.Admin') . $e->getMessage();
                 $this->logger->log('Error synchronizing Yuju attributes: ' . $e->getMessage(), 'error');
             }
         }
@@ -505,7 +505,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
     protected function getAllowedValuesJsonPath()
     {
-        return _PS_MODULE_DIR_ . 'prestashopyuju/config/yuju_allowed_values.json';
+        return _PS_MODULE_DIR_ . 'yuju/config/yuju_allowed_values.json';
     }
 
     /**
@@ -724,7 +724,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         }
 
         $this->persistYujuAttributesInCache($fallback_items);
-        $this->confirmations[] = $this->trans('Yuju values loaded from local JSON fallback.', array(), 'Modules.Prestashopyuju.Admin');
+        $this->confirmations[] = $this->trans('Yuju values loaded from local JSON fallback.', array(), 'Modules.Yuju.Admin');
         $this->logger->log('Fallback JSON loaded for Yuju attributes. Count: ' . count($fallback_items), 'warning');
 
         return true;
@@ -822,7 +822,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Selected mappings enabled.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Selected mappings enabled.', array(), 'Modules.Yuju.Admin');
             }
         }
     }
@@ -839,7 +839,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Selected mappings disabled.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Selected mappings disabled.', array(), 'Modules.Yuju.Admin');
             }
         }
     }
@@ -849,7 +849,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         $id = (int) Tools::getValue('id');
 
         if (!$id) {
-            $this->errors[] = $this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Invalid mapping ID.', array(), 'Modules.Yuju.Admin');
 
             return;
         }
@@ -861,7 +861,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         );
 
         if (!$mapping) {
-            $this->errors[] = $this->trans('Mapping not found.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Mapping not found.', array(), 'Modules.Yuju.Admin');
 
             return;
         }
@@ -899,7 +899,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             'token' => $this->token,
         ]);
 
-        $this->content = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/attribute_value_mapping.tpl');
+        $this->content = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'yuju/views/templates/admin/attribute_value_mapping.tpl');
     }
 
     // AJAX Methods
@@ -930,7 +930,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             }
 
             if (!$prestashop_attribute_id || $yuju_attribute_id === '') {
-                throw new Exception($this->trans('All required fields must be filled.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('All required fields must be filled.', array(), 'Modules.Yuju.Admin'));
             }
 
             // Check if mapping already exists
@@ -941,12 +941,12 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             ');
 
             if ($existing) {
-                throw new Exception($this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('This PrestaShop attribute is already mapped.', array(), 'Modules.Yuju.Admin'));
             }
 
             $yuju_attribute_name = $this->getYujuAttributeName($yuju_attribute_id);
             if (!$yuju_attribute_name) {
-                throw new Exception($this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Invalid Yuju attribute selected.', array(), 'Modules.Yuju.Admin'));
             }
 
             $id_lang = (int) $this->context->language->id;
@@ -975,11 +975,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                     $data,
                     'id = ' . (int) $id
                 );
-                $message = $this->trans('Attribute mapping updated successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $message = $this->trans('Attribute mapping updated successfully.', array(), 'Modules.Yuju.Admin');
             } else {
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $result = Db::getInstance()->insert('yuju_attribute_mapping', $data);
-                $message = $this->trans('Attribute mapping created successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $message = $this->trans('Attribute mapping created successfully.', array(), 'Modules.Yuju.Admin');
             }
 
             if ($result) {
@@ -987,7 +987,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 $response['message'] = $message;
                 $this->logger->log('Attribute mapping saved: PS Attribute ' . $prestashop_attribute_id . ' -> Yuju Attribute ' . $yuju_attribute_id, 'info');
             } else {
-                throw new Exception($this->trans('Error saving attribute mapping.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Error saving attribute mapping.', array(), 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -1005,7 +1005,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         try {
             $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Yuju.Admin'));
             }
 
             $mapping = Db::getInstance()->getRow('
@@ -1027,7 +1027,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 $response['success'] = true;
                 $response['data'] = $mapping;
             } else {
-                throw new Exception($this->trans('Mapping not found.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Mapping not found.', array(), 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -1044,7 +1044,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         try {
             $id = (int) Tools::getValue('id_mapping', Tools::getValue('id'));
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Yuju.Admin'));
             }
 
             $result = Db::getInstance()->delete(
@@ -1054,10 +1054,10 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
             if ($result) {
                 $response['success'] = true;
-                $response['message'] = $this->trans('Attribute mapping deleted successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $response['message'] = $this->trans('Attribute mapping deleted successfully.', array(), 'Modules.Yuju.Admin');
                 $this->logger->log('Attribute mapping deleted: ID ' . $id, 'info');
             } else {
-                throw new Exception($this->trans('Error deleting attribute mapping.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Error deleting attribute mapping.', array(), 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -1077,7 +1077,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $status = (int) Tools::getValue('status', Tools::getValue('is_active'));
 
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Yuju.Admin'));
             }
 
             $result = Db::getInstance()->update(
@@ -1089,11 +1089,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             if ($result) {
                 $response['success'] = true;
                 $response['message'] = $status ? 
-                    $this->trans('Attribute mapping enabled.', array(), 'Modules.Prestashopyuju.Admin') :
-                    $this->trans('Attribute mapping disabled.', array(), 'Modules.Prestashopyuju.Admin');
+                    $this->trans('Attribute mapping enabled.', array(), 'Modules.Yuju.Admin') :
+                    $this->trans('Attribute mapping disabled.', array(), 'Modules.Yuju.Admin');
                 $this->logger->log('Attribute mapping status changed: ID ' . $id . ' -> ' . ($status ? 'enabled' : 'disabled'), 'info');
             } else {
-                throw new Exception($this->trans('Error updating attribute mapping status.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Error updating attribute mapping status.', array(), 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -1116,7 +1116,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $attributes = $this->getYujuAttributes();
 
             $response['success'] = true;
-            $response['message'] = $this->trans('Yuju attributes refreshed successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            $response['message'] = $this->trans('Yuju attributes refreshed successfully.', array(), 'Modules.Yuju.Admin');
             $response['data'] = $attributes;
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -1290,10 +1290,10 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     protected function getAttributeTypes()
     {
         return [
-            ['id' => 'select', 'name' => $this->trans('Seleccionar', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'number', 'name' => $this->trans('Número', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'select', 'name' => $this->trans('Seleccionar', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'number', 'name' => $this->trans('Número', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Yuju.Admin')],
         ];
     }
 
@@ -1332,7 +1332,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             foreach ($typeList as $type) {
                 $groups[] = [
                     'id' => $type,
-                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Prestashopyuju.Admin'), $type),
+                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Yuju.Admin'), $type),
                 ];
             }
 
@@ -1353,7 +1353,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 }
                 $groups[] = [
                     'id' => $type,
-                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Prestashopyuju.Admin'), $type),
+                    'name' => sprintf($this->trans('Tipo de valor: %s', array(), 'Modules.Yuju.Admin'), $type),
                 ];
             }
         }
@@ -1364,32 +1364,32 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
     protected function getFieldTypes()
     {
         return [
-            ['id' => 'string', 'name' => $this->trans('Cadena de texto', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'integer', 'name' => $this->trans('Número entero', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'decimal', 'name' => $this->trans('Número decimal', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'date', 'name' => $this->trans('Fecha', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'datetime', 'name' => $this->trans('Fecha y Hora', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'html', 'name' => $this->trans('HTML', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'json', 'name' => $this->trans('JSON', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'string', 'name' => $this->trans('Cadena de texto', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'integer', 'name' => $this->trans('Número entero', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'decimal', 'name' => $this->trans('Número decimal', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'date', 'name' => $this->trans('Fecha', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'datetime', 'name' => $this->trans('Fecha y Hora', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Texto', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'html', 'name' => $this->trans('HTML', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'json', 'name' => $this->trans('JSON', array(), 'Modules.Yuju.Admin')],
         ];
     }
 
     protected function getTransformationRules()
     {
         return [
-            ['id' => 'none', 'name' => $this->trans('Ninguna', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'uppercase', 'name' => $this->trans('Mayúsculas', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'lowercase', 'name' => $this->trans('Minúsculas', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'capitalize', 'name' => $this->trans('Capitalizar', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'strip_html', 'name' => $this->trans('Eliminar HTML', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'strip_tags', 'name' => $this->trans('Eliminar Etiquetas', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'trim', 'name' => $this->trans('Recortar Espacios', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'number_format', 'name' => $this->trans('Formato de Número', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'date_format', 'name' => $this->trans('Formato de Fecha', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'boolean_convert', 'name' => $this->trans('Convertir a Booleano', array(), 'Modules.Prestashopyuju.Admin')],
-            ['id' => 'custom', 'name' => $this->trans('Código PHP Personalizado', array(), 'Modules.Prestashopyuju.Admin')],
+            ['id' => 'none', 'name' => $this->trans('Ninguna', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'uppercase', 'name' => $this->trans('Mayúsculas', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'lowercase', 'name' => $this->trans('Minúsculas', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'capitalize', 'name' => $this->trans('Capitalizar', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'strip_html', 'name' => $this->trans('Eliminar HTML', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'strip_tags', 'name' => $this->trans('Eliminar Etiquetas', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'trim', 'name' => $this->trans('Recortar Espacios', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'number_format', 'name' => $this->trans('Formato de Número', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'date_format', 'name' => $this->trans('Formato de Fecha', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'boolean_convert', 'name' => $this->trans('Convertir a Booleano', array(), 'Modules.Yuju.Admin')],
+            ['id' => 'custom', 'name' => $this->trans('Código PHP Personalizado', array(), 'Modules.Yuju.Admin')],
         ];
     }
 

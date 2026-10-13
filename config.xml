@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <module>
-    <name>prestashopyuju</name>
+    <name>yuju</name>
     <displayName><![CDATA[Integración Yuju]]></displayName>
-    <version><![CDATA[1.0.2]]></version>
+    <version><![CDATA[1.1.0]]></version>
     <description><![CDATA[Sincroniza tu tienda PrestaShop con la plataforma Yuju para una gestión perfecta de inventario, productos y pedidos.]]></description>
     <author><![CDATA[Equipo de Integración Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>

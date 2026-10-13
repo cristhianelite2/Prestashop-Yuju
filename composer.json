@@ -1,5 +1,5 @@
 {
-    "name": "yuju/prestashopyuju",
+    "name": "yuju/yuju",
     "description": "Módulo de integración Yuju para PrestaShop",
     "type": "prestashop-module",
     "require": {

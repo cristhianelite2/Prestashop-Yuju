@@ -23,7 +23,7 @@ if (!defined('_PS_VERSION_')) {
 require_once dirname(__FILE__) . '/../../classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/../../config/config.php';
 
-class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
+class YujuOauthModuleFrontController extends ModuleFrontController
 {
     public function initContent()
     {
@@ -161,7 +161,7 @@ class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
             'admin_redirect_url' => $admin_url,
         ]);
 
-        $this->setTemplate('module:prestashopyuju/views/templates/front/oauth_callback.tpl');
+        $this->setTemplate('module:yuju/views/templates/front/oauth_callback.tpl');
     }
 
     private function handleAuthError($error_message, $extra_debug = [])
@@ -187,6 +187,6 @@ class PrestashopyujuOauthModuleFrontController extends ModuleFrontController
             'show_debug' => true, // Activar debugging temporal
         ]);
 
-        $this->setTemplate('module:prestashopyuju/views/templates/front/oauth_callback.tpl');
+        $this->setTemplate('module:yuju/views/templates/front/oauth_callback.tpl');
     }
 }

@@ -149,7 +149,7 @@
                 <div id="yuju-cat-bulk-pager" class="clearfix"></div>
             </div>
 
-            {include file='module:prestashopyuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
+            {include file='module:yuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
 
 <div class="modal fade" id="yuju-product-error-modal" tabindex="-1" role="dialog" aria-hidden="true">
                 <div class="modal-dialog" role="document">

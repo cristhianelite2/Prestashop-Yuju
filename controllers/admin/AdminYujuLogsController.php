@@ -20,7 +20,7 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'prestashopyuju/classes/YujuLogger.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
 
 class AdminYujuLogsController extends ModuleAdminController
 {
@@ -341,7 +341,7 @@ class AdminYujuLogsController extends ModuleAdminController
 
     protected function getLogs()
     {
-        $log_dir = _PS_MODULE_DIR_ . 'prestashopyuju/logs/';
+        $log_dir = _PS_MODULE_DIR_ . 'yuju/logs/';
         $logs = [];
 
         if (is_dir($log_dir)) {

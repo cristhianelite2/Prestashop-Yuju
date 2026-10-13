@@ -609,7 +609,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     </div>
 </div>
 
-{include file='module:prestashopyuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
+{include file='module:yuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
 
 <!-- Confirmación eliminación masiva en Yuju -->
 <div class="modal fade" id="yuju-bulk-delete-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-bulk-delete-modal-title">
