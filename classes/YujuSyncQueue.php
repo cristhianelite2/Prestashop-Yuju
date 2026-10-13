@@ -645,7 +645,7 @@ class YujuSyncQueue
                         'sync_status' => pSQL('synced_with_errors'),
                         'last_error' => pSQL($itemDetail['error'] ?: 'Error al procesar producto'),
                         'updated_at' => date('Y-m-d H:i:s'),
-                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id']);
+                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id'] . ' AND ' . ((int) ($item['prestashop_product_attribute_id'] ?? 0) > 0 ? 'prestashop_product_attribute_id = ' . (int) $item['prestashop_product_attribute_id'] : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
                 }
                 $this->handleQueueError($item['id'], $itemDetail['error'] ?: 'Error al procesar producto');
                 $stats['failed']++;
