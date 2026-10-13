@@ -35,7 +35,7 @@
                             </div>
                             <div class="col-xs-9 text-right">
                                 <div class="huge">{$webhook_stats.total_received|default:0|escape:'html':'UTF-8'}</div>
-                                <div>Total de Webhooks</div>
+                                <div>Total de webhooks</div>
                             </div>
                         </div>
                     </div>
@@ -195,14 +195,14 @@
             <div class="col-lg-12">
                 <div class="panel panel-default">
                     <div class="panel-heading">
-                        <h4 class="panel-title">Webhooks por Tipo de Evento</h4>
+                        <h4 class="panel-title">Webhooks por tipo de evento</h4>
                     </div>
                     <div class="panel-body">
                         <div class="table-responsive">
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>Tipo de Evento</th>
+                                        <th>Tipo de evento</th>
                                         <th>Cantidad</th>
                                         <th>Porcentaje</th>
                                     </tr>
@@ -248,7 +248,7 @@
                                 <thead>
                                     <tr>
                                         <th>Estado</th>
-                                        <th>Tipo de Evento</th>
+                                        <th>Tipo de evento</th>
                                         <th>Entidad ID</th>
                                         <th>Fecha</th>
                                         <th>Estado</th>
