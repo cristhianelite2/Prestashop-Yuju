@@ -620,9 +620,25 @@ class YujuSyncQueue
 
             if ($result) {
                 if (!empty($data['direct_update'])) {
+                    $attributeId = (int) ($item['prestashop_product_attribute_id'] ?? $data['id_product_attribute'] ?? 0);
+                    $entityWhere = 'prestashop_product_id = ' . (int) $item['prestashop_product_id'] . ' AND ' .
+                        ($attributeId > 0 ? 'prestashop_product_attribute_id = ' . $attributeId : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)');
+                    $snapshotRow = Db::getInstance()->getRow(
+                        'SELECT last_sync_data FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE ' . $entityWhere
+                    );
+                    $snapshot = json_decode((string) ($snapshotRow['last_sync_data'] ?? ''), true);
+                    if (!is_array($snapshot)) { $snapshot = []; }
+                    foreach (['stock', 'price'] as $field) {
+                        if (array_key_exists($field, $data) && !in_array($field, (array) ($data['drop_fields'] ?? []), true)) {
+                            $snapshot[$field] = $data[$field];
+                        }
+                    }
+                    if ($attributeId > 0) { $snapshot['prestashop_product_attribute_id'] = $attributeId; }
                     Db::getInstance()->update('yuju_product_status', [
                         'sync_status' => pSQL('synced'), 'last_error' => null,
-                        'last_sync_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
+                        'last_sync_at' => date('Y-m-d H:i:s'),
+                        'last_sync_data' => pSQL(json_encode($snapshot, JSON_UNESCAPED_UNICODE), true),
+                        'updated_at' => date('Y-m-d H:i:s'),
                     ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id'] . ' AND ' . ((int) ($item['prestashop_product_attribute_id'] ?? 0) > 0 ? 'prestashop_product_attribute_id = ' . (int) $item['prestashop_product_attribute_id'] : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
                 }
                 $this->updateQueueStatus($item['id'], 'completed');
