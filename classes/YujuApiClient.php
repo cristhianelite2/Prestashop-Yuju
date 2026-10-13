@@ -966,10 +966,10 @@ class YujuApiClient
         $apiMessage = trim((string) ($data['message'] ?? ''));
         if ($ok) {
             $message = $apiMessage !== '' ? $apiMessage : 'Yuju aceptó la solicitud y creó la tarea; esto no confirma el procesamiento de cada SKU.';
+        } elseif ($http2xx && !$rejected && $idTask === '') {
+            $message = 'Yuju respondió HTTP ' . $httpCode . ' sin id de tarea: ' . substr(trim((string) $responseBody), 0, 300);
         } elseif ($apiMessage !== '') {
             $message = $apiMessage;
-        } elseif ($http2xx && !$rejected) {
-            $message = 'Yuju respondió HTTP ' . $httpCode . ' sin id de tarea: ' . substr(trim((string) $responseBody), 0, 300);
         } else {
             $message = 'Yuju rechazó la actualización masiva (HTTP ' . $httpCode . ').';
         }
