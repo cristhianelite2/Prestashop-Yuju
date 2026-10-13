@@ -45,36 +45,36 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         $this->fields_list = [
         'id_mapping' => [
-        'title' => $this->l('ID'),
+        'title' => $this->trans('ID', [], 'Modules.Yuju.Admin'),
         'align' => 'center',
         'class' => 'fixed-width-xs',
         ],
         'prestashop_field' => [
-        'title' => $this->l('PrestaShop Field'),
+        'title' => $this->trans('PrestaShop Field', [], 'Modules.Yuju.Admin'),
         'width' => 200,
         ],
         'yuju_field' => [
-        'title' => $this->l('Yuju Field'),
+        'title' => $this->trans('Yuju Field', [], 'Modules.Yuju.Admin'),
         'width' => 200,
         ],
         'field_type' => [
-        'title' => $this->l('Field Type'),
+        'title' => $this->trans('Field Type', [], 'Modules.Yuju.Admin'),
         'align' => 'center',
         'width' => 120,
         ],
         'is_required' => [
-        'title' => $this->l('Required'),
+        'title' => $this->trans('Required', [], 'Modules.Yuju.Admin'),
         'align' => 'center',
         'type' => 'bool',
         'class' => 'fixed-width-sm',
         ],
 
         'transformation_rule' => [
-        'title' => $this->l('Transformation'),
+        'title' => $this->trans('Transformation', [], 'Modules.Yuju.Admin'),
         'width' => 150,
         ],
         'is_active' => [
-        'title' => $this->l('Active'),
+        'title' => $this->trans('Active', [], 'Modules.Yuju.Admin'),
         'align' => 'center',
         'active' => 'status',
         'type' => 'bool',
@@ -85,28 +85,28 @@ class AdminYujuProductMappingController extends ModuleAdminController
         $this->actions = ['edit', 'delete'];
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->l('Delete selected'),
-        'confirm' => $this->l('Delete selected items?'),
+        'text' => $this->trans('Delete selected', [], 'Modules.Yuju.Admin'),
+        'confirm' => $this->trans('Delete selected items?', [], 'Modules.Yuju.Admin'),
         'icon' => 'icon-trash'
         ],
         'enableMapping' => [
-        'text' => $this->l('Enable mapping'),
+        'text' => $this->trans('Enable mapping', [], 'Modules.Yuju.Admin'),
         'icon' => 'icon-check'
         ],
         'disableMapping' => [
-        'text' => $this->l('Disable mapping'),
+        'text' => $this->trans('Disable mapping', [], 'Modules.Yuju.Admin'),
         'icon' => 'icon-remove'
         ],
         ];
 
         $this->toolbar_btn['new'] = [
         'href' => self::$currentIndex . '&add' . $this->table . '&token=' . $this->token,
-        'desc' => $this->l('Add new mapping'),
+        'desc' => $this->trans('Add new mapping', [], 'Modules.Yuju.Admin'),
         ];
 
         $this->toolbar_btn['load_defaults'] = [
         'href' => self::$currentIndex . '&loadDefaults&token=' . $this->token,
-        'desc' => $this->l('Load Default Mappings'),
+        'desc' => $this->trans('Load Default Mappings', [], 'Modules.Yuju.Admin'),
         'class' => 'process-icon-download',
         ];
     }
@@ -333,38 +333,38 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ];
 
         $field_types = [
-        ['id' => 'string', 'name' => $this->l('Cadena de texto')],
-        ['id' => 'integer', 'name' => $this->l('Número entero')],
-        ['id' => 'decimal', 'name' => $this->l('Número decimal')],
-        ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
-        ['id' => 'date', 'name' => $this->l('Fecha')],
-        ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
-        ['id' => 'array', 'name' => $this->l('Lista')],
-        ['id' => 'object', 'name' => $this->l('Objeto')],
+        ['id' => 'string', 'name' => $this->trans('Cadena de texto', [], 'Modules.Yuju.Admin')],
+        ['id' => 'integer', 'name' => $this->trans('Número entero', [], 'Modules.Yuju.Admin')],
+        ['id' => 'decimal', 'name' => $this->trans('Número decimal', [], 'Modules.Yuju.Admin')],
+        ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', [], 'Modules.Yuju.Admin')],
+        ['id' => 'date', 'name' => $this->trans('Fecha', [], 'Modules.Yuju.Admin')],
+        ['id' => 'datetime', 'name' => $this->trans('Fecha y Hora', [], 'Modules.Yuju.Admin')],
+        ['id' => 'array', 'name' => $this->trans('Lista', [], 'Modules.Yuju.Admin')],
+        ['id' => 'object', 'name' => $this->trans('Objeto', [], 'Modules.Yuju.Admin')],
         ];
 
 
 
         $transformation_rules = [
-        ['id' => 'none', 'name' => $this->l('Ninguna')],
-        ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
-        ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
-        ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
-        ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
-        ['id' => 'currency_convert', 'name' => $this->l('Convertir Moneda')],
-        ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
-        ['id' => 'custom', 'name' => $this->l('Función Personalizada')],
+        ['id' => 'none', 'name' => $this->trans('Ninguna', [], 'Modules.Yuju.Admin')],
+        ['id' => 'uppercase', 'name' => $this->trans('Mayúsculas', [], 'Modules.Yuju.Admin')],
+        ['id' => 'lowercase', 'name' => $this->trans('Minúsculas', [], 'Modules.Yuju.Admin')],
+        ['id' => 'capitalize', 'name' => $this->trans('Capitalizar', [], 'Modules.Yuju.Admin')],
+        ['id' => 'strip_html', 'name' => $this->trans('Eliminar HTML', [], 'Modules.Yuju.Admin')],
+        ['id' => 'currency_convert', 'name' => $this->trans('Convertir Moneda', [], 'Modules.Yuju.Admin')],
+        ['id' => 'date_format', 'name' => $this->trans('Formato de Fecha', [], 'Modules.Yuju.Admin')],
+        ['id' => 'custom', 'name' => $this->trans('Función Personalizada', [], 'Modules.Yuju.Admin')],
         ];
 
         $this->fields_form = [
         'legend' => [
-        'title' => $this->l('Mapeo de Campos de Producto'),
+        'title' => $this->trans('Mapeo de Campos de Producto', [], 'Modules.Yuju.Admin'),
         'icon' => 'icon-cogs',
         ],
         'input' => [
         [
         'type' => 'select',
-        'label' => $this->l('Campo PrestaShop'),
+        'label' => $this->trans('Campo PrestaShop', [], 'Modules.Yuju.Admin'),
         'name' => 'prestashop_field',
         'required' => true,
         'options' => [
@@ -375,7 +375,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Campo Yuju'),
+        'label' => $this->trans('Campo Yuju', [], 'Modules.Yuju.Admin'),
         'name' => 'yuju_field',
         'required' => true,
         'options' => [
@@ -386,7 +386,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'select',
-        'label' => $this->l('Tipo de Campo'),
+        'label' => $this->trans('Tipo de Campo', [], 'Modules.Yuju.Admin'),
         'name' => 'field_type',
         'required' => true,
         'options' => [
@@ -398,7 +398,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         [
         'type' => 'select',
-        'label' => $this->l('Regla de Transformación'),
+        'label' => $this->trans('Regla de Transformación', [], 'Modules.Yuju.Admin'),
         'name' => 'transformation_rule',
         'options' => [
         'query' => $transformation_rules,
@@ -408,55 +408,55 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ],
         [
         'type' => 'textarea',
-        'label' => $this->l('Transformación Personalizada'),
+        'label' => $this->trans('Transformación Personalizada', [], 'Modules.Yuju.Admin'),
         'name' => 'custom_transformation',
-        'desc' => $this->l('Código PHP para transformación personalizada (solo si la regla de transformación es \'custom\')'),
+        'desc' => $this->trans('Código PHP para transformación personalizada (solo si la regla de transformación es \'custom\')', [], 'Modules.Yuju.Admin'),
         ],
         [
         'type' => 'text',
-        'label' => $this->l('Valor por Defecto'),
+        'label' => $this->trans('Valor por Defecto', [], 'Modules.Yuju.Admin'),
         'name' => 'default_value',
-        'desc' => $this->l('Valor por defecto si el campo origen está vacío'),
+        'desc' => $this->trans('Valor por defecto si el campo origen está vacío', [], 'Modules.Yuju.Admin'),
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Campo Requerido'),
+        'label' => $this->trans('Campo Requerido', [], 'Modules.Yuju.Admin'),
         'name' => 'is_required',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_required_on',
         'value' => 1,
-        'label' => $this->l('Sí'),
+        'label' => $this->trans('Sí', [], 'Modules.Yuju.Admin'),
         ],
         [
         'id' => 'is_required_off',
         'value' => 0,
-        'label' => $this->l('No'),
+        'label' => $this->trans('No', [], 'Modules.Yuju.Admin'),
         ],
         ],
         ],
         [
         'type' => 'switch',
-        'label' => $this->l('Activo'),
+        'label' => $this->trans('Activo', [], 'Modules.Yuju.Admin'),
         'name' => 'is_active',
         'is_bool' => true,
         'values' => [
         [
         'id' => 'is_active_on',
         'value' => 1,
-        'label' => $this->l('Habilitado'),
+        'label' => $this->trans('Habilitado', [], 'Modules.Yuju.Admin'),
         ],
         [
         'id' => 'is_active_off',
         'value' => 0,
-        'label' => $this->l('Deshabilitado'),
+        'label' => $this->trans('Deshabilitado', [], 'Modules.Yuju.Admin'),
         ],
         ],
         ],
         ],
         'submit' => [
-        'title' => $this->l('Guardar'),
+        'title' => $this->trans('Guardar', [], 'Modules.Yuju.Admin'),
         ],
         ];
 
@@ -491,7 +491,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         );
 
         if ($existing) {
-            $this->errors[] = $this->l('This PrestaShop field is already mapped.');
+            $this->errors[] = $this->trans('This PrestaShop field is already mapped.', [], 'Modules.Yuju.Admin');
 
             return false;
         }
@@ -523,12 +523,12 @@ class AdminYujuProductMappingController extends ModuleAdminController
         }
 
         if ($result) {
-            $this->confirmations[] = $this->l('Product mapping saved successfully.');
+            $this->confirmations[] = $this->trans('Product mapping saved successfully.', [], 'Modules.Yuju.Admin');
             $this->logger->log('Product mapping saved: ' . $prestashop_field . ' -> ' . $yuju_field, 'info');
 
             return true;
         } else {
-            $this->errors[] = $this->l('Error saving product mapping.');
+            $this->errors[] = $this->trans('Error saving product mapping.', [], 'Modules.Yuju.Admin');
 
             return false;
         }
@@ -555,7 +555,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             }
         }
 
-        $this->confirmations[] = sprintf($this->l('%d default mappings loaded successfully.'), $inserted);
+        $this->confirmations[] = sprintf($this->trans('%d default mappings loaded successfully.', [], 'Modules.Yuju.Admin'), $inserted);
         $this->logger->log('Default product mappings reloaded: ' . $inserted . ' mappings', 'info');
     }
 
@@ -583,7 +583,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         }
 
         if ($updated > 0) {
-            $this->confirmations[] = sprintf($this->l('%d fields updated as required.'), $updated);
+            $this->confirmations[] = sprintf($this->trans('%d fields updated as required.', [], 'Modules.Yuju.Admin'), $updated);
             $this->logger->log('Required fields updated: ' . $updated . ' fields', 'info');
         }
     }
@@ -600,7 +600,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Selected mappings enabled.');
+                $this->confirmations[] = $this->trans('Selected mappings enabled.', [], 'Modules.Yuju.Admin');
             }
         }
     }
@@ -617,7 +617,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->l('Selected mappings disabled.');
+                $this->confirmations[] = $this->trans('Selected mappings disabled.', [], 'Modules.Yuju.Admin');
             }
         }
     }
@@ -641,7 +641,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             // Validation
             if (empty($prestashop_field) || empty($yuju_field) || empty($field_type)) {
-                throw new Exception($this->l('Required fields are missing.'));
+                throw new Exception($this->trans('Required fields are missing.', [], 'Modules.Yuju.Admin'));
             }
 
             // Check if mapping already exists (for different mapping)
@@ -655,7 +655,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             $existing = Db::getInstance()->getRow($existing_query);
             if ($existing) {
-                throw new Exception($this->l('This PrestaShop field is already mapped.'));
+                throw new Exception($this->trans('This PrestaShop field is already mapped.', [], 'Modules.Yuju.Admin'));
             }
 
             $data = [
@@ -678,12 +678,12 @@ class AdminYujuProductMappingController extends ModuleAdminController
                     $data,
                     'id_mapping = ' . $id_mapping
                 );
-                $message = $this->l('Product mapping updated successfully.');
+                $message = $this->trans('Product mapping updated successfully.', [], 'Modules.Yuju.Admin');
             } else {
                 // Create new mapping
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $result = Db::getInstance()->insert('yuju_product_mapping', $data);
-                $message = $this->l('Product mapping created successfully.');
+                $message = $this->trans('Product mapping created successfully.', [], 'Modules.Yuju.Admin');
             }
 
             if ($result) {
@@ -691,7 +691,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 $response['message'] = $message;
                 $this->logger->log('Product mapping saved: ' . $prestashop_field . ' -> ' . $yuju_field, 'info');
             } else {
-                throw new Exception($this->l('Error saving product mapping.'));
+                throw new Exception($this->trans('Error saving product mapping.', [], 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -708,7 +708,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         try {
             $id_mapping = (int) Tools::getValue('id_mapping');
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->trans('Invalid mapping ID.', [], 'Modules.Yuju.Admin'));
             }
 
             $mapping = Db::getInstance()->getRow('
@@ -720,7 +720,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 $response['success'] = true;
                 $response['data'] = $mapping;
             } else {
-                throw new Exception($this->l('Mapping not found.'));
+                throw new Exception($this->trans('Mapping not found.', [], 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -736,7 +736,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         try {
             $id_mapping = (int) Tools::getValue('id_mapping');
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->trans('Invalid mapping ID.', [], 'Modules.Yuju.Admin'));
             }
 
             $result = Db::getInstance()->delete(
@@ -746,10 +746,10 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             if ($result) {
                 $response['success'] = true;
-                $response['message'] = $this->l('Product mapping deleted successfully.');
+                $response['message'] = $this->trans('Product mapping deleted successfully.', [], 'Modules.Yuju.Admin');
                 $this->logger->log('Product mapping deleted: ID ' . $id_mapping, 'info');
             } else {
-                throw new Exception($this->l('Error deleting product mapping.'));
+                throw new Exception($this->trans('Error deleting product mapping.', [], 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -768,7 +768,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             $is_active = (int) Tools::getValue('is_active');
 
             if ($id_mapping <= 0) {
-                throw new Exception($this->l('Invalid mapping ID.'));
+                throw new Exception($this->trans('Invalid mapping ID.', [], 'Modules.Yuju.Admin'));
             }
 
             $result = Db::getInstance()->update(
@@ -780,11 +780,11 @@ class AdminYujuProductMappingController extends ModuleAdminController
             if ($result) {
                 $response['success'] = true;
                 $response['message'] = $is_active ? 
-                    $this->l('Product mapping enabled successfully.') : 
-                    $this->l('Product mapping disabled successfully.');
+                    $this->trans('Product mapping enabled successfully.', [], 'Modules.Yuju.Admin') : 
+                    $this->trans('Product mapping disabled successfully.', [], 'Modules.Yuju.Admin');
                 $this->logger->log('Product mapping toggled: ID ' . $id_mapping . ' -> ' . ($is_active ? 'enabled' : 'disabled'), 'info');
             } else {
-                throw new Exception($this->l('Error updating product mapping status.'));
+                throw new Exception($this->trans('Error updating product mapping status.', [], 'Modules.Yuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -805,7 +805,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             
             $response['success'] = true;
             $response['data'] = $yuju_fields;
-            $response['message'] = $this->l('Yuju fields refreshed successfully.');
+            $response['message'] = $this->trans('Yuju fields refreshed successfully.', [], 'Modules.Yuju.Admin');
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
             $this->logger->log('Error refreshing Yuju fields: ' . $e->getMessage(), 'error');
@@ -911,15 +911,15 @@ class AdminYujuProductMappingController extends ModuleAdminController
     protected function getFieldTypes()
     {
         return [
-            ['id' => 'string', 'name' => $this->l('Cadena de texto')],
-            ['id' => 'integer', 'name' => $this->l('Número entero')],
-            ['id' => 'decimal', 'name' => $this->l('Número decimal')],
-            ['id' => 'boolean', 'name' => $this->l('Verdadero/Falso')],
-            ['id' => 'date', 'name' => $this->l('Fecha')],
-            ['id' => 'datetime', 'name' => $this->l('Fecha y Hora')],
-            ['id' => 'text', 'name' => $this->l('Texto')],
-            ['id' => 'html', 'name' => $this->l('HTML')],
-            ['id' => 'json', 'name' => $this->l('JSON')],
+            ['id' => 'string', 'name' => $this->trans('Cadena de texto', [], 'Modules.Yuju.Admin')],
+            ['id' => 'integer', 'name' => $this->trans('Número entero', [], 'Modules.Yuju.Admin')],
+            ['id' => 'decimal', 'name' => $this->trans('Número decimal', [], 'Modules.Yuju.Admin')],
+            ['id' => 'boolean', 'name' => $this->trans('Verdadero/Falso', [], 'Modules.Yuju.Admin')],
+            ['id' => 'date', 'name' => $this->trans('Fecha', [], 'Modules.Yuju.Admin')],
+            ['id' => 'datetime', 'name' => $this->trans('Fecha y Hora', [], 'Modules.Yuju.Admin')],
+            ['id' => 'text', 'name' => $this->trans('Texto', [], 'Modules.Yuju.Admin')],
+            ['id' => 'html', 'name' => $this->trans('HTML', [], 'Modules.Yuju.Admin')],
+            ['id' => 'json', 'name' => $this->trans('JSON', [], 'Modules.Yuju.Admin')],
         ];
     }
 
@@ -928,17 +928,17 @@ class AdminYujuProductMappingController extends ModuleAdminController
     protected function getTransformationRules()
     {
         return [
-            ['id' => 'none', 'name' => $this->l('Ninguna')],
-            ['id' => 'uppercase', 'name' => $this->l('Mayúsculas')],
-            ['id' => 'lowercase', 'name' => $this->l('Minúsculas')],
-            ['id' => 'capitalize', 'name' => $this->l('Capitalizar')],
-            ['id' => 'strip_html', 'name' => $this->l('Eliminar HTML')],
-            ['id' => 'strip_tags', 'name' => $this->l('Eliminar Etiquetas')],
-            ['id' => 'trim', 'name' => $this->l('Recortar Espacios')],
-            ['id' => 'number_format', 'name' => $this->l('Formato de Número')],
-            ['id' => 'date_format', 'name' => $this->l('Formato de Fecha')],
-            ['id' => 'boolean_convert', 'name' => $this->l('Convertir a Booleano')],
-            ['id' => 'custom', 'name' => $this->l('Código PHP Personalizado')],
+            ['id' => 'none', 'name' => $this->trans('Ninguna', [], 'Modules.Yuju.Admin')],
+            ['id' => 'uppercase', 'name' => $this->trans('Mayúsculas', [], 'Modules.Yuju.Admin')],
+            ['id' => 'lowercase', 'name' => $this->trans('Minúsculas', [], 'Modules.Yuju.Admin')],
+            ['id' => 'capitalize', 'name' => $this->trans('Capitalizar', [], 'Modules.Yuju.Admin')],
+            ['id' => 'strip_html', 'name' => $this->trans('Eliminar HTML', [], 'Modules.Yuju.Admin')],
+            ['id' => 'strip_tags', 'name' => $this->trans('Eliminar Etiquetas', [], 'Modules.Yuju.Admin')],
+            ['id' => 'trim', 'name' => $this->trans('Recortar Espacios', [], 'Modules.Yuju.Admin')],
+            ['id' => 'number_format', 'name' => $this->trans('Formato de Número', [], 'Modules.Yuju.Admin')],
+            ['id' => 'date_format', 'name' => $this->trans('Formato de Fecha', [], 'Modules.Yuju.Admin')],
+            ['id' => 'boolean_convert', 'name' => $this->trans('Convertir a Booleano', [], 'Modules.Yuju.Admin')],
+            ['id' => 'custom', 'name' => $this->trans('Código PHP Personalizado', [], 'Modules.Yuju.Admin')],
         ];
     }
     
