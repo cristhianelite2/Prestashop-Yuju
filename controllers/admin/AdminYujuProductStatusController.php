@@ -808,7 +808,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     protected function getProductsWithFilters($page = 1, $per_page = 25)
     {
-        $this->repairStaleInfrastructureErrorsInProductStatus();
+        // No ejecutar UPDATE correctivos de toda la tabla al abrir el listado.
 
         $store_id = (int)Tools::getValue('store', 0);
         $ps_category_id = (int)Tools::getValue('ps_category', 0);
@@ -2179,39 +2179,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $icon = isset($status_icons[$value]) ? $status_icons[$value] : 'icon-question';
         $label = isset($status_labels[$value]) ? $status_labels[$value] : ucfirst($value);
         
-        // Si está en cola, mostrar posición
-        if ($value === 'queued') {
-            try {
-                // Verificar si la tabla existe
-                $table_exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . _DB_PREFIX_ . 'yuju_sync_queue"');
-                
-                if ($table_exists) {
-                    $queue_info = Db::getInstance()->getRow('
-                        SELECT id, created_at, attempts 
-                        FROM ' . _DB_PREFIX_ . 'yuju_sync_queue 
-                        WHERE prestashop_product_id = ' . (int)$row['prestashop_product_id'] . '
-                        AND status = "pending"
-                        ORDER BY created_at ASC
-                        LIMIT 1
-                    ');
-                    
-                    if ($queue_info && isset($queue_info['created_at'])) {
-                        $position = (int)Db::getInstance()->getValue('
-                            SELECT COUNT(*) + 1
-                            FROM ' . _DB_PREFIX_ . 'yuju_sync_queue 
-                            WHERE status = "pending" 
-                            AND created_at < "' . pSQL($queue_info['created_at']) . '"
-                        ');
-                        
-                        $tooltip = 'title="Posición en cola: #' . $position . ' | Creado: ' . htmlspecialchars($queue_info['created_at']) . '"';
-                        return '<span class="label label-' . $color . '" ' . $tooltip . '><i class="' . $icon . '"></i> ' . $label . ' (#' . $position . ')</span>';
-                    }
-                }
-            } catch (Exception $e) {
-                // Si hay error, mostrar solo el badge sin posición
-            }
-        }
-        
+        // Evitar consultas por fila (SHOW TABLES + búsqueda y posición en cola).
+        // La etiqueta conserva el estado sin calcular la posición en tiempo de render.
         // Si es synced_with_errors, mostrar badge verde + ícono rojo
         if ($value === 'synced_with_errors') {
             $tooltip = !empty($row['last_error']) ? 'title="' . htmlspecialchars($row['last_error']) . '"' : '';
