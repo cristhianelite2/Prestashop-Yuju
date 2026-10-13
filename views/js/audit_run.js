@@ -425,9 +425,13 @@
 
         var nameExtra = opts.child ? diffBadgesBlock(row, 'yuju-audit-child-diffs') : '';
 
+        var selector = row.detail_id
+            ? '<input type="checkbox" class="yuju-audit-select-product" data-detail-id="' + parseInt(row.detail_id, 10) + '" aria-label="Seleccionar ' + skuCell + '">'
+            : '<input type="checkbox" disabled title="Disponible al terminar de cargar la auditoría">';
         return '<tr class="' + trClass.trim() + '"'
             + (opts.groupKey ? ' data-group="' + escapeHtml(opts.groupKey) + '"' : '')
             + '>' +
+            '<td class="text-center">' + selector + '</td>' +
             '<td class="yuju-audit-sku">' + skuCell + '</td>' +
             '<td class="yuju-audit-name-cell">' +
                 nameCellHtml(row.product_name, opts.child ? { emptyMark: '-' } : {}) +
@@ -451,6 +455,7 @@
         else if (p.result === 'diff_fixed' || p.result === 'diff_found') trClass = 'yuju-audit-parent warning';
 
         return '<tr class="' + trClass + '" data-group="' + escapeHtml(group.key) + '">' +
+            '<td class="text-center"></td>' +
             '<td class="yuju-audit-sku">' +
                 '<a href="#" class="yuju-audit-toggle-group" data-group="' + escapeHtml(group.key) + '" title="Expandir / contraer">' +
                     '<span class="yuju-audit-chevron" aria-hidden="true">' + groupToggleIcon(expanded) + '</span>' +
@@ -478,7 +483,7 @@
             });
         var $tbody = $('#yuju-audit-diff-table tbody');
         if (!rows.length) {
-            $tbody.html('<tr class="yuju-audit-empty"><td colspan="6" class="text-center text-muted">Sin filas para este filtro/búsqueda.</td></tr>');
+            $tbody.html('<tr class="yuju-audit-empty"><td colspan="7" class="text-center text-muted">Sin filas para este filtro/búsqueda.</td></tr>');
             $('#yuju-audit-filter-label').text('Filtro: ' + filterLabel(activeFilter) + ' · 0 filas');
             return;
         }
@@ -975,6 +980,59 @@
         });
     }
 
+    function updateSelectionUi() {
+        var count = $('.yuju-audit-select-product:checked').length;
+        $('#yuju-audit-update-selected-btn').prop('disabled', count === 0 || running);
+    }
+
+    function updateSelectedToYuju() {
+        if (running) {
+            setStatus('warning', 'Espere a que termine la auditoría antes de enviar productos.');
+            return;
+        }
+        var ids = $('.yuju-audit-select-product:checked').map(function () {
+            return parseInt($(this).attr('data-detail-id'), 10) || 0;
+        }).get().filter(function (id) { return id > 0; });
+        if (!ids.length) {
+            setStatus('warning', 'Seleccione al menos un producto.');
+            return;
+        }
+        if (!window.confirm('Se enviarán a Yuju los valores actuales de PrestaShop para ' + ids.length + ' producto(s). PrestaShop no se modificará. ¿Continuar?')) {
+            return;
+        }
+        var $button = $('#yuju-audit-update-selected-btn').prop('disabled', true);
+        setStatus('info', '<i class="icon-spinner icon-spin"></i> Enviando valores desde PrestaShop a Yuju…');
+        $.ajax({
+            url: ajaxUrl,
+            type: 'POST',
+            dataType: 'text',
+            timeout: 180000,
+            traditional: true,
+            data: {
+                ajax: 1,
+                action: 'updateSelectedToYuju',
+                token: token,
+                run_id: runId,
+                detail_ids: ids
+            }
+        }).done(function (raw) {
+            var resp = parseJsonLoose(raw);
+            if (!resp) {
+                setStatus('danger', 'Yuju devolvió una respuesta no válida.');
+                return;
+            }
+            setStatus(resp.success ? 'success' : 'warning', '<strong>' +
+                (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.') +
+                '</strong> ' + escapeHtml(resp.message || ''));
+            applyKpiFilter(activeFilter);
+        }).fail(function (xhr) {
+            setStatus('danger', '<strong>Error:</strong> ' + ajaxFailMessage(xhr, 'No se pudieron actualizar los productos seleccionados'));
+        }).always(function () {
+            $button.prop('disabled', false);
+            updateSelectionUi();
+        });
+    }
+
     function exportCsv() {
         if (!runId) return;
         var result = activeFilter === 'total' ? '' : activeFilter;
@@ -1052,6 +1110,16 @@
             e.preventDefault();
             exportCsv();
         });
+        $('#yuju-audit-update-selected-btn').on('click', function (e) {
+            e.preventDefault();
+            updateSelectedToYuju();
+        });
+        $('#yuju-audit-select-all').on('change', function () {
+            var checked = $(this).is(':checked');
+            $('#yuju-audit-diff-table tbody .yuju-audit-select-product').prop('checked', checked);
+            updateSelectionUi();
+        });
+        $(document).on('change', '.yuju-audit-select-product', updateSelectionUi);
         $('#yuju-audit-search-btn').on('click', function () {
             applyKpiFilter(activeFilter);
         });
