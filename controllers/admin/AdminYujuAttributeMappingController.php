@@ -381,11 +381,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 $this->confirmations[] = $this->trans('Los atributos de Yuju se sincronizaron correctamente.', array(), 'Modules.Prestashopyuju.Admin');
                 $this->logger->log('Yuju attributes synchronized: ' . count($attributes['data']) . ' attributes', 'info');
             } else {
-                $this->errors[] = $this->trans('No attributes found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->errors[] = $this->trans('No se encontraron atributos en Yuju.', array(), 'Modules.Prestashopyuju.Admin');
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error synchronizing Yuju attributes: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
-            $this->logger->log('Error synchronizing Yuju attributes: ' . $e->getMessage(), 'error');
+            $this->errors[] = $this->trans('Error al sincronizar los atributos de Yuju: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->logger->log('Error al sincronizar los atributos de Yuju: ' . $e->getMessage(), 'error');
         }
     }
 
@@ -433,7 +433,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Selected mappings enabled.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Se habilitaron los mapeos seleccionados.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }
@@ -450,7 +450,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Selected mappings disabled.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Se deshabilitaron los mapeos seleccionados.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }
@@ -460,7 +460,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         $id = (int) Tools::getValue('id');
 
         if (!$id) {
-            $this->errors[] = $this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('ID de mapeo no válido.', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -472,7 +472,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         );
 
         if (!$mapping) {
-            $this->errors[] = $this->trans('Mapping not found.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('No se encontró el mapeo.', array(), 'Modules.Prestashopyuju.Admin');
 
             return;
         }
@@ -520,7 +520,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
             // Validation
             if (!$prestashop_attribute_id || !$yuju_attribute_id || !$attribute_type || !$sync_direction) {
-                throw new Exception($this->trans('All required fields must be filled.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Debes completar todos los campos obligatorios.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
             // Check if mapping already exists
@@ -558,12 +558,12 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                     $data,
                     'id = ' . (int) $id
                 );
-                $message = $this->trans('Attribute mapping updated successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $message = $this->trans('El mapeo del atributo se actualizó correctamente.', array(), 'Modules.Prestashopyuju.Admin');
             } else {
                 // Insert
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $result = Db::getInstance()->insert('yuju_attribute_mapping', $data);
-                $message = $this->trans('Attribute mapping created successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $message = $this->trans('El mapeo del atributo se creó correctamente.', array(), 'Modules.Prestashopyuju.Admin');
             }
 
             if ($result) {
@@ -588,7 +588,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         try {
             $id = (int) Tools::getValue('id');
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('ID de mapeo no válido.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
             $mapping = Db::getInstance()->getRow('
@@ -600,7 +600,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 $response['success'] = true;
                 $response['data'] = $mapping;
             } else {
-                throw new Exception($this->trans('Mapping not found.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('No se encontró el mapeo.', array(), 'Modules.Prestashopyuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -616,7 +616,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         try {
             $id = (int) Tools::getValue('id');
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('ID de mapeo no válido.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
             $result = Db::getInstance()->delete(
@@ -626,10 +626,10 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
 
             if ($result) {
                 $response['success'] = true;
-                $response['message'] = $this->trans('Attribute mapping deleted successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $response['message'] = $this->trans('El mapeo del atributo se eliminó correctamente.', array(), 'Modules.Prestashopyuju.Admin');
                 $this->logger->log('Attribute mapping deleted: ID ' . $id, 'info');
             } else {
-                throw new Exception($this->trans('Error deleting attribute mapping.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Error al eliminar el mapeo del atributo.', array(), 'Modules.Prestashopyuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -648,7 +648,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $status = (int) Tools::getValue('status');
 
             if (!$id) {
-                throw new Exception($this->trans('Invalid mapping ID.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('ID de mapeo no válido.', array(), 'Modules.Prestashopyuju.Admin'));
             }
 
             $result = Db::getInstance()->update(
@@ -660,11 +660,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             if ($result) {
                 $response['success'] = true;
                 $response['message'] = $status ? 
-                    $this->trans('Attribute mapping enabled.', array(), 'Modules.Prestashopyuju.Admin') :
-                    $this->trans('Attribute mapping disabled.', array(), 'Modules.Prestashopyuju.Admin');
+                    $this->trans('Mapeo de atributo habilitado.', array(), 'Modules.Prestashopyuju.Admin') :
+                    $this->trans('Mapeo de atributo deshabilitado.', array(), 'Modules.Prestashopyuju.Admin');
                 $this->logger->log('Attribute mapping status changed: ID ' . $id . ' -> ' . ($status ? 'enabled' : 'disabled'), 'info');
             } else {
-                throw new Exception($this->trans('Error updating attribute mapping status.', array(), 'Modules.Prestashopyuju.Admin'));
+                throw new Exception($this->trans('Error al actualizar el estado del mapeo de atributos.', array(), 'Modules.Prestashopyuju.Admin'));
             }
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
@@ -682,7 +682,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $attributes = $this->getYujuAttributes();
             
             $response['success'] = true;
-            $response['message'] = $this->trans('Yuju attributes refreshed successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            $response['message'] = $this->trans('Los atributos de Yuju se actualizaron correctamente.', array(), 'Modules.Prestashopyuju.Admin');
             $response['data'] = $attributes;
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
