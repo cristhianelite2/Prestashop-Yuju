@@ -128,7 +128,7 @@
     overflow: hidden;
 }
 
-/* Override default panel styles */
+/* Ajuste de los estilos predeterminados del panel */
 .yuju-webhook-content .panel {
     background: transparent;
     border: none;
@@ -150,7 +150,7 @@
     background: transparent;
 }
 
-/* Responsive Design */
+/* Diseño adaptable */
 @media (max-width: 768px) {
     .yuju-webhook-container {
         padding: 10px;
