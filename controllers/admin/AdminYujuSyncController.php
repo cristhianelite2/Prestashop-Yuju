@@ -518,7 +518,7 @@ class AdminYujuSyncController extends ModuleAdminController
                     $response = [
                         'success' => true,
                         'message' => sprintf(
-                            $this->trans('SincronizaciÃ³n finalizada. Productos actualizados: %d. Errores: %d.', array(), 'Modules.Prestashopyuju.Admin'),
+                            $this->trans('Sincronización finalizada. Productos actualizados: %d. Errores: %d.', array(), 'Modules.Prestashopyuju.Admin'),
                             isset($results['synced']) ? (int) $results['synced'] : 0,
                             isset($results['failed']) ? (int) $results['failed'] : 0
                         ),
@@ -530,7 +530,7 @@ class AdminYujuSyncController extends ModuleAdminController
                 } else {
                     $response = [
                         'success' => false,
-                        'message' => $this->trans('El reporte cacheado estÃ¡ vacÃ­o.', array(), 'Modules.Prestashopyuju.Admin'),
+                        'message' => $this->trans('El reporte almacenado en caché está vacío.', array(), 'Modules.Prestashopyuju.Admin'),
                     ];
                 }
             } else {
