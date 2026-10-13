@@ -391,13 +391,29 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
 
             $yujuCategories = $this->getOfficialYujuCategoryNames();
             $now = date('Y-m-d H:i:s');
+            $invalidSamples = [];
 
             foreach ($rows as $row) {
                 $prestashopId = (int) $row['id_category_prestashop'];
-                $yujuId = (string) (int) $row['id_category_madkting'];
+                $sourceCategoryId = trim((string) $row['id_category_madkting']);
+                $yujuId = $sourceCategoryId;
 
-                if ($prestashopId <= 0 || !isset($yujuCategories[$yujuId])) {
+                if ($prestashopId <= 0 || $sourceCategoryId === '' || !isset($yujuCategories[$yujuId])) {
                     ++$response['skipped_invalid_category'];
+                    if (count($invalidSamples) < 20) {
+                        $prestashopCategoryName = Db::getInstance()->getValue(
+                            'SELECT cl.name
+                             FROM ' . _DB_PREFIX_ . 'category_lang cl
+                             WHERE cl.id_category = ' . $prestashopId . '
+                               AND cl.id_lang = ' . (int) $this->context->language->id . '
+                               AND cl.id_shop = ' . (int) $this->context->shop->id
+                        );
+                        $invalidSamples[] = [
+                            'id_category_prestashop' => $prestashopId,
+                            'nombre_prestashop' => $prestashopCategoryName ?: '',
+                            'id_category_madkting' => $sourceCategoryId,
+                        ];
+                    }
                     continue;
                 }
 
@@ -427,14 +443,20 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 }
             }
 
-            // Persistir que el proceso de importación se ejecutó para ocultar el botón.
-            Configuration::updateValue('PRESTASHOPYUJU_MADKTING_MAPPINGS_IMPORTED', 1);
-
+            // Marcar como completado únicamente cuando hubo al menos un mapeo
+            // importado o ya existente. Si todos los IDs son ajenos a Yuju, permitir reintentar.
+            if ($response['imported'] > 0 || $response['skipped_existing'] > 0) {
+                Configuration::updateValue('PRESTASHOPYUJU_MADKTING_MAPPINGS_IMPORTED', 1);
+            }
+            $response['invalid_samples'] = $invalidSamples;
             $response['success'] = true;
             $response['message'] = 'Importación terminada. Importados: ' . $response['imported']
                 . '; ya existentes: ' . $response['skipped_existing']
                 . '; categoría Yuju no reconocida: ' . $response['skipped_invalid_category']
                 . '; errores: ' . $response['errors'] . '.';
+            if ($response['skipped_invalid_category'] > 0) {
+                $response['message'] .= ' Los IDs de Madkting no se asumirán como IDs de Yuju; consulta invalid_samples para ver los registros rechazados.';
+            }
             $this->logger->log('Importación Madkting -> Yuju: ' . $response['message'], 'info');
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
