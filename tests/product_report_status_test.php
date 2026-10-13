@@ -223,6 +223,7 @@ $mappings = [
 $report_rows = [
     ['id_product' => 101, 'sku_simple' => 'SKU-11', 'sku' => 'SKU-11', 'name' => 'Yuju name', 'description' => 'Description', 'price' => '15.00', 'variations' => [], '_yuju_report_has_variations' => true],
     ['id_product' => 103, 'sku_simple' => 'SKU-13', 'sku' => 'SKU-13', 'name' => 'Clean', 'description' => 'Description', 'price' => 7, 'variations' => [], '_yuju_report_has_variations' => true],
+    ['id_product' => 105, 'sku_simple' => 'YUJU-ONLY', 'sku' => 'YUJU-ONLY', 'name' => 'Yuju only product', 'description' => 'Description', 'price' => 12, 'variations' => [], '_yuju_report_has_variations' => true],
     ['id_product' => 104, 'sku_simple' => 'VAR-PARENT', 'sku' => 'VAR-PARENT', 'name' => 'Variations', 'description' => 'Description', 'price' => 10, 'variations' => [
         ['id_variation' => 1041, 'sku' => 'VAR-M', 'size' => 'M', 'price' => 10, 'stock' => 2],
     ], '_yuju_report_has_variations' => true],
@@ -240,7 +241,9 @@ assertSameValue(4, count($result['all_products']), 'The reconciliation table dat
 assertSameValue('differences', $result['all_products'][0]['reconciliation_status'], 'Products with field differences must be categorized for the table.');
 assertSameValue('not_in_yuju', $result['all_products'][1]['reconciliation_status'], 'Products without a Yuju match must be shown as missing in Yuju.');
 assertSameValue('synced', $result['all_products'][2]['reconciliation_status'], 'Products with equal mapped fields must be shown as synchronized.');
-assertSameValue(null, $db->findStatusByYujuId('101', 'missing'), 'Unknown Yuju variations should not be fabricated.');
+$yujuOnly = $db->findStatusByYujuId('105');
+assertSameValue(null, $yujuOnly['prestashop_product_id'], 'Yuju products without a PrestaShop match must remain visible with a NULL PrestaShop ID.');
+assertSameValue('Yuju only product', $yujuOnly['yuju_product_name'], 'Unlinked Yuju rows should retain their source name.');
 $status103 = $db->findStatusByYujuId('103');
 $status104 = $db->findStatusByYujuId('104');
 assertSameValue('synced', $status103['sync_status'], 'Equal outbound values should be marked synced.');
@@ -252,6 +255,6 @@ $status101 = $db->findStatusByYujuId('101');
 assertSameValue(null, $status101['last_error'], 'Status updates should use the schema last_error column.');
 assertSameValue(false, isset($status101['error_message']), 'Status updates must not write a nonexistent error_message column.');
 assertSameValue('VAR-M', $db->findStatusByYujuId('104', 'id:1041')['yuju_variation_sku'], 'Each reported Yuju variation should have its own status row.');
-assertSameValue(4, $result['yuju_total'], 'The Yuju catalog total should include parent products and nested variations.');
+assertSameValue(5, $result['yuju_total'], 'The Yuju catalog total should include parents, unlinked products, and nested variations.');
 
 echo "Product report status reconciliation tests passed.\n";
