@@ -526,17 +526,25 @@ class AdminYujuConfigurationController extends ModuleAdminController
             
             $oauth = new YujuOAuth();
 
-            // Validar credenciales antes de intentar token/API para devolver
-            // un mensaje claro al usuario en el debug de conectividad.
+            // El botón de conectividad no envía los secretos en el POST (por seguridad).
+            // Por eso, si no vienen en la petición, usar las credenciales ya guardadas.
+            // No registrar ni devolver nunca los valores de las credenciales.
+            $oauth_data_debug = $oauth->getStoredTokenData();
             $raw_client_id = trim((string) Tools::getValue('YUJU_CLIENT_ID', ''));
             $raw_client_secret = trim((string) Tools::getValue('YUJU_CLIENT_SECRET', ''));
-            $has_form_client_id = !empty($raw_client_id);
-            $has_form_client_secret = !empty($raw_client_secret);
+
+            if ($raw_client_id === '') {
+                $raw_client_id = trim((string) ($oauth_data_debug['client_id'] ?? YujuConfig::get('YUJU_CLIENT_ID', '')));
+            }
+            if ($raw_client_secret === '') {
+                $raw_client_secret = trim((string) ($oauth_data_debug['client_secret'] ?? YujuConfig::get('YUJU_CLIENT_SECRET', '')));
+            }
+
+            $has_form_client_id = ($raw_client_id !== '');
+            $has_form_client_secret = ($raw_client_secret !== '');
             $credentials_ready = $has_form_client_id && $has_form_client_secret;
 
             if (!$credentials_ready) {
-                $oauth_data_debug = $oauth->getStoredTokenData();
-
                 $debug = [
                     'credentials' => [
                         'has_client_id' => $has_form_client_id,
