@@ -46,7 +46,7 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.0';
+        $this->version = '1.0.1';
         $this->author = 'Yuju';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -100,17 +100,13 @@ class Yuju extends Module
                 // Su activación deberá hacerse manualmente en una fase posterior.
                 'guardar configuración inicial' => 'installConfiguration',
                 'crear directorios del módulo' => 'createDirectories',
-                'crear transportista Yuju' => 'ensureYujuCarrier',
+                // El transportista se crea de forma diferida; nunca bloquea la instalación.
             ];
 
             foreach ($steps as $label => $method) {
                 $stage = $label;
 
-                // La creación del transportista es opcional para instalar el módulo:
-                // si PrestaShop no permite crearlo, el resto de la integración debe instalarse.
-                if ($method === 'ensureYujuCarrier') {
-                    try {
-                        if (!$this->{$method}()) {
+                if (!$this->{$method}()) {
                             $detail = $this->installFailureDetail !== ''
                                 ? $this->installFailureDetail
                                 : 'No se pudo crear el transportista Yuju; la instalación continuará sin él.';
