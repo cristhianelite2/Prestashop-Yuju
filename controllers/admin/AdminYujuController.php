@@ -60,7 +60,7 @@ class AdminYujuController extends ModuleAdminController
             'webhook_stats' => $webhookStats,
             'yuju_account_info' => $accountInfo,
             'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
-            'token' => $this->token,
+            'token' => Tools::getAdminTokenLite('AdminYuju'),
             'update_status' => $updateStatus,
         ]);
 
@@ -168,7 +168,7 @@ class AdminYujuController extends ModuleAdminController
      */
     protected function validateUpdateAjaxToken()
     {
-        $expected = (string) $this->token;
+        $expected = (string) Tools::getAdminTokenLite('AdminYuju');
         $provided = (string) Tools::getValue('token');
         if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
             throw new Exception('El token de seguridad no es válido. Recargue el panel e inténtelo de nuevo.');
