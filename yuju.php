@@ -107,22 +107,6 @@ class Yuju extends Module
                 $stage = $label;
 
                 if (!$this->{$method}()) {
-                            $detail = $this->installFailureDetail !== ''
-                                ? $this->installFailureDetail
-                                : 'No se pudo crear el transportista Yuju; la instalación continuará sin él.';
-                            $this->logOptionalInstallFailure($stage, $detail);
-                        }
-                    } catch (Throwable $carrierError) {
-                        $detail = get_class($carrierError) . ': ' . $carrierError->getMessage()
-                            . ' en ' . basename($carrierError->getFile()) . ':' . $carrierError->getLine();
-                        $this->logOptionalInstallFailure($stage, $detail);
-                    }
-
-                    // No ejecutar rollbackFailedInstall() ni devolver false por este paso.
-                    continue;
-                }
-
-                if (!$this->{$method}()) {
                     $detail = $this->installFailureDetail !== '' ? $this->installFailureDetail : 'El paso devolvió false.';
                     $this->logInstallFailure($stage, $detail);
                     $this->rollbackFailedInstall();
