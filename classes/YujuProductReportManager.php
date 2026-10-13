@@ -191,47 +191,82 @@ class YujuProductReportManager
      */
     public function downloadOfferReport()
     {
-        try {
-            $response = $this->api_client->getProductOfferReport();
-        } catch (Exception $e) {
-            return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo consultar el reporte de ofertas de Yuju.'];
+        // Reuse the actual local file first. The API endpoint should only be queried
+        // when neither a usable cache nor a previously obtained download URL exists.
+        $offer_state = $this->getStoredOfferState();
+        if (!empty($offer_state['cache_id'])) {
+            try {
+                $cached_products = $this->file_store->readOfferProducts($offer_state['cache_id']);
+                if (!empty($cached_products)) {
+                    return [
+                        'success' => true,
+                        'status' => 'completed',
+                        'report_type' => 'offer',
+                        'report_cached' => true,
+                        'reused' => true,
+                        'products_count' => count($cached_products),
+                        'file_size_bytes' => (int) ($offer_state['report_size_bytes'] ?? 0),
+                        'message' => 'Se reutilizó el reporte de stock/precio ya descargado; no se volvió a consultar ni descargar desde Yuju.',
+                    ];
+                }
+            } catch (Exception $e) {
+                // The cache is missing or invalid. Recover from its saved URL below.
+            }
         }
 
-        if (empty($response['success'])) {
-            return [
-                'success' => false,
-                'status' => 'failed',
-                'http_code' => (int) ($response['http_code'] ?? 0),
-                'message' => isset($response['message']) ? (string) $response['message'] : 'Yuju rechazó la solicitud del reporte de ofertas.',
-            ];
-        }
-
-        $payload = $response['data'] ?? null;
-        $url = is_array($payload) && isset($payload['url']) && is_string($payload['url'])
-            ? trim($payload['url'])
-            : '';
+        $url = $this->getSavedOfferReportUrl($offer_state);
+        $response_http_code = 200;
 
         if ($url === '') {
-            return [
-                'success' => false,
-                'status' => 'failed',
-                'http_code' => (int) ($response['http_code'] ?? 200),
-                'message' => 'Yuju respondió, pero no incluyó una URL de descarga válida en el campo "url".',
-            ];
+            // No cached file or saved URL exists. Only now request the report URL from Yuju.
+            try {
+                $response = $this->api_client->getProductOfferReport();
+            } catch (Exception $e) {
+                return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo consultar el reporte de ofertas de Yuju.'];
+            }
+
+            if (empty($response['success'])) {
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'http_code' => (int) ($response['http_code'] ?? 0),
+                    'message' => isset($response['message']) ? (string) $response['message'] : 'Yuju rechazó la solicitud del reporte de ofertas.',
+                ];
+            }
+
+            $payload = $response['data'] ?? null;
+            $url = is_array($payload) && isset($payload['url']) && is_string($payload['url'])
+                ? trim($payload['url'])
+                : '';
+            $response_http_code = (int) ($response['http_code'] ?? 200);
+
+            if ($url === '') {
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'http_code' => $response_http_code,
+                    'message' => 'Yuju respondió, pero no incluyó una URL de descarga válida en el campo "url".',
+                ];
+            }
+
+            // Persist the URL before downloading so a failed transfer can be retried
+            // without calling the report endpoint again.
+            $offer_state['download_url'] = $url;
+            Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
         }
 
         try {
             $saved = $this->file_store->downloadRawReportFile($url);
+            $offer_products = $this->file_store->readOfferProducts($saved['cache_id']);
             $state = [
                 'cache_id' => $saved['cache_id'],
                 'task_id' => null,
-                'product_count' => 0,
+                'product_count' => count($offer_products),
                 'report_size_bytes' => $saved['size_bytes'],
                 'report_downloaded_at' => $saved['saved_at'],
+                'download_url' => $url,
             ];
 
-            $offer_products = $this->file_store->readOfferProducts($saved['cache_id']);
-            $state['product_count'] = count($offer_products);
             if (!$this->saveReportMetadata($state, 'offer')) {
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
                 return [
@@ -240,13 +275,15 @@ class YujuProductReportManager
                     'message' => 'El archivo se descargó, pero no se pudieron registrar sus metadatos en la base de datos.',
                 ];
             }
-            $offer_state = [
+
+            $new_offer_state = [
                 'cache_id' => $saved['cache_id'],
                 'product_count' => count($offer_products),
                 'report_size_bytes' => $saved['size_bytes'],
                 'report_downloaded_at' => $saved['saved_at'],
+                'download_url' => $url,
             ];
-            if (!Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state))) {
+            if (!Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($new_offer_state))) {
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
                 return [
                     'success' => false,
@@ -255,7 +292,7 @@ class YujuProductReportManager
                 ];
             }
             if (!$this->persistOfferProductsToDatabase($offer_products, $saved['cache_id'])) {
-                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, '');
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode(['download_url' => $url]));
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
                 return [
                     'success' => false,
@@ -267,8 +304,9 @@ class YujuProductReportManager
             return [
                 'success' => false,
                 'status' => 'failed',
-                'http_code' => (int) ($response['http_code'] ?? 200),
-                'message' => 'No se pudo descargar o guardar el archivo real del reporte de ofertas: ' . $e->getMessage(),
+                'http_code' => $response_http_code,
+                'message' => 'No se pudo descargar o guardar el archivo real del reporte de ofertas: ' . $e->getMessage()
+                    . ' Se conservará la URL para reintentar sin volver a solicitar el reporte.',
             ];
         }
 
@@ -277,12 +315,52 @@ class YujuProductReportManager
             'status' => 'completed',
             'report_type' => 'offer',
             'report_cached' => true,
+            'reused' => false,
             'file_path' => $saved['relative_path'],
             'file_size_bytes' => $saved['size_bytes'],
-            'products_count' => isset($offer_products) ? count($offer_products) : 0,
-            'http_code' => (int) ($response['http_code'] ?? 200),
-            'message' => 'Archivo real del reporte de ofertas descargado desde la URL temporal de Yuju y guardado en almacenamiento privado. El archivo se validó y está listo para combinar stock/precio con el reporte general.',
+            'products_count' => count($offer_products),
+            'http_code' => $response_http_code,
+            'message' => 'El archivo real del reporte de ofertas se descargó desde la URL guardada y quedó listo para combinar stock/precio con el reporte general.',
         ];
+    }
+
+    /**
+     * Return the saved offer-report state, including a local cache ID or URL.
+     */
+    protected function getStoredOfferState()
+    {
+        $state = json_decode((string) Configuration::get(self::OFFER_STATE_CONFIG_KEY), true);
+        return is_array($state) ? $state : [];
+    }
+
+    /**
+     * Recover an existing temporary URL without requesting a new report.
+     * Older module versions may have persisted it in the report metadata table.
+     */
+    protected function getSavedOfferReportUrl($offer_state)
+    {
+        if (is_array($offer_state) && !empty($offer_state['download_url']) && is_string($offer_state['download_url'])) {
+            return trim($offer_state['download_url']);
+        }
+
+        try {
+            $db = Db::getInstance();
+            $table = _DB_PREFIX_ . 'yuju_product_reports';
+            $table_sql = chr(96) . bqSQL($table) . chr(96);
+            $exists = $db->getValue("SHOW TABLES LIKE '" . pSQL(_DB_PREFIX_ . "yuju_product_reports") . "'");
+            if ($exists) {
+                $url = $db->getValue("SELECT download_url FROM " . $table_sql
+                    . " WHERE report_type = 'offer' AND download_url IS NOT NULL AND download_url <> ''"
+                    . " ORDER BY id DESC");
+                if (is_string($url) && trim($url) !== '') {
+                    return trim($url);
+                }
+            }
+        } catch (Exception $e) {
+            // Continue to the API fallback only if no recoverable URL is present.
+        }
+
+        return '';
     }
 
     protected function countOfferRows($payload)
