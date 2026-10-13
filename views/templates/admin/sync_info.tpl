@@ -326,8 +326,13 @@ $(function() {
     function updatePushButton() {
         var selectedCount = getSelectedProductIds().length;
         if (selectedCount > 0) {
-            $pushBtn.html('<i class="icon-refresh"></i> Actualizar urgentes seleccionados (' + selectedCount + ')').show();
-        } else { $pushBtn.hide(); }
+            var label = '<i class="icon-refresh"></i> Actualizar urgentes seleccionados (' + selectedCount + ')';
+            $pushBtn.html(label).show();
+            $('#yuju-push-differences-top').html(label).show();
+        } else {
+            $pushBtn.hide();
+            $('#yuju-push-differences-top').hide();
+        }
     }
 
     function renderReconciliationTable() {
@@ -543,6 +548,7 @@ $(function() {
         $urgencyColumn.append($urgencySelect);
         $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn).append($urgencyColumn);
         $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente nombre, stock y precio; los demás campos no se modificarán.</p>');
+        $container.append('<div class="clearfix" style="margin: 10px 0;"><button type="button" class="btn btn-success" id="yuju-push-differences-top" style="display:none;"><i class="icon-refresh"></i> Actualizar urgentes seleccionados (0)</button></div>');
         $container.append('<div id="yuju-reconciliation-results"></div>');
 
         showMessage(
@@ -600,16 +606,16 @@ $(function() {
         });
     });
 
-    $pushBtn.on('click', function() {
+    function pushSelectedDifferences($button) {
         var selectedIds = getSelectedProductIds();
         if (!selectedIds.length) {
             showMessage('Selecciona al menos un producto con diferencias urgentes.', 'alert-warning');
             return;
         }
         if (!confirm('Se actualizarán en Yuju únicamente nombre, stock y precio de ' + selectedIds.length + ' producto(s) seleccionado(s). Los demás campos no se modificarán. ¿Continuar?')) return;
-        setLoading($pushBtn, true, 'Actualizando campos urgentes...');
+        setLoading($button, true, 'Actualizando campos urgentes...');
         ajaxAction('pushDifferencesToYuju', {ldelim}selected_product_ids: JSON.stringify(selectedIds), urgent_only: 1{rdelim}, function(response) {
-            setLoading($pushBtn, false);
+            setLoading($button, false);
             if (response && response.success) {
                 var synced = response.synced_count || 0;
                 var details = response.details || [];
@@ -633,9 +639,12 @@ $(function() {
                 );
             }
         }, function() {
-            setLoading($pushBtn, false);
+            setLoading($button, false);
         });
-    });
+    }
+
+    $pushBtn.on('click', function() { pushSelectedDifferences($pushBtn); });
+    $(document).on('click', '#yuju-push-differences-top', function() { pushSelectedDifferences($(this)); });
 
     // Automatically load a validated local report when opening AdminYujuSync,
     // so the user does not need to click "Ver reconciliación" on every visit.
