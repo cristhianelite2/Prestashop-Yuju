@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_mapping` (
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_product_id` int(11) NOT NULL,
+    `prestashop_product_id` int(11) DEFAULT NULL,
     `yuju_product_id` varchar(255),
     `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued', 'creating_in_yuju', 'updating_in_yuju', 'deleting_in_yuju') DEFAULT 'pending',
     `sync_direction` enum('prestashop_to_yuju', 'yuju_to_prestashop', 'bidirectional') DEFAULT 'bidirectional',
@@ -88,7 +88,6 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_prestashop_product` (`prestashop_product_id`),
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
