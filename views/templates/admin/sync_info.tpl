@@ -57,7 +57,7 @@
                 </button>
             </div>
             <p class="text-muted" style="margin-top: 10px;">
-                PrestaShop es la fuente de verdad. Solo los productos already vinculados con diferencias se envían a PS→Yuju. Los productos sin emparejar se listan, nunca se crean en Yuju.
+                PrestaShop es la fuente de verdad. Solo los productos ya vinculados que tienen diferencias se envían de PrestaShop a Yuju. Los productos sin vincular se muestran en la lista, pero nunca se crean en Yuju.
             </p>
         </div>
 
@@ -99,7 +99,7 @@
 
             <div class="col-md-3">
                 <div class="sync-status-card">
-                    <h4>{if $last_sync_date}{$last_sync_date|date_format:"%Y-%m-%d %H:%M"|escape:'html':'UTF-8'}{else}Never{/if}</h4>
+                    <h4>{if $last_sync_date}{$last_sync_date|date_format:"%Y-%m-%d %H:%M"|escape:'html':'UTF-8'}{else}Nunca{/if}</h4>
                     <p class="text-muted">Última sincronización</p>
                 </div>
             </div>
