@@ -48,7 +48,7 @@ class AdminYujuLogsController extends ModuleAdminController
         $queue_stats = $this->getQueueStats();
         $sync_history_errors = $this->getRecentSyncHistoryErrors(40);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
-        $bulk_offer_tasks = YujuOfferAuditor::refreshBulkOfferTaskHistory();
+        $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
 
         $this->context->smarty->assign([
             'bulk_offer_tasks' => $bulk_offer_tasks,
