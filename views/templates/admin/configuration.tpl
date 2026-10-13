@@ -149,7 +149,7 @@
                         <div class="col-lg-9">
                             <select name="YUJU_ENVIRONMENT" class="form-control">
                                 <option value="sandbox" {if $config.YUJU_ENVIRONMENT == 'sandbox'}selected{/if}>
-                                    Sandbox (Pruebas)
+                                    Entorno de pruebas (Sandbox)
                                 </option>
                                 <option value="production" {if $config.YUJU_ENVIRONMENT == 'production' || !$config.YUJU_ENVIRONMENT}selected{/if}>
                                     Producción
@@ -296,7 +296,7 @@
                                     Información y superiores
                                 </option>
                                 <option value="debug" {if $config.YUJU_LOG_LEVEL == 'debug'}selected{/if}>
-                                    Debug (todo)
+                                    Depuración (todo)
                                 </option>
                             </select>
                         </div>
