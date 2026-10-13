@@ -1,3 +1,8 @@
+## [1.1.18] - 2026-10-13
+### Corregido
+- El actualizador registra y activa la pestaña administrativa `AdminYujuProductCategoryStatus` después de copiar los archivos. Evita que la sección de estado de productos por categoría muestre «Página no encontrada» en instalaciones existentes.
+- Se incrementa la versión para que las tiendas puedan detectar e instalar esta reparación.
+
 ## [1.1.17] - 2026-10-13
 ### Corregido
 - Se completa la traducción al español de las acciones, mensajes y etiquetas visibles en la administración de webhooks.
