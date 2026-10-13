@@ -2988,7 +2988,7 @@ class YujuOfferAuditor
                     'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details`
                      WHERE id_audit_run = ' . $runId . '
                        AND sku = \'' . pSQL($sku) . '\'
-                     ORDER BY id ASC LIMIT 1'
+                     ORDER BY id ASC'
                 );
             }
             if ($existingId <= 0 && $runId > 0 && $productId > 0) {
