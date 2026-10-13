@@ -1485,7 +1485,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $meta = [
             'cron.php' => [
                 'label' => 'cron.php',
-                'description' => 'Cron principal del módulo (token, tareas y también procesa un lote de cola). En producción combine con process_queue.php cada 1–5 min.',
+                'description' => 'Cron principal: ejecuta la sincronización y las tareas programadas de auditoría/reportes cuando corresponden. Programar cada 5 minutos; combinar con process_queue.php.',
                 'required_mode' => 'programar',
             ],
             'process_queue.php' => [
@@ -1495,7 +1495,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ],
             'check_token.php' => [
                 'label' => 'check_token.php',
-                'description' => 'Verifica y renueva token OAuth. Normalmente lo invoca cron.php automáticamente.',
+                'description' => 'Script legado: no se encontró ninguna llamada desde cron.php ni otra referencia activa. No programar; revisar antes de eliminarlo.',
                 'required_mode' => 'interno',
             ],
             'sync.php' => [
@@ -1505,18 +1505,18 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ],
             'sync_products.php' => [
                 'label' => 'sync_products.php',
-                'description' => 'Sincronización avanzada de productos con cache JSON. Operación manual/diagnóstico.',
-                'required_mode' => 'manual',
+                'description' => 'Sincronización de productos que cron.php invoca cuando corresponde. No programar por separado; ejecutar manualmente solo si se necesita una sincronización puntual.',
+                'required_mode' => 'interno',
             ],
             'audit_offers.php' => [
                 'label' => 'audit_offers.php',
-                'description' => 'Auditoría de ofertas (stock/precio/imágenes): compara PS vs Yuju y corrige solo en Yuju. Respetá la programación o use --force.',
-                'required_mode' => 'programar',
+                'description' => 'Tarea interna de cron.php: audita ofertas según la programación configurada. No agregar otro cron para este archivo; --force queda para ejecución puntual.',
+                'required_mode' => 'interno',
             ],
             'gral_report.php' => [
                 'label' => 'gral_report.php',
-                'description' => 'Reporte general de productos (products-gral-report). Máx. 2/día UTC. Descarga JSONL al histórico. Use --force para forzar.',
-                'required_mode' => 'programar',
+                'description' => 'Tarea interna de cron.php: solicita/procesa reportes generales según configuración y cuota diaria. No programar por separado; --force es para ejecución puntual.',
+                'required_mode' => 'interno',
             ],
             'sync_to_yuju.php' => [
                 'label' => 'sync_to_yuju.php',
