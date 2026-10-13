@@ -54,12 +54,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'class' => 'fixed-width-xs',
         ],
         'prestashop_product_id' => [
-        'title' => 'ID Producto PS',
+        'title' => 'ID de producto en PrestaShop',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'prestashop_product_attribute_id' => [
-        'title' => 'ID Combinación PS',
+        'title' => 'ID de combinación en PrestaShop',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
@@ -68,17 +68,17 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'callback' => 'getProductName',
         ],
         'yuju_product_id' => [
-        'title' => 'ID Producto Yuju',
+        'title' => 'ID de producto en Yuju',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'yuju_variation_id' => [
-        'title' => 'Clave de Variación Yuju',
+        'title' => 'ID de variante en Yuju',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
         'yuju_variation_sku' => [
-        'title' => 'SKU Variación',
+        'title' => 'SKU de la variante',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
@@ -89,7 +89,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'callback' => 'displaySyncStatus',
         ],
         'last_sync_at' => [
-            'title' => 'Última Sincronización',
+            'title' => 'Última sincronización',
             'align' => 'center',
             'type' => 'datetime',
         ],
@@ -114,11 +114,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         $this->bulk_actions = [
         'enableSync' => [
-        'text' => 'Habilitar sincronización',
+        'text' => 'Activar sincronización',
         'icon' => 'icon-power-off text-success',
         ],
         'disableSync' => [
-        'text' => 'Deshabilitar sincronización',
+        'text' => 'Desactivar sincronización',
         'icon' => 'icon-power-off text-danger',
         ],
         'syncSelected' => [
@@ -126,7 +126,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'icon' => 'icon-refresh',
         ],
         'resetErrors' => [
-        'text' => 'Reiniciar errores',
+        'text' => 'Restablecer errores',
         'icon' => 'icon-eraser',
         ],
         'delete' => [
@@ -182,20 +182,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'disabled' => 'Deshabilitado',
         ];
 
-        // Add statistics
-        $stats = $this->getProductStatusStats();
-
-        // The statistics template consumes the "stats" structure. Keep the
-        // legacy variable as an alias for compatibility with any custom templates.
-        $this->context->smarty->assign([
-            'stats' => $stats,
-            'product_status_stats' => $stats,
-            'sync_running' => $this->sync_manager->isSyncRunning(),
-        ]);
-
-        $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/product_status_stats.tpl');
-
-        return $stats_html . parent::renderList();
+        // La vista de estado de productos muestra únicamente el listado detallado.
+        // Las estadísticas por categoría tienen su propio controlador y sección.
+        return parent::renderList();
     }
 
     public function postProcess()
