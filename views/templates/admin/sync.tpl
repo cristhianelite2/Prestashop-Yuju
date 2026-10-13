@@ -410,7 +410,7 @@ $(function() {
                 });
                 showMessage(
                     (response.message || 'Envío completado.') +
-                    (failed ? ' ' + failed + ' falló.' : ''),
+                    (failed ? '; errores: ' + failed : ''),
                     failed ? 'alert-warning' : 'alert-success'
                 );
                 if (response.report) {
