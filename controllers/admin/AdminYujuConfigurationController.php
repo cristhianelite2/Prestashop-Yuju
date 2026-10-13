@@ -1776,74 +1776,24 @@ class AdminYujuConfigurationController extends ModuleAdminController
     protected function getYujuHooksStatus()
     {
         $required = [
-            'actionProductAdd' => [
-                'label' => 'Producto creado',
-                'description' => 'Detecta cuando se crea un producto en PrestaShop.',
-                'critical' => true,
-            ],
             'actionProductUpdate' => [
                 'label' => 'Producto actualizado',
-                'description' => 'Detecta cambios generales del producto (precio, datos básicos, etc.).',
+                'description' => 'Encola cambios de producto y los envía en segundo plano.',
                 'critical' => true,
             ],
             'actionProductDelete' => [
                 'label' => 'Producto eliminado',
-                'description' => 'Detecta eliminación de productos para retirarlos de Yuju.',
-                'critical' => true,
+                'description' => 'Encola la retirada del producto de Yuju.',
+                'critical' => false,
             ],
             'actionUpdateQuantity' => [
                 'label' => 'Stock actualizado',
-                'description' => 'Detecta cambios de stock para enviarlos a Yuju.',
+                'description' => 'Encola cambios de stock de productos simples sin bloquear el checkout.',
                 'critical' => true,
-            ],
-            'actionProductAttributeUpdate' => [
-                'label' => 'Combinación actualizada',
-                'description' => 'Detecta cambios en combinaciones / atributos de producto.',
-                'critical' => true,
-            ],
-            'actionProductAttributeDelete' => [
-                'label' => 'Combinación eliminada',
-                'description' => 'Detecta eliminación de combinaciones.',
-                'critical' => false,
-            ],
-            'actionCategoryAdd' => [
-                'label' => 'Categoría creada',
-                'description' => 'Detecta creación de categorías.',
-                'critical' => false,
-            ],
-            'actionCategoryUpdate' => [
-                'label' => 'Categoría actualizada',
-                'description' => 'Detecta actualización de categorías.',
-                'critical' => false,
-            ],
-            'actionCategoryDelete' => [
-                'label' => 'Categoría eliminada',
-                'description' => 'Detecta eliminación de categorías.',
-                'critical' => false,
-            ],
-            'actionValidateOrder' => [
-                'label' => 'Pedido validado',
-                'description' => 'Detecta nuevos pedidos validados.',
-                'critical' => true,
-            ],
-            'actionOrderStatusUpdate' => [
-                'label' => 'Estado del pedido',
-                'description' => 'Detecta cambios en el estado de los pedidos.',
-                'critical' => true,
-            ],
-            'actionOrderReturn' => [
-                'label' => 'Devolución de pedido',
-                'description' => 'Detecta devoluciones de pedidos.',
-                'critical' => false,
-            ],
-            'actionAdminControllerSetMedia' => [
-                'label' => 'Recursos del back office',
-                'description' => 'Carga JS/CSS necesarios del módulo en el back office.',
-                'critical' => false,
             ],
             'displayBackOfficeHeader' => [
                 'label' => 'Cabecera back office',
-                'description' => 'Inyecta el header del back office para asegurar la inicialización del módulo.',
+                'description' => 'Carga recursos y mantiene el intento diferido de crear el transportista Yuju.',
                 'critical' => false,
             ],
             'displayAdminProductsExtra' => [
