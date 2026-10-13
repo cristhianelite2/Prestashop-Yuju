@@ -1332,6 +1332,14 @@ class YujuProductManager
                 $value = class_exists('StockAvailable')
                     ? (int) StockAvailable::getQuantityAvailableByProduct((int) $product->id, 0)
                     : 0;
+            } elseif ($ps_field === 'manufacturer') {
+                $value = '';
+                if (!empty($product->id_manufacturer)) {
+                    $manufacturer = new Manufacturer((int) $product->id_manufacturer);
+                    if (Validate::isLoadedObject($manufacturer)) {
+                        $value = (string) $manufacturer->name;
+                    }
+                }
             } elseif (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'], true)) {
                 $value = isset($product->{$ps_field}[$default_lang]) ? $product->{$ps_field}[$default_lang] : '';
             } else {
