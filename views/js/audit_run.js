@@ -43,6 +43,7 @@
     var activeFilter = 'total';
     var allRows = [];
     var serverFiltered = false;
+    var lastUpdateIssues = [];
 
     function setStatus(type, html) {
         var $el = $('#yuju-audit-status');
@@ -1020,9 +1021,21 @@
                 setStatus('danger', 'Yuju devolvió una respuesta no válida.');
                 return;
             }
-            setStatus(resp.success ? 'success' : 'warning', '<strong>' +
+            var updateItems = Array.isArray(resp.items) ? resp.items : [];
+            lastUpdateIssues = updateItems.filter(function (item) {
+                return item && item.success !== true;
+            });
+
+            var issueCount = lastUpdateIssues.length;
+            var summaryHtml = '<strong>' +
                 (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.') +
-                '</strong> ' + escapeHtml(resp.message || ''));
+                '</strong> ' + escapeHtml(resp.message || '');
+
+            if (issueCount > 0 || Number(resp.failed || 0) > 0 || Number(resp.skipped || 0) > 0) {
+                summaryHtml += ' <button type="button" class="btn btn-xs btn-warning yuju-audit-update-errors" style="margin-left:8px;">' +
+                    '<i class="icon-warning-sign"></i> Ver detalles (' + issueCount + ')</button>';
+            }
+            setStatus(resp.success ? 'success' : 'warning', summaryHtml);
             applyKpiFilter(activeFilter);
         }).fail(function (xhr) {
             setStatus('danger', '<strong>Error:</strong> ' + ajaxFailMessage(xhr, 'No se pudieron actualizar los productos seleccionados'));
@@ -1128,6 +1141,22 @@
         $(document).on('click', '.yuju-kpi-filter', function () {
             applyKpiFilter($(this).data('filter'));
         });
+        $(document).on('click', '.yuju-audit-update-errors', function (e) {
+            e.preventDefault();
+            var lines = lastUpdateIssues.map(function (item, index) {
+                var sku = item.sku ? String(item.sku) : '(SKU no disponible)';
+                var message = item.message ? String(item.message) : 'Error sin detalle devuelto por Yuju.';
+                return (index + 1) + '. SKU: ' + sku + '\\n   Detalle: ' + message;
+            });
+            if (!lines.length) {
+                lines.push('La respuesta indicó errores u omitidos, pero no incluyó detalles por producto.');
+                lines.push('Errores: ' + ($('#yuju-audit-status').text().match(/errores:\\s*([^;]+)/i) || [null, 'no disponible'])[1]);
+            }
+            $('#yujuAuditErrorModal .modal-title').text('Detalles de errores al actualizar en Yuju');
+            $('#yuju-audit-error-json').text(lines.join('\\n\\n'));
+            $('#yujuAuditErrorModal').modal('show');
+        });
+
         $(document).on('click', '.yuju-audit-error-link', function (e) {
             e.preventDefault();
             var idx = parseInt($(this).data('idx'), 10);
