@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [1.1.9] - 2026-10-12
+
+### Añadido
+- Sección de administración para mapear estados de pedidos entre PrestaShop y Yuju.
+- Botón de importación idempotente desde `mad_mapping_status_orders`; la tabla heredada se consulta en modo de solo lectura.
+- Creación automática de la pestaña de mapeo en tiendas existentes.
+
+### Corregido
+- La carga de mapeos de estado aplica solo los activos y reconoce `canceled` como el identificador oficial de Yuju.
+
 ### Corregido
 - Se corrige un error de sintaxis en `AdminYujuProductMappingController::getProductMappings()` (comillas simples sin escapar dentro de la cadena SQL del `ORDER BY FIELD(...)`) que rompía la página de mapeo de productos. El orden por campo Yuju se construye ahora desde `getYujuFields()`, así no se desincroniza ni repite la lista.
 
