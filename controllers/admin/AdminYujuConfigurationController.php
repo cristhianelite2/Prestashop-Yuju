@@ -38,8 +38,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         parent::__construct();
 
-        $this->meta_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
-        $this->toolbar_title = $this->trans('Yuju Configuration', array(), 'Modules.Prestashopyuju.Admin');
+        $this->meta_title = $this->trans('Configuración de Yuju', array(), 'Modules.Prestashopyuju.Admin');
+        $this->toolbar_title = $this->trans('Configuración de Yuju', array(), 'Modules.Prestashopyuju.Admin');
     }
 
     /**
@@ -212,7 +212,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
             $response = [
                 'success' => true,
-                'message' => $this->trans('Connection successful', array(), 'Modules.Prestashopyuju.Admin'),
+                'message' => $this->trans('Conexión establecida correctamente', array(), 'Modules.Prestashopyuju.Admin'),
                 'data' => $result,
             ];
         } catch (Exception $e) {
@@ -298,7 +298,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
             $response = [
                 'success' => true,
-                'message' => $this->trans('Connectivity test successful', array(), 'Modules.Prestashopyuju.Admin'),
+                'message' => $this->trans('La prueba de conectividad fue exitosa', array(), 'Modules.Prestashopyuju.Admin'),
                 'data' => [
                     'connection' => $connection_test,
                     'stores' => $stores_list,
@@ -641,14 +641,14 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'input' => [
                     [
                         'type' => 'text',
-                        'label' => $this->trans('Client ID', array(), 'Modules.Prestashopyuju.Admin'),
+                        'label' => $this->trans('ID de cliente', array(), 'Modules.Prestashopyuju.Admin'),
                         'name' => 'client_id',
                         'required' => true,
                         'desc' => $this->trans('Client ID proporcionado por Yuju', array(), 'Modules.Prestashopyuju.Admin'),
                     ],
                     [
                         'type' => 'text',
-                        'label' => $this->trans('Client Secret', array(), 'Modules.Prestashopyuju.Admin'),
+                        'label' => $this->trans('Secreto de cliente', array(), 'Modules.Prestashopyuju.Admin'),
                         'name' => 'client_secret',
                         'required' => true,
                         'desc' => $this->trans('Client Secret proporcionado por Yuju', array(), 'Modules.Prestashopyuju.Admin'),
