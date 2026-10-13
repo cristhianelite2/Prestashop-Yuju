@@ -1002,11 +1002,11 @@
         var sizes = [50, 100, 200];
         var html = '<div class="yuju-audit-pagination-summary"><strong>' + first + '–' + last + '</strong> de <strong>' + totalGroups + '</strong> productos</div>' +
             '<div class="yuju-audit-pagination-controls">' +
-            '<label>Por página <select class="yuju-audit-page-size" aria-label="Productos por página">';
+            '<div class="yuju-audit-page-size-control"><span>Mostrar</span><select class="yuju-audit-page-size" aria-label="Productos por página">';
         sizes.forEach(function (size) {
             html += '<option value="' + size + '"' + (size === pageSize ? ' selected' : '') + '>' + size + '</option>';
         });
-        html += '</select></label>' +
+        html += '</select><span>por página</span></div>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage - 1) + '"' + (currentPage <= 1 ? ' disabled' : '') + ' aria-label="Página anterior"><i class="icon-angle-left"></i> Anterior</button>' +
             '<span class="yuju-audit-page-current">Página ' + currentPage + ' de ' + totalPages + '</span>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage + 1) + '"' + (currentPage >= totalPages ? ' disabled' : '') + ' aria-label="Página siguiente">Siguiente <i class="icon-angle-right"></i></button>' +
