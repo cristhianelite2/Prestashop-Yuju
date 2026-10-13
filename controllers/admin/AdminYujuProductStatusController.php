@@ -67,16 +67,21 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
+        'yuju_variation_id' => [
+        'title' => 'ID Variación Yuju',
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
+        ],
+        'yuju_variation_sku' => [
+        'title' => 'SKU Variación',
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
+        ],
         'sync_status' => [
         'title' => 'Estado de Sincronización',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         'callback' => 'displaySyncStatus',
-        ],
-        'sync_direction' => [
-        'title' => 'Dirección',
-        'align' => 'center',
-        'class' => 'fixed-width-sm',
         ],
         'last_sync_at' => [
             'title' => 'Última Sincronización',
@@ -551,7 +556,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'Product Name',
         'Yuju Product ID',
         'Sync Status',
-        'Sync Direction',
         'Last Sync Date',
         'Error Count',
         'Last Error Message',
@@ -564,8 +568,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $records = Db::getInstance()->executeS('
         SELECT ps.*, pl.name as product_name
         FROM ' . _DB_PREFIX_ . 'yuju_product_status ps
-        LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON ps.prestashop_product_id = pl.id_product
-        WHERE pl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
+        LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON (ps.prestashop_product_id = pl.id_product AND pl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . ')
         ORDER BY ps.created_at DESC
         ');
 
@@ -575,7 +578,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $record['product_name'],
             $record['yuju_product_id'],
             $record['sync_status'],
-            $record['sync_direction'],
             $record['last_sync_at'],
             $record['error_count'],
             $record['last_error_message'],
@@ -596,7 +598,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
             return $row['product_name'];
         }
 
-        $product = new Product($row['prestashop_product_id'], false, $this->context->language->id);
+        if (empty($row['prestashop_product_id'])) {
+            return !empty($row['yuju_variation_sku'])
+                ? 'Variación Yuju sin enlazar (' . $row['yuju_variation_sku'] . ')'
+                : 'Producto Yuju sin enlazar';
+        }
+
+        $product = new Product((int) $row['prestashop_product_id'], false, $this->context->language->id);
 
         return Validate::isLoadedObject($product) ? $product->name : 'Producto no encontrado';
     }
@@ -638,7 +646,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'type' => 'text',
         'label' => 'ID Producto PrestaShop',
         'name' => 'prestashop_product_id',
-        'required' => true,
+        'required' => false,
         ],
         [
         'type' => 'text',
@@ -655,20 +663,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
         ['id' => 'pending', 'name' => 'Pendiente'],
         ['id' => 'error', 'name' => 'Error'],
         ['id' => 'disabled', 'name' => 'Deshabilitado'],
-        ],
-        'id' => 'id',
-        'name' => 'name',
-        ],
-        ],
-        [
-        'type' => 'select',
-        'label' => 'Dirección de Sincronización',
-        'name' => 'sync_direction',
-        'options' => [
-        'query' => [
-        ['id' => 'bidirectional', 'name' => 'Bidireccional'],
-        ['id' => 'yuju_to_ps', 'name' => 'Yuju a PrestaShop'],
-        ['id' => 'ps_to_yuju', 'name' => 'PrestaShop a Yuju'],
         ],
         'id' => 'id',
         'name' => 'name',
