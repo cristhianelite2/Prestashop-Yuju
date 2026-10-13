@@ -40,6 +40,7 @@
 </div>
 
 <style>
+{literal}
 /* Webhooks comparte la presentación sobria del panel principal de Yuju. */
 .yuju-webhook-container{margin:0;padding:0;background:transparent}
 .yuju-webhook-shell{margin-bottom:15px;border:1px solid #ddd;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
@@ -69,5 +70,6 @@
 .yuju-order-search-bar .btn{padding:5px 10px;font-size:12px;line-height:1.3}
 .yuju-order-search-bar .checkbox-inline{margin:0 8px 0 0;padding-top:0;font-size:12px;font-weight:400}
 @media(max-width:768px){.yuju-webhook-shell>.panel-body.yuju-webhook-content{padding:9px}.yuju-page-title{font-size:16px}.yuju-webhook-content .panel-body{padding:9px}.yuju-order-search-bar .form-control{width:100%}}
+{/literal}
 </style>
 {/block}
