@@ -367,6 +367,7 @@ class YujuProductManager
 
             $yuju_catalog_rows[] = [
                 'yuju_product_id' => $yuju_product_id,
+                'yuju_product_name' => $this->getYujuReportProductName($report_product),
                 'yuju_variation_id' => '',
                 'yuju_variation_sku' => null,
                 'prestashop_product_id' => $prestashop_product_id,
@@ -411,6 +412,7 @@ class YujuProductManager
                     : 1;
                 $yuju_catalog_rows[] = [
                     'yuju_product_id' => $yuju_product_id,
+                    'yuju_product_name' => $this->getYujuReportProductName($report_product),
                     'yuju_variation_id' => $variation_key,
                     'yuju_variation_sku' => $variation_sku !== '' ? $variation_sku : null,
                     'prestashop_product_id' => $variation_ps_id,
@@ -726,6 +728,17 @@ class YujuProductManager
             : '';
     }
 
+    protected function getYujuReportProductName($product)
+    {
+        foreach (['name', 'title', 'product_name'] as $field) {
+            if (isset($product[$field]) && is_scalar($product[$field]) && trim((string) $product[$field]) !== '') {
+                return trim((string) $product[$field]);
+            }
+        }
+
+        return '';
+    }
+
     /**
      * Upsert one Yuju parent product or variation in the Yuju-centric status catalog.
      */
@@ -744,6 +757,7 @@ class YujuProductManager
         $data = [
             'prestashop_product_id' => $row['prestashop_product_id'] !== null ? (int) $row['prestashop_product_id'] : null,
             'yuju_product_id' => $yuju_product_id,
+            'yuju_product_name' => pSQL((string) $row['yuju_product_name']),
             'yuju_variation_id' => $variation_id,
             'yuju_variation_sku' => $row['yuju_variation_sku'] !== null ? pSQL((string) $row['yuju_variation_sku']) : null,
             'sync_status' => pSQL((string) $row['sync_status']),
@@ -1570,18 +1584,9 @@ class YujuProductManager
                     }
                 }
 
-                // Preserve pending status if any non-urgent field or missing variation remains.
-                $has_non_urgent_differences = false;
-                if ($urgent_only) {
-                    foreach ($unsynced['differences'] as $difference) {
-                        $field = (string) $difference['field'];
-                        $field_parts = explode('.', $field);
-                        $base_field = strpos($field, 'variations.') === 0 ? end($field_parts) : $field;
-                        if (!$is_urgent_field($base_field)) { $has_non_urgent_differences = true; break; }
-                    }
-                    if (!empty($variation_comparison['to_create'])) $has_non_urgent_differences = true;
-                }
-                $this->updateProductStatus($prestashop_product_id, $has_non_urgent_differences ? 'pending' : 'synced', null, $yuju_product_id);
+                // A successful API update is a successful sync operation. The next fresh
+                // reconciliation can flag remaining field differences independently.
+                $this->updateProductStatus($prestashop_product_id, 'synced', null, $yuju_product_id);
 
                 $results['synced']++;
                 $results['products'][] = [
