@@ -35,6 +35,12 @@ class YujuOfferAuditor
     /** @var int */
     protected $activeBulkRunId = 0;
 
+    /** Límite de llamadas de creación por operación para aislar ofertas rechazadas. */
+    const BULK_SUBMIT_MAX_CALLS = 60;
+
+    /** Contador de llamadas de envío en la operación actual. */
+    protected $bulkSubmitCalls = 0;
+
     public function __construct()
     {
         $this->api = new YujuApiClient();
@@ -1917,16 +1923,20 @@ class YujuOfferAuditor
      * Los errores de conexión/autorización/servidor no se reintentan por SKU para
      * evitar multiplicar llamadas cuando el problema no depende de un producto.
      */
-    protected function submitBulkOffersResiliently(array $offers)
+    protected function submitBulkOffersResiliently(array $offers, $retryBusy = true)
     {
         $out = ['tasks' => [], 'failed' => []];
         if (empty($offers)) {
             return $out;
         }
+        if ($this->bulkSubmitCalls >= self::BULK_SUBMIT_MAX_CALLS) {
+            return $this->failAllOffers($offers, 'Se alcanzó el límite de envíos de esta operación; vuelva a enviar estos SKU.');
+        }
+        $this->bulkSubmitCalls++;
 
         $response = $this->api->createBulkOfferTask($offers);
         $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-        $taskId = trim((string) ($data['id_task'] ?? ''));
+        $taskId = trim((string) ($response['id_task'] ?? $data['id_task'] ?? $data['task_id'] ?? $data['idTask'] ?? ''));
         $accepted = !empty($response['success']) && $taskId !== '';
 
         if ($accepted) {
@@ -1942,11 +1952,9 @@ class YujuOfferAuditor
                 'total_rows' => count($offers),
                 'success_count' => 0,
                 'errors_count' => 0,
-                'message' => (string) ($data['message'] ?? 'Yuju aceptó la solicitud y creó la tarea; aún no confirma el resultado de cada SKU.'),
+                'message' => (string) ($data['message'] ?? $response['message'] ?? 'Yuju creó la tarea; el procesamiento de cada SKU sigue pendiente de confirmación.'),
                 'skus' => $skus,
-                // Datos exactos enviados por SKU para comparar con el resultado posterior.
                 'submitted_offers' => array_values($offers),
-                // Guardar la respuesta de creación por separado de la consulta de estado.
                 'submission_response' => [
                     'success' => !empty($response['success']),
                     'http_code' => (int) ($response['http_code'] ?? 0),
@@ -1966,24 +1974,47 @@ class YujuOfferAuditor
         $httpCode = (int) ($response['http_code'] ?? 0);
         $apiStatus = strtoupper((string) ($data['status'] ?? ''));
         $message = trim((string) ($response['message'] ?? 'Yuju rechazó la actualización masiva.'));
-        $validationRejection = in_array($httpCode, [400, 422], true)
-            || $apiStatus === 'REJECTED';
+        $currentTaskId = trim((string) ($response['current_id_task'] ?? ($data['details']['current_id_task'] ?? $data['current_id_task'] ?? '')));
 
-        if ($validationRejection && count($offers) > 1) {
+        // Si otra tarea está en curso, esperar y reintentar el mismo bloque una sola vez.
+        if ((!empty($response['rejected']) || $apiStatus === 'REJECTED') && $currentTaskId !== '') {
+            if ($retryBusy) {
+                $this->waitMassOfferTask($currentTaskId, 90);
+                $this->bulkSubmitCalls--;
+                return $this->submitBulkOffersResiliently($offers, false);
+            }
+            return $this->failAllOffers($offers, $message);
+        }
+
+        // Incluye 2xx sin ID de tarea: dividir para aislar el SKU que causa el rechazo.
+        $splittable = in_array($httpCode, [400, 422], true)
+            || $apiStatus === 'REJECTED'
+            || !empty($response['rejected'])
+            || ($httpCode >= 200 && $httpCode < 300);
+        if ($splittable && count($offers) > 1) {
             $middle = (int) floor(count($offers) / 2);
-            $left = $this->submitBulkOffersResiliently(array_slice($offers, 0, $middle));
-            $right = $this->submitBulkOffersResiliently(array_slice($offers, $middle));
+            $left = $this->submitBulkOffersResiliently(array_slice($offers, 0, $middle), $retryBusy);
+            $right = $this->submitBulkOffersResiliently(array_slice($offers, $middle), $retryBusy);
             return [
                 'tasks' => array_merge($left['tasks'], $right['tasks']),
                 'failed' => array_merge($left['failed'], $right['failed']),
             ];
         }
 
+        return $this->failAllOffers($offers, $message !== '' ? $message : 'Yuju rechazó este SKU.');
+    }
+
+    /**
+     * Devuelve una estructura uniforme para SKU que no pudieron enviarse.
+     */
+    protected function failAllOffers(array $offers, $message)
+    {
+        $out = ['tasks' => [], 'failed' => []];
         foreach ($offers as $offer) {
             $out['failed'][] = [
                 'sku' => (string) ($offer['sku'] ?? ''),
                 'success' => false,
-                'message' => $message !== '' ? $message : 'Yuju rechazó este SKU.',
+                'message' => (string) $message,
             ];
         }
         return $out;
@@ -2053,12 +2084,19 @@ class YujuOfferAuditor
 
             $offer = ['sku' => $sku];
             if (!empty($run['audit_stock'])) {
-                $offer['stock'] = (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop);
+                $offer['stock'] = max(0, (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop));
             }
             if (!empty($run['audit_price'])) {
                 $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6);
                 $yujuPrice = isset($row['yuju_price']) ? (float) $row['yuju_price'] : 0.0;
-                if ($this->isAbruptPriceChangeBlocked($psPrice, $yujuPrice)) {
+                if ($psPrice <= 0.0) {
+                    $results['skipped']++;
+                    $results['items'][] = [
+                        'sku' => $sku,
+                        'success' => false,
+                        'message' => 'El precio en PrestaShop es menor o igual a 0. Se omitió únicamente el precio.',
+                    ];
+                } elseif ($this->isAbruptPriceChangeBlocked($psPrice, $yujuPrice)) {
                     $results['skipped']++;
                     $results['items'][] = [
                         'sku' => $sku,
@@ -2070,7 +2108,8 @@ class YujuOfferAuditor
                 }
             }
             if (count($offer) > 1) {
-                $bulkOffers[] = $offer;
+                // La misma referencia repetida en el lote invalida el archivo JSONL completo.
+                $bulkOffers[$sku] = $offer;
                 $bulkDetailIds[$sku] = (int) $detailId;
             } else {
                 $results['skipped']++;
@@ -2102,7 +2141,8 @@ class YujuOfferAuditor
 
         if (!empty($bulkOffers)) {
             $this->activeBulkRunId = $runId;
-            $bulkResult = $this->submitBulkOffersResiliently($bulkOffers);
+            $this->bulkSubmitCalls = 0;
+            $bulkResult = $this->submitBulkOffersResiliently(array_values($bulkOffers));
             unset($this->activeBulkRunId);
 
             foreach ($bulkResult['tasks'] as $task) {
@@ -2502,7 +2542,7 @@ class YujuOfferAuditor
             }
         }
 
-        $psStock = (int) StockAvailable::getQuantityAvailableByProduct((int) $idProduct);
+        $psStock = max(0, (int) StockAvailable::getQuantityAvailableByProduct((int) $idProduct));
         $product = new Product((int) $idProduct, false, $idLang);
         $psPrice = (float) $product->price;
 
@@ -2818,7 +2858,7 @@ class YujuOfferAuditor
             $detail['product_name'] = (string) $ctx['names'][$idProduct];
         }
 
-        $psStock = isset($ctx['stocks'][$idProduct]) ? (int) $ctx['stocks'][$idProduct] : 0;
+        $psStock = isset($ctx['stocks'][$idProduct]) ? max(0, (int) $ctx['stocks'][$idProduct]) : 0;
         $psPrice = isset($ctx['prices'][$idProduct]) ? (float) $ctx['prices'][$idProduct] : 0.0;
         $detail['ps_stock'] = $psStock;
         $detail['ps_price'] = $psPrice;
