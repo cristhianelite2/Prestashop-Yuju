@@ -61,9 +61,19 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
+        'prestashop_product_attribute_id' => [
+        'title' => 'ID Combinación PS',
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
+        ],
         'product_name' => [
         'title' => 'Nombre del Producto',
         'callback' => 'getProductName',
+        ],
+        'parent_yuju_product_id' => [
+        'title' => 'ID Padre Yuju',
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
         ],
         'yuju_product_id' => [
         'title' => 'ID Producto Yuju',
@@ -2203,8 +2213,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Write header
         fputcsv($handle, [
         'PrestaShop Product ID',
+        'PrestaShop Combination ID',
         'Product Name',
         'Yuju Product ID',
+        'Yuju Parent Product ID',
         'Sync Status',
         'Last Sync Date',
         'Error Count',
@@ -2228,8 +2240,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
         foreach ($records as $record) {
             fputcsv($handle, [
             $record['prestashop_product_id'],
+            $record['prestashop_product_attribute_id'] ?? '',
             $record['product_name'],
             $record['yuju_product_id'],
+            $record['parent_yuju_product_id'] ?? '',
             $record['sync_status'],
             $record['last_sync_at'],
             $record['error_count'],
