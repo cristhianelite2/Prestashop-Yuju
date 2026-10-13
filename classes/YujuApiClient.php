@@ -894,7 +894,7 @@ class YujuApiClient
             return ['success' => false, 'message' => 'Ningún SKU contiene stock o precio para actualizar.', 'http_code' => 0, 'data' => null];
         }
 
-        $body = implode("\\n", $lines);
+        $body = implode("\n", $lines);
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => 'https://api.tp.yuju.io/products-offer',
