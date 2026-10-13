@@ -849,6 +849,106 @@ class YujuApiClient
         ];
     }
 
+    /**
+     * Envía múltiples ofertas en JSONL al endpoint oficial de Yuju.
+     * Cada línea es un objeto JSON con sku, stock y/o price.
+     *
+     * @param array $offers
+     * @return array
+     */
+    public function createBulkOfferTask(array $offers)
+    {
+        if (empty($offers)) {
+            return ['success' => false, 'message' => 'No hay ofertas para enviar.', 'http_code' => 0, 'data' => null];
+        }
+        if (count($offers) > 20000) {
+            return ['success' => false, 'message' => 'Yuju permite máximo 20,000 SKU por tarea.', 'http_code' => 0, 'data' => null];
+        }
+
+        $token = $this->oauth->getValidAccessToken();
+        if (!$token) {
+            return ['success' => false, 'message' => 'No hay token válido disponible.', 'http_code' => 0, 'data' => null];
+        }
+
+        $lines = [];
+        foreach ($offers as $offer) {
+            if (!is_array($offer) || empty($offer['sku'])) {
+                continue;
+            }
+            $line = ['sku' => (string) $offer['sku']];
+            if (array_key_exists('stock', $offer)) {
+                $line['stock'] = (int) $offer['stock'];
+            }
+            if (array_key_exists('price', $offer)) {
+                $line['price'] = (float) $offer['price'];
+            }
+            if (count($line) > 1) {
+                $encoded = json_encode($line, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($encoded === false) {
+                    return ['success' => false, 'message' => 'No se pudo serializar el SKU ' . $line['sku'], 'http_code' => 0, 'data' => null];
+                }
+                $lines[] = $encoded;
+            }
+        }
+        if (empty($lines)) {
+            return ['success' => false, 'message' => 'Ningún SKU contiene stock o precio para actualizar.', 'http_code' => 0, 'data' => null];
+        }
+
+        $body = implode("\\n", $lines);
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://api.tp.yuju.io/products-offer',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 90,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/x-ndjson',
+                'Accept: application/json',
+                $this->buildAuthorizationHeader($token),
+            ],
+        ]);
+        $responseBody = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            return ['success' => false, 'message' => $curlError, 'http_code' => 0, 'data' => null];
+        }
+        $decoded = json_decode((string) $responseBody, true);
+        $ok = $httpCode >= 200 && $httpCode < 300 && is_array($decoded)
+            && strtoupper((string) ($decoded['status'] ?? '')) !== 'REJECTED';
+        $result = [
+            'success' => $ok,
+            'http_code' => $httpCode,
+            'data' => $decoded,
+            'message' => (string) ($decoded['message'] ?? ($ok ? 'Tarea masiva creada.' : 'Yuju rechazó la actualización masiva.')),
+        ];
+        $this->logger->log($ok ? 'info' : 'error', 'Yuju bulk offer task submitted', [
+            'endpoint' => 'products-offer',
+            'http_code' => $httpCode,
+            'sku_count' => count($lines),
+            'id_task' => $decoded['id_task'] ?? null,
+            'status' => $decoded['status'] ?? null,
+            'message' => $result['message'],
+        ]);
+        return $result;
+    }
+
+    /**
+     * Consulta el estado de una tarea de actualización masiva de ofertas.
+     */
+    public function getBulkOfferTaskStatus($taskId)
+    {
+        $taskId = trim((string) $taskId);
+        if ($taskId === '' || !preg_match('/^[a-zA-Z0-9_-]+$/', $taskId)) {
+            return ['success' => false, 'message' => 'ID de tarea inválido.', 'http_code' => 0, 'data' => null];
+        }
+        return $this->get('products-offer/' . rawurlencode($taskId));
+    }
+
     public function updateProduct($product_id, $product_data)
     {
         // Usar cURL directo como en testProducts para evitar problemas de encoding
