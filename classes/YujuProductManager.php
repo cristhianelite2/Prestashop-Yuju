@@ -384,6 +384,26 @@ class YujuProductManager
                 $catalog_status = isset($result['status']) ? $result['status'] : 'pending';
                 $catalog_error = isset($result['message']) ? $result['message'] : null;
                 $catalog_sync_enabled = $status_row && isset($status_row['sync_enabled']) ? (int) $status_row['sync_enabled'] : 1;
+
+                $yuju_status_row = isset($status_by_yuju_item[$parent_status_key])
+                    ? $status_by_yuju_item[$parent_status_key]
+                    : null;
+                if ($catalog_status === 'pending' && $catalog_sync_enabled
+                    && $report_downloaded_at > 0 && $yuju_status_row
+                    && isset($yuju_status_row['sync_status'], $yuju_status_row['last_sync_at'])
+                    && $yuju_status_row['sync_status'] === 'synced'
+                    && !empty($yuju_status_row['last_sync_at'])
+                    && strtotime($yuju_status_row['last_sync_at']) > $report_downloaded_at
+                ) {
+                    // A report older than the successful write cannot prove the item is still pending.
+                    $catalog_status = 'synced';
+                    $catalog_error = null;
+                    $result['status'] = 'synced';
+                    $result['reconciliation_status'] = 'synced';
+                    $result['message'] = null;
+                    $result['syncable'] = false;
+                }
+
                 $results[$prestashop_product_id] = $result;
             }
 
