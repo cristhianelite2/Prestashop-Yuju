@@ -267,7 +267,7 @@
                             <div class="invalid-payload">
                                 <div class="warning-header">
                                     <i class="icon-exclamation-triangle"></i>
-                                    <strong>JSON Payload Inválido</strong>
+                                    <strong>JSON Contenido Inválido</strong>
                                 </div>
                                 <div class="raw-payload">
                                     <pre class="code-block">{$webhook_log.payload|escape:'html':'UTF-8'}</pre>
@@ -375,7 +375,7 @@ $(document).ready(function() {
 </script>
 
 <style>
-/* Conservative Webhook Detail Styles for PrestaShop Integration */
+/* Conservative Detalle del webhook Styles for PrestaShop Integration */
 .panel {
     margin-bottom: 20px;
     background-color: #fff;
