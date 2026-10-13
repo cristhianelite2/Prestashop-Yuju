@@ -321,7 +321,7 @@ $(function() {
     function isUrgentDifference(field) {
         var parts = String(field || '').toLowerCase().split('.');
         var normalized = parts[parts.length - 1].replace(/[\\s-]/g, '_');
-        return $.inArray(normalized, ['name', 'product_name', 'stock', 'quantity', 'price']) !== -1;
+        return $.inArray(normalized, ['stock', 'price']) !== -1;
     }
 
     function getUrgentDifferences(product) {
@@ -579,7 +579,7 @@ $(function() {
         $urgencyColumn.append('<label for="yuju-reconciliation-urgency">Tipo de diferencia</label>');
         var $urgencySelect = $('<select id="yuju-reconciliation-urgency" class="form-control">' +
             '<option value="all">Todas las diferencias</option>' +
-            '<option value="urgent">Solo urgentes (nombre, stock y precio)</option>' +
+            '<option value="urgent">Solo urgentes (stock y precio)</option>' +
             '<option value="non_urgent">Solo no urgentes (otros campos)</option>' +
             '</select>').val(reconciliationUrgencyFilter);
         $urgencySelect.on('change', function() {
@@ -589,7 +589,7 @@ $(function() {
         });
         $urgencyColumn.append($urgencySelect);
         $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn).append($urgencyColumn);
-        $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente nombre, stock y precio; los demás campos no se modificarán.</p>');
+        $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente stock y precio; los demás campos no se modificarán.</p>');
         $container.append('<div class="clearfix" style="margin: 10px 0;"><button type="button" class="btn btn-success" id="yuju-push-differences-top" style="display:none;"><i class="icon-refresh"></i> Actualizar urgentes seleccionados (0)</button></div>');
         $container.append('<div id="yuju-reconciliation-results"></div>');
 
@@ -654,7 +654,7 @@ $(function() {
             showMessage('Selecciona al menos un producto con diferencias urgentes.', 'alert-warning');
             return;
         }
-        if (!confirm('Se actualizarán en Yuju únicamente nombre, stock y precio de ' + selectedIds.length + ' producto(s) seleccionado(s). Los demás campos no se modificarán. ¿Continuar?')) return;
+        if (!confirm('Se actualizarán en Yuju únicamente stock y precio de ' + selectedIds.length + ' producto(s) seleccionado(s). Los demás campos no se modificarán. ¿Continuar?')) return;
         setLoading($button, true, 'Actualizando campos urgentes...');
         ajaxAction('pushDifferencesToYuju', {ldelim}selected_product_ids: JSON.stringify(selectedIds), urgent_only: 1{rdelim}, function(response) {
             setLoading($button, false);
