@@ -31,8 +31,24 @@ class YujuProductReportManager
      */
     public function startOrResumeReport()
     {
-        $this->file_store->cleanupExpired();
+        // Recover existing files before retention cleanup. The previous order deleted
+        // an active report after 24 hours, forcing needless downloads on the next visit.
         $state = $this->getStoredState();
+        $offer_state = $this->getStoredOfferState();
+        if (empty($offer_state['cache_id'])) {
+            $local_offer = $this->file_store->discoverLatestValidOfferReport();
+            if (is_array($local_offer) && !empty($local_offer['cache_id'])) {
+                $offer_state = array_merge($offer_state, $local_offer);
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
+            }
+        }
+        $protected_cache_ids = [];
+        foreach ([$state, $offer_state] as $cached_state) {
+            if (!empty($cached_state['cache_id']) && preg_match('/^[a-f0-9]{32}$/', (string) $cached_state['cache_id'])) {
+                $protected_cache_ids[] = (string) $cached_state['cache_id'];
+            }
+        }
+        $this->file_store->cleanupExpired(86400, $protected_cache_ids);
 
         $has_cached_report = !empty($state['cache_id'])
             && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
