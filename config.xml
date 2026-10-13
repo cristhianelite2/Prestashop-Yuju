@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <module>
     <name>prestashopyuju</name>
-    <displayName><![CDATA[Yuju Integration]]></displayName>
+    <displayName><![CDATA[Integración Yuju]]></displayName>
     <version><![CDATA[1.1.16]]></version>
-    <description><![CDATA[Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.]]></description>
+    <description><![CDATA[Sincroniza tu tienda PrestaShop con Yuju para administrar productos, inventario y pedidos.]]></description>
     <author><![CDATA[Yuju Integration Team]]></author>
     <tab><![CDATA[market_place]]></tab>
-    <confirmUninstall><![CDATA[Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.]]></confirmUninstall>
+    <confirmUninstall><![CDATA[¿Seguro que deseas desinstalar el módulo Integración Yuju? Se eliminarán los datos de sincronización.]]></confirmUninstall>
     <is_configurable>1</is_configurable>
     <need_instance>0</need_instance>
     <limited_countries></limited_countries>
