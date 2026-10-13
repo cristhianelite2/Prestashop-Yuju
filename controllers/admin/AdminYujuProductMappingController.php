@@ -1183,4 +1183,19 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         return $normalized;
     }
+
+    /**
+     * Carga explícitamente los recursos visuales del módulo en esta página.
+     * El dashboard ya lo hace desde su controlador; las páginas de mapeo
+     * no deben depender de que los hooks del módulo estén registrados.
+     */
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        if ($this->module) {
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css?v=20261013-menu-fix');
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+        }
+    }
 }
