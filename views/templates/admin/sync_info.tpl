@@ -319,9 +319,9 @@ $(function() {
             if (onSuccess) {
                 onSuccess(response);
             }
-        }).fail(function() {
+        }).fail(function(xhr, status, error) {
             if (onError) {
-                onError();
+                onError(xhr, status, error);
             } else {
                 showMessage('Fallo al conectar con Yuju. Revise la conexión e intente nuevamente.', 'alert-danger');
             }
