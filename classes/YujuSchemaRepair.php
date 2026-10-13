@@ -384,6 +384,16 @@ class YujuSchemaRepair
                     Db::getInstance()->execute('ALTER TABLE ' . $table . ' DROP COLUMN `sync_direction`');
                     $actions[] = ['type' => 'patch', 'detail' => 'Columna sync_direction eliminada: la sincronización de productos siempre va de PrestaShop a Yuju'];
                 }
+                $productIdColumns = Db::getInstance()->executeS('SHOW COLUMNS FROM ' . $table . " LIKE 'prestashop_product_id'");
+                if (!empty($productIdColumns) && strtoupper((string) $productIdColumns[0]['Null']) !== 'YES') {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' MODIFY COLUMN `prestashop_product_id` INT(11) NULL DEFAULT NULL');
+                    $actions[] = ['type' => 'patch', 'detail' => 'prestashop_product_id permite NULL para productos Yuju aún sin correspondencia local'];
+                }
+                $uniqueIndexes = Db::getInstance()->executeS('SHOW INDEX FROM ' . $table . " WHERE Key_name = 'unique_prestashop_product'");
+                if (!empty($uniqueIndexes)) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' DROP INDEX `unique_prestashop_product`');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Índice único por producto padre eliminado para permitir múltiples combinaciones'];
+                }
             } catch (Exception $e) {
                 $actions[] = ['type' => 'patch_skip', 'detail' => 'Patch columnas de variaciones/dirección: ' . $e->getMessage()];
             }
