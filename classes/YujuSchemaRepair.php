@@ -362,6 +362,24 @@ class YujuSchemaRepair
                     'detail' => 'Patch action ENUM: ' . $e->getMessage(),
                 ];
             }
+            try {
+                $queueTable = '`' . _DB_PREFIX_ . 'yuju_sync_queue`';
+                $queueIndex = Db::getInstance()->executeS('SHOW INDEX FROM ' . $queueTable . " WHERE Key_name = 'idx_queue_product_action_status'");
+                if (empty($queueIndex)) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $queueTable . ' ADD INDEX `idx_queue_product_action_status` (`prestashop_product_id`, `prestashop_product_attribute_id`, `action`, `status`)');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Índice de rendimiento agregado para buscar tareas de cola'];
+                }
+                $queueStatusIndex = Db::getInstance()->executeS('SHOW INDEX FROM ' . $queueTable . " WHERE Key_name = 'idx_queue_status_created'");
+                if (empty($queueStatusIndex)) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $queueTable . ' ADD INDEX `idx_queue_status_created` (`status`, `created_at`)');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Índice de rendimiento agregado para estadísticas y orden de cola'];
+                }
+            } catch (Exception $e) {
+                $actions[] = [
+                    'type' => 'patch_skip',
+                    'detail' => 'Índices de rendimiento de cola: ' . $e->getMessage(),
+                ];
+            }
         }
 
         if ($shortName === 'yuju_product_status') {
