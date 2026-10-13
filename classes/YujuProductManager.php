@@ -186,59 +186,8 @@ class YujuProductManager
      */
     protected function updateProductFromYujuData($product, $yuju_product)
     {
-        $languages = Language::getLanguages(false);
-        $default_lang = Configuration::get('PS_LANG_DEFAULT');
-
-        foreach ($this->field_mappings as $mapping) {
-            if ($mapping['sync_direction'] === 'ps_to_yuju') {
-                continue; // Skip fields that only sync from PS to Yuju
-            }
-
-            $yuju_field = $mapping['yuju_field'];
-            $ps_field = $mapping['prestashop_field'];
-
-            if (!isset($yuju_product[$yuju_field])) {
-                if ($mapping['is_required'] && !empty($mapping['default_value'])) {
-                    $value = $mapping['default_value'];
-                } else {
-                    continue;
-                }
-            } else {
-                $value = $yuju_product[$yuju_field];
-            }
-
-            // Apply transformation
-            $value = $this->applyTransformation($value, $mapping);
-
-            // Set field value based on type
-            if (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'])) {
-                // Multilingual fields
-                foreach ($languages as $language) {
-                    $product->{$ps_field}[$language['id_lang']] = $value;
-                }
-            } else {
-                // Single value fields
-                $product->{$ps_field} = $value;
-            }
-        }
-
-        // Set category if mapped
-        if (isset($yuju_product['category_id'])) {
-            $category_mapping = $this->getCategoryMappingByYujuId($yuju_product['category_id']);
-
-            if ($category_mapping) {
-                $product->id_category_default = $category_mapping['prestashop_category_id'];
-            }
-        }
-
-        // Set manufacturer if available
-        if (isset($yuju_product['brand']) && !empty($yuju_product['brand'])) {
-            $manufacturer = $this->getOrCreateManufacturer($yuju_product['brand']);
-
-            if ($manufacturer) {
-                $product->id_manufacturer = $manufacturer->id;
-            }
-        }
+        // Método legado bloqueado: no aplicar datos de Yuju al objeto PrestaShop.
+        return false;
     }
 
     /**
