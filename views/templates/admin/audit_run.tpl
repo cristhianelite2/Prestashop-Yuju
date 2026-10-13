@@ -44,10 +44,10 @@
                     </a>
                 </div>
             </div>
-            <div class="well well-sm" style="margin-bottom:15px;">
-                <div class="row">
-                    <div class="{if $gral_reports|@count > 0}col-md-6{else}col-md-12{/if}">
-                        <p style="margin:0 0 8px 0;">
+            <div class="yuju-audit-launcher">
+                <div class="row yuju-audit-launcher-grid">
+                    <div class="yuju-audit-launcher-card {if $gral_reports|@count > 0}col-md-6{else}col-md-12{/if}">
+                        <p class="yuju-audit-launcher-title">
                             <strong>Nueva auditoría</strong>
                             <small class="text-muted" id="yuju-audit-quota-label">
                                 Ofertas: cada {$offer_quota.interval_hours|default:12|intval}h
@@ -65,8 +65,8 @@
                         </button>
                     </div>
                     {if $saved_reports|@count > 0 || $gral_reports|@count > 0}
-                        <div class="col-md-6">
-                            <p style="margin:0 0 8px 0;"><strong>Reanalizar reporte guardado</strong></p>
+                        <div class="yuju-audit-launcher-card col-md-6">
+                            <p class="yuju-audit-launcher-title"><strong>Reanalizar reporte guardado</strong></p>
                             <div class="input-group">
                                 <select id="yuju-audit-report-select" class="form-control">
                                     <option value="">— Elija un reporte completado —</option>
@@ -137,7 +137,7 @@
                     <div class="yuju-audit-searchbox">
                         <i class="icon-search yuju-audit-search-icon"></i>
                         <input type="text" id="yuju-audit-search" class="form-control" placeholder="Buscar por SKU o nombre del producto…">
-                        <button type="button" id="yuju-audit-search-btn" aria-label="Buscar" title="Buscar"><i class="icon-arrow-right"></i></button>
+                        <button type="button" id="yuju-audit-search-btn" aria-label="Buscar" title="Buscar"><i class="icon-search"></i></button>
                     </div>
                     <small class="yuju-audit-filter-label" id="yuju-audit-filter-label">Filtro: todos</small>
                 </div>
@@ -157,7 +157,8 @@
                     <i class="icon-check-square"></i> 0 seleccionados
                 </span>
             </div>
-            <div class="table-responsive" style="max-height:420px; overflow:auto;">
+            <div class="yuju-audit-pagination" id="yuju-audit-pagination-top" aria-label="Paginación de productos"></div>
+            <div class="table-responsive yuju-audit-table-wrap" style="max-height:560px; overflow:auto;">
                 <table class="table table-bordered table-striped table-condensed" id="yuju-audit-diff-table">
                     <thead>
                         <tr>
@@ -177,6 +178,7 @@
                     </tbody>
                 </table>
             </div>
+            <div class="yuju-audit-pagination" id="yuju-audit-pagination-bottom" aria-label="Paginación de productos"></div>
 
             <div class="modal fade" id="yujuAuditErrorModal" tabindex="-1" role="dialog">
                 <div class="modal-dialog modal-lg" role="document">
