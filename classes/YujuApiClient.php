@@ -1010,6 +1010,21 @@ class YujuApiClient
 
     public function updateProduct($product_id, $product_data)
     {
+        if (!is_array($product_data)) {
+            return ['success' => false, 'message' => 'Los datos de actualización no son válidos.', 'http_code' => 0, 'data' => null];
+        }
+        // Regla global: ningún flujo envía stock negativo ni precio inválido.
+        if (array_key_exists('stock', $product_data)) {
+            $product_data['stock'] = max(0, (int) $product_data['stock']);
+        }
+        if (array_key_exists('price', $product_data)) {
+            $price = (float) $product_data['price'];
+            if (!is_finite($price) || $price <= 0) { unset($product_data['price']); }
+            else { $product_data['price'] = round($price, 2); }
+        }
+        if (empty($product_data)) {
+            return ['success' => false, 'message' => 'No hay campos válidos para actualizar.', 'http_code' => 0, 'data' => null];
+        }
         // Usar cURL directo como en testProducts para evitar problemas de encoding
         $token = $this->oauth->getValidAccessToken();
         
