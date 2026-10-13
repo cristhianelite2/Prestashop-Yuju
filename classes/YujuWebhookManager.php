@@ -735,13 +735,34 @@ class YujuWebhookManager
                 if (!$updated_id) {
                     throw new Exception('No se pudo actualizar la suscripción existente: ' . $this->extractResponseMessage($response));
                 }
+
+                // Consolidar duplicados de esta misma URL: conservar la suscripción
+                // actualizada y eliminar las otras configuraciones que enviarían
+                // eventos repetidos al mismo receptor. No tocar URLs ajenas.
+                $removed_duplicates = 0;
+                foreach ($existing_subscriptions as $duplicate) {
+                    $duplicate_url = rtrim(strtolower(trim((string) ($duplicate['url'] ?? ''))), '/');
+                    $duplicate_id = $this->extractWebhookSubscriptionId($duplicate);
+                    if ($duplicate_url !== $normalized_url || !$duplicate_id || (string) $duplicate_id === (string) $updated_id) {
+                        continue;
+                    }
+
+                    $delete_response = $this->api_client->deleteWebhookSubscription((int) $duplicate_id);
+                    if (is_array($delete_response) && !empty($delete_response['success'])) {
+                        ++$removed_duplicates;
+                        $this->logger->log('Removed duplicate Yuju webhook subscription ' . $duplicate_id . ' for ' . $normalized_url, 'warning');
+                    } else {
+                        $this->logger->log('Could not remove duplicate Yuju webhook subscription ' . $duplicate_id . ': ' . json_encode($delete_response), 'warning');
+                    }
+                }
+
                 Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_webhook_registrations`');
                 $this->storeWebhookRegistration('yuju_subscription', (string) $updated_id);
                 return [[
                     'event_type' => implode(',', $topics),
                     'webhook_id' => (string) $updated_id,
                     'status' => 'registered',
-                    'note' => 'Suscripción existente reutilizada; no se creó una duplicada.',
+                    'note' => 'Suscripción existente reutilizada; se eliminaron ' . $removed_duplicates . ' duplicadas.',
                 ]];
             }
 
