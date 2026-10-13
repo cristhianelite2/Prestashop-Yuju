@@ -116,6 +116,8 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             'category_mappings' => $mappings,
             'prestashop_categories' => $prestashop_categories,
             'yuju_categories' => $yuju_categories,
+            'madkting_mapping_available' => $this->getMadktingMappingStatus()['available'],
+            'madkting_mapping_count' => $this->getMadktingMappingStatus()['count'],
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuCategoryMapping'),
             'token' => $this->token,
             'auto_open_mapping_modal' => (int) Tools::getValue('openModal', 0) === 1,
@@ -672,6 +674,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         die(json_encode($response));
     }
     
+    protected function getMadktingMappingStatus(){ $t=_DB_PREFIX_.'mad_mapping_categories'; $e=(int)Db::getInstance()->getValue('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="'.pSQL($t).'"'); if(!$e)return ['available'=>false,'count'=>0]; $n=(int)Db::getInstance()->getValue('SELECT COUNT(*) FROM '.bqSQL($t)); if((bool)Configuration::get('YUJU_MADKTING_MAPPINGS_IMPORTED'))return ['available'=>false,'count'=>$n]; return ['available'=>$n>0,'count'=>$n]; }
+    public function ajaxProcessImportMadktingMappings(){ $r=['success'=>false,'message'=>'','imported'=>0,'skipped_existing'=>0,'skipped_invalid_category'=>0,'errors'=>0]; try{$t=_DB_PREFIX_.'mad_mapping_categories'; if(!(int)Db::getInstance()->getValue('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name="'.pSQL($t).'"'))throw new Exception('No existe mad_mapping_categories.'); $rows=Db::getInstance()->executeS('SELECT id_category_prestashop,id_category_madkting FROM '.bqSQL($t).' ORDER BY id_mapping_category ASC'); if($rows===false)throw new Exception('No fue posible leer la referencia de categorías.'); $valid=[]; $walk=function($items)use(&$walk,&$valid){foreach($items as $it){if(isset($it['id']))$valid[(string)$it['id']]=(string)($it['name']??$it['id']);if(!empty($it['children']))$walk($it['children']);}}; $walk($this->getYujuCategories()); $now=date('Y-m-d H:i:s'); foreach($rows as $row){$ps=(int)$row['id_category_prestashop'];$yu=(string)(int)$row['id_category_madkting'];if($ps<=0||!isset($valid[$yu])){++$r['skipped_invalid_category'];continue;}if(Db::getInstance()->getValue('SELECT id FROM '._DB_PREFIX_.'yuju_category_mapping WHERE prestashop_category_id='.$ps)){++$r['skipped_existing'];continue;}if(Db::getInstance()->insert('yuju_category_mapping',['prestashop_category_id'=>$ps,'yuju_category_id'=>pSQL($yu),'yuju_category_name'=>pSQL($valid[$yu]),'sync_enabled'=>1,'last_sync_at'=>null,'created_at'=>$now,'updated_at'=>$now]))++$r['imported'];else ++$r['errors'];} if($r['imported']||$r['skipped_existing'])Configuration::updateValue('YUJU_MADKTING_MAPPINGS_IMPORTED',1);$r['success']=true;$r['message']='Importados: '.$r['imported'].'; existentes: '.$r['skipped_existing'].'; categoría inválida: '.$r['skipped_invalid_category'].'; errores: '.$r['errors'].'.';}catch(Exception $e){$r['message']=$e->getMessage();}header('Content-Type: application/json');die(json_encode($r));}
+
     protected function getCategoryMappings()
     {
         $sql = '
