@@ -82,9 +82,6 @@
                                 <td>
                                     {if $mapping.parent_category_name}
                                         {$mapping.parent_category_name|escape:'html':'UTF-8'}
-                                        {if !$mapping.parent_synced}
-                                            <span class="label label-warning">Padre no sincronizado</span>
-                                        {/if}
                                     {else}
                                         <span class="text-muted">Categoría raíz</span>
                                     {/if}
