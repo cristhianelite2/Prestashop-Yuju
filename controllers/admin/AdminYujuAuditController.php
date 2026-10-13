@@ -217,6 +217,9 @@ class AdminYujuAuditController extends ModuleAdminController
                 case 'auditChunk':
                     $this->ajaxProcessAuditChunk();
                     break;
+                case 'updateSelectedToYuju':
+                    $this->ajaxProcessUpdateSelectedToYuju();
+                    break;
                 case 'pauseAudit':
                     $this->ajaxProcessPauseAudit();
                     break;
@@ -512,6 +515,24 @@ class AdminYujuAuditController extends ModuleAdminController
         }
     }
 
+    public function ajaxProcessUpdateSelectedToYuju()
+    {
+        try {
+            $runId = (int) Tools::getValue('run_id');
+            $detailIds = Tools::getValue('detail_ids', []);
+            if (!is_array($detailIds)) {
+                $detailIds = [];
+            }
+            $auditor = new YujuOfferAuditor();
+            $result = $auditor->updateSelectedFromPrestaShop($runId, $detailIds);
+            $this->yujuAjaxResponse(json_encode($result, JSON_UNESCAPED_UNICODE));
+        } catch (Exception $e) {
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
+        } catch (Throwable $e) {
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
+        }
+    }
+
     public function ajaxProcessAuditChunk()
     {
         try {
@@ -607,6 +628,7 @@ class AdminYujuAuditController extends ModuleAdminController
                     }
                 }
                 $ui[] = [
+                    'detail_id' => (int) $row['id'],
                     'sku' => $row['sku'],
                     'sku_simple' => null,
                     'parent_id' => null,
