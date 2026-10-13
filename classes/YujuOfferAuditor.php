@@ -1443,6 +1443,133 @@ class YujuOfferAuditor
      * @param int $offset
      * @return array
      */
+    /**
+     * Envía a Yuju los valores actuales de PrestaShop para los detalles seleccionados.
+     * Nunca escribe ni modifica el catálogo de PrestaShop.
+     *
+     * @param int $runId
+     * @param array $detailIds
+     * @return array
+     */
+    public function updateSelectedFromPrestaShop($runId, array $detailIds)
+    {
+        $runId = (int) $runId;
+        $detailIds = array_values(array_unique(array_filter(array_map('intval', $detailIds))));
+        if ($runId <= 0 || empty($detailIds)) {
+            return ['success' => false, 'message' => 'Seleccione al menos un producto de la auditoría.'];
+        }
+
+        $run = $this->getRun($runId);
+        if (!$run) {
+            return ['success' => false, 'message' => 'La auditoría seleccionada no existe.'];
+        }
+
+        $results = ['updated' => 0, 'failed' => 0, 'skipped' => 0, 'items' => []];
+        $idLang = (int) Configuration::get('PS_LANG_DEFAULT');
+        $idShop = (int) Context::getContext()->shop->id;
+
+        foreach ($detailIds as $detailId) {
+            $row = Db::getInstance()->getRow(
+                'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_audit_run_details
+                 WHERE id = ' . (int) $detailId . ' AND id_audit_run = ' . (int) $runId
+            );
+            if (!$row) {
+                $results['skipped']++;
+                continue;
+            }
+
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $yujuId = trim((string) ($row['yuju_product_id'] ?? ''));
+            if ($sku === '' || $yujuId === '') {
+                $results['skipped']++;
+                $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'Falta SKU o ID de Yuju.'];
+                continue;
+            }
+
+            $idProduct = 0;
+            $idProductAttribute = 0;
+            $attribute = Db::getInstance()->getRow(
+                "SELECT id_product, id_product_attribute FROM " . _DB_PREFIX_ . "product_attribute
+                 WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product_attribute ASC"
+            );
+            if (!empty($attribute)) {
+                $idProduct = (int) $attribute['id_product'];
+                $idProductAttribute = (int) $attribute['id_product_attribute'];
+            } else {
+                $idProduct = (int) Db::getInstance()->getValue(
+                    "SELECT id_product FROM " . _DB_PREFIX_ . "product
+                     WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                );
+            }
+
+            if ($idProduct <= 0) {
+                $results['skipped']++;
+                $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No existe una referencia equivalente en PrestaShop.'];
+                continue;
+            }
+
+            $payload = [];
+            if (!empty($run['audit_stock'])) {
+                $payload['stock'] = (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop);
+            }
+            if (!empty($run['audit_price'])) {
+                $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6, null, false, true, 1, false, null, $idShop);
+                $yujuPrice = isset($row['yuju_price']) ? (float) $row['yuju_price'] : 0.0;
+                if ($this->isAbruptPriceChangeBlocked($psPrice, $yujuPrice)) {
+                    $results['skipped']++;
+                    $results['items'][] = [
+                        'sku' => $sku,
+                        'success' => false,
+                        'message' => self::PRICE_SECURITY_MSG . ' No se envió el precio; los demás campos se procesarán si aplica.',
+                    ];
+                    unset($payload['stock']);
+                    if (!empty($run['audit_images'])) {
+                        $payload['images'] = $this->getPrestaShopImageUrls($idProduct, $idLang, new Product($idProduct, false, $idLang));
+                    }
+                    if (empty($payload)) {
+                        continue;
+                    }
+                } else {
+                    $payload['price'] = $psPrice;
+                }
+            }
+            if (!empty($run['audit_images'])) {
+                $product = new Product($idProduct, false, $idLang);
+                $payload['images'] = $this->getPrestaShopImageUrls($idProduct, $idLang, $product);
+            }
+
+            if (empty($payload)) {
+                $results['skipped']++;
+                $results['items'][] = ['sku' => $sku, 'success' => false, 'message' => 'No hay campos habilitados para enviar.'];
+                continue;
+            }
+
+            // Única escritura de este flujo: petición a Yuju con datos obtenidos de PrestaShop.
+            $response = $this->api->updateProduct($yujuId, $payload);
+            $ok = !empty($response['success']);
+            if ($ok) {
+                $results['updated']++;
+                Db::getInstance()->update('yuju_audit_run_details', [
+                    'result' => 'diff_fixed',
+                    'message' => pSQL('Actualizado en Yuju desde PrestaShop: ' . implode(', ', array_keys($payload))),
+                ], 'id = ' . (int) $detailId . ' AND id_audit_run = ' . (int) $runId);
+            } else {
+                $results['failed']++;
+            }
+            $results['items'][] = [
+                'sku' => $sku,
+                'success' => $ok,
+                'message' => $ok
+                    ? 'Actualizado en Yuju desde PrestaShop.'
+                    : (string) ($response['message'] ?? ('HTTP ' . ($response['http_code'] ?? '?'))),
+            ];
+        }
+
+        $results['success'] = $results['failed'] === 0 && $results['updated'] > 0;
+        $results['message'] = 'Actualizados: ' . $results['updated'] . '; errores: ' . $results['failed'] . '; omitidos: ' . $results['skipped'] . '.';
+        return $results;
+    }
+
     public static function getRunDetails($runId, $resultFilter = null, $limit = 100, $offset = 0, $search = '')
     {
         $where = 'id_audit_run = ' . (int) $runId;
