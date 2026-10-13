@@ -26,6 +26,10 @@ function upgrade_module_1_1_6($module)
             return false;
         }
     }
+    if (!isset($column_names['prestashop_product_attribute_id'])
+        && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD `prestashop_product_attribute_id` int(11) DEFAULT NULL AFTER `prestashop_product_id`')) {
+        return false;
+    }
     if (!isset($column_names['yuju_product_name'])
         && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD `yuju_product_name` varchar(512) DEFAULT NULL AFTER `yuju_product_id`')) {
         return false;
