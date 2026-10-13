@@ -1,3 +1,5 @@
+## [Unreleased]
+
 ## [1.1.6] - 2026-10-13
 
 ### Corregido
@@ -12,8 +14,6 @@
 - Se añade migración para tiendas existentes al actualizar el módulo a 1.1.6.
 
 # Changelog
-
-## [Unreleased]
 
 - El botón «Iniciar sincronización» muestra el avance paso a paso (solicitar informe general, esperar y descargar, obtener stock/precio, combinar y detectar diferencias), con el estado de cada paso y el tiempo transcurrido de espera; si un paso falla se marca con su error y el botón se libera.
 - El reporte de stock/precio (oferta) se reutiliza durante 12 horas; pasado ese tiempo se solicita y descarga uno nuevo. La URL temporal de descarga ya no se guarda en la tabla `yuju_product_reports` y en la configuración solo se conserva 5 minutos mientras se reintenta una descarga fallida; se elimina al terminar.
