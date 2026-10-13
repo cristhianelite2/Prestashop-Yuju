@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_attribute_mapping` (
     KEY `idx_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Yuju is the catalog source; PrestaShop IDs are optional links. No sync_direction belongs on status rows.
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) DEFAULT NULL,
