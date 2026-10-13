@@ -356,6 +356,9 @@ class YujuProductManager
                 && !isset($report_index['duplicate_ids'][$yuju_product_id])
                 ? (int) $selected_products[$yuju_product_id]
                 : null;
+            $report_downloaded_at = isset($report_product['_report_downloaded_at'])
+                ? (int) $report_product['_report_downloaded_at']
+                : 0;
             $catalog_status = 'pending';
             $catalog_error = null;
             $parent_status_key = json_encode([$yuju_product_id, '']);
@@ -392,6 +395,7 @@ class YujuProductManager
                 'prestashop_product_attribute_id' => null,
                 'prestashop_product_id' => $prestashop_product_id,
                 'sync_status' => $catalog_status,
+                'report_downloaded_at' => $report_downloaded_at,
                 'sync_enabled' => $catalog_sync_enabled,
                 'last_error' => $catalog_error,
             ];
@@ -445,6 +449,7 @@ class YujuProductManager
                     'prestashop_product_attribute_id' => $variation_ps_attribute_id,
                     'prestashop_product_id' => $variation_ps_id,
                     'sync_status' => $variation_status,
+                    'report_downloaded_at' => $report_downloaded_at,
                     'sync_enabled' => $variation_enabled,
                     'last_error' => null,
                 ];
@@ -824,11 +829,24 @@ class YujuProductManager
         $yuju_product_id = pSQL((string) $row['yuju_product_id']);
         $variation_id = pSQL((string) $row['yuju_variation_id']);
         $existing = $db->getRow('
-            SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            SELECT id, sync_status, last_sync_at
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
             WHERE yuju_product_id = "' . $yuju_product_id . '"
               AND (yuju_variation_id = "' . $variation_id . '" OR (yuju_variation_id IS NULL AND "' . $variation_id . '" = ""))
             ORDER BY id ASC
         ');
+
+        $incoming_status = (string) $row['sync_status'];
+        $report_downloaded_at = isset($row['report_downloaded_at']) ? (int) $row['report_downloaded_at'] : 0;
+        if ($existing && $report_downloaded_at > 0 && $incoming_status === 'pending'
+            && (string) $existing['sync_status'] === 'synced'
+            && !empty($existing['last_sync_at'])
+            && strtotime($existing['last_sync_at']) > $report_downloaded_at
+        ) {
+            // Do not let a cached report downloaded before the successful API write
+            // downgrade the newer sync result back to pending.
+            $incoming_status = 'synced';
+        }
 
         $data = [
             'prestashop_product_id' => $row['prestashop_product_id'] !== null ? (int) $row['prestashop_product_id'] : null,
@@ -839,9 +857,9 @@ class YujuProductManager
             'yuju_product_name' => pSQL((string) $row['yuju_product_name']),
             'yuju_variation_id' => $variation_id,
             'yuju_variation_sku' => $row['yuju_variation_sku'] !== null ? pSQL((string) $row['yuju_variation_sku']) : null,
-            'sync_status' => pSQL((string) $row['sync_status']),
+            'sync_status' => pSQL($incoming_status),
             'sync_enabled' => (int) $row['sync_enabled'],
-            'last_error' => $row['last_error'] !== null ? pSQL((string) $row['last_error']) : null,
+            'last_error' => $incoming_status === 'synced' ? null : ($row['last_error'] !== null ? pSQL((string) $row['last_error']) : null),
             'updated_at' => date('Y-m-d H:i:s'),
         ];
 
