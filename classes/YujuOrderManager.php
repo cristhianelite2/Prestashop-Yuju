@@ -2879,11 +2879,11 @@ class YujuOrderManager
         }
 
         $result['yuju_product_id'] = $yuju_product_id;
-        $stock = (int) StockAvailable::getQuantityAvailableByProduct(
+        $stock = max(0, (int) StockAvailable::getQuantityAvailableByProduct(
             $prestashop_product_id,
             null,
             $id_shop ? (int) $id_shop : null
-        );
+        ));
         if ($stock < 0) {
             $stock = 0;
         }
