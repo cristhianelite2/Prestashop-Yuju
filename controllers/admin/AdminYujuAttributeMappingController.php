@@ -125,6 +125,8 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             'attribute_types' => $this->getAttributeTypes(),
             'field_types' => $this->getFieldTypes(),
             'transformation_rules' => $this->getTransformationRules(),
+            'madkting_attribute_mapping_available' => $this->getMadktingAttributeMappingStatus()['available'],
+            'madkting_attribute_mapping_count' => $this->getMadktingAttributeMappingStatus()['count'],
 
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuAttributeMapping'),
         ]);
@@ -685,6 +687,144 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             $response['message'] = $e->getMessage();
         }
 
+        die(json_encode($response));
+    }
+
+    /**
+     * Detecta los mapeos de atributos de Madkting sin modificar la tabla de origen.
+     */
+    protected function getMadktingAttributeMappingStatus()
+    {
+        $tableName = _DB_PREFIX_ . 'mad_mapping_attributes';
+        $exists = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema = DATABASE()
+             AND table_name = "' . pSQL($tableName) . '"'
+        );
+
+        if (!$exists) {
+            return ['available' => false, 'count' => 0];
+        }
+
+        $count = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM ' . bqSQL($tableName)
+        );
+
+        if ((bool) Configuration::get('PRESTASHOPYUJU_MADKTING_ATTRIBUTES_IMPORTED')) {
+            return ['available' => false, 'count' => $count];
+        }
+
+        return ['available' => $count > 0, 'count' => $count];
+    }
+
+    /**
+     * Importa mapeos de Madkting que coincidan con grupos de atributos PrestaShop
+     * y atributos existentes en la caché de Yuju. La tabla Madkting es de solo lectura.
+     */
+    public function ajaxProcessImportMadktingAttributeMappings()
+    {
+        $response = [
+            'success' => false,
+            'message' => '',
+            'imported' => 0,
+            'skipped_existing' => 0,
+            'skipped_invalid' => 0,
+            'errors' => 0,
+        ];
+
+        try {
+            $tableName = _DB_PREFIX_ . 'mad_mapping_attributes';
+            $exists = (int) Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema = DATABASE()
+                 AND table_name = "' . pSQL($tableName) . '"'
+            );
+            if (!$exists) {
+                throw new Exception('No existe la tabla de mapeos de atributos de Madkting.');
+            }
+
+            $rows = Db::getInstance()->executeS(
+                'SELECT id_field_attribute_prestashop, id_attribute_prestashop, id_attribute_madkting
+                 FROM ' . bqSQL($tableName) . '
+                 ORDER BY id_mapping_attribute ASC'
+            );
+            if ($rows === false) {
+                throw new Exception('No fue posible leer los mapeos de atributos de Madkting.');
+            }
+
+            $languageId = (int) $this->context->language->id;
+            $now = date('Y-m-d H:i:s');
+
+            foreach ($rows as $row) {
+                // El destino representa grupos/atributos de PrestaShop, no valores individuales.
+                $prestashopAttributeId = (int) $row['id_field_attribute_prestashop'];
+                $madktingAttributeId = trim((string) $row['id_attribute_madkting']);
+                if ($prestashopAttributeId <= 0 || $madktingAttributeId === '') {
+                    ++$response['skipped_invalid'];
+                    continue;
+                }
+
+                $prestashopAttribute = Db::getInstance()->getRow(
+                    'SELECT agl.name
+                     FROM ' . _DB_PREFIX_ . 'attribute_group ag
+                     INNER JOIN ' . _DB_PREFIX_ . 'attribute_group_lang agl
+                       ON agl.id_attribute_group = ag.id_attribute_group
+                      AND agl.id_lang = ' . $languageId . '
+                     WHERE ag.id_attribute_group = ' . $prestashopAttributeId
+                );
+                $yujuAttribute = Db::getInstance()->getRow(
+                    'SELECT yuju_attribute_id, name, type
+                     FROM ' . _DB_PREFIX_ . 'yuju_attributes_cache
+                     WHERE yuju_attribute_id = "' . pSQL($madktingAttributeId) . '"'
+                );
+
+                if (!$prestashopAttribute || !$yujuAttribute) {
+                    ++$response['skipped_invalid'];
+                    continue;
+                }
+
+                $existing = Db::getInstance()->getValue(
+                    'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_attribute_mapping
+                     WHERE prestashop_attribute_id = ' . $prestashopAttributeId
+                );
+                if ($existing) {
+                    ++$response['skipped_existing'];
+                    continue;
+                }
+
+                $inserted = Db::getInstance()->insert('yuju_attribute_mapping', [
+                    'prestashop_attribute_id' => $prestashopAttributeId,
+                    'prestashop_attribute_name' => pSQL($prestashopAttribute['name']),
+                    'yuju_attribute_id' => pSQL($yujuAttribute['yuju_attribute_id']),
+                    'yuju_attribute_name' => pSQL($yujuAttribute['name']),
+                    'attribute_type' => 'custom',
+                    'sync_direction' => 'prestashop_to_yuju',
+                    'auto_create_values' => 1,
+                    'is_active' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                if ($inserted) {
+                    ++$response['imported'];
+                } else {
+                    ++$response['errors'];
+                }
+            }
+
+            Configuration::updateValue('PRESTASHOPYUJU_MADKTING_ATTRIBUTES_IMPORTED', 1);
+            $response['success'] = true;
+            $response['message'] = 'Importación terminada. Importados: ' . $response['imported']
+                . '; ya existentes: ' . $response['skipped_existing']
+                . '; no válidos o no encontrados en Yuju: ' . $response['skipped_invalid']
+                . '; errores: ' . $response['errors'] . '.';
+            $this->logger->log('Importación de atributos Madkting -> Yuju: ' . $response['message'], 'info');
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error al importar mapeos de atributos de Madkting: ' . $e->getMessage(), 'error');
+        }
+
+        header('Content-Type: application/json');
         die(json_encode($response));
     }
 
