@@ -224,6 +224,7 @@ class YujuProductManager
 
         $contexts = [];
         $sku_owners = [];
+        $sku_owner_attributes = [];
         foreach ($products as $product_row) {
             $prestashop_product_id = (int) $product_row['id_product'];
             $product = new Product($prestashop_product_id);
@@ -262,6 +263,14 @@ class YujuProductManager
                 $normalized_sku = YujuProductReportReconciler::normalizeSku($sku);
                 if ($normalized_sku !== '') {
                     $sku_owners[$normalized_sku][$prestashop_product_id] = true;
+                }
+            }
+            foreach ($variations as $variation) {
+                $normalized_sku = YujuProductReportReconciler::normalizeSku(isset($variation['sku']) ? $variation['sku'] : '');
+                if ($normalized_sku !== '') {
+                    $sku_owner_attributes[$normalized_sku][$prestashop_product_id] = isset($variation['prestashop_product_attribute_id'])
+                        ? (int) $variation['prestashop_product_attribute_id']
+                        : null;
                 }
             }
         }
@@ -380,6 +389,7 @@ class YujuProductManager
                 'yuju_product_name' => $this->getYujuReportProductName($report_product),
                 'yuju_variation_id' => '',
                 'yuju_variation_sku' => null,
+                'prestashop_product_attribute_id' => null,
                 'prestashop_product_id' => $prestashop_product_id,
                 'sync_status' => $catalog_status,
                 'sync_enabled' => $catalog_sync_enabled,
@@ -405,11 +415,15 @@ class YujuProductManager
                 // Stable Yuju variation ID when available; otherwise use its SKU as identity.
                 $variation_key = $variation_id !== '' ? 'id:' . $variation_id : 'sku:' . $variation_sku;
                 $variation_ps_id = $prestashop_product_id;
-                if ($variation_ps_id === null && $variation_sku !== '') {
+                $variation_ps_attribute_id = null;
+                if ($variation_sku !== '') {
                     $normalized_sku = YujuProductReportReconciler::normalizeSku($variation_sku);
                     $owners = isset($sku_owners[$normalized_sku]) ? array_keys($sku_owners[$normalized_sku]) : [];
-                    if (count($owners) === 1) {
+                    if ($variation_ps_id === null && count($owners) === 1) {
                         $variation_ps_id = (int) $owners[0];
+                    }
+                    if ($variation_ps_id !== null && isset($sku_owner_attributes[$normalized_sku][$variation_ps_id])) {
+                        $variation_ps_attribute_id = $sku_owner_attributes[$normalized_sku][$variation_ps_id];
                     }
                 }
 
@@ -428,6 +442,7 @@ class YujuProductManager
                     'yuju_product_name' => $this->getYujuReportProductName($report_product),
                     'yuju_variation_id' => $variation_key,
                     'yuju_variation_sku' => $variation_sku !== '' ? $variation_sku : null,
+                    'prestashop_product_attribute_id' => $variation_ps_attribute_id,
                     'prestashop_product_id' => $variation_ps_id,
                     'sync_status' => $variation_status,
                     'sync_enabled' => $variation_enabled,
@@ -679,6 +694,7 @@ class YujuProductManager
             $id_product_attribute = (int) $row['id_product_attribute'];
             if (!isset($variations[$id_product_attribute])) {
                 $variations[$id_product_attribute] = [
+                    'prestashop_product_attribute_id' => $id_product_attribute,
                     'sku' => isset($row['reference']) ? trim((string) $row['reference']) : '',
                     'stock' => isset($row['quantity']) ? (int) $row['quantity'] : 0,
                     'price' => (float) $product->price + (isset($row['price']) ? (float) $row['price'] : 0),
@@ -816,6 +832,9 @@ class YujuProductManager
 
         $data = [
             'prestashop_product_id' => $row['prestashop_product_id'] !== null ? (int) $row['prestashop_product_id'] : null,
+            'prestashop_product_attribute_id' => isset($row['prestashop_product_attribute_id']) && $row['prestashop_product_attribute_id'] !== null
+                ? (int) $row['prestashop_product_attribute_id']
+                : null,
             'yuju_product_id' => $yuju_product_id,
             'yuju_product_name' => pSQL((string) $row['yuju_product_name']),
             'yuju_variation_id' => $variation_id,
