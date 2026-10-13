@@ -287,10 +287,13 @@ class YujuProductReportFileStore
     {
         $this->ensurePrivateDirectory();
         $deleted = 0;
-        $files = glob($this->directory . DIRECTORY_SEPARATOR . '*.jsonl');
+        $files = array_merge(
+            glob($this->directory . DIRECTORY_SEPARATOR . '*.jsonl') ?: [],
+            glob($this->directory . DIRECTORY_SEPARATOR . '*.json') ?: []
+        );
 
         foreach ($files as $path) {
-            if (is_link($path) || !preg_match('/^[a-f0-9]{32}\.jsonl$/', basename($path))) {
+            if (is_link($path) || !preg_match('/^[a-f0-9]{32}\.(jsonl|json)$/', basename($path))) {
                 continue;
             }
 
