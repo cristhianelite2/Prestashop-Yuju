@@ -1851,6 +1851,57 @@ class YujuOfferAuditor
         return array_values($store['tasks']);
     }
 
+    /**
+     * Recupera en el historial local una tarea ya existente en Yuju, sin reenviarla.
+     * Útil cuando Yuju creó la tarea pero falló el registro local.
+     */
+    public static function recoverBulkOfferTaskById($idTask)
+    {
+        $idTask = trim((string) $idTask);
+        if ($idTask === '') {
+            return ['success' => false, 'message' => 'Indique el ID de tarea de Yuju.'];
+        }
+
+        $api = new YujuApiClient();
+        $response = $api->getBulkOfferTaskStatus($idTask);
+        if (empty($response['success']) || !is_array($response['data'] ?? null)) {
+            return [
+                'success' => false,
+                'message' => (string) ($response['message'] ?? 'No se pudo consultar la tarea en Yuju.'),
+            ];
+        }
+
+        $data = $response['data'];
+        $status = strtoupper((string) ($data['status'] ?? $data['data']['status'] ?? 'UNKNOWN'));
+        $total = (int) ($data['total_rows'] ?? $data['data']['total_rows'] ?? 0);
+        $found = (int) ($data['found_skus'] ?? $data['data']['found_skus'] ?? 0);
+        $successCount = (int) ($data['success'] ?? $data['data']['success'] ?? 0);
+        $errorsCount = (int) ($data['errors'] ?? $data['data']['errors'] ?? 0);
+        $task = [
+            'id_task' => $idTask,
+            'status' => $status,
+            'sku_count' => $total,
+            'total_rows' => $total,
+            'found_skus' => $found,
+            'success_count' => $successCount,
+            'errors_count' => $errorsCount,
+            'details' => self::extractBulkOfferTaskDetails($data),
+            'api_response' => $data,
+            'message' => self::getBulkOfferTaskStatusMessage($status, $successCount, $errorsCount),
+            'recovered' => true,
+            'recovered_at' => date('Y-m-d H:i:s'),
+        ];
+
+        if (!self::recordBulkOfferTask($task)) {
+            return [
+                'success' => false,
+                'message' => 'Yuju devolvió la tarea #' . $idTask . ', pero no se pudo guardar el histórico local. Revise permisos y el archivo de recuperación.',
+            ];
+        }
+
+        return ['success' => true, 'task' => $task, 'message' => 'Tarea #' . $idTask . ' recuperada desde Yuju.'];
+    }
+
     public static function getBulkOfferTaskHistory($refresh = false)
     {
         if ($refresh) {
