@@ -1008,7 +1008,39 @@ class YujuProductReportManager
             ];
 
             if ($existing_id > 0) {
-                return $db->update('yuju_product_reports', $row, 'id = ' . $existing_id);
+                // Legacy offer metadata rows use id_task='offer' as a unique sentinel.
+                // Preserve that value instead of setting a nullable unique key to NULL.
+                if ($report_type === 'offer') {
+                    unset($row['id_task']);
+                }
+
+                $updated = $db->update('yuju_product_reports', $row, 'id = ' . (int) $existing_id);
+                if (!$updated) {
+                    // Fallback to explicit SQL in case the PrestaShop helper rejects nullable fields.
+                    $sets = [];
+                    foreach ($row as $field => $value) {
+                        $column = chr(96) . bqSQL($field) . chr(96);
+                        if ($value === null) {
+                            $sets[] = $column . ' = NULL';
+                        } elseif (is_int($value) || is_float($value)) {
+                            $sets[] = $column . ' = ' . (string) $value;
+                        } else {
+                            $sets[] = $column . " = '" . pSQL((string) $value, true) . "'";
+                        }
+                    }
+                    $updated = $db->execute(
+                        'UPDATE ' . $table_sql . ' SET ' . implode(', ', $sets)
+                        . ' WHERE id = ' . (int) $existing_id . ' LIMIT 1'
+                    );
+                }
+
+                if (!$updated) {
+                    error_log('[PrestashopYuju] No se pudieron actualizar metadatos del reporte ' . $report_type
+                        . ' (id=' . (int) $existing_id . ', cache_id=' . pSQL((string) $state['cache_id']) . '): '
+                        . (method_exists($db, 'getMsgError') ? $db->getMsgError() : 'error SQL no disponible'));
+                }
+
+                return (bool) $updated;
             }
 
             return $db->insert('yuju_product_reports', $row);
