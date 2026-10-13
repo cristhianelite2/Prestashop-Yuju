@@ -1,3 +1,9 @@
+## [1.1.20] - 2026-10-13
+### Corregido
+- Se restaura el panel de **Estado de Productos** con tarjetas de totales, porcentaje de sincronización, última actividad, actividad reciente y errores recientes, seguido del listado detallado de productos.
+- **Estado de productos por categoría** recupera una interfaz y tabla independientes; deja de reutilizar la plantilla del resumen general.
+- Se alinean los datos asignados por el controlador con las variables que consume el panel de estadísticas.
+
 ## [1.1.19] - 2026-10-13
 ### Corregido
 - La sección **Estado de productos por categoría** ahora usa la ruta administrativa registrada `AdminYuju` con `yuju_view=product_category_status`, igual que la pantalla funcional de mapeo de estados.
