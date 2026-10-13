@@ -301,12 +301,29 @@ class YujuProductReportReconciler
             // Reportes de Yuju pueden serializar el mismo texto con entidades HTML,
             // espacios repetidos o saltos de línea. Normalizar antes de declarar diferencias.
             $value = html_entity_decode($value, ENT_QUOTES, 'UTF-8');
-            $value = preg_replace('/\\s+/u', ' ', trim($value));
+
+            // Product names can contain invisible format characters (for example
+            // zero-width spaces) or Unicode spacing characters from exports. They
+            // look identical in the table but differ byte-for-byte.
+            $without_format_chars = preg_replace('/\\p{Cf}+/u', '', $value);
+            if ($without_format_chars !== null) {
+                $value = $without_format_chars;
+            }
+
+            // Compatibility normalization handles visually equivalent Unicode forms
+            // such as full-width Latin characters; fall back safely without ext-intl.
             if (class_exists('Normalizer')) {
-                $normalized = Normalizer::normalize($value, Normalizer::FORM_C);
+                $normalized = Normalizer::normalize($value, Normalizer::FORM_KC);
                 if ($normalized !== false) {
                     $value = $normalized;
                 }
+            }
+
+            $normalized_spaces = preg_replace('/[\\p{Z}\\s]+/u', ' ', trim($value));
+            if ($normalized_spaces !== null) {
+                $value = trim($normalized_spaces);
+            } else {
+                $value = preg_replace('/\\s+/', ' ', trim($value));
             }
 
             return $value;
