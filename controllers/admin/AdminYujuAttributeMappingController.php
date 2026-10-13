@@ -115,6 +115,7 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
         }
         
         // Assign data for the template
+        $madktingAttributeMappingStatus = $this->getMadktingAttributeMappingStatus();
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuAttributeMapping',
             'attribute_mappings' => $this->getAttributeMappings(),
@@ -125,8 +126,8 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
             'attribute_types' => $this->getAttributeTypes(),
             'field_types' => $this->getFieldTypes(),
             'transformation_rules' => $this->getTransformationRules(),
-            'madkting_attribute_mapping_available' => $this->getMadktingAttributeMappingStatus()['available'],
-            'madkting_attribute_mapping_count' => $this->getMadktingAttributeMappingStatus()['count'],
+            'madkting_attribute_mapping_available' => $madktingAttributeMappingStatus['available'],
+            'madkting_attribute_mapping_count' => $madktingAttributeMappingStatus['count'],
 
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuAttributeMapping'),
         ]);
@@ -812,7 +813,11 @@ class AdminYujuAttributeMappingController extends ModuleAdminController
                 }
             }
 
-            Configuration::updateValue('PRESTASHOPYUJU_MADKTING_ATTRIBUTES_IMPORTED', 1);
+            // No marcar como importado si no se pudo cotejar ninguna fila; así el botón
+            // permanece disponible tras actualizar la caché de atributos de Yuju.
+            if ($response['imported'] > 0 || $response['skipped_existing'] > 0) {
+                Configuration::updateValue('PRESTASHOPYUJU_MADKTING_ATTRIBUTES_IMPORTED', 1);
+            }
             $response['success'] = true;
             $response['message'] = 'Importación terminada. Importados: ' . $response['imported']
                 . '; ya existentes: ' . $response['skipped_existing']
