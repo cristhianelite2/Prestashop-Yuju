@@ -1,6 +1,6 @@
-# Rutas amigables de la integración Yuju para el módulo actual: yuju.
-# Además de las rutas estándar /module/yuju/{controller}, permite usar
-# /yuju/oauth, /yuju/terms y /yuju/webhook cuando PrestaShop carga estas rutas.
+# Rutas amigables OAuth y términos para el módulo Yuju actual.
+# Las URLs estándar /module/yuju/oauth y /module/yuju/terms también se
+# generan desde Link::getModuleLink() dentro de YujuOAuth y el controlador admin.
 
 module_yuju_oauth:
     path: /yuju/oauth
@@ -17,11 +17,3 @@ module_yuju_terms:
         _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
         module: 'yuju'
         controller: 'terms'
-
-module_yuju_webhook:
-    path: /yuju/webhook
-    methods: [POST, GET]
-    defaults:
-        _controller: 'PrestaShopBundle\Controller\ModuleFrontController::dispatch'
-        module: 'yuju'
-        controller: 'webhook'
