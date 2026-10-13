@@ -207,6 +207,11 @@ class YujuUpdateManager
 
             $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
+            // The custom updater copies files but does not execute PrestaShop's
+            // upgrade scripts automatically. Apply the module-owned local schema
+            // migration explicitly before marking the update as installed.
+            $this->runLocalSchemaUpgrade();
+
             $newVersion = $this->parseVersionFromFile($this->moduleDir . 'prestashopyuju.php');
             if ($newVersion === null) {
                 $newVersion = $remoteVersion ?: $this->localVersion;
@@ -364,6 +369,48 @@ class YujuUpdateManager
         }
 
         return (string) $body;
+    }
+
+    /**
+     * Apply the idempotent schema migration for this module's own tables.
+     *
+     * This deliberately targets only the local PrestaShop table
+     * PREFIX_yuju_product_status. It does not connect to or alter Yuju's
+     * external platform/database.
+     *
+     * @throws Exception
+     */
+    private function runLocalSchemaUpgrade()
+    {
+        $upgradeFile = $this->moduleDir . 'upgrade' . DIRECTORY_SEPARATOR . 'upgrade-1.1.7.php';
+        if (!is_file($upgradeFile)) {
+            throw new Exception('No se encontró la migración local de base de datos upgrade-1.1.7.php. No se marcó la actualización como completada.');
+        }
+
+        require_once $upgradeFile;
+        if (!function_exists('upgrade_module_1_1_7')) {
+            throw new Exception('La migración local 1.1.7 no define upgrade_module_1_1_7().');
+        }
+
+        $module = Module::getInstanceByName('prestashopyuju');
+        if (!$module || !upgrade_module_1_1_7($module)) {
+            throw new Exception('No se pudo actualizar la tabla local ' . _DB_PREFIX_ . 'yuju_product_status. La actualización no se marcó como completada.');
+        }
+
+        // Verify the column needed by the synchronization screen actually exists.
+        $columns = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . bqSQL(_DB_PREFIX_ . 'yuju_product_status') . '`');
+        if (!is_array($columns)) {
+            throw new Exception('No se pudo verificar el esquema de la tabla local de estados Yuju.');
+        }
+        $columnNames = [];
+        foreach ($columns as $column) {
+            $columnNames[$column['Field']] = true;
+        }
+        foreach (['yuju_variation_id', 'yuju_variation_sku', 'prestashop_product_attribute_id'] as $requiredColumn) {
+            if (!isset($columnNames[$requiredColumn])) {
+                throw new Exception('La migración terminó, pero falta la columna local requerida: ' . $requiredColumn . '.');
+            }
+        }
     }
 
     /**
