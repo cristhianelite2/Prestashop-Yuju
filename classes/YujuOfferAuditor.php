@@ -1598,6 +1598,7 @@ class YujuOfferAuditor
                 $normalized['success_count'], $normalized['errors_count'],
             ]);
             $task = array_merge($task, $normalized);
+            $changed = true;
             unset($task['last_check_error']);
             $task['last_checked_at'] = $normalized['updated_at'];
             if ($oldStatus !== $status || $oldSummary !== $newSummary) {
