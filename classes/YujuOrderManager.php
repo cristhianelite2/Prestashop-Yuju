@@ -78,6 +78,7 @@ class YujuOrderManager
             ORDER BY id ASC
         ');
 
+        $customPrestashopIds = [];
         foreach ($custom_mappings as $mapping) {
             $psStatusId = (string) (int) $mapping['prestashop_status_id'];
             $yujuStatus = strtolower(trim((string) $mapping['yuju_status_name']));
@@ -85,11 +86,13 @@ class YujuOrderManager
                 $yujuStatus = 'canceled';
             }
 
-            // The first mapping for a PrestaShop status wins; don't silently override
-            // a mapping when several legacy rows point to different Yuju statuses.
-            if (!isset($this->status_mapping['ps_to_yuju'][$psStatusId]) || $psStatusId === '') {
-                $this->status_mapping['ps_to_yuju'][$psStatusId] = $yujuStatus;
+            // Custom mappings override defaults, but only the first active custom
+            // mapping is used when a legacy source has conflicting statuses.
+            if ($psStatusId === '' || isset($customPrestashopIds[$psStatusId])) {
+                continue;
             }
+            $customPrestashopIds[$psStatusId] = true;
+            $this->status_mapping['ps_to_yuju'][$psStatusId] = $yujuStatus;
             $this->status_mapping['yuju_to_ps'][$yujuStatus] = $psStatusId;
         }
     }
