@@ -1210,6 +1210,8 @@ class YujuProductManager
                      WHERE yuju_product_id = '" . pSQL($resource_id) . "'"
                 );
                 $now = date('Y-m-d H:i:s');
+                $variationPrice = (float) Product::getPriceStatic($idProduct, false, $idAttribute, 2, null, false, false);
+                $variationStock = max(0, (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idAttribute));
                 $data = [
                     'prestashop_product_id' => $idProduct,
                     'prestashop_product_attribute_id' => $idAttribute,
@@ -1219,11 +1221,15 @@ class YujuProductManager
                     'last_sync_at' => $now,
                     'last_error' => null,
                     'updated_at' => $now,
+                    // Snapshot inicial por variación para aplicar la protección de precio
+                    // y comparar futuros cambios contra la entidad correcta.
                     'last_sync_data' => pSQL(json_encode([
                         'source' => 'product_created_webhook',
                         'sku' => $sku !== '' ? $sku : $sku_simple,
                         'parent_yuju_id' => $parent_id_norm,
                         'prestashop_product_attribute_id' => $idAttribute,
+                        'price' => round($variationPrice, 2),
+                        'stock' => $variationStock,
                     ], JSON_UNESCAPED_UNICODE), true),
                 ];
 
