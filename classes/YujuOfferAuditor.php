@@ -1555,6 +1555,33 @@ class YujuOfferAuditor
     }
 
     /**
+     * Genera un mensaje coherente con el estado y los contadores reportados por Yuju.
+     */
+    protected static function getBulkOfferTaskStatusMessage($status, $successCount, $errorsCount)
+    {
+        $status = strtoupper((string) $status);
+        $successCount = (int) $successCount;
+        $errorsCount = (int) $errorsCount;
+
+        if ($status === 'COMPLETED') {
+            return $errorsCount > 0
+                ? sprintf('Tarea completada en Yuju con errores. Correctos: %d; errores: %d.', $successCount, $errorsCount)
+                : sprintf('Tarea completada correctamente en Yuju: %d ofertas procesadas, sin errores.', $successCount);
+        }
+        if (in_array($status, ['FAILED', 'ERROR', 'CANCELLED'], true)) {
+            return sprintf('La tarea terminó con estado %s en Yuju. Correctos: %d; errores: %d.', $status, $successCount, $errorsCount);
+        }
+        if (in_array($status, ['PROCESSING', 'IN_PROGRESS', 'RUNNING'], true)) {
+            return 'La tarea se está procesando en Yuju.';
+        }
+        if (in_array($status, ['CREATED', 'PENDING', 'QUEUED'], true)) {
+            return 'La tarea está pendiente de procesamiento en Yuju.';
+        }
+
+        return sprintf('Estado reportado por Yuju: %s. Correctos: %d; errores: %d.', $status !== '' ? $status : 'DESCONOCIDO', $successCount, $errorsCount);
+    }
+
+    /**
      * Actualiza el estado de las tareas activas y guarda el histórico en el mismo archivo.
      */
     public static function refreshBulkOfferTaskHistory()
@@ -1598,6 +1625,7 @@ class YujuOfferAuditor
                 $normalized['success_count'], $normalized['errors_count'],
             ]);
             $task = array_merge($task, $normalized);
+            $task['message'] = self::getBulkOfferTaskStatusMessage($status, $normalized['success_count'], $normalized['errors_count']);
             $changed = true;
             unset($task['last_check_error']);
             $task['last_checked_at'] = $normalized['updated_at'];
