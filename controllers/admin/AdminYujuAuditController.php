@@ -34,7 +34,7 @@ class AdminYujuAuditController extends ModuleAdminController
     {
         $this->bootstrap = true;
         parent::__construct();
-        $this->meta_title = $this->l('Auditoría de Ofertas');
+        $this->meta_title = 'Auditoría de Ofertas';
     }
 
     protected function ensureAuditInfra()
@@ -642,4 +642,15 @@ class AdminYujuAuditController extends ModuleAdminController
             $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
+
+    /** Carga los recursos compartidos del módulo Yuju con versionado de caché. */
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+        $moduleUri = $this->module->getPathUri();
+        $version = rawurlencode((string) $this->module->version);
+        $this->addCSS($moduleUri . 'views/css/admin.css?v=' . $version);
+        $this->addJS($moduleUri . 'views/js/admin.js?v=' . $version);
+    }
+
 }
