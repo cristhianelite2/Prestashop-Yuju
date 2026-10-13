@@ -21,6 +21,18 @@ $rows = [
 ];
 $index = YujuProductReportReconciler::indexReportRows($rows);
 
+$missingReportFields = YujuProductReportReconciler::compareMappedFields(
+    ['name' => 'Nombre desde PrestaShop', 'price' => 100, 'stock' => 5],
+    ['name' => 'Nombre en Yuju'],
+    [
+        ['yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+        ['yuju_field' => 'price', 'field_type' => 'decimal', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+        ['yuju_field' => 'stock', 'field_type' => 'integer', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+    ]
+);
+assertSameValue(['name'], array_column($missingReportFields['differences'], 'field'), 'The name mapping must still be compared when the report omits price and stock.');
+assertSameValue([], $missingReportFields['uncomparable'], 'Fields omitted by Yuju report must not be reported as uncomparable.');
+
 $byId = YujuProductReportReconciler::matchProduct($index, '101', ['WRONG-SKU']);
 assertSameValue('matched', $byId['status'], 'A persisted Yuju ID should take precedence over SKU.');
 assertSameValue('101', $byId['yuju_product_id'], 'The persisted ID should resolve its report row.');
