@@ -2987,7 +2987,7 @@ class YujuOfferAuditor
                 $existingId = (int) Db::getInstance()->getValue(
                     'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_audit_run_details`
                      WHERE id_audit_run = ' . $runId . '
-                       AND sku = \' ' . pSQL($sku) . '\'
+                       AND sku = \'' . pSQL($sku) . '\'
                      ORDER BY id ASC LIMIT 1'
                 );
             }
