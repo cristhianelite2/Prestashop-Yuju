@@ -1,3 +1,9 @@
+## [1.1.17] - 2026-10-13
+### Corregido
+- Se completa la traducción al español de las acciones, mensajes y etiquetas visibles en la administración de webhooks.
+- Se traducen textos restantes de las vistas de OAuth y detalles de webhooks.
+- Se mantiene separada la vista de estado individual de productos del resumen por categoría.
+
 ## [1.1.16] - 2026-10-13
 ### Corregido
 - Se separa el listado detallado de estado de productos del resumen por categoría, con una sección de menú y vista independientes para cada uno.
