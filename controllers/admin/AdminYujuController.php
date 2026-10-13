@@ -29,7 +29,7 @@ class AdminYujuController extends ModuleAdminController
         parent::__construct();
 
         $this->bootstrap = true;
-        $this->meta_title = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
+        $this->meta_title = $this->trans('Integración Yuju', array(), 'Modules.Prestashopyuju.Admin');
     }
 
     public function initContent()
