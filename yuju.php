@@ -1177,6 +1177,7 @@ class Yuju extends Module
             if (!is_array($data) || empty($data)) { return; }
 
             // Omitir solo el precio inválido o con variación superior al 50%.
+            $dropFields = [];
             if (array_key_exists('price', $data)) {
                 $newPrice = (float) $data['price'];
                 $oldPrice = isset($changes['old_values']['price']) ? (float) $changes['old_values']['price'] : null;
@@ -1184,6 +1185,7 @@ class Yuju extends Module
                 $abruptPrice = $oldPrice !== null && $oldPrice > 0 && abs($newPrice - $oldPrice) / $oldPrice > 0.5;
                 if ($invalidPrice || $abruptPrice) {
                     unset($data['price']);
+                    $dropFields[] = 'price';
                     $logger->warning('Precio omitido en actualización automática de Yuju', [
                         'product_id' => $productId, 'old_price' => $oldPrice, 'new_price' => $newPrice,
                         'reason' => $invalidPrice ? 'precio menor o igual a cero/no válido' : 'cambio superior al 50%',
@@ -1191,7 +1193,7 @@ class Yuju extends Module
                 }
             }
             if (array_key_exists('stock', $data)) { $data['stock'] = max(0, (int) $data['stock']); }
-            if (empty($data)) { return; }
+            if (empty($data) && empty($dropFields)) { return; }
 
             // Prioridad ordena la cola; defer=1 evita llamadas API dentro del hook.
             $priority = (($changes['priority'] ?? 'normal') === 'high') ? 'high' : 'normal';
@@ -1199,6 +1201,7 @@ class Yuju extends Module
             $queued = $queue->addToQueue($productId, 'update', $priority, array_merge($data, [
                 'origin' => 'auto_product', 'direct_update' => 1, 'defer' => 1,
                 'changed_fields' => array_values((array) $changes['changed_fields']),
+                'drop_fields' => $dropFields,
             ]));
             if ($queued) {
                 Db::getInstance()->update('yuju_product_status', [
