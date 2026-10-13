@@ -42,6 +42,68 @@
         </div>
     </div>
 
+    {* Actualizaciones desde GitHub (rama main) *}
+    <div class="panel panel-default yuju-dashboard-panel" id="yuju-update-panel">
+        <div class="panel-heading">
+            <i class="icon-cloud-download"></i>
+            Actualizaciones del módulo
+            <span class="label {if isset($update_status.update_available) && $update_status.update_available}label-warning{else}label-success{/if}" id="yuju-update-badge">
+                {if isset($update_status.update_available) && $update_status.update_available}Disponible{else}Al día{/if}
+            </span>
+        </div>
+        <div class="panel-body">
+            <div id="yuju-update-alert" class="alert alert-danger" style="{if isset($update_status.check_error) && $update_status.check_error}display:block;{else}display:none;{/if} margin-bottom:12px;">{if isset($update_status.check_error)}{$update_status.check_error|escape:'html':'UTF-8'}{/if}</div>
+            <div class="row">
+                <div class="col-md-8">
+                    <p>
+                        <strong>Versión instalada:</strong>
+                        <span id="yuju-local-version">v{$module_version|escape:'html':'UTF-8'}</span>
+                        &nbsp;|&nbsp;
+                        <strong>Versión en main:</strong>
+                        <span id="yuju-remote-version">v{if isset($update_status.remote_version)}{$update_status.remote_version|escape:'html':'UTF-8'}{else}{$module_version|escape:'html':'UTF-8'}{/if}</span>
+                    </p>
+                    <p id="yuju-update-message" class="{if isset($update_status.check_error) && $update_status.check_error}text-danger{elseif isset($update_status.update_available) && $update_status.update_available}text-warning{else}text-success{/if}">
+                        {if isset($update_status.check_error) && $update_status.check_error}
+                            No se pudo comprobar la rama main.
+                        {elseif isset($update_status.update_available) && $update_status.update_available}
+                            Hay cambios disponibles en GitHub. Puede obtenerlos desde este panel.
+                        {else}
+                            No se detectan cambios pendientes respecto de la rama main.
+                        {/if}
+                    </p>
+                    <p class="text-muted" style="margin-bottom:8px;">
+                        <small>
+                            Última comprobación:
+                            <span id="yuju-update-last-check">{if isset($update_status.last_check) && $update_status.last_check}{$update_status.last_check|escape:'html':'UTF-8'}{else}Nunca{/if}</span>
+                            {if isset($update_status.remote_message) && $update_status.remote_message}
+                                &nbsp;·&nbsp;<span id="yuju-update-remote-message">{$update_status.remote_message|escape:'html':'UTF-8'}</span>
+                            {else}
+                                &nbsp;·&nbsp;<span id="yuju-update-remote-message"></span>
+                            {/if}
+                        </small>
+                    </p>
+                    <p>
+                        <a href="https://github.com/cristhianelite2/Prestashop-Yuju/commits/main" target="_blank" rel="noopener noreferrer">
+                            <i class="icon-github"></i> Ver cambios de main en GitHub
+                        </a>
+                    </p>
+                </div>
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-default" id="yuju-check-update" style="margin-bottom:8px;">
+                        <i class="icon-refresh"></i> Buscar actualizaciones
+                    </button>
+                    <br>
+                    <button type="button" class="btn btn-warning" id="yuju-perform-update" {if !isset($update_status.update_available) || !$update_status.update_available}style="display:none;"{/if}>
+                        <i class="icon-download"></i> Obtener actualizaciones
+                    </button>
+                </div>
+            </div>
+            <p class="help-block" style="margin-top:10px;">
+                Descarga archivos del commit detectado en <code>main</code>. La configuración guardada en PrestaShop y los directorios locales <code>logs</code>, <code>cache</code> y <code>exports</code> se conservan.
+            </p>
+        </div>
+    </div>
+
     <div class="yuju-connection-banner {if $oauth_status.is_connected && $oauth_status.has_token}is-connected{else}is-disconnected{/if}">
         <div class="yuju-connection-icon">
             <i class="icon-{if $oauth_status.is_connected && $oauth_status.has_token}check-circle{else}warning{/if}"></i>
@@ -316,6 +378,116 @@
     $(function () {
         var ajaxUrl = '{$ajax_url|escape:'javascript':'UTF-8'}';
         var token = '{$token|escape:'javascript':'UTF-8'}';
+
+        function showUpdateAlert(type, message) {
+            $('#yuju-update-alert')
+                .removeClass('alert-success alert-danger alert-info alert-warning')
+                .addClass('alert-' + type)
+                .text(message || '')
+                .show();
+        }
+
+        function applyUpdateStatus(data) {
+            if (!data) return;
+
+            $('#yuju-local-version').text('v' + (data.local_version || '—'));
+            $('#yuju-remote-version').text('v' + (data.remote_version || data.local_version || '—'));
+            $('#yuju-update-last-check').text(data.last_check || 'Nunca');
+            $('#yuju-update-remote-message').text(data.remote_message || '');
+
+            var $panel = $('#yuju-update-panel');
+            var $badge = $('#yuju-update-badge');
+            var $message = $('#yuju-update-message');
+            var available = !!data.update_available;
+
+            if (data.check_error) {
+                $badge.removeClass('label-success label-warning').addClass('label-danger').text('Error');
+                $panel.removeClass('panel-warning').addClass('panel-default');
+                $message.removeClass('text-success text-warning').addClass('text-danger')
+                    .text('No se pudo comprobar la rama main.');
+                $('#yuju-perform-update').hide();
+                showUpdateAlert('danger', data.check_error);
+                return;
+            }
+
+            $('#yuju-update-alert').hide();
+            if (available) {
+                $badge.removeClass('label-success label-danger').addClass('label-warning').text('Disponible');
+                $panel.removeClass('panel-default').addClass('panel-warning');
+                $message.removeClass('text-success text-danger').addClass('text-warning')
+                    .text('Hay cambios disponibles en GitHub. Puede obtenerlos desde este panel.');
+                $('#yuju-perform-update').show();
+            } else {
+                $badge.removeClass('label-warning label-danger').addClass('label-success').text('Al día');
+                $panel.removeClass('panel-warning').addClass('panel-default');
+                $message.removeClass('text-warning text-danger').addClass('text-success')
+                    .text('No se detectan cambios pendientes respecto de la rama main.');
+                $('#yuju-perform-update').hide();
+            }
+        }
+
+        $('#yuju-check-update').on('click', function () {
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="icon-refresh icon-spin"></i> Comprobando…');
+
+            $.ajax({
+                url: ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                timeout: 60000,
+                data: { ajax: 1, action: 'checkUpdate', token: token }
+            }).done(function (response) {
+                if (response && response.success) {
+                    applyUpdateStatus(response.data);
+                    showUpdateAlert('success', response.message || 'Comprobación terminada.');
+                } else {
+                    showUpdateAlert('danger', response && response.message ? response.message : 'No se pudieron comprobar las actualizaciones.');
+                }
+            }).fail(function (xhr) {
+                var message = 'Error de comunicación al consultar GitHub.';
+                if (xhr && xhr.status) message += ' (HTTP ' + xhr.status + ')';
+                showUpdateAlert('danger', message);
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="icon-refresh"></i> Buscar actualizaciones');
+            });
+        });
+
+        $('#yuju-perform-update').on('click', function () {
+            if (!window.confirm('¿Obtener e instalar los archivos más recientes de la rama main? Se reemplazarán archivos del módulo. La configuración de PrestaShop y los directorios logs, cache y exports se conservarán.')) {
+                return;
+            }
+
+            var $btn = $(this);
+            var $checkBtn = $('#yuju-check-update');
+            $btn.prop('disabled', true).html('<i class="icon-refresh icon-spin"></i> Obteniendo…');
+            $checkBtn.prop('disabled', true);
+            showUpdateAlert('info', 'Descargando y aplicando los archivos de GitHub. No cierre esta página.');
+
+            $.ajax({
+                url: ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                timeout: 300000,
+                data: { ajax: 1, action: 'performUpdate', token: token }
+            }).done(function (response) {
+                if (response && response.success) {
+                    showUpdateAlert('success', response.message || 'Actualización completada.');
+                    $('#yuju-update-message').text(response.message || 'Actualización completada.');
+                    $btn.html('<i class="icon-check"></i> Actualización completada');
+                    window.setTimeout(function () { window.location.reload(); }, 1400);
+                } else {
+                    showUpdateAlert('danger', response && response.message ? response.message : 'No se pudo aplicar la actualización.');
+                    $btn.prop('disabled', false).html('<i class="icon-download"></i> Obtener actualizaciones');
+                    $checkBtn.prop('disabled', false);
+                }
+            }).fail(function (xhr) {
+                var message = 'Falló la descarga o instalación de la actualización.';
+                if (xhr && xhr.status) message += ' (HTTP ' + xhr.status + ')';
+                showUpdateAlert('danger', message);
+                $btn.prop('disabled', false).html('<i class="icon-download"></i> Obtener actualizaciones');
+                $checkBtn.prop('disabled', false);
+            });
+        });
 
         $('#yuju-refresh-account-btn').on('click', function () {
             var $btn = $(this);
