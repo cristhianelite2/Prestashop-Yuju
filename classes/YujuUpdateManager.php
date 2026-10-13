@@ -207,6 +207,10 @@ class YujuUpdateManager
 
             $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
+            // Register the legacy ModuleAdminController tab before users open its URL.
+            // The custom updater does not execute PrestaShop's install/upgrade tab registration.
+            $this->ensureOrderStatusMappingTab();
+
             // The custom updater copies files but does not execute PrestaShop's
             // upgrade scripts automatically. Apply the module-owned local schema
             // migration explicitly before marking the update as installed.
@@ -369,6 +373,42 @@ class YujuUpdateManager
         }
 
         return (string) $body;
+    }
+
+    /**
+     * Ensure the custom order-status controller has a valid PrestaShop Tab record.
+     * ModuleAdminController requires this record to resolve its owning module.
+     * This is idempotent and only touches the module's own Tab entry.
+     *
+     * @throws Exception
+     */
+    private function ensureOrderStatusMappingTab()
+    {
+        $className = 'AdminYujuOrderStatusMapping';
+        $idTab = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab WHERE class_name = "' . pSQL($className) . '"'
+        );
+
+        $parentId = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab WHERE class_name = "AdminYuju"'
+        );
+        if ($parentId <= 0) {
+            throw new Exception('No se encontró la pestaña padre AdminYuju; no se pudo registrar el controlador de mapeo de estados.');
+        }
+
+        $tab = $idTab > 0 ? new Tab($idTab) : new Tab();
+        $tab->class_name = $className;
+        $tab->module = 'prestashopyuju';
+        $tab->id_parent = $parentId;
+        $tab->active = 1;
+
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[(int) $language['id_lang']] = 'Mapeo de estados de pedidos';
+        }
+
+        if (!$tab->save()) {
+            throw new Exception('No se pudo crear/activar la pestaña AdminYujuOrderStatusMapping: ' . print_r($tab->getErrors(), true));
+        }
     }
 
     /**
