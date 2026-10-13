@@ -992,6 +992,21 @@
         var checkedCount = $visible.filter(':checked').length;
         $('#yuju-audit-select-all').prop('checked', visibleCount > 0 && checkedCount === visibleCount);
         $('#yuju-audit-select-all').prop('indeterminate', checkedCount > 0 && checkedCount < visibleCount);
+
+        var availableIds = {};
+        allRows.forEach(function (row) {
+            var id = parseInt(row && row.detail_id, 10) || 0;
+            if (id > 0) availableIds[id] = true;
+        });
+        var availableCount = Object.keys(availableIds).length;
+        var selectedAvailableCount = Object.keys(availableIds).filter(function (id) {
+            return !!selectedDetailIds[id];
+        }).length;
+        $('#yuju-audit-select-all-results')
+            .text(availableCount > 0 && selectedAvailableCount === availableCount
+                ? 'Quitar selección de resultados'
+                : 'Seleccionar todos los resultados')
+            .prop('disabled', availableCount === 0);
     }
 
     function renderAuditPagination(totalGroups) {
@@ -1007,6 +1022,7 @@
             html += '<option value="' + size + '"' + (size === pageSize ? ' selected' : '') + '>' + size + '</option>';
         });
         html += '</select><span>por página</span></div>' +
+            '<button type="button" id="yuju-audit-select-all-results" class="yuju-audit-select-all-results" title="Selecciona todos los productos del resultado actual, no solo los visibles en esta página">Seleccionar todos los resultados</button>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage - 1) + '"' + (currentPage <= 1 ? ' disabled' : '') + ' aria-label="Página anterior"><i class="icon-angle-left"></i> Anterior</button>' +
             '<span class="yuju-audit-page-current">Página ' + currentPage + ' de ' + totalPages + '</span>' +
             '<button type="button" class="yuju-audit-page-btn" data-page="' + (currentPage + 1) + '"' + (currentPage >= totalPages ? ' disabled' : '') + ' aria-label="Página siguiente">Siguiente <i class="icon-angle-right"></i></button>' +
@@ -1154,6 +1170,31 @@
         $('#yuju-audit-update-selected-btn').on('click', function (e) {
             e.preventDefault();
             updateSelectedToYuju();
+        });
+        $(document).on('click', '#yuju-audit-select-all-results', function () {
+            var availableIds = {};
+            allRows.forEach(function (row) {
+                var id = parseInt(row && row.detail_id, 10) || 0;
+                if (id > 0) availableIds[id] = true;
+            });
+            var ids = Object.keys(availableIds);
+            if (!ids.length) return;
+
+            var allAlreadySelected = ids.every(function (id) {
+                return !!selectedDetailIds[id];
+            });
+            ids.forEach(function (id) {
+                if (allAlreadySelected) delete selectedDetailIds[id];
+                else selectedDetailIds[id] = true;
+            });
+
+            $('#yuju-audit-diff-table tbody .yuju-audit-select-product').each(function () {
+                var id = String($(this).attr('data-detail-id') || '');
+                if (Object.prototype.hasOwnProperty.call(availableIds, id)) {
+                    $(this).prop('checked', !allAlreadySelected);
+                }
+            });
+            updateSelectionUi();
         });
         $('#yuju-audit-select-all').on('change', function () {
             var checked = $(this).is(':checked');
