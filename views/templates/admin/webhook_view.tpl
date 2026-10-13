@@ -189,7 +189,7 @@
                         {if $webhook_log.response_decoded}
                             <div class="code-container">
                                 <div class="code-header">
-                                    <span class="code-label">JSON Response</span>
+                                    <span class="code-label">Respuesta JSON</span>
                                     <button class="copy-code-btn" onclick="copyToClipboard('response-code')">
                                         <i class="icon-copy"></i>
                                     </button>
@@ -212,7 +212,7 @@
                 <div class="detail-card payload-card">
                     <div class="card-header">
                         <i class="icon-file-code-o"></i>
-                        <h4>Webhook Payload</h4>
+                        <h4>Contenido del webhook</h4>
                         <div class="payload-tabs">
                             <button class="tab-btn active" onclick="switchTab('json')" id="json-tab">
                                 <i class="icon-code"></i> JSON
@@ -228,7 +228,7 @@
                                 <div class="tab-content active" id="json-content">
                                     <div class="code-container">
                                         <div class="code-header">
-                                            <span class="code-label">Formatted JSON</span>
+                                            <span class="code-label">JSON con formato</span>
                                             <button class="copy-code-btn" onclick="copyToClipboard('payload-code')">
                                                 <i class="icon-copy"></i> Copiar
                                             </button>
@@ -246,7 +246,7 @@
                                                     <div class="data-value">
                                                         {if is_array($value)}
                                                             <span class="array-indicator">
-                                                                <i class="icon-folder"></i> Array/Object
+                                                                <i class="icon-folder"></i> Arreglo/objeto
                                                             </span>
                                                         {else}
                                                             <span class="value-content">{$value|escape:'html':'UTF-8'}</span>
@@ -294,7 +294,7 @@ function retryWebhook(webhookId) {
             },
             success: function(response) {
                 if (response.success) {
-                    showSuccessMessage('Webhook reintentado exitosamente');
+                    showSuccessMessage('Webhook reintentado correctamente');
                     location.reload();
                 } else {
                     showErrorMessage(response.error || 'Error al reintentar webhook');
