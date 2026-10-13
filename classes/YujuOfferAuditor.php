@@ -172,7 +172,10 @@ class YujuOfferAuditor
 
         // Permitir varias variaciones por producto padre y productos sin mapeo local.
         try {
-            $db->execute('ALTER TABLE ' . bqSQL($table) . ' MODIFY prestashop_product_id INT(11) NULL');
+            $columns = $db->executeS("SHOW COLUMNS FROM " . bqSQL($table) . " LIKE 'prestashop_product_id'");
+            if (!empty($columns) && strtoupper((string) $columns[0]['Null']) !== 'YES') {
+                $db->execute('ALTER TABLE ' . bqSQL($table) . ' MODIFY prestashop_product_id INT(11) NULL');
+            }
             $indexes = $db->executeS("SHOW INDEX FROM " . bqSQL($table) . " WHERE Key_name = 'unique_prestashop_product'");
             if (!empty($indexes)) {
                 $db->execute('ALTER TABLE ' . bqSQL($table) . ' DROP INDEX unique_prestashop_product');
@@ -1513,7 +1516,7 @@ class YujuOfferAuditor
                 $payload['stock'] = (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop);
             }
             if (!empty($run['audit_price'])) {
-                $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6, null, false, true, 1, false, null, $idShop);
+                $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6);
                 $yujuPrice = isset($row['yuju_price']) ? (float) $row['yuju_price'] : 0.0;
                 if ($this->isAbruptPriceChangeBlocked($psPrice, $yujuPrice)) {
                     $results['skipped']++;
@@ -1522,7 +1525,7 @@ class YujuOfferAuditor
                         'success' => false,
                         'message' => self::PRICE_SECURITY_MSG . ' No se envió el precio; los demás campos se procesarán si aplica.',
                     ];
-                    unset($payload['stock']);
+                    unset($payload['price']);
                     if (!empty($run['audit_images'])) {
                         $payload['images'] = $this->getPrestaShopImageUrls($idProduct, $idLang, new Product($idProduct, false, $idLang));
                     }
