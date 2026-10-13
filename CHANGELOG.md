@@ -1,3 +1,9 @@
+## [1.1.11] - 2026-10-12
+
+### Corregido
+- La sección de mapeo de estados se crea o repara al entrar a la configuración del módulo, sin depender exclusivamente del hook de cabecera.
+- Si la pestaña ya existía, se reactiva y se reasigna al menú Yuju para corregir registros inactivos o con padre incorrecto.
+
 ## [1.1.10] - 2026-10-12
 
 ### Corregido
