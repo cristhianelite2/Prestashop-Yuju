@@ -394,6 +394,12 @@ class YujuSchemaRepair
                     Db::getInstance()->execute('ALTER TABLE ' . $table . ' DROP INDEX `unique_prestashop_product`');
                     $actions[] = ['type' => 'patch', 'detail' => 'Índice único por producto padre eliminado para permitir múltiples combinaciones'];
                 }
+                // Índice para el JOIN que busca el último estado por producto.
+                $statusIndex = Db::getInstance()->executeS('SHOW INDEX FROM ' . $table . " WHERE Key_name = 'idx_status_product_latest'");
+                if (empty($statusIndex)) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' ADD INDEX `idx_status_product_latest` (`prestashop_product_id`, `id`)');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Índice de rendimiento agregado para estados por producto'];
+                }
             } catch (Exception $e) {
                 $actions[] = ['type' => 'patch_skip', 'detail' => 'Patch columnas de variaciones/dirección: ' . $e->getMessage()];
             }
