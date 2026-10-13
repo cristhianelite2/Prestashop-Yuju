@@ -43,7 +43,7 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.2.4';
+        $this->version = '1.2.5';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -92,7 +92,8 @@ class Yuju extends Module
                 'actualizar estados intermedios de productos' => 'ensureProductStatusIntermediateWebhookStates',
                 'crear tablas de auditoría' => 'ensureAuditTables',
                 'crear pestañas del panel administrativo' => 'installTabs',
-                'registrar hooks' => 'registerHooks',
+                // Los hooks NO se registran durante la instalación.
+                // Su activación deberá hacerse manualmente en una fase posterior.
                 'guardar configuración inicial' => 'installConfiguration',
                 'crear directorios del módulo' => 'createDirectories',
                 'crear transportista Yuju' => 'ensureYujuCarrier',
