@@ -70,7 +70,7 @@
                             </a>
                         </li>
                         <li class="{if $current_controller == 'AdminYujuOrderStatusMapping'}active{/if}">
-                            <a href="{$link->getAdminLink('AdminYujuOrderStatusMapping')|escape:'html':'UTF-8'}">
+                            <a href="{$link->getAdminLink('AdminYuju')|escape:'html':'UTF-8'}&amp;yuju_view=order_status_mapping">
                                 <i class="icon-exchange"></i>
                                 Mapeo de estados de pedidos
                             </a>
