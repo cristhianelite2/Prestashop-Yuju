@@ -1,3 +1,9 @@
+## [1.1.12] - 2026-10-12
+
+### Corregido
+- Se agrega **Mapeo de estados de pedidos** al menú lateral interno de Integración Yuju (yuju-nav), junto a las demás secciones.
+- Se marca la opción como activa al entrar al controlador correspondiente. No depende de una pestaña del menú global de PrestaShop.
+
 ## [1.1.11] - 2026-10-12
 
 ### Corregido
