@@ -1,5 +1,5 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
-    {$content}
+    {include file="./product_status_stats.tpl"}
 {/block}
