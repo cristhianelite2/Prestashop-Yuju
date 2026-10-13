@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.10';
+        $this->version = '1.1.11';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -488,24 +488,43 @@ class Prestashopyuju extends Module
      */
     protected function ensureOrderStatusMappingTab()
     {
-        $tab = Tab::getInstanceFromClassName('AdminYujuOrderStatusMapping');
-        if (Validate::isLoadedObject($tab) && (int) $tab->id > 0) {
-            return;
-        }
+        // Consultar la tabla directamente evita depender de que el objeto Tab
+        // resuelva correctamente un registro existente en todas las versiones PS.
+        $idTab = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab
+             WHERE class_name = "AdminYujuOrderStatusMapping"'
+        );
 
         $parent = Tab::getInstanceFromClassName('AdminYuju');
-        $newTab = new Tab();
-        $newTab->class_name = 'AdminYujuOrderStatusMapping';
-        $newTab->module = $this->name;
-        $newTab->active = 1;
-        $newTab->id_parent = (Validate::isLoadedObject($parent) && isset($parent->id)) ? (int) $parent->id : 0;
+        $parentId = (Validate::isLoadedObject($parent) && isset($parent->id))
+            ? (int) $parent->id
+            : 0;
 
-        foreach (Language::getLanguages(false) as $language) {
-            $newTab->name[(int) $language['id_lang']] = 'Mapeo de estados de pedidos';
+        if ($idTab > 0) {
+            // Reparar también pestañas que existían pero quedaron desactivadas
+            // o fuera del menú Yuju después de una actualización.
+            $tab = new Tab($idTab);
+            $tab->active = 1;
+            $tab->module = $this->name;
+            $tab->id_parent = $parentId;
+        } else {
+            $tab = new Tab();
+            $tab->class_name = 'AdminYujuOrderStatusMapping';
+            $tab->module = $this->name;
+            $tab->active = 1;
+            $tab->id_parent = $parentId;
         }
 
-        if (!$newTab->save()) {
-            PrestaShopLogger::addLog('Yuju: no se pudo crear el tab AdminYujuOrderStatusMapping.', 2);
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[(int) $language['id_lang']] = 'Mapeo de estados de pedidos';
+        }
+
+        if (!$tab->save()) {
+            PrestaShopLogger::addLog(
+                'Yuju: no se pudo crear/activar el tab AdminYujuOrderStatusMapping. ' .
+                print_r($tab->getErrors(), true),
+                2
+            );
         }
     }
 
@@ -601,6 +620,11 @@ class Prestashopyuju extends Module
      */
     public function getContent()
     {
+        // El actualizador propio no ejecuta los instaladores de pestañas de
+        // PrestaShop. Reparar/crear la sección desde la entrada de configuración,
+        // sin depender de que displayBackOfficeHeader esté registrado.
+        $this->ensureOrderStatusMappingTab();
+
         // Redirigir al controlador personalizado de configuración
         $admin_link = $this->context->link->getAdminLink('AdminYujuConfiguration');
         Tools::redirectAdmin($admin_link);
