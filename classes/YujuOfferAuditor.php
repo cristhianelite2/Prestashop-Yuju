@@ -1755,6 +1755,13 @@ class YujuOfferAuditor
      */
     public static function refreshBulkOfferTaskHistory()
     {
+        return self::withBulkOfferTaskStoreLock(static function () {
+            return self::refreshBulkOfferTaskHistoryLocked();
+        });
+    }
+
+    protected static function refreshBulkOfferTaskHistoryLocked()
+    {
         $store = self::readBulkOfferTaskStore();
         if (empty($store['tasks'])) {
             return array_values($store['tasks']);
@@ -1834,8 +1841,8 @@ class YujuOfferAuditor
             }
         }
         unset($task);
-        if ($changed) {
-            self::writeBulkOfferTaskStore($store);
+        if ($changed && !self::writeBulkOfferTaskStore($store)) {
+            error_log('[Yuju] No se pudieron persistir las actualizaciones del estado de tareas masivas.');
         }
         return array_values($store['tasks']);
     }
