@@ -20,28 +20,6 @@
 
 {block name="content"}
 <div class="yuju-dashboard">
-    <div class="yuju-dashboard-hero">
-        <div class="row">
-            <div class="col-md-8">
-                <h2 class="yuju-hero-title">
-                    <i class="icon-dashboard"></i>
-                    Panel de Control Yuju
-                </h2>
-                <p class="yuju-hero-subtitle">
-                    Administre de forma centralizada la conexión, sincronización y salud de su integración con Yuju.
-                </p>
-            </div>
-            <div class="col-md-4 text-right yuju-hero-actions">
-                <a href="{$link->getAdminLink('AdminYujuConfiguration')|escape:'html':'UTF-8'}" class="btn btn-primary">
-                    <i class="icon-cogs"></i> Configuración
-                </a>
-                <a href="{$link->getAdminLink('AdminYujuLogs')|escape:'html':'UTF-8'}" class="btn btn-default">
-                    <i class="icon-file-text"></i> Registros
-                </a>
-            </div>
-        </div>
-    </div>
-
     {* Actualizaciones desde GitHub (rama main) *}
     <div class="panel {if isset($update_status.update_available) && $update_status.update_available}panel-warning{else}panel-default{/if} yuju-dashboard-panel" id="yuju-update-panel">
         <div class="panel-heading">
@@ -101,24 +79,6 @@
             <p class="help-block" style="margin-top:10px;">
                 Descarga archivos del commit detectado en <code>main</code>. La configuración guardada en PrestaShop y los directorios locales <code>logs</code>, <code>cache</code> y <code>exports</code> se conservan.
             </p>
-        </div>
-    </div>
-
-    <div class="yuju-connection-banner {if $oauth_status.is_connected && $oauth_status.has_token}is-connected{else}is-disconnected{/if}">
-        <div class="yuju-connection-icon">
-            <i class="icon-{if $oauth_status.is_connected && $oauth_status.has_token}check-circle{else}warning{/if}"></i>
-        </div>
-        <div class="yuju-connection-content">
-            <h4>Estado OAuth</h4>
-            {if $oauth_status.is_connected && $oauth_status.has_token}
-                <p>Conexión activa con Yuju API.</p>
-                {if $oauth_status.client_id}
-                    <small>Client ID: {$oauth_status.client_id|escape:'html':'UTF-8'}</small>
-                {/if}
-            {else}
-                <p>La cuenta no está conectada a Yuju API.</p>
-                <a href="{$link->getAdminLink('AdminYujuConfiguration')|escape:'html':'UTF-8'}">Configurar conexión ahora</a>
-            {/if}
         </div>
     </div>
 
