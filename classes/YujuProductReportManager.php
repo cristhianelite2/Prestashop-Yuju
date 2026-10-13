@@ -846,7 +846,20 @@ class YujuProductReportManager
     public function getMergedCachedReportProducts()
     {
         $products = [];
-        foreach ($this->getCachedReportProducts() as $product) $products[] = $product;
+        $general_by_id = [];
+        foreach ($this->getCachedReportProducts() as $product) {
+            if (!isset($product['id_product'])) {
+                continue;
+            }
+            $id = (string) $product['id_product'];
+            $general_by_id[$id] = count($products);
+            $products[] = $product;
+        }
+
+        $general_state = $this->getStoredState();
+        $general_downloaded_at = isset($general_state['report_downloaded_at'])
+            ? (int) $general_state['report_downloaded_at']
+            : 0;
 
         $offer_state = json_decode((string) Configuration::get(self::OFFER_STATE_CONFIG_KEY), true);
         if (!is_array($offer_state) || empty($offer_state['cache_id'])
@@ -855,17 +868,42 @@ class YujuProductReportManager
         }
         $offer_rows = $this->file_store->readOfferProducts($offer_state['cache_id']);
         $offer_by_id = [];
-        foreach ($offer_rows as $offer) $offer_by_id[(string) $offer['id_product']] = $offer;
+        foreach ($offer_rows as $offer) {
+            $offer_by_id[(string) $offer['id_product']] = $offer;
+        }
+
+        $offer_downloaded_at = isset($offer_state['report_downloaded_at'])
+            ? (int) $offer_state['report_downloaded_at']
+            : (isset($offer_state['saved_at']) ? (int) $offer_state['saved_at'] : 0);
+        $report_downloaded_at = max($general_downloaded_at, $offer_downloaded_at);
+
+        foreach ($offer_by_id as $id => $offer) {
+            if (isset($general_by_id[$id])) {
+                $index = $general_by_id[$id];
+                foreach (['stock', 'price'] as $field) {
+                    if (array_key_exists($field, $offer)) {
+                        $products[$index][$field] = $offer[$field];
+                    }
+                }
+                $products[$index]['_offer_report_matched'] = true;
+                $products[$index]['_report_downloaded_at'] = $report_downloaded_at;
+                continue;
+            }
+
+            // The offer report can contain products absent from the general report.
+            // Keep them in the Yuju catalog rather than silently dropping them.
+            $offer['_offer_report_only'] = true;
+            $offer['_report_downloaded_at'] = $report_downloaded_at;
+            $products[] = $offer;
+        }
 
         foreach ($products as &$product) {
-            $id = isset($product['id_product']) ? (string) $product['id_product'] : '';
-            if ($id === '' || !isset($offer_by_id[$id])) continue;
-            foreach (['stock', 'price'] as $field) {
-                if (array_key_exists($field, $offer_by_id[$id])) $product[$field] = $offer_by_id[$id][$field];
+            if (!isset($product['_report_downloaded_at'])) {
+                $product['_report_downloaded_at'] = $report_downloaded_at;
             }
-            $product['_offer_report_matched'] = true;
         }
         unset($product);
+
         return $products;
     }
 
