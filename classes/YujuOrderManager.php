@@ -2514,7 +2514,8 @@ class YujuOrderManager
             error_log('[Yuju carrier] Error: ' . get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine());
             return 0;
         } catch (Throwable $e) {
-            $this->logger->log('Error creating Yuju carrier: ' . $e->getMessage(), 'error');
+            $this->logger->error('Error al crear el transportista Yuju: ' . $e->getMessage(), ['file' => basename($e->getFile()), 'line' => $e->getLine()]);
+            error_log('[Yuju carrier] Error: ' . get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine());
             return 0;
         }
     }
