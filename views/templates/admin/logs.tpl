@@ -164,14 +164,23 @@
                 });
                 var output = 'No se encontró el detalle de la tarea.';
                 if (task) {
-                    if (Array.isArray(task.details) && task.details.length) {
-                        output = JSON.stringify(task.details, null, 2);
-                    } else if (task.api_response) {
-                        output = 'Yuju reportó ' + (parseInt(task.errors_count, 10) || 0) + ' error(es), pero no devolvió detalles por SKU reconocibles.\n' +
-                            'Respuesta completa recibida de la API (para diagnóstico):\n\n' + JSON.stringify(task.api_response, null, 2);
-                    } else {
-                        output = JSON.stringify(task.history || task, null, 2);
-                    }
+                    var diagnostic = {
+                        id_task: task.id_task,
+                        status: task.status,
+                        total_rows: task.total_rows,
+                        found_skus: task.found_skus,
+                        success_count: task.success_count,
+                        errors_count: task.errors_count,
+                        submitted_offers: task.submitted_offers || [],
+                        sku_details: Array.isArray(task.details) ? task.details : [],
+                        submission_response: task.submission_response || null,
+                        latest_status_response: task.api_response || null,
+                        last_check_error: task.last_check_error || null,
+                        history: task.history || []
+                    };
+                    output = (Array.isArray(task.details) && task.details.length)
+                        ? 'Detalles por SKU y respuestas de la tarea:\n\n' + JSON.stringify(diagnostic, null, 2)
+                        : 'Yuju reporta ' + (parseInt(task.errors_count, 10) || 0) + ' error(es), pero no se reconocieron detalles por SKU. El diagnóstico incluye los valores enviados, la respuesta al crear la tarea y la última respuesta de estado de Yuju. Si la API no incluye la causa individual, no es posible deducirla sin otra respuesta de Yuju.\n\n' + JSON.stringify(diagnostic, null, 2);
                 }
                 $('#yuju-bulk-offer-task-details').text(output).show();
             });
