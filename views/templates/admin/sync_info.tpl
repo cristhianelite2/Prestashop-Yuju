@@ -507,7 +507,7 @@ $(function() {
             });
             var msg = product.message || '';
             if (product.uncomparable && product.uncomparable.length) {
-                msg += (msg ? ' ' : '') + 'No comparable: ' + product.uncomparable.join(', ');
+                msg += (msg ? ' ' : '') + 'No se puede comparar: ' + product.uncomparable.join(', ');
             }
 
             var status = getProductStatus(product);
