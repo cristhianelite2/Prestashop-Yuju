@@ -1754,7 +1754,7 @@ class YujuOfferAuditor
                 $results['submitted'] = count($bulkOffers);
                 $results['updated'] += count($bulkOffers);
                 $status = strtoupper((string) ($data['status'] ?? 'CREATED'));
-                self::recordBulkOfferTask([
+                $historySaved = self::recordBulkOfferTask([
                     'id_task' => $taskId,
                     'run_id' => $runId,
                     'status' => $status,
@@ -1765,6 +1765,14 @@ class YujuOfferAuditor
                     'message' => (string) ($data['message'] ?? 'Tarea masiva aceptada por Yuju.'),
                     'skus' => array_column($bulkOffers, 'sku'),
                 ]);
+                if (!$historySaved) {
+                    $results['failed']++;
+                    $results['items'][] = [
+                        'sku' => '',
+                        'success' => false,
+                        'message' => 'Yuju aceptó la tarea #' . $taskId . ', pero no se pudo guardar su histórico en logs/yuju_bulk_offer_tasks.json. Verifique permisos de escritura del directorio logs.',
+                    ];
+                }
                 foreach ($bulkDetailIds as $sku => $detailId) {
                     Db::getInstance()->update('yuju_audit_run_details', [
                         'message' => pSQL('Enviado a tarea masiva de Yuju #' . $taskId . ' (pendiente de confirmación).'),
