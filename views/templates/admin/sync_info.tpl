@@ -21,10 +21,10 @@
 {block name="content"}
 <div class="panel panel-default yuju-sync-info">
     <div class="panel-heading">
-        <i class="icon-refresh"></i>
+        <i class="glyphicon glyphicon-refresh"></i>
         Estado de sincronización
         <button type="button" class="btn btn-primary btn-sm pull-right" id="yuju-start-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
-            <i class="icon-refresh"></i> Iniciar sincronización
+            <i class="glyphicon glyphicon-refresh"></i> Iniciar sincronización
         </button>
     </div>
     <div class="panel-body">
@@ -47,7 +47,7 @@
                     <i class="icon-eye"></i> Ver reconciliación
                 </button>
                 <button type="button" class="btn btn-success" id="yuju-push-differences" style="display: none;">
-                    <i class="icon-refresh"></i> Sincronizar (PrestaShop → Yuju)
+                    <i class="glyphicon glyphicon-refresh"></i> Sincronizar (PrestaShop → Yuju)
                 </button>
             </div>
             <p class="text-muted" style="margin-top: 10px;">
@@ -326,7 +326,7 @@ $(function() {
     function updatePushButton() {
         var selectedCount = getSelectedProductIds().length;
         if (selectedCount > 0) {
-            var label = '<i class="icon-refresh"></i> Actualizar urgentes seleccionados (' + selectedCount + ')';
+            var label = '<i class="glyphicon glyphicon-refresh"></i> Actualizar urgentes seleccionados (' + selectedCount + ')';
             $pushBtn.html(label).show();
             $('#yuju-push-differences-top').html(label).show();
         } else {
@@ -548,7 +548,7 @@ $(function() {
         $urgencyColumn.append($urgencySelect);
         $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn).append($urgencyColumn);
         $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente nombre, stock y precio; los demás campos no se modificarán.</p>');
-        $container.append('<div class="clearfix" style="margin: 10px 0;"><button type="button" class="btn btn-success" id="yuju-push-differences-top" style="display:none;"><i class="icon-refresh"></i> Actualizar urgentes seleccionados (0)</button></div>');
+        $container.append('<div class="clearfix" style="margin: 10px 0;"><button type="button" class="btn btn-success" id="yuju-push-differences-top" style="display:none;"><i class="glyphicon glyphicon-refresh"></i> Actualizar urgentes seleccionados (0)</button></div>');
         $container.append('<div id="yuju-reconciliation-results"></div>');
 
         showMessage(
