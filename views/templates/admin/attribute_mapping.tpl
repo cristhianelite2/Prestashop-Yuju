@@ -13,7 +13,8 @@
             <i class="icon-tags"></i>
             Mapeo de Atributos
             <span class="panel-heading-action">
-                <button type="button" class="btn btn-primary" id="add-attribute-mapping">
+                {if isset($madkting_attribute_mapping_available) && $madkting_attribute_mapping_available}<button type="button" class="btn btn-info" id="btn-import-madkting-attribute-mappings"><i class="icon-random"></i> Importar mapeos Madkting ({$madkting_attribute_mapping_count|intval})</button>{/if}
+<button type="button" class="btn btn-primary" id="add-attribute-mapping">
                     <i class="icon-plus"></i> Nuevo mapeo
                 </button>
             </span>
@@ -488,7 +489,8 @@
                 });
             });
 
-            $(document).on('change', '.toggle-mapping', function() {
+            $('#btn-import-madkting-attribute-mappings').on('click',function(){if(!confirm('Importar referencias Madkting sin sobrescribir mapeos existentes. ¿Continuar?'))return;var b=$(this);b.prop('disabled',true);$.ajax({url:ajaxUrl,type:'POST',dataType:'json',data:{ajax:true,action:'importMadktingAttributeMappings',token:adminToken},success:function(r){alert(r.message);if(r.success)location.reload();else b.prop('disabled',false);},error:function(){alert('Error de importación.');b.prop('disabled',false);}});});
+$(document).on('change', '.toggle-mapping', function() {
                 var mappingId = $(this).data('mapping-id');
                 var isActive = $(this).val();
                 $.ajax({
