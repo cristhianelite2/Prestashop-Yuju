@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) DEFAULT NULL,
     `yuju_product_id` varchar(255) DEFAULT NULL,
+    `yuju_product_name` varchar(512) DEFAULT NULL,
     `yuju_variation_id` varchar(255) DEFAULT NULL,
     `yuju_variation_sku` varchar(255) DEFAULT NULL,
     `sync_status` enum('pending', 'syncing', 'synced', 'synced_with_warnings', 'synced_with_errors', 'error', 'disabled', 'queued', 'creating_in_yuju', 'updating_in_yuju', 'deleting_in_yuju') DEFAULT 'pending',
