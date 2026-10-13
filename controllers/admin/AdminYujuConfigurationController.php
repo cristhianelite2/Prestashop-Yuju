@@ -59,7 +59,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
     public function initContent()
     {
-        parent::initContent();
+        try {
+            parent::initContent();
 
         // Vinculación con el monitor de telemetría: aquí solo se consulta el
         // estado (el registro ocurre tras una prueba de conectividad autorizada).
@@ -74,11 +75,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $oauth = new YujuOAuth();
             $api_client = new YujuApiClient();
             $logger = new YujuLogger();
-        } catch (Exception $e) {
-            file_put_contents(dirname(__FILE__) . '/../../logs/debug.log', 
-                date('Y-m-d H:i:s') . " - Error creating objects: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
-            return;
+        } catch (Throwable $e) {
+            throw $e;
         }
 
         // Verificar si se está procesando el callback de OAuth
@@ -260,6 +258,29 @@ class AdminYujuConfigurationController extends ModuleAdminController
             $this->setTemplate('layout-ajax.tpl');
         } else {
             $this->setTemplate('configuration.tpl');
+        }
+        } catch (Throwable $e) {
+            // Nunca dejar el panel en blanco cuando falle una consulta, una tabla o una dependencia.
+            $message = 'No se pudo cargar la configuración de Yuju. Revisa los registros de PrestaShop para ver el detalle.';
+            try {
+                PrestaShopLogger::addLog(
+                    '[Yuju] Error en AdminYujuConfigurationController::initContent: ' . $e->getMessage(),
+                    3,
+                    null,
+                    'Module',
+                    (int) ($this->module->id ?? 0),
+                    true
+                );
+            } catch (Throwable $loggingError) {
+                // El registro no debe impedir mostrar el error en pantalla.
+            }
+            $this->context->smarty->assign([
+                'yuju_page_error' => $message,
+                'yuju_page_error_detail' => (defined('_PS_MODE_DEV_') && _PS_MODE_DEV_)
+                    ? $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')'
+                    : '',
+            ]);
+            $this->setTemplate('configuration_error.tpl');
         }
     }
 
