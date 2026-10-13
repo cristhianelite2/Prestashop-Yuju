@@ -160,8 +160,8 @@ var YujuAdmin = {
         var $button = $('#yuju-test-api');
         var $status = $('#yuju-api-status');
 
-        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Testing...');
-        $status.removeClass().addClass('yuju-status syncing').text('Testing...');
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Probando...');
+        $status.removeClass().addClass('yuju-status syncing').text('Probando...');
 
         $.ajax({
             url: this.config.ajaxUrl,
@@ -404,7 +404,7 @@ var YujuAdmin = {
         var self = this;
         
         if (this.state.isSyncing) {
-            this.showAlert('Synchronization is already in progress', 'warning');
+            this.showAlert('La sincronización ya está en curso', 'warning');
             return;
         }
 
@@ -427,7 +427,7 @@ var YujuAdmin = {
                     self.showAlert('La sincronización comenzó correctamente', 'success');
                     self.startSyncMonitoring();
                 } else {
-                    self.showAlert('Failed to start synchronization: ' + (response.message || 'Error desconocido'), 'error');
+                    self.showAlert('No se pudo iniciar la sincronización: ' + (response.message || 'Error desconocido'), 'error');
                     self.state.isSyncing = false;
                     self.updateSyncUI(false);
                 }
@@ -457,9 +457,9 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    self.showAlert('Synchronization stopped', 'info');
+                    self.showAlert('Sincronización detenida', 'info');
                 } else {
-                    self.showAlert('Failed to stop synchronization: ' + (response.message || 'Error desconocido'), 'error');
+                    self.showAlert('No se pudo detener la sincronización: ' + (response.message || 'Error desconocido'), 'error');
                 }
                 self.state.isSyncing = false;
                 self.updateSyncUI(false);
@@ -557,11 +557,11 @@ var YujuAdmin = {
         if (isSyncing) {
             $syncButtons.prop('disabled', true);
             $stopButton.prop('disabled', false).show();
-            $('#yuju-sync-status').removeClass().addClass('yuju-status syncing').text('Syncing...');
+            $('#yuju-sync-status').removeClass().addClass('yuju-status syncing').text('Sincronizando...');
         } else {
             $syncButtons.prop('disabled', false);
             $stopButton.prop('disabled', true).hide();
-            $('#yuju-sync-status').removeClass().addClass('yuju-status synced').text('Ready');
+            $('#yuju-sync-status').removeClass().addClass('yuju-status synced').text('Listo');
         }
     },
 
@@ -586,15 +586,15 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    self.showAlert('Logs cleaned successfully', 'success');
+                    self.showAlert('Registros eliminados correctamente', 'success');
                     // Refresh logs table
                     window.location.reload();
                 } else {
-                    self.showAlert('Failed to clean logs: ' + (response.message || 'Error desconocido'), 'error');
+                    self.showAlert('No se pudieron eliminar los registros: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
-                self.showAlert('Failed to clean logs', 'error');
+                self.showAlert('No se pudieron eliminar los registros', 'error');
             }
         });
     },
@@ -619,11 +619,11 @@ var YujuAdmin = {
                 if (response.success) {
                     self.showLogModal(response.data);
                 } else {
-                    self.showAlert('Failed to load log details: ' + (response.message || 'Error desconocido'), 'error');
+                    self.showAlert('No se pudieron cargar los detalles del registro: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
-                self.showAlert('Failed to load log details', 'error');
+                self.showAlert('No se pudieron cargar los detalles del registro', 'error');
             }
         });
     },
@@ -932,7 +932,7 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    self.showAlert('Configuration saved automatically', 'success', 2000);
+                    self.showAlert('Configuración guardada automáticamente', 'success', 2000);
                 }
             }
         });
