@@ -22,6 +22,8 @@ if (!defined('_PS_VERSION_')) {
 
 // Include autoloader and config
 require_once dirname(__FILE__) . '/config/config.php';
+// Puente de telemetría nativo hacia el monitor Yuju.
+require_once dirname(__FILE__) . '/classes/YujuMonitor.php';
 
 class Prestashopyuju extends Module
 {
@@ -41,7 +43,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.1';
+        $this->version = '1.0.2';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [

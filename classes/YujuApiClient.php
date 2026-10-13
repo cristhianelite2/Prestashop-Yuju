@@ -22,6 +22,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once dirname(__FILE__) . '/YujuOAuth.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
+require_once dirname(__FILE__) . '/YujuMonitor.php';
 require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuApiClient
@@ -154,6 +155,15 @@ class YujuApiClient
 
         // Log de la petición
         $this->logRequest($method, $endpoint, $data, $response, $execution_time);
+
+        // Telemetría best-effort del monitor: metadatos de la petición (sin cuerpo).
+        YujuMonitor::emit('api.request', [
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'httpStatus' => (int) ($response['http_code'] ?? 0),
+            'status' => !empty($response['success']) ? 'success' : 'error',
+            'durationMs' => (int) round($execution_time * 1000),
+        ]);
 
         return $response;
     }

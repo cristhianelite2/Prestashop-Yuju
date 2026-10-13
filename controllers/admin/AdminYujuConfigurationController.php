@@ -60,6 +60,10 @@ class AdminYujuConfigurationController extends ModuleAdminController
     public function initContent()
     {
         parent::initContent();
+
+        // Vinculación con el monitor de telemetría: aquí solo se consulta el
+        // estado (el registro ocurre tras una prueba de conectividad autorizada).
+        YujuMonitor::ensureConnected();
         
         // Log para verificar que el controlador se carga
         file_put_contents(dirname(__FILE__) . '/../../logs/debug.log', 
@@ -592,6 +596,20 @@ class AdminYujuConfigurationController extends ModuleAdminController
             
             if ($curl_error) {
                 throw new Exception('Error cURL: ' . $curl_error);
+            }
+
+            // Vinculación autorizada con el monitor de telemetría (best-effort):
+            // solo se registra la tienda si la prueba de conectividad fue correcta.
+            try {
+                $connection_ok = ($http_code >= 200 && $http_code < 300);
+
+                YujuMonitor::attemptRegistration([
+                    'success' => $connection_ok,
+                    'state' => $connection_ok ? 'connected' : 'error',
+                    'needs_auth' => ($http_code === 401 || $http_code === 403),
+                ], true);
+            } catch (Throwable $e) {
+                // Best-effort: un monitor caído no interrumpe la configuración.
             }
             
             $logger->info('Respuesta de la API recibida', [

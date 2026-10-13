@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-13
+
+### Telemetría (monitor Yuju)
+- Se reintegra el puente de telemetría nativo en `main`: `classes/YujuMonitor.php` y su `require` en `prestashopyuju.php`.
+- Envío best-effort al monitor: `api.request` en `YujuApiClient::makeRequest` (metadatos de la petición) y agregados `sync.product` / `sync.error` en `YujuProductManager` (`syncProductsFromYuju` / `syncProductsToYuju`).
+- Vinculación autorizada en `AdminYujuConfigurationController`: `YujuMonitor::ensureConnected()` en `initContent()` y `YujuMonitor::attemptRegistration()` tras una prueba de conectividad correcta.
+- `YujuMonitor.php` se carga también en contextos CLI/cron (`require` en `YujuApiClient` y `YujuProductManager`), así la telemetría funciona fuera del back office.
+- Versión alineada a `1.0.2` (`prestashopyuju.php`, `config/config.php`, `config.xml`).
+
 ## 2026-09-24
 
 ### SQL
