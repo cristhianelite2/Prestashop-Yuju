@@ -19,7 +19,8 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
-<div class="panel">
+<div class="yuju-webhook-container">
+<div class="panel yuju-webhook-shell">
     <div class="panel-heading">
         <i class="icon-link"></i>
         Gestión de Webhooks
@@ -32,9 +33,10 @@
             </span>
         {/if}
     </div>
-    <div class="panel-body">
+    <div class="panel-body yuju-webhook-content">
         {$content}
     </div>
+</div>
 </div>
 
 <style>
