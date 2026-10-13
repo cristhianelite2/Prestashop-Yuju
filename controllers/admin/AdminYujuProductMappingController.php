@@ -748,10 +748,16 @@ class AdminYujuProductMappingController extends ModuleAdminController
     // Helper Methods
     protected function getProductMappings()
     {
-        return Db::getInstance()->executeS('
-            SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
-            ORDER BY FIELD(yuju_field, 'sku_simple', 'sku', 'name', 'description', 'id_category', 'stock', 'price', 'brand', 'shipping', 'dimensions_unit', 'shipping_width', 'shipping_depth', 'shipping_height', 'weight_unit', 'weight', 'images', 'characteristics', 'listing_type', 'ean', 'upc', 'isbn_10', 'isbn_13', 'mpn', 'product_weight', 'net_content', 'variations', 'channel_fields', 'channel_categories'), prestashop_field ASC
-        ');
+        // Keep the rows in the same order as the Yuju field catalog shown in the interface.
+        $ordered_yuju_fields = [];
+        foreach ($this->getYujuFields() as $yuju_field) {
+            $ordered_yuju_fields[] = "'" . pSQL($yuju_field['id']) . "'";
+        }
+
+        return Db::getInstance()->executeS(
+            'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping'
+            . ' ORDER BY FIELD(yuju_field, ' . implode(', ', $ordered_yuju_fields) . '), prestashop_field ASC'
+        );
     }
 
     protected function getPrestashopFields()

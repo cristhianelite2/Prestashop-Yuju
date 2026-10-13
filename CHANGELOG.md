@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Corregido
+- Se corrige un error de sintaxis en `AdminYujuProductMappingController::getProductMappings()` (comillas simples sin escapar dentro de la cadena SQL del `ORDER BY FIELD(...)`) que rompía la página de mapeo de productos. El orden por campo Yuju se construye ahora desde `getYujuFields()`, así no se desincroniza ni repite la lista.
+
 ## [1.1.6] - 2026-10-13
 
 ### Corregido
