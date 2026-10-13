@@ -21,7 +21,7 @@ class AdminYujuAuditMonitoringController extends ModuleAdminController
     {
         parent::__construct();
         $this->bootstrap = true;
-        $this->meta_title = $this->l('Monitoreo Auditoría');
+        $this->meta_title = 'Monitoreo Auditoría';
     }
 
     public function initContent()
@@ -250,6 +250,18 @@ class AdminYujuAuditMonitoringController extends ModuleAdminController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]));
+        }
+    }
+
+
+    /** Carga los estilos y scripts propios del módulo en el back office. */
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        if ($this->module) {
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
         }
     }
 }
