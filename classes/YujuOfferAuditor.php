@@ -386,7 +386,7 @@ class YujuOfferAuditor
              WHERE status IN (\'completed\', \'failed\')
                AND summary_json LIKE \'%' . pSQL($reportIdNeedle) . '%\'
                AND summary_json LIKE \'%' . pSQL($reportTypeNeedle) . '%\'
-             ORDER BY id DESC LIMIT 1'
+             ORDER BY id DESC'
         );
 
         if (!empty($existingRun['id'])) {
