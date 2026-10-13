@@ -43,11 +43,11 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.2.3';
+        $this->version = '1.2.4';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
-            'min' => '9.0.0',
+            'min' => '8.0.0',
             'max' => '9.99.99',
         ];
         $this->bootstrap = true;
