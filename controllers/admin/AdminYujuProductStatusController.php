@@ -22,11 +22,13 @@ if (!defined('_PS_VERSION_')) {
 
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncManager.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSchemaRepair.php';
 
 class AdminYujuProductStatusController extends ModuleAdminController
 {
     /** @var bool Evita repetir el UPDATE de corrección en la misma petición HTTP */
     protected static $productStatusInfrastructureRepairDone = false;
+    protected static $productStatusSchemaRepairDone = false;
 
     protected $product_manager;
 
@@ -45,6 +47,17 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         $this->product_manager = new YujuProductManager();
         $this->sync_manager = new YujuSyncManager();
+
+        // Asegurar columnas de variaciones y eliminar sync_direction antes de construir la lista.
+        if (!self::$productStatusSchemaRepairDone) {
+            try {
+                $schemaRepair = new YujuSchemaRepair();
+                $schemaRepair->repairTable('yuju_product_status');
+            } catch (Exception $e) {
+                // La vista sigue intentando cargar; el error queda limitado a la reparación de esquema.
+            }
+            self::$productStatusSchemaRepairDone = true;
+        }
 
         parent::__construct();
 
