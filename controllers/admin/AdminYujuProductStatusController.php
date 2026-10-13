@@ -48,16 +48,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $this->product_manager = new YujuProductManager();
         $this->sync_manager = new YujuSyncManager();
 
-        // Asegurar columnas de variaciones y eliminar sync_direction antes de construir la lista.
-        if (!self::$productStatusSchemaRepairDone) {
-            try {
-                $schemaRepair = new YujuSchemaRepair();
-                $schemaRepair->repairTable('yuju_product_status');
-            } catch (Exception $e) {
-                // La vista sigue intentando cargar; el error queda limitado a la reparación de esquema.
-            }
-            self::$productStatusSchemaRepairDone = true;
-        }
+        // No ejecutar reparaciones/ALTER TABLE al abrir el listado: pueden tomar bloqueos
+        // de metadatos y retrasar la pantalla. Las reparaciones se realizan desde la instalación
+        // o las herramientas de mantenimiento del módulo.
 
         parent::__construct();
 
@@ -972,7 +965,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $products = Db::getInstance()->executeS($products_sql);
         $products = $this->sanitizeProductsYujuDisplayForInfrastructureErrors($products ?: []);
         $products = $this->normalizeSyncedStatusRequiresYujuProductId($products);
-        $products = $this->annotateProductsWithDuplicateReferenceInCatalog($products);
+        // La detección global de SKU duplicados es costosa y no es necesaria para dibujar
+        // el listado. Se conserva la validación de duplicados al crear/actualizar productos.
 
         return [
             'products' => $products,
@@ -2072,204 +2066,61 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     protected function getProductStatusStats()
     {
+        // Un solo recorrido para todos los contadores de estado.
+        $row = Db::getInstance()->getRow('
+            SELECT
+                COUNT(*) AS total,
+                SUM(sync_status = "synced") AS synced,
+                SUM(sync_status = "synced_with_warnings") AS synced_with_warnings,
+                SUM(sync_status = "pending") AS pending,
+                SUM(sync_status = "error") AS error,
+                SUM(sync_status = "disabled") AS disabled,
+                SUM(sync_status = "queued") AS queued,
+                SUM(sync_enabled = 1) AS active,
+                SUM(sync_enabled = 0 OR sync_enabled IS NULL) AS inactive,
+                SUM(error_count > 0 OR sync_status IN ("error", "synced_with_warnings")) AS with_errors,
+                SUM(last_sync_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)) AS recent_syncs
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+        ');
+
         $stats = [];
+        foreach ([
+            'total', 'synced', 'synced_with_warnings', 'pending', 'error',
+            'disabled', 'queued', 'active', 'inactive', 'with_errors', 'recent_syncs'
+        ] as $key) {
+            $stats[$key] = (int) ($row[$key] ?? 0);
+        }
 
-        // Total products
-        $stats['total'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        ');
-
-        // By status
+        // Conservar el desglose por estado que consume la plantilla.
         $stats['by_status'] = Db::getInstance()->executeS('
-        SELECT sync_status, COUNT(*) as count
-        FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        GROUP BY sync_status
+            SELECT sync_status, COUNT(*) AS count
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            GROUP BY sync_status
         ');
-        
-        // Contador específico para cada estado
-        $stats['synced'] = 0;
-        $stats['synced_with_warnings'] = 0;
-        $stats['pending'] = 0;
-        $stats['error'] = 0;
-        $stats['disabled'] = 0;
-        $stats['queued'] = 0;
-        
-        foreach ($stats['by_status'] as $status) {
-            if (isset($status['sync_status']) && isset($status['count'])) {
-                $stats[$status['sync_status']] = (int)$status['count'];
-            }
-        }
-        
-        // Estadísticas de la cola de sincronización
+
+        // Un solo agregado para la cola, sin SHOW TABLES en cada carga.
         try {
-            $table_exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . _DB_PREFIX_ . 'yuju_sync_queue"');
-            
-            if ($table_exists) {
-                $queue_stats = Db::getInstance()->getRow('
-                    SELECT 
-                        COUNT(*) as total,
-                        SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending,
-                        SUM(CASE WHEN status = "processing" THEN 1 ELSE 0 END) as processing,
-                        SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed,
-                        SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed
-                    FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
-                ');
-                
-                $stats['queue'] = [
-                    'total' => (int)($queue_stats['total'] ?? 0),
-                    'pending' => (int)($queue_stats['pending'] ?? 0),
-                    'processing' => (int)($queue_stats['processing'] ?? 0),
-                    'completed' => (int)($queue_stats['completed'] ?? 0),
-                    'failed' => (int)($queue_stats['failed'] ?? 0),
-                ];
-            } else {
-                $stats['queue'] = [
-                    'total' => 0,
-                    'pending' => 0,
-                    'processing' => 0,
-                    'completed' => 0,
-                    'failed' => 0,
-                ];
-            }
-        } catch (Exception $e) {
+            $queue = Db::getInstance()->getRow('
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(status = "pending") AS pending,
+                    SUM(status = "processing") AS processing,
+                    SUM(status = "completed") AS completed,
+                    SUM(status = "failed") AS failed
+                FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+            ');
             $stats['queue'] = [
-                'total' => 0,
-                'pending' => 0,
-                'processing' => 0,
-                'completed' => 0,
-                'failed' => 0,
+                'total' => (int) ($queue['total'] ?? 0),
+                'pending' => (int) ($queue['pending'] ?? 0),
+                'processing' => (int) ($queue['processing'] ?? 0),
+                'completed' => (int) ($queue['completed'] ?? 0),
+                'failed' => (int) ($queue['failed'] ?? 0),
             ];
+        } catch (Exception $e) {
+            $stats['queue'] = ['total' => 0, 'pending' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0];
         }
-
-        // Active vs inactive
-        $stats['active'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE sync_enabled = 1
-        ');
-
-        $stats['inactive'] = $stats['total'] - $stats['active'];
-
-        // With errors (incluir warnings)
-        $stats['with_errors'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status 
-        WHERE error_count > 0 OR sync_status = "error" OR sync_status = "synced_with_warnings"
-        ');
-
-        // Recent syncs
-        $stats['recent_syncs'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        WHERE last_sync_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        ');
 
         return $stats;
-    }
-
-    protected function importProductStatus($file_path)
-    {
-        $imported_count = 0;
-
-        if (($handle = fopen($file_path, 'r')) !== false) {
-            // Skip header row
-            fgetcsv($handle);
-
-            while (($data = fgetcsv($handle)) !== false) {
-                if (count($data) >= 4) {
-                    $prestashop_product_id = (int) $data[0];
-                    $yuju_product_id = $data[1];
-                    $sync_status = $data[2];
-                    $sync_enabled = (int) $data[3];
-
-                    // Check if product exists
-                    $product = new Product($prestashop_product_id);
-
-                    if (!Validate::isLoadedObject($product)) {
-                        continue;
-                    }
-
-                    // Check if status already exists
-                    $existing = Db::getInstance()->getRow(
-                        '
-                    SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
-                    WHERE prestashop_product_id = ' . (int) $prestashop_product_id
-                    );
-
-                    $status_data = [
-                    'prestashop_product_id' => $prestashop_product_id,
-                    'yuju_product_id' => pSQL($yuju_product_id),
-                    'sync_status' => pSQL($sync_status),
-                    'sync_enabled' => $sync_enabled,
-                    'updated_at' => date('Y-m-d H:i:s'),
-                    ];
-
-                    if ($existing) {
-                        Db::getInstance()->update('yuju_product_status', $status_data, 'id = ' . (int) $existing['id']);
-                    } else {
-                        $status_data['created_at'] = date('Y-m-d H:i:s');
-                        Db::getInstance()->insert('yuju_product_status', $status_data);
-                    }
-
-                    ++$imported_count;
-                }
-            }
-
-            fclose($handle);
-        }
-
-        return $imported_count;
-    }
-
-    protected function exportProductStatus()
-    {
-        $export_file = tempnam(sys_get_temp_dir(), 'yuju_product_status_');
-
-        $handle = fopen($export_file, 'w');
-
-        // Write header
-        fputcsv($handle, [
-        'PrestaShop Product ID',
-        'PrestaShop Combination ID',
-        'Product Name',
-        'Yuju Product ID',
-        'Yuju Parent Product ID',
-        'Sync Status',
-        'Last Sync Date',
-        'Error Count',
-        'Last Error Message',
-        'Sync Enabled',
-        'Created At',
-        'Updated At',
-        ]);
-
-        // Get all product status records
-        $records = Db::getInstance()->executeS('
-        SELECT ps.*, pl.name as product_name
-        FROM ' . _DB_PREFIX_ . 'yuju_product_status ps
-        LEFT JOIN ' . _DB_PREFIX_ . 'product ype ON (ype.id_product = ps.prestashop_product_id)
-        LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON ps.prestashop_product_id = pl.id_product
-            AND pl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
-            AND pl.id_shop = ype.id_shop_default
-        ORDER BY ps.created_at DESC
-        ');
-
-        foreach ($records as $record) {
-            fputcsv($handle, [
-            $record['prestashop_product_id'],
-            $record['prestashop_product_attribute_id'] ?? '',
-            $record['product_name'],
-            $record['yuju_product_id'],
-            $record['parent_yuju_product_id'] ?? '',
-            $record['sync_status'],
-            $record['last_sync_at'],
-            $record['error_count'],
-            $record['last_error_message'],
-            $record['sync_enabled'],
-            $record['created_at'],
-            $record['updated_at'],
-            ]);
-        }
-
-        fclose($handle);
-
-        return $export_file;
     }
 
     public function getProductName($value, $row)
