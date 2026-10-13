@@ -61,6 +61,10 @@ function upgrade_module_1_1_6($module)
         && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD KEY `idx_yuju_variation_sku` (`yuju_variation_sku`)')) {
         return false;
     }
+    if (!isset($index_names['unique_yuju_catalog_item'])
+        && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD UNIQUE KEY `unique_yuju_catalog_item` (`yuju_product_id`, `yuju_variation_id`)')) {
+        return false;
+    }
 
     return true;
 }
