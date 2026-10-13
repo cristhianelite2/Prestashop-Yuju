@@ -2,6 +2,7 @@
 
 ### Corregido
 - El actualizador registra y activa la pestaña `AdminYujuOrderStatusMapping` después de copiar los archivos, antes de marcar la actualización como instalada. Evita que el enlace del menú lateral abra «Página no encontrada» en tiendas existentes.
+- Se alinea `<version>` de `config.xml` a `1.1.13` (seguía en `1.1.5`), para que una instalación o exportación limpia del módulo reporte la versión correcta.
 
 ## [1.1.12] - 2026-10-12
 
