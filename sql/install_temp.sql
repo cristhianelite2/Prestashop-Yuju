@@ -65,10 +65,12 @@ CREATE TABLE IF NOT EXISTS `ps_yuju_attribute_mapping` (
 
 CREATE TABLE IF NOT EXISTS `ps_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
-    `prestashop_product_id` int(11) NOT NULL,
-    `yuju_product_id` varchar(255),
+    `prestashop_product_id` int(11) DEFAULT NULL,
+    `yuju_product_id` varchar(255) DEFAULT NULL,
+    `yuju_product_name` varchar(512) DEFAULT NULL,
+    `yuju_variation_id` varchar(255) DEFAULT NULL,
+    `yuju_variation_sku` varchar(255) DEFAULT NULL,
     `sync_status` enum('pending', 'syncing', 'synced', 'error', 'disabled') DEFAULT 'pending',
-    `sync_direction` enum('prestashop_to_yuju', 'yuju_to_prestashop', 'bidirectional') DEFAULT 'bidirectional',
     `last_sync_at` datetime,
     `last_error` text,
     `error_count` int(11) DEFAULT 0,
@@ -76,8 +78,10 @@ CREATE TABLE IF NOT EXISTS `ps_yuju_product_status` (
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `unique_prestashop_product` (`prestashop_product_id`),
+    KEY `idx_prestashop_product` (`prestashop_product_id`),
     KEY `idx_yuju_product` (`yuju_product_id`),
+    KEY `idx_yuju_variation_sku` (`yuju_variation_sku`),
+    UNIQUE KEY `unique_yuju_catalog_item` (`yuju_product_id`, `yuju_variation_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
