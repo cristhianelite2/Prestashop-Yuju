@@ -68,13 +68,25 @@ class YujuProductReportManager
             ];
         }
 
-        if (!empty($state['task_id']) && $state['status'] === 'COMPLETED' && $has_cached_report) {
+        // A validated local report is reusable even if Configuration lost the task ID.
+        // getStoredState() can recover this state from var/reports/ after checking the
+        // downloaded file; requiring task_id here caused an unnecessary new request to Yuju.
+        if ($state['status'] === 'COMPLETED' && $has_cached_report) {
+            if (!empty($state['local_report_recovered'])) {
+                // Persist the recovered pointer so subsequent requests use the same cache.
+                $this->storeJson(self::STATE_CONFIG_KEY, $state);
+                $this->saveReportMetadata($state);
+            }
+
             return [
                 'success' => true,
                 'status' => 'COMPLETED',
-                'task_id' => $state['task_id'],
+                'task_id' => isset($state['task_id']) ? $state['task_id'] : null,
                 'requested_at' => isset($state['requested_at']) ? (int) $state['requested_at'] : null,
+                'product_count' => isset($state['product_count']) ? (int) $state['product_count'] : 0,
+                'report_cached' => true,
                 'reused' => true,
+                'message' => 'Se reutilizó el informe general ya descargado y validado; no se solicitó otro informe a Yuju.',
             ];
         }
 
