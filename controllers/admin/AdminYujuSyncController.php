@@ -481,8 +481,32 @@ class AdminYujuSyncController extends ModuleAdminController
                     $lock_created = true;
 
                     $results = $this->sync_manager->pushDifferencesToYuju($reconciliation_report, $selected_product_ids, true);
-                    // Revalidate against the same cached report; no new report is requested.
-                    $updated_reconciliation_report = $this->sync_manager->getYujuProductSyncReport($report_index, $report_products);
+
+                    // Do not immediately reconcile against the same stale cached report:
+                    // that report predates the successful API write and would overwrite
+                    // the just-saved "synced" state back to "pending".
+                    $updated_reconciliation_report = $reconciliation_report;
+                    $successfully_synced_ids = [];
+                    foreach (isset($results['products']) && is_array($results['products']) ? $results['products'] : [] as $sync_result) {
+                        if (isset($sync_result['status'], $sync_result['prestashop_product_id'])
+                            && $sync_result['status'] === 'synced'
+                        ) {
+                            $successfully_synced_ids[(int) $sync_result['prestashop_product_id']] = true;
+                        }
+                    }
+                    foreach (['all_products', 'unsynced_products'] as $list_key) {
+                        if (empty($updated_reconciliation_report[$list_key]) || !is_array($updated_reconciliation_report[$list_key])) {
+                            continue;
+                        }
+                        foreach ($updated_reconciliation_report[$list_key] as &$report_row) {
+                            $row_id = isset($report_row['prestashop_product_id']) ? (int) $report_row['prestashop_product_id'] : 0;
+                            if ($row_id > 0 && isset($successfully_synced_ids[$row_id])) {
+                                $report_row['status'] = 'synced';
+                                $report_row['sync_status'] = 'synced';
+                            }
+                        }
+                        unset($report_row);
+                    }
 
                     $response = [
                         'success' => true,
