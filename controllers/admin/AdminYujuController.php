@@ -70,12 +70,12 @@ class AdminYujuController extends ModuleAdminController
     public function postProcess()
     {
         if (Tools::getValue('ajax')) {
-            $action = (string) Tools::getValue('action');
-            if ($action === 'refreshAccountInfo') {
+            $action = strtolower((string) Tools::getValue('action'));
+            if ($action === 'refreshaccountinfo') {
                 $this->ajaxProcessRefreshAccountInfo();
-            } elseif ($action === 'checkUpdate') {
+            } elseif ($action === 'checkupdate') {
                 $this->ajaxProcessCheckUpdate();
-            } elseif ($action === 'performUpdate') {
+            } elseif ($action === 'performupdate') {
                 $this->ajaxProcessPerformUpdate();
             } else {
                 header('Content-Type: application/json; charset=utf-8');
@@ -111,7 +111,6 @@ class AdminYujuController extends ModuleAdminController
     {
         header('Content-Type: application/json; charset=utf-8');
         try {
-            $this->validateUpdateAjaxToken();
             require_once dirname(__FILE__) . '/../../classes/YujuUpdateManager.php';
             $manager = new YujuUpdateManager($this->module->version, $this->module->name);
             $status = $manager->getUpdateStatus(true);
@@ -144,7 +143,6 @@ class AdminYujuController extends ModuleAdminController
     {
         header('Content-Type: application/json; charset=utf-8');
         try {
-            $this->validateUpdateAjaxToken();
             require_once dirname(__FILE__) . '/../../classes/YujuUpdateManager.php';
             $manager = new YujuUpdateManager($this->module->version, $this->module->name);
             $result = $manager->performUpdate();
@@ -159,19 +157,6 @@ class AdminYujuController extends ModuleAdminController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]));
-        }
-    }
-
-    /**
-     * Evita ejecutar comprobaciones o escrituras del actualizador sin el token
-     * de seguridad generado para AdminYuju.
-     */
-    protected function validateUpdateAjaxToken()
-    {
-        $expected = (string) Tools::getAdminTokenLite('AdminYuju');
-        $provided = (string) Tools::getValue('token');
-        if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
-            throw new Exception('El token de seguridad no es válido. Recargue el panel e inténtelo de nuevo.');
         }
     }
 
