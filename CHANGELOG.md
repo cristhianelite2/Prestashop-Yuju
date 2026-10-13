@@ -2,6 +2,9 @@
 ### Corregido
 - Se completa la traducción al español de las acciones, mensajes y etiquetas visibles en la administración de webhooks.
 - Se traducen textos restantes de las vistas de OAuth y detalles de webhooks.
+- Se traducen etiquetas y mensajes de los mapeos de productos y atributos, además de los mensajes de sincronización y conexión.
+- Se corrigen textos con codificación incorrecta en los mensajes de sincronización.
+- Se traducen al español los metadatos del módulo en `config.xml`.
 - Se mantiene separada la vista de estado individual de productos del resumen por categoría.
 
 ## [1.1.16] - 2026-10-13
