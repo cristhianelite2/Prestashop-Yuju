@@ -1,7 +1,7 @@
 ## [1.1.16] - 2026-10-13
 ### Corregido
 - Se separa el listado detallado de estado de productos del resumen por categoría, con una sección de menú y vista independientes para cada uno.
-- Se fuerzan etiquetas en español en las dos vistas de estado de productos.
+- Se fuerza el español en las vistas administrativas, incluidos los mensajes y acciones de sincronización y registros.
 
 ## [1.1.15] - 2026-10-13
 ### Corregido
