@@ -186,6 +186,71 @@ class YujuProductReportManager
     }
 
     /**
+     * Phase one: request and persist the offer-report response without assuming its schema.
+     */
+    public function downloadOfferReport()
+    {
+        try {
+            $response = $this->api_client->getProductOfferReport();
+        } catch (Exception $e) {
+            return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo consultar el reporte de ofertas de Yuju.'];
+        }
+        if (empty($response['success'])) {
+            return ['success' => false, 'status' => 'failed', 'http_code' => (int) ($response['http_code'] ?? 0), 'message' => isset($response['message']) ? (string) $response['message'] : 'Yuju rechazó la solicitud del reporte de ofertas.'];
+        }
+        if (!array_key_exists('data', $response)) {
+            return ['success' => false, 'status' => 'failed', 'message' => 'Yuju respondió sin contenido JSON para el reporte de ofertas.'];
+        }
+        try {
+            $saved = $this->file_store->saveJsonPayload($response['data']);
+            $products_count = $this->countOfferRows($response['data']);
+            $state = [
+                'cache_id' => $saved['cache_id'],
+                'task_id' => null,
+                'product_count' => $products_count,
+                'report_size_bytes' => $saved['size_bytes'],
+                'report_downloaded_at' => $saved['saved_at'],
+            ];
+            if (!$this->saveReportMetadata($state, 'offer')) {
+                $this->file_store->deleteJsonPayload($saved['cache_id']);
+                return ['success' => false, 'status' => 'failed', 'message' => 'El archivo se recibió, pero no se pudo registrar en la tabla de reportes.'];
+            }
+        } catch (Exception $e) {
+            return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo guardar el reporte de ofertas: ' . $e->getMessage()];
+        }
+        return [
+            'success' => true,
+            'status' => 'completed',
+            'report_type' => 'offer',
+            'report_cached' => true,
+            'file_path' => $saved['relative_path'],
+            'file_size_bytes' => $saved['size_bytes'],
+            'products_count' => $products_count,
+            'http_code' => (int) ($response['http_code'] ?? 200),
+            'message' => 'Respuesta de products-offer-report guardada en almacenamiento privado y registrada en la base de datos. El formato aún no se interpreta; inspeccionaremos el archivo en la siguiente fase.',
+        ];
+    }
+
+    protected function countOfferRows($payload)
+    {
+        if (!is_array($payload)) {
+            return 0;
+        }
+        if ($payload === []) {
+            return 0;
+        }
+        if (array_keys($payload) === range(0, count($payload) - 1)) {
+            return count($payload);
+        }
+        foreach (['products', 'offers', 'items', 'results', 'data'] as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                return count($payload[$key]);
+            }
+        }
+        return 0;
+    }
+
+    /**
      * Poll a saved task. The download URL is returned only to server-side callers.
      *
      * @return array
@@ -394,7 +459,7 @@ class YujuProductReportManager
      * The JSONL remains the source of truth and stays inside var/reports.
      * No signed URL, product payload, or absolute server path is stored.
      */
-    protected function saveReportMetadata($state)
+    protected function saveReportMetadata($state, $report_type = 'gral')
     {
         if (empty($state['cache_id']) || !preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])) {
             return false;
@@ -433,7 +498,8 @@ class YujuProductReportManager
                 return false;
             }
 
-            $relative_path = 'var/reports/' . $state['cache_id'] . '.jsonl';
+            $extension = $report_type === 'offer' ? '.json' : '.jsonl';
+            $relative_path = 'var/reports/' . $state['cache_id'] . $extension;
             $task_id = !empty($state['task_id']) ? (string) $state['task_id'] : null;
             $where = "file_path = '" . pSQL($relative_path) . "'";
             if ($task_id !== null) {
@@ -449,7 +515,7 @@ class YujuProductReportManager
             ];
             $row = [
                 'id_task' => $task_id,
-                'report_type' => 'gral',
+                'report_type' => $report_type,
                 'trigger' => 'manual',
                 'status' => 'completed',
                 'products_count' => isset($state['product_count']) ? (int) $state['product_count'] : 0,
