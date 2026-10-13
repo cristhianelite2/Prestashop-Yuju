@@ -1065,6 +1065,17 @@
                 setStatus('danger', 'Yuju devolvió una respuesta no válida.');
                 return;
             }
+            // Los productos enviados dejan de estar seleccionados al recibir una respuesta válida.
+            // Si la petición falla por comunicación, se conserva la selección para poder reintentar.
+            ids.forEach(function (id) {
+                delete selectedDetailIds[id];
+            });
+            $('#yuju-audit-diff-table tbody .yuju-audit-select-product').each(function () {
+                var id = parseInt($(this).attr('data-detail-id'), 10) || 0;
+                if (ids.indexOf(id) !== -1) $(this).prop('checked', false);
+            });
+            updateSelectionUi();
+
             var updateItems = Array.isArray(resp.items) ? resp.items : [];
             lastUpdateIssues = updateItems.filter(function (item) {
                 return item && item.success !== true;
