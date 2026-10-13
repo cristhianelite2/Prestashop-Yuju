@@ -291,6 +291,19 @@ class YujuProductReportManager
         $response_http_code = 200;
 
         if ($url === '') {
+            // Recover a URL payload already saved under var/reports/*.json before
+            // calling Yuju again. Older builds stored the URL response as a JSON file,
+            // sometimes with the URL rendered as a Markdown link.
+            $local_url = $this->discoverSavedOfferReportUrl();
+            if (!empty($local_url['url'])) {
+                $url = $local_url['url'];
+                $offer_state['download_url'] = $url;
+                $offer_state['download_url_saved_at'] = time();
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
+            }
+        }
+
+        if ($url === '') {
             // No cached file or saved URL exists. Only now request the report URL from Yuju.
             try {
                 $response = $this->api_client->getProductOfferReport();
@@ -435,8 +448,9 @@ class YujuProductReportManager
 
             if (is_string($candidate)) {
                 $trimmed = trim($candidate);
-                if (preg_match('#^https://#i', $trimmed)) {
-                    return $trimmed;
+                $normalized_url = $this->normalizeOfferReportUrl($trimmed);
+                if ($normalized_url !== '') {
+                    return $normalized_url;
                 }
 
                 $decoded = json_decode($trimmed, true);
@@ -452,8 +466,8 @@ class YujuProductReportManager
 
             foreach (['url', 'download_url', 'report_url', 'signed_url'] as $key) {
                 if (isset($candidate[$key]) && is_string($candidate[$key])) {
-                    $url = trim($candidate[$key]);
-                    if (preg_match('#^https://#i', $url)) {
+                    $url = $this->normalizeOfferReportUrl($candidate[$key]);
+                    if ($url !== '') {
                         return $url;
                     }
                 }
@@ -467,6 +481,68 @@ class YujuProductReportManager
         }
 
         return '';
+    }
+
+    /**
+     * Normalize a plain URL or a Markdown link such as [https://host/file](https://host/file).
+     * The destination is still checked by YujuProductReportFileStore before download.
+     */
+    protected function normalizeOfferReportUrl($value)
+    {
+        $value = trim((string) $value);
+        if (preg_match('#\]\((https://[^)\s]+)\)#i', $value, $matches)) {
+            return rtrim($matches[1], '.,;');
+        }
+        if (preg_match('#^https://[^\s<>"\']+$#i', $value)) {
+            return rtrim($value, '.,;');
+        }
+
+        return '';
+    }
+
+    /**
+     * Find a previously saved URL response in the module's private report cache.
+     * Only recent JSON files are considered; actual download URLs are temporary.
+     *
+     * @return array|null
+     */
+    protected function discoverSavedOfferReportUrl()
+    {
+        $directory = dirname(__DIR__) . '/var/reports';
+        $paths = glob($directory . '/*.json');
+        if (!is_array($paths) || !$paths) {
+            return null;
+        }
+
+        usort($paths, function ($left, $right) {
+            return (int) @filemtime($right) <=> (int) @filemtime($left);
+        });
+
+        foreach ($paths as $path) {
+            $cache_id = basename($path, '.json');
+            if (is_link($path) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+                continue;
+            }
+            $modified_at = (int) @filemtime($path);
+            if ($modified_at <= 0 || $modified_at < time() - self::OFFER_REPORT_TTL) {
+                continue;
+            }
+            $size = @filesize($path);
+            if ($size === false || $size <= 0 || $size > 1048576) {
+                continue;
+            }
+
+            $payload = json_decode((string) @file_get_contents($path), true);
+            if (!is_array($payload)) {
+                continue;
+            }
+            $url = $this->extractOfferReportUrl($payload);
+            if ($url !== '') {
+                return ['url' => $url, 'cache_id' => $cache_id, 'saved_at' => $modified_at];
+            }
+        }
+
+        return null;
     }
 
     /**
