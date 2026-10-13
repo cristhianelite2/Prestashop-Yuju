@@ -47,27 +47,27 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         'class' => 'fixed-width-xs',
         ],
         'prestashop_category_name' => [
-        'title' => $this->trans('PrestaShop Category', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Categoría de PrestaShop', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 200,
         ],
         'yuju_category_id' => [
-        'title' => $this->trans('Yuju Category ID', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('ID de categoría de Yuju', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'width' => 150,
         ],
         'yuju_category_name' => [
-        'title' => $this->trans('Yuju Category Name', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Nombre de categoría de Yuju', array(), 'Modules.Prestashopyuju.Admin'),
         'width' => 200,
         ],
         'sync_enabled' => [
-        'title' => $this->trans('Sync Enabled', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Sincronización habilitada', array(), 'Modules.Prestashopyuju.Admin'),
         'align' => 'center',
         'active' => 'status',
         'type' => 'bool',
         'class' => 'fixed-width-sm',
         ],
         'created_at' => [
-        'title' => $this->trans('Created', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Fecha de creación', array(), 'Modules.Prestashopyuju.Admin'),
         'type' => 'datetime',
         'width' => 150,
         ],
@@ -76,27 +76,27 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $this->actions = ['edit', 'delete'];
         $this->bulk_actions = [
         'delete' => [
-        'text' => $this->trans('Delete selected', array(), 'Modules.Prestashopyuju.Admin'),
-        'confirm' => $this->trans('Delete selected items?', array(), 'Modules.Prestashopyuju.Admin'),
+        'text' => $this->trans('Eliminar seleccionados', array(), 'Modules.Prestashopyuju.Admin'),
+        'confirm' => $this->trans('¿Eliminar los elementos seleccionados?', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         'enableSync' => [
-        'text' => $this->trans('Enable sync', array(), 'Modules.Prestashopyuju.Admin'),
+        'text' => $this->trans('Activar sincronización', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-check'
         ],
         'disableSync' => [
-        'text' => $this->trans('Disable sync', array(), 'Modules.Prestashopyuju.Admin'),
+        'text' => $this->trans('Desactivar sincronización', array(), 'Modules.Prestashopyuju.Admin'),
         'icon' => 'icon-remove'
         ],
         ];
 
         $this->toolbar_btn['new'] = [
         'href' => self::$currentIndex . '&add' . $this->table . '&token=' . $this->token,
-        'desc' => $this->trans('Add new mapping', array(), 'Modules.Prestashopyuju.Admin'),
+        'desc' => $this->trans('Agregar nuevo mapeo', array(), 'Modules.Prestashopyuju.Admin'),
         ];
 
         $this->toolbar_btn['sync_categories'] = [
         'href' => self::$currentIndex . '&syncYujuCategories&token=' . $this->token,
-        'desc' => $this->trans('Sync Yuju Categories', array(), 'Modules.Prestashopyuju.Admin'),
+        'desc' => $this->trans('Sincronizar categorías de Yuju', array(), 'Modules.Prestashopyuju.Admin'),
         'class' => 'process-icon-refresh',
         ];
     }
@@ -202,7 +202,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         ],
         ],
         'submit' => [
-        'title' => $this->trans('Save', array(), 'Modules.Prestashopyuju.Admin'),
+        'title' => $this->trans('Guardar', array(), 'Modules.Prestashopyuju.Admin'),
         ],
         ];
 
@@ -236,7 +236,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         );
 
         if ($existing) {
-            $this->errors[] = $this->trans('This PrestaShop category is already mapped.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Esta categoría de PrestaShop ya está mapeada.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -245,7 +245,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $yuju_category_name = $this->getYujuCategoryName($yuju_category_id);
 
         if (!$yuju_category_name) {
-            $this->errors[] = $this->trans('Invalid Yuju category selected.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Se seleccionó una categoría de Yuju no válida.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -272,10 +272,10 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         }
 
         if ($result) {
-            $this->confirmations[] = $this->trans('Category mapping saved successfully.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->confirmations[] = $this->trans('El mapeo de categorías se guardó correctamente.', array(), 'Modules.Prestashopyuju.Admin');
             $this->logger->log('Category mapping saved: PS Category ' . $prestashop_category_id . ' -> Yuju Category ' . $yuju_category_id, 'info');
         } else {
-            $this->errors[] = $this->trans('Error saving category mapping.', array(), 'Modules.Prestashopyuju.Admin');
+            $this->errors[] = $this->trans('Error al guardar el mapeo de categorías.', array(), 'Modules.Prestashopyuju.Admin');
 
             return false;
         }
@@ -302,13 +302,13 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                     ]);
                 }
 
-                $this->confirmations[] = $this->trans('Yuju categories synchronized successfully.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Las categorías de Yuju se sincronizaron correctamente.', array(), 'Modules.Prestashopyuju.Admin');
                 $this->logger->log('Yuju categories synchronized: ' . count($categories['data']) . ' categories', 'info');
             } else {
-                $this->errors[] = $this->trans('No categories found in Yuju.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->errors[] = $this->trans('No se encontraron categorías en Yuju.', array(), 'Modules.Prestashopyuju.Admin');
             }
         } catch (Exception $e) {
-            $this->errors[] = $this->trans('Error synchronizing Yuju categories: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
+            $this->errors[] = $this->trans('Error al sincronizar las categorías de Yuju: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
             $this->logger->log('Error synchronizing Yuju categories: ' . $e->getMessage(), 'error');
         }
     }
@@ -561,7 +561,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Sync enabled for selected mappings.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Se activó la sincronización para los mapeos seleccionados.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }
@@ -578,7 +578,7 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             );
 
             if ($result) {
-                $this->confirmations[] = $this->trans('Sync disabled for selected mappings.', array(), 'Modules.Prestashopyuju.Admin');
+                $this->confirmations[] = $this->trans('Se desactivó la sincronización para los mapeos seleccionados.', array(), 'Modules.Prestashopyuju.Admin');
             }
         }
     }
