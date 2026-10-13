@@ -174,11 +174,11 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    $status.removeClass().addClass('yuju-status connected').text('Connected');
-                    self.showAlert('API connection successful!', 'success');
+                    $status.removeClass().addClass('yuju-status connected').text('Conectado');
+                    self.showAlert('¡Conexión con la API exitosa!', 'success');
                 } else {
-                    $status.removeClass().addClass('yuju-status disconnected').text('Disconnected');
-                    self.showAlert('API connection failed: ' + (response.message || 'Unknown error'), 'error');
+                    $status.removeClass().addClass('yuju-status disconnected').text('Desconectado');
+                    self.showAlert('Falló la conexión con la API: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
@@ -424,16 +424,16 @@ var YujuAdmin = {
             dataType: 'json',
             success: function(response) {
                 if (response.success) {
-                    self.showAlert('Synchronization started successfully', 'success');
+                    self.showAlert('La sincronización comenzó correctamente', 'success');
                     self.startSyncMonitoring();
                 } else {
-                    self.showAlert('Failed to start synchronization: ' + (response.message || 'Unknown error'), 'error');
+                    self.showAlert('Failed to start synchronization: ' + (response.message || 'Error desconocido'), 'error');
                     self.state.isSyncing = false;
                     self.updateSyncUI(false);
                 }
             },
             error: function() {
-                self.showAlert('Failed to start synchronization', 'error');
+                self.showAlert('No se pudo iniciar la sincronización', 'error');
                 self.state.isSyncing = false;
                 self.updateSyncUI(false);
             }
@@ -459,13 +459,13 @@ var YujuAdmin = {
                 if (response.success) {
                     self.showAlert('Synchronization stopped', 'info');
                 } else {
-                    self.showAlert('Failed to stop synchronization: ' + (response.message || 'Unknown error'), 'error');
+                    self.showAlert('Failed to stop synchronization: ' + (response.message || 'Error desconocido'), 'error');
                 }
                 self.state.isSyncing = false;
                 self.updateSyncUI(false);
             },
             error: function() {
-                self.showAlert('Failed to stop synchronization', 'error');
+                self.showAlert('No se pudo detener la sincronización', 'error');
             }
         });
     },
@@ -590,7 +590,7 @@ var YujuAdmin = {
                     // Refresh logs table
                     window.location.reload();
                 } else {
-                    self.showAlert('Failed to clean logs: ' + (response.message || 'Unknown error'), 'error');
+                    self.showAlert('Failed to clean logs: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
@@ -619,7 +619,7 @@ var YujuAdmin = {
                 if (response.success) {
                     self.showLogModal(response.data);
                 } else {
-                    self.showAlert('Failed to load log details: ' + (response.message || 'Unknown error'), 'error');
+                    self.showAlert('Failed to load log details: ' + (response.message || 'Error desconocido'), 'error');
                 }
             },
             error: function() {
