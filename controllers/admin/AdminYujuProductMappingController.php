@@ -139,6 +139,9 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
     public function initContent()
     {
+        // Keep required Yuju mappings and fallback values available on existing installations.
+        $this->loadDefaultMappings(true);
+
         // Assign data to Smarty
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuProductMapping',
@@ -172,6 +175,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         ['id' => 'width', 'name' => $this->translate('Width')],
         ['id' => 'height', 'name' => $this->translate('Height')],
         ['id' => 'depth', 'name' => $this->translate('Depth')],
+        ['id' => 'manufacturer', 'name' => $this->translate('Manufacturer')],
         ['id' => 'quantity', 'name' => $this->translate('Quantity')],
         ['id' => 'minimal_quantity', 'name' => $this->translate('Minimal Quantity')],
         ['id' => 'active', 'name' => $this->translate('Active')],
@@ -419,7 +423,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         }
     }
 
-    protected function loadDefaultMappings()
+    protected function loadDefaultMappings($silent = false)
     {
         // Correct only known legacy defaults; custom mappings are preserved.
         $legacy_mappings = [
@@ -466,16 +470,17 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
         $default_mappings = [
             ['prestashop_field' => 'name', 'yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 1],
-            ['prestashop_field' => 'description', 'yuju_field' => 'description', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 0],
+            ['prestashop_field' => 'description', 'yuju_field' => 'description', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => 'No disponible'],
             ['prestashop_field' => 'price', 'yuju_field' => 'price', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 1],
             ['prestashop_field' => 'reference', 'yuju_field' => 'sku', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 1],
             ['prestashop_field' => 'ean13', 'yuju_field' => 'ean', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 0],
             ['prestashop_field' => 'upc', 'yuju_field' => 'upc', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 0],
             ['prestashop_field' => 'quantity', 'yuju_field' => 'stock', 'field_type' => 'integer', 'sync_direction' => 'bidirectional', 'is_required' => 1],
-            ['prestashop_field' => 'weight', 'yuju_field' => 'weight', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 0],
-            ['prestashop_field' => 'width', 'yuju_field' => 'shipping_width', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 0],
-            ['prestashop_field' => 'height', 'yuju_field' => 'shipping_height', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 0],
-            ['prestashop_field' => 'depth', 'yuju_field' => 'shipping_depth', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 0],
+            ['prestashop_field' => 'weight', 'yuju_field' => 'weight', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => '1'],
+            ['prestashop_field' => 'manufacturer', 'yuju_field' => 'brand', 'field_type' => 'string', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => 'No disponible'],
+            ['prestashop_field' => 'width', 'yuju_field' => 'shipping_width', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => '20'],
+            ['prestashop_field' => 'height', 'yuju_field' => 'shipping_height', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => '20'],
+            ['prestashop_field' => 'depth', 'yuju_field' => 'shipping_depth', 'field_type' => 'decimal', 'sync_direction' => 'bidirectional', 'is_required' => 1, 'default_value' => '20'],
         ];
 
         $inserted = 0;
@@ -493,12 +498,23 @@ class AdminYujuProductMappingController extends ModuleAdminController
                     ++$inserted;
                 }
             }
+            if (isset($mapping['default_value']) && $mapping['default_value'] !== '') {
+                Db::getInstance()->update(
+                    'yuju_product_mapping',
+                    [
+                        'default_value' => pSQL($mapping['default_value']),
+                        'is_required' => 1,
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ],
+                    'yuju_field = "' . pSQL($mapping['yuju_field']) . '"'
+                );
+            }
         }
 
-        if ($inserted > 0) {
+        if (!$silent && $inserted > 0) {
             $this->confirmations[] = sprintf($this->translate('%d default mappings loaded successfully.'), $inserted);
             $this->logger->log('Default product mappings loaded: ' . $inserted . ' mappings', 'info');
-        } else {
+        } elseif (!$silent) {
             $this->warnings[] = $this->translate('No new default mappings to load. Known legacy defaults were checked.');
         }
     }
@@ -734,7 +750,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
     {
         return Db::getInstance()->executeS('
             SELECT * FROM ' . _DB_PREFIX_ . 'yuju_product_mapping
-            ORDER BY prestashop_field ASC
+            ORDER BY FIELD(yuju_field, 'sku_simple', 'sku', 'name', 'description', 'id_category', 'stock', 'price', 'brand', 'shipping', 'dimensions_unit', 'shipping_width', 'shipping_depth', 'shipping_height', 'weight_unit', 'weight', 'images', 'characteristics', 'listing_type', 'ean', 'upc', 'isbn_10', 'isbn_13', 'mpn', 'product_weight', 'net_content', 'variations', 'channel_fields', 'channel_categories'), prestashop_field ASC
         ');
     }
 
@@ -757,6 +773,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             ['id' => 'width', 'name' => $this->translate('Width')],
             ['id' => 'height', 'name' => $this->translate('Height')],
             ['id' => 'depth', 'name' => $this->translate('Depth')],
+            ['id' => 'manufacturer', 'name' => $this->translate('Manufacturer')],
             ['id' => 'active', 'name' => $this->translate('Active')],
             ['id' => 'available_for_order', 'name' => $this->translate('Available for Order')],
             ['id' => 'show_price', 'name' => $this->translate('Show Price')],
