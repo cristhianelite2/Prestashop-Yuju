@@ -183,7 +183,7 @@ var YujuAdmin = {
             },
             error: function() {
                 $status.removeClass().addClass('yuju-status error').text('Error');
-                self.showAlert('Failed to test API connection', 'error');
+                self.showAlert('No se pudo probar la conexión con la API', 'error');
             },
             complete: function() {
                 $button.prop('disabled', false).html('<i class="icon-check"></i> Test Connection');
@@ -571,7 +571,7 @@ var YujuAdmin = {
     cleanLogs: function() {
         var self = this;
         
-        if (!confirm('Are you sure you want to clean old logs?')) {
+        if (!confirm('¿Seguro que deseas limpiar los registros antiguos?')) {
             return;
         }
 
