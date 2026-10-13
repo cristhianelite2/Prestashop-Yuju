@@ -46,7 +46,7 @@ class YujuWebhookManager
     /**
      * Process incoming webhook.
      */
-    public function processWebhook($payload, $headers)
+    public function processWebhook($payload, $headers, $onAccepted = null)
     {
         $this->logger->log('Processing webhook with payload length: ' . strlen($payload), 'info');
 
@@ -112,14 +112,27 @@ class YujuWebhookManager
                 }
             }
             
+            // Registrar la recepción ANTES de llamadas externas: el panel debe mostrar
+            // el evento aunque Yuju API tarde o falle al consultar la orden.
+            $webhook_id = $this->logWebhookReception($webhook_data, $headers);
+
+            // Confirmar recepción en cuanto el evento quedó registrado. El callback
+            // envía el HTTP 200 dentro del límite de Yuju (<500 ms); el trabajo pesado
+            // continúa después de cerrar la respuesta.
+            if (is_callable($onAccepted)) {
+                call_user_func($onAccepted, $webhook_id, $webhook_data);
+            }
+
             // Para webhooks de órdenes, hacer fetch automático de los detalles completos
             if ($topic && strpos($topic, 'order') !== false) {
                 $this->logger->log('Order webhook detected, fetching full order details', 'info');
-                $webhook_data = $this->enrichOrderWebhookData($webhook_data, $headers);
+                $webhook_data = $this->enrichOrderWebhookData($webhook_data, $headers, $topic);
+                Db::getInstance()->update(
+                    'yuju_webhook_logs',
+                    ['payload' => pSQL(json_encode($webhook_data))],
+                    'id = ' . (int) $webhook_id
+                );
             }
-
-            // Log webhook reception
-            $webhook_id = $this->logWebhookReception($webhook_data, $headers);
 
             // Process webhook based on topic from headers
             $result = $this->processWebhookEvent($webhook_data, $headers);
@@ -241,7 +254,7 @@ class YujuWebhookManager
      * @param array $headers Headers del webhook
      * @return array Datos enriquecidos con información completa de la orden
      */
-    protected function enrichOrderWebhookData($webhook_data, $headers)
+    protected function enrichOrderWebhookData($webhook_data, $headers, $topic = null)
     {
         try {
             $order_id = $webhook_data['resource_id'] ?? $webhook_data['id'] ?? null;
@@ -257,8 +270,13 @@ class YujuWebhookManager
                 'channel_id' => $channel_id
             ]);
             
-            // Hacer petición a la API de Yuju para obtener detalles completos
-            $api_response = $this->api_client->getOrder($order_id, $channel_id);
+            // Cada estructura usa su endpoint documentado. La normal usa /orders/;
+            // la estandarizada usa /std-orders/ (si Yuju habilitó esa función para la cuenta).
+            if (strpos((string) $topic, 'std-order') !== false && method_exists($this->api_client, 'getStandardOrder')) {
+                $api_response = $this->api_client->getStandardOrder($order_id, $channel_id);
+            } else {
+                $api_response = $this->api_client->getOrder($order_id, $channel_id);
+            }
             
             if (isset($api_response['success']) && $api_response['success'] === false) {
                 $this->logger->log('API returned error fetching order', [
@@ -665,11 +683,11 @@ class YujuWebhookManager
         $webhook_url = $this->getWebhookUrl();
 
         // Topics según API Yuju (webhook-sub): guiones, no "product.created"
+        // Elegimos una sola estructura de órdenes (normal). La documentación de Yuju
+        // advierte que suscribirse a normal y estandarizada duplica notificaciones.
         $topics = [
             'new-order',
             'updated-order',
-            'new-std-order',
-            'updated-std-order',
             'product-created',
             'product-deleted',
         ];
@@ -677,6 +695,56 @@ class YujuWebhookManager
         $registered_webhooks = [];
 
         try {
+            // Hacer el registro idempotente: si ya existe una suscripción para esta URL,
+            // actualizarla en vez de crear otra cada vez que se pulsa "Habilitar".
+            $existing_response = $this->api_client->getWebhookSubscriptions();
+            $existing_subscriptions = $this->normalizeWebhookSubscriptionsResponse($existing_response);
+            $normalized_url = rtrim(strtolower(trim((string) $webhook_url)), '/');
+            $target = null;
+            foreach ($existing_subscriptions as $existing) {
+                $existing_url = rtrim(strtolower(trim((string) ($existing['url'] ?? ''))), '/');
+                if ($existing_url !== $normalized_url) {
+                    continue;
+                }
+                $existing_topics = $this->normalizeSubscriptionTopics($existing);
+                if ($target === null || in_array('new-order', $existing_topics, true)) {
+                    $target = $existing;
+                }
+                if (in_array('new-order', $existing_topics, true)) {
+                    break;
+                }
+            }
+
+            if ($target !== null) {
+                $target_id = $this->extractWebhookSubscriptionId($target);
+                if (!$target_id) {
+                    throw new Exception('La suscripción existente no tiene ID; no se creó otra para evitar duplicados.');
+                }
+                $update_payload = [
+                    'url' => $webhook_url,
+                    'topics' => $topics,
+                ];
+                if (isset($target['headers']) && is_array($target['headers'])) {
+                    $update_payload['headers'] = $target['headers'];
+                }
+                $response = $this->api_client->updateWebhookSubscription((int) $target_id, $update_payload);
+                $updated_id = $this->extractWebhookSubscriptionId($response);
+                if (!$updated_id && is_array($response) && !empty($response['success'])) {
+                    $updated_id = (string) $target_id;
+                }
+                if (!$updated_id) {
+                    throw new Exception('No se pudo actualizar la suscripción existente: ' . $this->extractResponseMessage($response));
+                }
+                Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . 'yuju_webhook_registrations`');
+                $this->storeWebhookRegistration('yuju_subscription', (string) $updated_id);
+                return [[
+                    'event_type' => implode(',', $topics),
+                    'webhook_id' => (string) $updated_id,
+                    'status' => 'registered',
+                    'note' => 'Suscripción existente reutilizada; no se creó una duplicada.',
+                ]];
+            }
+
             $response = $this->api_client->createWebhookSubscription($webhook_url, $topics);
             $sub_id = $this->extractWebhookSubscriptionId($response);
             $resp_message = $this->extractResponseMessage($response);
@@ -1020,11 +1088,10 @@ class YujuWebhookManager
      */
     public function getRequiredWebhookSubscriptionStatus()
     {
+        // Se requiere una sola estructura de órdenes: normal.
         $required_topics = [
             'new-order',
             'updated-order',
-            'new-std-order',
-            'updated-std-order',
             'product-created',
             'product-deleted',
         ];
