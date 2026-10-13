@@ -767,6 +767,13 @@ class YujuProductReportManager
                 return false;
             }
 
+            // CREATE TABLE IF NOT EXISTS does not upgrade an existing table. Ensure
+            // installations upgraded from older versions can store and recover URLs.
+            $has_url_column = $db->getValue("SHOW COLUMNS FROM " . $table_sql . " LIKE 'download_url'");
+            if (!$has_url_column && !$db->execute("ALTER TABLE " . $table_sql . " ADD COLUMN download_url TEXT NULL")) {
+                return false;
+            }
+
             $extension = $report_type === 'offer' ? '.json' : '.jsonl';
             $relative_path = 'var/reports/' . $state['cache_id'] . $extension;
             $task_id = !empty($state['task_id']) ? (string) $state['task_id'] : null;
