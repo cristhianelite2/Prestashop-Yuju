@@ -609,7 +609,7 @@
         if (!p) return;
         $('#yuju-audit-progress-wrap').show();
         $('#yuju-audit-kpis').show();
-        $('#yuju-audit-table-tools').show();
+        $('#yuju-audit-table-tools').css('display', 'flex');
         $('#kpi-total').text(p.total || 0);
         $('#kpi-matched').text(p.matched || 0);
         $('#kpi-diff').text(p.diff_found || 0);
