@@ -850,6 +850,63 @@ class YujuApiClient
     }
 
     /**
+     * Normaliza ofertas y las convierte a JSON Lines para /products-offer.
+     * Stock negativo se normaliza a cero; precios inválidos o <= 0 se omiten.
+     *
+     * @param array $offers
+     * @return string[]
+     */
+    protected function buildOfferJsonLines(array $offers)
+    {
+        $lines = [];
+        $oldPrecision = ini_get('serialize_precision');
+        ini_set('serialize_precision', '-1');
+        foreach ($offers as $offer) {
+            $sku = is_array($offer) ? trim((string) ($offer['sku'] ?? '')) : '';
+            if ($sku === '') {
+                continue;
+            }
+            $row = ['sku' => $sku];
+            if (isset($offer['stock']) && is_numeric($offer['stock'])) {
+                $row['stock'] = max(0, (int) $offer['stock']);
+            }
+            if (isset($offer['price']) && is_numeric($offer['price']) && is_finite((float) $offer['price']) && (float) $offer['price'] > 0) {
+                $row['price'] = round((float) $offer['price'], 2);
+            }
+            if (count($row) < 2) {
+                continue;
+            }
+            $encoded = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($encoded !== false) {
+                $lines[] = $encoded;
+            }
+        }
+        ini_set('serialize_precision', (string) $oldPrecision);
+
+        return $lines;
+    }
+
+    /**
+     * Extrae el identificador de tarea de las formas conocidas de respuesta.
+     *
+     * @param array $data
+     * @return string
+     */
+    protected function extractTaskId(array $data)
+    {
+        $sources = [$data, is_array($data['data'] ?? null) ? $data['data'] : []];
+        foreach ($sources as $source) {
+            foreach (['id_task', 'task_id', 'idTask'] as $key) {
+                if (isset($source[$key]) && is_scalar($source[$key]) && trim((string) $source[$key]) !== '') {
+                    return trim((string) $source[$key]);
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * Envía múltiples ofertas en JSONL al endpoint oficial de Yuju.
      * Cada línea es un objeto JSON con sku, stock y/o price.
      *
@@ -870,26 +927,7 @@ class YujuApiClient
             return ['success' => false, 'message' => 'No hay token válido disponible.', 'http_code' => 0, 'data' => null];
         }
 
-        $lines = [];
-        foreach ($offers as $offer) {
-            if (!is_array($offer) || empty($offer['sku'])) {
-                continue;
-            }
-            $line = ['sku' => (string) $offer['sku']];
-            if (array_key_exists('stock', $offer)) {
-                $line['stock'] = (int) $offer['stock'];
-            }
-            if (array_key_exists('price', $offer)) {
-                $line['price'] = (float) $offer['price'];
-            }
-            if (count($line) > 1) {
-                $encoded = json_encode($line, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                if ($encoded === false) {
-                    return ['success' => false, 'message' => 'No se pudo serializar el SKU ' . $line['sku'], 'http_code' => 0, 'data' => null];
-                }
-                $lines[] = $encoded;
-            }
-        }
+        $lines = $this->buildOfferJsonLines($offers);
         if (empty($lines)) {
             return ['success' => false, 'message' => 'Ningún SKU contiene stock o precio para actualizar.', 'http_code' => 0, 'data' => null];
         }
@@ -918,23 +956,42 @@ class YujuApiClient
             return ['success' => false, 'message' => $curlError, 'http_code' => 0, 'data' => null];
         }
         $decoded = json_decode((string) $responseBody, true);
-        $ok = $httpCode >= 200 && $httpCode < 300 && is_array($decoded)
-            && strtoupper((string) ($decoded['status'] ?? '')) !== 'REJECTED';
+        $data = is_array($decoded) ? $decoded : [];
+        $status = strtoupper((string) ($data['status'] ?? ''));
+        $idTask = $this->extractTaskId($data);
+        $rejected = $status === 'REJECTED';
+        $http2xx = $httpCode >= 200 && $httpCode < 300;
+        // HTTP exitoso no basta: sin ID no existe una tarea que podamos consultar.
+        $ok = $http2xx && !$rejected && $idTask !== '';
+        $apiMessage = trim((string) ($data['message'] ?? ''));
+        if ($ok) {
+            $message = $apiMessage !== '' ? $apiMessage : 'Yuju aceptó la solicitud y creó la tarea; esto no confirma el procesamiento de cada SKU.';
+        } elseif ($apiMessage !== '') {
+            $message = $apiMessage;
+        } elseif ($http2xx && !$rejected) {
+            $message = 'Yuju respondió HTTP ' . $httpCode . ' sin id de tarea: ' . substr(trim((string) $responseBody), 0, 300);
+        } else {
+            $message = 'Yuju rechazó la actualización masiva (HTTP ' . $httpCode . ').';
+        }
+        $details = is_array($data['details'] ?? null) ? $data['details'] : [];
         $result = [
             'success' => $ok,
             'http_code' => $httpCode,
             'data' => $decoded,
-            // Conservar el cuerpo original: puede contener errores que no se reflejan en JSON.
+            'id_task' => $idTask,
+            'rejected' => $rejected,
+            'current_id_task' => $details['current_id_task'] ?? ($data['current_id_task'] ?? null),
             'raw_response' => (string) $responseBody,
-            'message' => (string) ($decoded['message'] ?? ($ok ? 'Yuju aceptó la solicitud y creó la tarea; esto no confirma el procesamiento de cada SKU.' : 'Yuju rechazó la actualización masiva.')),
+            'message' => $message,
         ];
         $this->logger->log($ok ? 'info' : 'error', 'Yuju bulk offer task submitted', [
             'endpoint' => 'products-offer',
             'http_code' => $httpCode,
             'sku_count' => count($lines),
-            'id_task' => $decoded['id_task'] ?? null,
-            'status' => $decoded['status'] ?? null,
-            'message' => $result['message'],
+            'id_task' => $idTask !== '' ? $idTask : null,
+            'status' => $data['status'] ?? null,
+            'message' => $message,
+            'raw_response' => $ok ? null : substr((string) $responseBody, 0, 500),
         ]);
         return $result;
     }
@@ -1182,26 +1239,7 @@ class YujuApiClient
             ];
         }
 
-        $oldPrecision = ini_get('serialize_precision');
-        ini_set('serialize_precision', -1);
-        $lines = [];
-        foreach ($offers as $offer) {
-            if (empty($offer['sku'])) {
-                continue;
-            }
-            $row = ['sku' => (string) $offer['sku']];
-            if (array_key_exists('stock', $offer) && $offer['stock'] !== null) {
-                $row['stock'] = (int) $offer['stock'];
-            }
-            if (array_key_exists('price', $offer) && $offer['price'] !== null) {
-                $row['price'] = (float) $offer['price'];
-            }
-            if (count($row) < 2) {
-                continue;
-            }
-            $lines[] = json_encode($row, JSON_UNESCAPED_SLASHES);
-        }
-        ini_set('serialize_precision', $oldPrecision);
+        $lines = $this->buildOfferJsonLines($offers);
 
         if (empty($lines)) {
             return [
