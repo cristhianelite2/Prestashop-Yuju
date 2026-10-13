@@ -395,7 +395,7 @@
             var $checkBtn = $('#yuju-check-update');
             $btn.prop('disabled', true).html('<i class="icon-refresh icon-spin"></i> Obteniendo…');
             $checkBtn.prop('disabled', true);
-            showUpdateAlert('info', 'Descargando y aplicando los archivos de GitHub. No cierre esta página.');
+            $('#yuju-update-alert').hide();
 
             $.ajax({
                 url: ajaxUrl,
