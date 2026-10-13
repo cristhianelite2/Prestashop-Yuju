@@ -170,8 +170,24 @@ class YujuOfferAuditor
             return $stats;
         }
 
-        // Permitir varias variaciones por producto padre y productos sin mapeo local.
+        // Migración defensiva: separar el producto padre de la combinación y eliminar dirección bidireccional.
         try {
+            $existingColumns = $db->executeS("SHOW COLUMNS FROM " . bqSQL($table));
+            $columnNames = [];
+            foreach ((array) $existingColumns as $column) {
+                $columnNames[strtolower($column['Field'])] = true;
+            }
+            if (!isset($columnNames['prestashop_product_attribute_id'])) {
+                $db->execute('ALTER TABLE ' . bqSQL($table) . ' ADD COLUMN prestashop_product_attribute_id INT(11) NULL DEFAULT NULL AFTER prestashop_product_id');
+            }
+            if (!isset($columnNames['parent_yuju_product_id'])) {
+                $db->execute('ALTER TABLE ' . bqSQL($table) . ' ADD COLUMN parent_yuju_product_id VARCHAR(255) NULL DEFAULT NULL AFTER yuju_product_id');
+            }
+            if (isset($columnNames['sync_direction'])) {
+                $db->execute('ALTER TABLE ' . bqSQL($table) . ' DROP COLUMN sync_direction');
+            }
+
+            // Permitir varias variaciones por producto padre y productos sin mapeo local.
             $columns = $db->executeS("SHOW COLUMNS FROM " . bqSQL($table) . " LIKE 'prestashop_product_id'");
             if (!empty($columns) && strtoupper((string) $columns[0]['Null']) !== 'YES') {
                 $db->execute('ALTER TABLE ' . bqSQL($table) . ' MODIFY prestashop_product_id INT(11) NULL');
