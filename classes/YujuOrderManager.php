@@ -308,7 +308,32 @@ class YujuOrderManager
      */
     public function ensureYujuCarrierPublic()
     {
-        return (int) $this->getCarrierId('Yuju');
+        $configuredId = (int) Configuration::get('YUJU_CARRIER_ID');
+        if ($configuredId > 0) {
+            $configuredCarrier = new Carrier($configuredId);
+            if (Validate::isLoadedObject($configuredCarrier) && !(int) $configuredCarrier->deleted) {
+                return (int) $configuredCarrier->id;
+            }
+        }
+
+        $existingId = (int) Db::getInstance()->getValue(
+            'SELECT id_carrier FROM `' . _DB_PREFIX_ . 'carrier`
+             WHERE name = "Yuju" AND deleted = 0
+             ORDER BY active DESC, id_carrier DESC'
+        );
+        if ($existingId > 0) {
+            Configuration::updateValue('YUJU_CARRIER_ID', $existingId);
+            return $existingId;
+        }
+
+        $carrierId = (int) $this->createYujuCarrier();
+        if ($carrierId <= 0) {
+            $this->logger->error('No se pudo crear el transportista Yuju; no se usará el transportista predeterminado como sustituto.');
+            return 0;
+        }
+
+        Configuration::updateValue('YUJU_CARRIER_ID', $carrierId);
+        return $carrierId;
     }
 
     /**
@@ -2339,7 +2364,7 @@ class YujuOrderManager
             return $carrier_id;
         }
 
-        $this->logger->log('Creating Yuju carrier...', 'info');
+        $this->logger->info('Creando transportista Yuju.');
         $carrier_id = (int) $this->createYujuCarrier();
 
         if ($carrier_id > 0) {
@@ -2348,10 +2373,7 @@ class YujuOrderManager
         }
 
         $fallback = (int) Configuration::get('PS_CARRIER_DEFAULT');
-        $this->logger->log(
-            'Yuju carrier unavailable, falling back to PS_CARRIER_DEFAULT=' . $fallback,
-            'error'
-        );
+        $this->logger->error('No se pudo crear el transportista Yuju; se usará PS_CARRIER_DEFAULT=' . $fallback . ' solo para operaciones que no sean de instalación.');
 
         return $fallback;
     }
@@ -2481,14 +2503,15 @@ class YujuOrderManager
 
             Configuration::updateValue('YUJU_CARRIER_ID', (int) $carrier->id);
 
-            $this->logger->log('Yuju carrier created successfully', [
+            $this->logger->info('Transportista Yuju creado correctamente.', [
                 'carrier_id' => (int) $carrier->id,
                 'range_price_id' => (int) $rangePrice->id,
             ]);
 
             return (int) $carrier->id;
         } catch (Exception $e) {
-            $this->logger->log('Error creating Yuju carrier: ' . $e->getMessage(), 'error');
+            $this->logger->error('Error al crear el transportista Yuju: ' . $e->getMessage(), ['file' => basename($e->getFile()), 'line' => $e->getLine()]);
+            error_log('[Yuju carrier] Error: ' . get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine());
             return 0;
         } catch (Throwable $e) {
             $this->logger->log('Error creating Yuju carrier: ' . $e->getMessage(), 'error');
