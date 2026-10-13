@@ -4,7 +4,7 @@
     <displayName><![CDATA[Integración Yuju]]></displayName>
     <version><![CDATA[1.1.17]]></version>
     <description><![CDATA[Sincroniza tu tienda PrestaShop con Yuju para administrar productos, inventario y pedidos.]]></description>
-    <author><![CDATA[Yuju Integration Team]]></author>
+    <author><![CDATA[Equipo de integración Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>
     <confirmUninstall><![CDATA[¿Seguro que deseas desinstalar el módulo Integración Yuju? Se eliminarán los datos de sincronización.]]></confirmUninstall>
     <is_configurable>1</is_configurable>
