@@ -623,7 +623,7 @@ class YujuSyncQueue
                     Db::getInstance()->update('yuju_product_status', [
                         'sync_status' => pSQL('synced'), 'last_error' => null,
                         'last_sync_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
-                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id']);
+                    ], 'prestashop_product_id = ' . (int) $item['prestashop_product_id'] . ' AND ' . ((int) ($item['prestashop_product_attribute_id'] ?? 0) > 0 ? 'prestashop_product_attribute_id = ' . (int) $item['prestashop_product_attribute_id'] : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
                 }
                 $this->updateQueueStatus($item['id'], 'completed');
                 $stats['success']++;
