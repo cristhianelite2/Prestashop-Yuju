@@ -188,11 +188,13 @@ class AdminYujuWebhookController extends ModuleAdminController
                 $missing_topics = $subscription_status['missing_topics'];
             }
             $topics_text = !empty($missing_topics) ? implode(', ', $missing_topics) : 'No se detectaron topics requeridos';
-            $status_alert_html = '<div class="yuju-webhook-notice yuju-webhook-notice-warning">
-                . '<p style="margin:0 0 8px 0;"><strong>Atención:</strong> No se detectó una suscripción activa con todos los webhooks necesarios de Yuju.</p>'
-                . '<p style="margin:0 0 10px 0;">Faltantes: <code>' . htmlspecialchars($topics_text, ENT_QUOTES, 'UTF-8') . '</code></p>'
-                . '<a class="btn btn-warning" href="' . htmlspecialchars($enable_webhooks_url, ENT_QUOTES, 'UTF-8') . '">'
-                . '<i class="icon-check"></i> Habilitar webhooks'
+            $status_alert_html = '<div class="yuju-webhook-notice yuju-webhook-notice-warning">'
+                . '<span class="yuju-webhook-notice-icon"><i class="icon-exclamation-triangle"></i></span>'
+                . '<span class="yuju-webhook-notice-text"><strong>Atención: faltan webhooks</strong>'
+                . '<span>No se detectó una suscripción activa con todos los webhooks necesarios de Yuju.</span>'
+                . '<span>Faltantes: <code>' . htmlspecialchars($topics_text, ENT_QUOTES, 'UTF-8') . '</code></span></span>'
+                . '<a class="yuju-webhook-notice-action" href="' . htmlspecialchars($enable_webhooks_url, ENT_QUOTES, 'UTF-8') . '">'
+                . '<i class="icon-check"></i> Habilitar'
                 . '</a>'
                 . '</div>';
         } else {
