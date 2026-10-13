@@ -2405,7 +2405,9 @@ class YujuOrderManager
             $carrier->max_depth = 0;
             $carrier->max_weight = 0;
             $carrier->grade = 0;
-            $carrier->url = '';
+            // La URL de seguimiento es opcional. Dejarla en null evita que
+            // Validate::isAbsoluteUrl rechace una cadena vacía en PrestaShop 9.
+            $carrier->url = null;
 
             $languages = Language::getLanguages(false);
             if (empty($languages)) {
@@ -2416,10 +2418,17 @@ class YujuOrderManager
             }
 
             if (!$carrier->add()) {
-                $msg = method_exists($carrier, 'validateFields')
-                    ? (string) $carrier->validateFields(false, true)
-                    : 'Carrier->add() returned false';
-                throw new Exception('Failed to create Yuju carrier: ' . $msg);
+                $validation = '';
+                try {
+                    $validation = (string) $carrier->validateFields(false, true);
+                } catch (Throwable $validationError) {
+                    $validation = $validationError->getMessage();
+                }
+                $dbError = (string) Db::getInstance()->getMsgError();
+                throw new Exception(
+                    'Carrier->add() devolvió false. Validación: ' . ($validation !== '' ? $validation : 'sin detalle')
+                    . '; base de datos: ' . ($dbError !== '' ? $dbError : 'sin detalle')
+                );
             }
 
             // Referencia estable (PS la usa al editar carriers)
