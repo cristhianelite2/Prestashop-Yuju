@@ -58,6 +58,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
+        'prestashop_product_attribute_id' => [
+        'title' => 'ID Combinación PS',
+        'align' => 'center',
+        'class' => 'fixed-width-sm',
+        ],
         'product_name' => [
         'title' => 'Nombre del Producto',
         'callback' => 'getProductName',
@@ -68,7 +73,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'class' => 'fixed-width-sm',
         ],
         'yuju_variation_id' => [
-        'title' => 'ID Variación Yuju',
+        'title' => 'Clave de Variación Yuju',
         'align' => 'center',
         'class' => 'fixed-width-sm',
         ],
@@ -562,6 +567,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Write header
         fputcsv($handle, [
         'PrestaShop Product ID',
+        'PrestaShop Combination ID',
         'Product Name',
         'Yuju Product ID',
         'Yuju Product Name',
@@ -587,6 +593,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         foreach ($records as $record) {
             fputcsv($handle, [
             $record['prestashop_product_id'],
+            $record['prestashop_product_attribute_id'],
             $record['product_name'],
             $record['yuju_product_id'],
             $record['yuju_product_name'],
