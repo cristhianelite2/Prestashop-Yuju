@@ -270,8 +270,8 @@ class YujuProductManager
         }
         
         // Stock es obligatorio - SIEMPRE tomar de PrestaShop
-        $stock = StockAvailable::getQuantityAvailableByProduct($product->id);
-        $data['stock'] = (int) $stock;
+        $stock = max(0, (int) StockAvailable::getQuantityAvailableByProduct($product->id));
+        $data['stock'] = $stock;
         
         // id_category es obligatorio - usar categoría mapeada del producto (default o cualquiera asignada)
         if ($product->id_category_default) {
