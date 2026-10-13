@@ -1,3 +1,7 @@
+## [1.1.15] - 2026-10-13
+### Corregido
+- Se restaura el panel de estadísticas de productos: contadores, actividad reciente, errores y estado agrupado por categoría. Se alinea la estructura que entrega el controlador con las variables que consume la plantilla y se cuentan productos únicos aunque tengan combinaciones.
+
 ## [1.1.14] - 2026-10-13
 ### Corregido
 - La pantalla de mapeo de estados se sirve desde el controlador administrativo existente `AdminYuju`, evitando depender de una pestaña de administración que puede no estar registrada en instalaciones existentes.
