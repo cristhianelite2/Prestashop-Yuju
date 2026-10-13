@@ -73,6 +73,7 @@ class Yuju extends Module
     public function install()
     {
         $stage = 'preparar contexto de tiendas';
+        $baseInstalled = false;
 
         try {
             if (Shop::isFeatureActive()) {
@@ -84,6 +85,7 @@ class Yuju extends Module
                 $this->logInstallFailure($stage, 'PrestaShop rechazó la instalación base del módulo.');
                 return false;
             }
+            $baseInstalled = true;
 
             $steps = [
                 'crear tablas SQL' => 'installDb',
@@ -100,6 +102,7 @@ class Yuju extends Module
                 $stage = $label;
                 if (!$this->{$method}()) {
                     $this->logInstallFailure($stage, 'El paso devolvió false.');
+                    $this->rollbackFailedInstall();
                     return false;
                 }
             }
@@ -110,8 +113,30 @@ class Yuju extends Module
                 $stage,
                 get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine()
             );
+            if ($baseInstalled) {
+                $this->rollbackFailedInstall();
+            }
 
             return false;
+        }
+    }
+
+    /**
+     * Deshace solo el registro base y las pestañas de una instalación incompleta.
+     * Conserva tablas y configuración para no destruir datos preexistentes.
+     */
+    protected function rollbackFailedInstall()
+    {
+        try {
+            $this->uninstallTabs();
+        } catch (Throwable $e) {
+            error_log('[Yuju install] No se pudieron limpiar las pestañas parciales: ' . $e->getMessage());
+        }
+
+        try {
+            parent::uninstall();
+        } catch (Throwable $e) {
+            error_log('[Yuju install] No se pudo revertir el registro base: ' . $e->getMessage());
         }
     }
 
@@ -799,7 +824,7 @@ class Yuju extends Module
 
             if (Validate::isLoadedObject($tab) && $tab->id > 0) {
                 if (!$tab->delete()) {
-                    $this->logger->error('Failed to uninstall tab: ' . $class_name);
+                    PrestaShopLogger::addLog('[Yuju uninstall] No se pudo eliminar la pestaña: ' . $class_name, 2);
                 }
             }
         }
