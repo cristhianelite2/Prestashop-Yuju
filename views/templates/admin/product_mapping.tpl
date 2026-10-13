@@ -47,6 +47,7 @@
                                 <th>Campo Yuju</th>
                                 <th>Tipo</th>
                                 <th>Transformación</th>
+                                <th>Valor por defecto</th>
                                 <th>Requerido</th>
                                 <th>Acciones</th>
                             </tr>
@@ -73,21 +74,31 @@
                                             {else}{$mapping.prestashop_field}{/if}
                                         </td>
                                         <td>
-                                            {if $mapping.yuju_field == 'name'}Nombre (Yuju) - REQUERIDO
+                                            {if $mapping.yuju_field == 'sku_simple'}SKU Simple (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'sku'}SKU (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'sku_simple'}SKU Simple (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'name'}Nombre (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'description'}Descripción (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'images'}Imágenes (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'id_category'}ID de categoría (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'stock'}Stock (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'price'}Precio (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'stock_quantity'}Stock (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'brand'}Fabricante (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping'}Envío (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'dimensions_unit'}Unidad de dimensiones (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_width'}Anchura del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_depth'}Profundidad del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_height'}Altura del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'weight_unit'}Unidad de peso (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'weight'}Peso del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'images'}Imágenes (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'stock'}Stock (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'brand'}Marca (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'condition'}Condición (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'shipping_method'}Método de envío (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping'}Envío (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'shipping_price'}Precio de envío (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'dimension_unit'}Unidad de dimensión (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'height'}Altura (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'width'}Ancho (Yuju) - REQUERIDO
-                                            {elseif $mapping.yuju_field == 'depth'}Profundidad (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'dimensions_unit'}Unidad de dimensiones (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_height'}Altura del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_width'}Anchura del paquete (Yuju) - REQUERIDO
+                                            {elseif $mapping.yuju_field == 'shipping_depth'}Profundidad del paquete (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'weight_unit'}Unidad de peso (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'weight'}Peso (Yuju) - REQUERIDO
                                             {elseif $mapping.yuju_field == 'mercadolibre_template'}Plantilla de MercadoLibre (Yuju) - REQUERIDO
@@ -125,6 +136,13 @@
                                             {elseif $mapping.transformation_rule == 'currency_convert'}Convertir Moneda
                                             {elseif $mapping.transformation_rule == 'custom'}Código PHP Personalizado
                                             {else}{$mapping.transformation_rule}{/if}
+                                        </td>
+                                        <td>
+                                            {if isset($mapping.default_value) && $mapping.default_value !== ''}
+                                                <code>{$mapping.default_value|escape:'htmlall':'UTF-8'}</code>
+                                            {else}
+                                                <span class="text-muted">—</span>
+                                            {/if}
                                         </td>
                                         <td>
                                             {if $mapping.is_required}
