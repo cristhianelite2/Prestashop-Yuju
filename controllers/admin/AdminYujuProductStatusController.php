@@ -185,9 +185,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Add statistics
         $stats = $this->getProductStatusStats();
 
+        // The statistics template consumes the "stats" structure. Keep the
+        // legacy variable as an alias for compatibility with any custom templates.
         $this->context->smarty->assign([
-        'product_status_stats' => $stats,
-        'sync_running' => $this->sync_manager->isSyncRunning(),
+            'stats' => $stats,
+            'product_status_stats' => $stats,
+            'sync_running' => $this->sync_manager->isSyncRunning(),
         ]);
 
         $stats_html = $this->context->smarty->fetch(_PS_MODULE_DIR_ . 'prestashopyuju/views/templates/admin/product_status_stats.tpl');
@@ -469,36 +472,156 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     protected function getProductStatusStats()
     {
+        $db = Db::getInstance();
         $stats = [];
 
-        // Total products
-        $stats['total'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status
+        // Build one synchronization status per PrestaShop product so combinations
+        // do not inflate the headline or per-category product counts.
+        $productStatusSql = '
+            SELECT
+                prestashop_product_id,
+                CASE
+                    WHEN SUM(sync_status IN ("error", "synced_with_errors")) > 0 THEN "error"
+                    WHEN SUM(sync_status IN ("synced", "synced_with_warnings")) > 0 THEN "synced"
+                    WHEN SUM(sync_status = "disabled") > 0 THEN "disabled"
+                    ELSE "pending"
+                END AS product_sync_status,
+                MAX(last_sync_at) AS last_sync_at,
+                MAX(error_count) AS error_count,
+                MAX(last_error) AS last_error
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            WHERE prestashop_product_id IS NOT NULL
+              AND prestashop_product_id > 0
+            GROUP BY prestashop_product_id
+        ';
+
+        $stats['total_products'] = (int) $db->getValue('
+            SELECT COUNT(*)
+            FROM ' . _DB_PREFIX_ . 'product p
+            WHERE p.active = 1
         ');
 
-        // By status
-        $stats['by_status'] = Db::getInstance()->executeS('
-        SELECT sync_status, COUNT(*) as count
-        FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        GROUP BY sync_status
+        $stats['synced_products'] = (int) $db->getValue('
+            SELECT COUNT(*)
+            FROM ' . _DB_PREFIX_ . 'product p
+            INNER JOIN (' . $productStatusSql . ') ps
+                ON ps.prestashop_product_id = p.id_product
+            WHERE p.active = 1
+              AND ps.product_sync_status = "synced"
         ');
 
-        // Active vs inactive
-        $stats['active'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE sync_enabled = 1
+        $stats['pending_products'] = (int) $db->getValue('
+            SELECT COUNT(*)
+            FROM ' . _DB_PREFIX_ . 'product p
+            LEFT JOIN (' . $productStatusSql . ') ps
+                ON ps.prestashop_product_id = p.id_product
+            WHERE p.active = 1
+              AND (ps.prestashop_product_id IS NULL OR ps.product_sync_status = "pending")
         ');
 
-        $stats['inactive'] = $stats['total'] - $stats['active'];
-
-        // With errors
-        $stats['with_errors'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE error_count > 0
+        $stats['error_products'] = (int) $db->getValue('
+            SELECT COUNT(*)
+            FROM ' . _DB_PREFIX_ . 'product p
+            INNER JOIN (' . $productStatusSql . ') ps
+                ON ps.prestashop_product_id = p.id_product
+            WHERE p.active = 1
+              AND ps.product_sync_status = "error"
         ');
 
-        // Recent syncs
-        $stats['recent_syncs'] = (int) Db::getInstance()->getValue('
-        SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status
-        WHERE last_sync_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        $stats['last_sync_date'] = $db->getValue('
+            SELECT MAX(last_sync_at)
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+        ');
+
+        // Category membership is taken from category_product, not only the
+        // default category, so products appear in every category they belong to.
+        $stats['category_stats'] = $db->executeS('
+            SELECT
+                c.id_category AS category_id,
+                cl.name AS category_name,
+                COUNT(DISTINCT p.id_product) AS total,
+                COUNT(DISTINCT CASE
+                    WHEN ps.product_sync_status = "synced" THEN p.id_product
+                    ELSE NULL
+                END) AS synced,
+                COUNT(DISTINCT CASE
+                    WHEN ps.prestashop_product_id IS NULL
+                      OR ps.product_sync_status = "pending" THEN p.id_product
+                    ELSE NULL
+                END) AS pending,
+                COUNT(DISTINCT CASE
+                    WHEN ps.product_sync_status = "error" THEN p.id_product
+                    ELSE NULL
+                END) AS errors
+            FROM ' . _DB_PREFIX_ . 'category_product cp
+            INNER JOIN ' . _DB_PREFIX_ . 'product p
+                ON p.id_product = cp.id_product AND p.active = 1
+            INNER JOIN ' . _DB_PREFIX_ . 'category c
+                ON c.id_category = cp.id_category
+            INNER JOIN ' . _DB_PREFIX_ . 'category_lang cl
+                ON cl.id_category = c.id_category
+               AND cl.id_lang = ' . (int) $this->context->language->id . '
+               AND cl.id_shop = ' . (int) $this->context->shop->id . '
+            LEFT JOIN (' . $productStatusSql . ') ps
+                ON ps.prestashop_product_id = p.id_product
+            GROUP BY c.id_category, cl.name
+            ORDER BY cl.name ASC
+        ');
+        if (!is_array($stats['category_stats'])) {
+            $stats['category_stats'] = [];
+        }
+
+        // Recent activity data is an array, as expected by the template.
+        $stats['recent_syncs'] = $db->executeS('
+            SELECT
+                ps.prestashop_product_id AS product_id,
+                COALESCE(pl.name, ps.yuju_product_name, CONCAT("Producto #", ps.prestashop_product_id)) AS product_name,
+                ps.sync_status,
+                ps.last_sync_at AS last_sync_attempt
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status ps
+            LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                ON pl.id_product = ps.prestashop_product_id
+               AND pl.id_lang = ' . (int) $this->context->language->id . '
+               AND pl.id_shop = ' . (int) $this->context->shop->id . '
+            WHERE ps.last_sync_at IS NOT NULL
+            ORDER BY ps.last_sync_at DESC
+            LIMIT 10
+        ');
+        if (!is_array($stats['recent_syncs'])) {
+            $stats['recent_syncs'] = [];
+        }
+
+        $stats['recent_errors'] = $db->executeS('
+            SELECT
+                ps.prestashop_product_id AS product_id,
+                COALESCE(pl.name, ps.yuju_product_name, CONCAT("Producto #", ps.prestashop_product_id)) AS product_name,
+                COALESCE(NULLIF(ps.last_error, ""), "Error de sincronización (sin detalle)") AS error_message,
+                ps.last_sync_at AS error_date
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status ps
+            LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                ON pl.id_product = ps.prestashop_product_id
+               AND pl.id_lang = ' . (int) $this->context->language->id . '
+               AND pl.id_shop = ' . (int) $this->context->shop->id . '
+            WHERE ps.error_count > 0
+               OR ps.sync_status IN ("error", "synced_with_errors")
+            ORDER BY ps.last_sync_at DESC
+            LIMIT 10
+        ');
+        if (!is_array($stats['recent_errors'])) {
+            $stats['recent_errors'] = [];
+        }
+
+        // Preserve the previous summary keys in case another module template uses them.
+        $stats['total'] = $stats['total_products'];
+        $stats['active'] = (int) $db->getValue('
+            SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE sync_enabled = 1
+        ');
+        $stats['inactive'] = max(0, $stats['total'] - $stats['active']);
+        $stats['with_errors'] = $stats['error_products'];
+        $stats['by_status'] = $db->executeS('
+            SELECT sync_status, COUNT(*) AS count
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            GROUP BY sync_status
         ');
 
         return $stats;
