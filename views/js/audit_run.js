@@ -1082,9 +1082,11 @@
             });
 
             var issueCount = lastUpdateIssues.length;
-            var summaryTitle = resp.task_id
-                ? 'Tarea masiva creada en Yuju; pendiente de resultado.'
-                : (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.');
+            var summaryTitle = Number(resp.submitted || 0) > 0 && (Number(resp.failed || 0) > 0 || Number(resp.skipped || 0) > 0)
+                ? 'Actualización parcial: se enviaron los productos válidos y se omitieron los que dieron error.'
+                : (resp.task_id
+                    ? 'Tarea masiva creada en Yuju; pendiente de resultado.'
+                    : (resp.success ? 'Actualización terminada.' : 'Actualización parcial o sin cambios.'));
             var summaryHtml = '<strong>' + summaryTitle + '</strong> ' + escapeHtml(resp.message || '');
 
             if (issueCount > 0 || Number(resp.failed || 0) > 0 || Number(resp.skipped || 0) > 0) {
