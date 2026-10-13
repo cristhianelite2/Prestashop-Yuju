@@ -47,6 +47,11 @@
                 <button type="button" class="btn btn-warning" id="btn-refresh-yuju-categories">
                     <i class="icon-download"></i> Actualizar Categorías de Yuju
                 </button>
+                {if isset($madkting_mapping_available) && $madkting_mapping_available}
+                    <button type="button" class="btn btn-info" id="btn-import-madkting-mappings">
+                        <i class="icon-random"></i> Importar mapeos de Madkting ({$madkting_mapping_count|intval})
+                    </button>
+                {/if}
             </div>
         </div>
         
@@ -414,6 +419,36 @@ $(document).ready(function() {
         }
     });
     
+    // Importar mapeos de Madkting sin alterar la tabla de origen
+    $('#btn-import-madkting-mappings').click(function() {
+        if (!confirm('Se importarán únicamente los mapeos cuyo ID de categoría coincida con una categoría oficial de Yuju. Los mapeos existentes no se sobrescribirán. ¿Desea continuar?')) {
+            return;
+        }
+
+        var button = $(this);
+        button.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Importando...');
+
+        $.ajax({
+            url: '{$ajax_url}',
+            type: 'POST',
+            dataType: 'json',
+            data: { action: 'importMadktingMappings', token: '{$token|escape:'javascript':'UTF-8'}' },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.message);
+                    button.prop('disabled', false).html('<i class="icon-random"></i> Importar mapeos de Madkting');
+                }
+            },
+            error: function() {
+                alert('Error al importar los mapeos de Madkting.');
+                button.prop('disabled', false).html('<i class="icon-random"></i> Importar mapeos de Madkting');
+            }
+        });
+    });
+
     // Actualizar categorías de Yuju
     $('#btn-refresh-yuju-categories').click(function() {
         var button = $(this);
