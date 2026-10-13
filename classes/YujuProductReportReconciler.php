@@ -22,12 +22,27 @@ class YujuProductReportReconciler
                 throw new InvalidArgumentException('A Yuju report product is missing id_product.');
             }
 
-            $product_id = (string) $product['id_product'];
-            ++$index['product_count'];
-            if (isset($index['by_id'][$product_id])) {
-                $index['duplicate_ids'][$product_id] = true;
+            $product_id = trim((string) $product['id_product']);
+            if ($product_id === '') {
+                throw new InvalidArgumentException('A Yuju report product has an empty id_product.');
             }
-            $index['by_id'][$product_id] = true;
+
+            // A repeated parent ID is not a second catalog item. Ignore exact duplicate
+            // rows, but fail closed if the same ID carries conflicting product data.
+            $signature_data = $product;
+            unset($signature_data['_report_downloaded_at']);
+            $signature = json_encode($signature_data);
+            if (isset($index['by_id'][$product_id])) {
+                if ($index['by_id'][$product_id] !== $signature) {
+                    throw new InvalidArgumentException(
+                        'The Yuju report contains conflicting rows for product ID ' . $product_id . '. Catalog reconciliation was cancelled.'
+                    );
+                }
+                continue;
+            }
+
+            $index['by_id'][$product_id] = $signature;
+            ++$index['product_count'];
 
             foreach (['sku_simple', 'sku'] as $field) {
                 if (isset($product[$field]) && is_scalar($product[$field])) {
