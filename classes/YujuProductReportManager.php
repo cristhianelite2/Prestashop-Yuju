@@ -14,6 +14,10 @@ class YujuProductReportManager
     const STATE_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_STATE';
     const QUOTA_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_QUOTA';
     const OFFER_STATE_CONFIG_KEY = 'YUJU_PRODUCTS_OFFER_REPORT_STATE';
+    // Yuju limits report generation to two per day, so a stock/price file is reused for 12 hours.
+    const OFFER_REPORT_TTL = 43200;
+    // The offer download URL is temporary: keep it only briefly to retry a failed transfer.
+    const OFFER_URL_TTL = 300;
 
     private $api_client;
     private $file_store;
@@ -218,7 +222,8 @@ class YujuProductReportManager
                 Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
             }
         }
-        if (!empty($offer_state['cache_id'])) {
+        $offer_cache_is_fresh = $this->isOfferReportFresh($offer_state);
+        if (!empty($offer_state['cache_id']) && $offer_cache_is_fresh) {
             try {
                 $cached_products = $this->file_store->readOfferProducts($offer_state['cache_id']);
                 if (!empty($cached_products)) {
@@ -229,14 +234,13 @@ class YujuProductReportManager
                     $offer_state['report_size_bytes'] = isset($offer_state['report_size_bytes'])
                         ? (int) $offer_state['report_size_bytes']
                         : (int) @filesize(dirname(__DIR__) . '/var/reports/' . $offer_state['cache_id'] . '.json');
-                    $offer_state['download_url'] = $this->getSavedOfferReportUrl($offer_state);
+                    unset($offer_state['download_url'], $offer_state['download_url_saved_at']);
                     Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
                     $this->saveReportMetadata([
                         'cache_id' => $offer_state['cache_id'],
                         'product_count' => count($cached_products),
                         'report_size_bytes' => $offer_state['report_size_bytes'],
-                        'report_downloaded_at' => isset($offer_state['report_downloaded_at']) ? (int) $offer_state['report_downloaded_at'] : time(),
-                        'download_url' => !empty($offer_state['download_url']) ? $offer_state['download_url'] : null,
+                        'report_downloaded_at' => $this->getOfferDownloadedAt($offer_state),
                     ], 'offer');
                     return [
                         'success' => true,
@@ -254,7 +258,10 @@ class YujuProductReportManager
             }
         }
 
-        $url = $this->getSavedOfferReportUrl($offer_state);
+        // A stale file (older than 12 hours) must be replaced by a new report, so an old URL is ignored.
+        $url = !empty($offer_state['cache_id']) && !$offer_cache_is_fresh
+            ? ''
+            : $this->getSavedOfferReportUrl($offer_state);
         $response_http_code = 200;
 
         if ($url === '') {
@@ -292,6 +299,7 @@ class YujuProductReportManager
             // Persist the URL before downloading so a failed transfer can be retried
             // without calling the report endpoint again.
             $offer_state['download_url'] = $url;
+            $offer_state['download_url_saved_at'] = time();
             Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
         }
 
@@ -304,7 +312,6 @@ class YujuProductReportManager
                 'product_count' => count($offer_products),
                 'report_size_bytes' => $saved['size_bytes'],
                 'report_downloaded_at' => $saved['saved_at'],
-                'download_url' => $url,
             ];
 
             if (!$this->saveReportMetadata($state, 'offer')) {
@@ -321,7 +328,6 @@ class YujuProductReportManager
                 'product_count' => count($offer_products),
                 'report_size_bytes' => $saved['size_bytes'],
                 'report_downloaded_at' => $saved['saved_at'],
-                'download_url' => $url,
             ];
             if (!Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($new_offer_state))) {
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
@@ -332,7 +338,10 @@ class YujuProductReportManager
                 ];
             }
             if (!$this->persistOfferProductsToDatabase($offer_products, $saved['cache_id'])) {
-                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode(['download_url' => $url]));
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode([
+                    'download_url' => $url,
+                    'download_url_saved_at' => time(),
+                ]));
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
                 return [
                     'success' => false,
@@ -454,39 +463,48 @@ class YujuProductReportManager
     }
 
     /**
-     * Recover an existing temporary URL without requesting a new report.
-     * Older module versions may have persisted it in the report metadata table.
+     * Return the temporary download URL only while it is still recent. It is never
+     * read from the report table: the signed URL expires and is not kept in the database.
      */
     protected function getSavedOfferReportUrl($offer_state)
     {
-        if (is_array($offer_state) && !empty($offer_state['download_url']) && is_string($offer_state['download_url'])) {
-            return trim($offer_state['download_url']);
+        if (!is_array($offer_state) || empty($offer_state['download_url']) || !is_string($offer_state['download_url'])) {
+            return '';
         }
 
-        try {
-            $db = Db::getInstance();
-            $table = _DB_PREFIX_ . 'yuju_product_reports';
-            $table_sql = chr(96) . bqSQL($table) . chr(96);
-            $exists = $db->getValue("SHOW TABLES LIKE '" . pSQL(_DB_PREFIX_ . "yuju_product_reports") . "'");
-            if ($exists) {
-                // Older installations keep the table but lack this column. Migrate it
-                // before selecting the URL instead of silently falling back to Yuju.
-                $has_url_column = $db->getValue("SHOW COLUMNS FROM " . $table_sql . " LIKE 'download_url'");
-                if (!$has_url_column) {
-                    $db->execute("ALTER TABLE " . $table_sql . " ADD COLUMN download_url TEXT NULL");
-                }
-                $url = $db->getValue("SELECT download_url FROM " . $table_sql
-                    . " WHERE report_type = 'offer' AND download_url IS NOT NULL AND download_url <> ''"
-                    . " ORDER BY id DESC LIMIT 1");
-                if (is_string($url) && trim($url) !== '') {
-                    return trim($url);
-                }
+        $saved_at = isset($offer_state['download_url_saved_at']) ? (int) $offer_state['download_url_saved_at'] : 0;
+
+        return $saved_at > 0 && (time() - $saved_at) <= self::OFFER_URL_TTL
+            ? trim($offer_state['download_url'])
+            : '';
+    }
+
+    /**
+     * Moment the local offer file was downloaded (0 when unknown).
+     */
+    protected function getOfferDownloadedAt($offer_state)
+    {
+        foreach (['report_downloaded_at', 'downloaded_at', 'saved_at'] as $key) {
+            if (!empty($offer_state[$key])) {
+                return (int) $offer_state[$key];
             }
-        } catch (Exception $e) {
-            // Continue to the API fallback only if no recoverable URL is present.
         }
 
-        return '';
+        return 0;
+    }
+
+    /**
+     * True while the local stock/price file is newer than OFFER_REPORT_TTL.
+     */
+    protected function isOfferReportFresh($offer_state)
+    {
+        if (!is_array($offer_state) || empty($offer_state['cache_id']) || !$this->isUsableOfferCache($offer_state['cache_id'])) {
+            return false;
+        }
+
+        $downloaded_at = $this->getOfferDownloadedAt($offer_state);
+
+        return $downloaded_at > 0 && (time() - $downloaded_at) < self::OFFER_REPORT_TTL;
     }
 
     protected function countOfferRows($payload)

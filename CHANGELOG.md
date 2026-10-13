@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- El botón «Iniciar sincronización» muestra el avance paso a paso (solicitar informe general, esperar y descargar, obtener stock/precio, combinar y detectar diferencias), con el estado de cada paso y el tiempo transcurrido de espera; si un paso falla se marca con su error y el botón se libera.
+- El reporte de stock/precio (oferta) se reutiliza durante 12 horas; pasado ese tiempo se solicita y descarga uno nuevo. La URL temporal de descarga ya no se guarda en la tabla `yuju_product_reports` y en la configuración solo se conserva 5 minutos mientras se reintenta una descarga fallida; se elimina al terminar.
+- Se corrige la estructura de `sync_info.tpl`: la reconciliación estaba dentro de `panel-heading` (se veía con estilos de encabezado); ahora el contenido va en `panel-body` y la tabla permite desplazamiento horizontal.
+- Se agrega `tests/offer_report_ttl_test.php` para la reutilización de 12 horas y la URL temporal.
+
 - Se añade un botón JSON por producto en la reconciliación para inspeccionar el payload generado por los mapeos activos de PrestaShop→Yuju, las variaciones y el registro original correspondiente del reporte Yuju cacheado, sin realizar escrituras en la API.
 
 - Se separan diferencias urgentes (solo stock y precio) de las no urgentes; se agregan selección individual/masiva y actualización limitada a esos campos, con reconciliación automática posterior.
