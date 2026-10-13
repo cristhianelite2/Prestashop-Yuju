@@ -84,9 +84,17 @@
         var html = '';
         tasks.slice().reverse().forEach(function (task) {
             var details = Array.isArray(task.details) ? task.details : [];
-            var detailCell = details.length
-                ? '<button type="button" class="btn btn-xs btn-warning yuju-bulk-task-details" data-task-id="' + esc(task.id_task) + '">Ver detalles (' + details.length + ')</button>'
-                : esc(task.message || '—') + (task.last_check_error ? '<br><small class="text-danger">' + esc(task.last_check_error) + '</small>' : '');
+            var errors = parseInt(task.errors_count, 10) || 0;
+            var detailLabel = details.length
+                ? 'Ver detalles (' + details.length + ')'
+                : (errors > 0 ? 'Ver respuesta de Yuju (' + errors + ' errores)' : 'Ver respuesta de Yuju');
+            var detailCell = (details.length || errors > 0 || task.api_response)
+                ? '<button type="button" class="btn btn-xs ' + (errors > 0 ? 'btn-warning' : 'btn-default') + ' yuju-bulk-task-details" data-task-id="' + esc(task.id_task) + '">' + esc(detailLabel) + '</button>'
+                : esc(task.message || '—');
+            if (errors > 0 && !details.length) {
+                detailCell += '<br><small class="text-warning">Yuju reportó ' + errors + ' errores, pero no se identificaron detalles por SKU. Abra la respuesta de Yuju para ver qué información entregó la API.</small>';
+            }
+            if (task.last_check_error) detailCell += '<br><small class="text-danger">' + esc(task.last_check_error) + '</small>';
             html += '<tr><td>' + esc(task.submitted_at || '—') + '</td>'
                 + '<td><code>' + esc(task.id_task || '') + '</code></td>'
                 + '<td>' + esc(task.status || 'CREATED') + '</td>'
@@ -154,7 +162,18 @@
                     if (String(candidate.id_task) === id) { task = candidate; return true; }
                     return false;
                 });
-                $('#yuju-bulk-offer-task-details').text(task ? JSON.stringify(task.details || task.history || task, null, 2) : 'No se encontró el detalle de la tarea.').show();
+                var output = 'No se encontró el detalle de la tarea.';
+                if (task) {
+                    if (Array.isArray(task.details) && task.details.length) {
+                        output = JSON.stringify(task.details, null, 2);
+                    } else if (task.api_response) {
+                        output = 'Yuju reportó ' + (parseInt(task.errors_count, 10) || 0) + ' error(es), pero no devolvió detalles por SKU reconocibles.\n' +
+                            'Respuesta completa recibida de la API (para diagnóstico):\n\n' + JSON.stringify(task.api_response, null, 2);
+                    } else {
+                        output = JSON.stringify(task.history || task, null, 2);
+                    }
+                }
+                $('#yuju-bulk-offer-task-details').text(output).show();
             });
         });
         if ($('#yuju-bulk-offer-task-panel').length) {
