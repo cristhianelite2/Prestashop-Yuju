@@ -7,16 +7,16 @@
     <body>
       <!-- Module Information -->
       <trans-unit id="1" resname="Modules.Yuju.Admin">
-        <source>Yuju Integration</source>
-        <target>Integración Yuju</target>
+        <source>Yuju</source>
+        <target>Yuju</target>
       </trans-unit>
       <trans-unit id="2" resname="Modules.Yuju.Admin">
-        <source>Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.</source>
-        <target>Sincroniza tu tienda PrestaShop con la plataforma Yuju para una gestión perfecta de inventario, productos y pedidos.</target>
+        <source>Connect your PrestaShop store with Yuju to synchronize inventory, products and orders.</source>
+        <target>Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.</target>
       </trans-unit>
       <trans-unit id="3" resname="Modules.Yuju.Admin">
-        <source>Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.</source>
-        <target>¿Está seguro de que desea desinstalar el módulo de Integración Yuju? Esto eliminará todos los datos de sincronización.</target>
+        <source>Are you sure you want to uninstall the Yuju module? This will remove synchronization data.</source>
+        <target>¿Seguro que deseas desinstalar el módulo Yuju? Se eliminarán los datos de sincronización.</target>
       </trans-unit>
       
       <!-- Menu Items -->
