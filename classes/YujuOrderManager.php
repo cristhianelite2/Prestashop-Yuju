@@ -2425,6 +2425,8 @@ class YujuOrderManager
      */
     protected function createYujuCarrier()
     {
+        $createdCarrierId = 0;
+
         try {
             $carrier = new Carrier();
             $carrier->name = 'Yuju';
@@ -2470,6 +2472,8 @@ class YujuOrderManager
                     . '; base de datos: ' . ($dbError !== '' ? $dbError : 'sin detalle')
                 );
             }
+
+            $createdCarrierId = (int) $carrier->id;
 
             // Referencia estable (PS la usa al editar carriers)
             $carrier->id_reference = (int) $carrier->id;
