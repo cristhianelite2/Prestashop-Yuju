@@ -19,6 +19,135 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
+<div class="panel panel-info" id="yuju-bulk-offer-task-panel">
+    <div class="panel-heading">
+        <i class="icon-tasks"></i> Estado de tareas masivas de ofertas Yuju
+        <span class="pull-right">
+            <button type="button" class="btn btn-default btn-xs" id="yuju-refresh-bulk-offer-tasks">
+                <i class="icon-refresh"></i> Actualizar estado
+            </button>
+        </span>
+    </div>
+    <div class="panel-body">
+        <p class="help-block">
+            Histórico en un solo archivo (<code>logs/yuju_bulk_offer_tasks.json</code>). El estado se consulta a Yuju automáticamente cada 15 segundos mientras haya tareas pendientes.
+        </p>
+        <div id="yuju-bulk-offer-task-alert" class="alert alert-info" style="display:none;"></div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-condensed" id="yuju-bulk-offer-task-table">
+                <thead>
+                    <tr>
+                        <th>Agregada</th><th>ID tarea Yuju</th><th>Estado</th>
+                        <th class="text-right">SKU</th><th class="text-right">Correctos</th>
+                        <th class="text-right">Errores</th><th>Última consulta</th><th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="yuju-bulk-offer-task-tbody">
+                    {if isset($bulk_offer_tasks) && $bulk_offer_tasks|@count > 0}
+                        {foreach from=$bulk_offer_tasks item=task}
+                            <tr>
+                                <td>{$task.submitted_at|default:'—'|escape:'html':'UTF-8'}</td>
+                                <td><code>{$task.id_task|escape:'html':'UTF-8'}</code></td>
+                                <td>{$task.status|default:'CREATED'|escape:'html':'UTF-8'}</td>
+                                <td class="text-right">{$task.sku_count|default:0|intval}</td>
+                                <td class="text-right">{$task.success_count|default:0|intval}</td>
+                                <td class="text-right">{$task.errors_count|default:0|intval}</td>
+                                <td>{$task.last_checked_at|default:$task.updated_at|default:'—'|escape:'html':'UTF-8'}</td>
+                                <td>
+                                    {if isset($task.details) && $task.details|@count > 0}
+                                        <button type="button" class="btn btn-xs btn-warning yuju-bulk-task-details" data-task-id="{$task.id_task|escape:'html':'UTF-8'}">Ver detalles ({$task.details|@count})</button>
+                                    {else}
+                                        {$task.message|default:'—'|escape:'html':'UTF-8'}
+                                        {if isset($task.last_check_error) && $task.last_check_error}<br><small class="text-danger">{$task.last_check_error|escape:'html':'UTF-8'}</small>{/if}
+                                    {/if}
+                                </td>
+                            </tr>
+                        {/foreach}
+                    {else}
+                        <tr class="yuju-bulk-task-empty"><td colspan="8" class="text-center text-muted">Todavía no hay tareas masivas registradas.</td></tr>
+                    {/if}
+                </tbody>
+            </table>
+        </div>
+        <pre id="yuju-bulk-offer-task-details" style="display:none; max-height:320px; overflow:auto; white-space:pre-wrap;"></pre>
+    </div>
+</div>
+<script type="text/javascript">
+(function ($) {
+    var endpoint = '{$cleanup_ajax_url|escape:'javascript':'UTF-8'}';
+    var busy = false;
+    function esc(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+    function renderTasks(tasks) {
+        var $body = $('#yuju-bulk-offer-task-tbody');
+        if (!tasks || !tasks.length) {
+            $body.html('<tr class="yuju-bulk-task-empty"><td colspan="8" class="text-center text-muted">Todavía no hay tareas masivas registradas.</td></tr>');
+            return;
+        }
+        var html = '';
+        tasks.slice().reverse().forEach(function (task) {
+            var details = Array.isArray(task.details) ? task.details : [];
+            var detailCell = details.length
+                ? '<button type="button" class="btn btn-xs btn-warning yuju-bulk-task-details" data-task-id="' + esc(task.id_task) + '">Ver detalles (' + details.length + ')</button>'
+                : esc(task.message || '—') + (task.last_check_error ? '<br><small class="text-danger">' + esc(task.last_check_error) + '</small>' : '');
+            html += '<tr><td>' + esc(task.submitted_at || '—') + '</td>'
+                + '<td><code>' + esc(task.id_task || '') + '</code></td>'
+                + '<td>' + esc(task.status || 'CREATED') + '</td>'
+                + '<td class="text-right">' + esc(task.sku_count || 0) + '</td>'
+                + '<td class="text-right">' + esc(task.success_count || 0) + '</td>'
+                + '<td class="text-right">' + esc(task.errors_count || 0) + '</td>'
+                + '<td>' + esc(task.last_checked_at || task.updated_at || '—') + '</td>'
+                + '<td>' + detailCell + '</td></tr>';
+        });
+        $body.html(html);
+    }
+    function refreshTasks(showMessage) {
+        if (busy) return;
+        busy = true;
+        $.ajax({
+            url: endpoint, type: 'POST', dataType: 'json', timeout: 60000,
+            data: {ajax: 1, action: 'refreshBulkOfferTasks'}
+        }).done(function (response) {
+            if (response && response.success) {
+                renderTasks(response.tasks || []);
+                if (showMessage) {
+                    $('#yuju-bulk-offer-task-alert').removeClass('alert-danger').addClass('alert-success')
+                        .text('Estado de tareas actualizado.').show();
+                }
+            } else if (showMessage) {
+                $('#yuju-bulk-offer-task-alert').removeClass('alert-success').addClass('alert-danger')
+                    .text('No se pudo actualizar el estado de las tareas.').show();
+            }
+        }).fail(function () {
+            if (showMessage) {
+                $('#yuju-bulk-offer-task-alert').removeClass('alert-success').addClass('alert-danger')
+                    .text('Error al consultar el estado de las tareas masivas.').show();
+            }
+        }).always(function () { busy = false; });
+    }
+    $(function () {
+        $('#yuju-refresh-bulk-offer-tasks').on('click', function () { refreshTasks(true); });
+        $(document).on('click', '.yuju-bulk-task-details', function () {
+            var id = String($(this).attr('data-task-id') || '');
+            $.ajax({
+                url: endpoint, type: 'POST', dataType: 'json',
+                data: {ajax: 1, action: 'refreshBulkOfferTasks'}
+            }).done(function (response) {
+                var task = null;
+                (response.tasks || []).some(function (candidate) {
+                    if (String(candidate.id_task) === id) { task = candidate; return true; }
+                    return false;
+                });
+                $('#yuju-bulk-offer-task-details').text(task ? JSON.stringify(task.details || task.history || task, null, 2) : 'No se encontró el detalle de la tarea.').show();
+            });
+        });
+        if ($('#yuju-bulk-offer-task-panel').length) {
+            window.setInterval(function () { refreshTasks(false); }, 15000);
+        }
+    });
+})(window.jQuery);
+</script>
 <div class="panel panel-warning">
     <div class="panel-heading">
         <i class="icon-database"></i> Limpieza de datos históricos (solo tablas de log / auditoría)
