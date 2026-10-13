@@ -224,21 +224,34 @@ class YujuOfferAuditor
             }
 
             $sku = trim((string) ($offer['sku'] ?? ($offer['sku_simple'] ?? '')));
+            $skuCandidates = array_values(array_unique(array_filter([
+                $sku,
+                trim((string) ($offer['sku_simple'] ?? '')),
+            ], static function ($value) {
+                return $value !== '';
+            })));
             $psProductId = null;
             $psProductAttributeId = null;
-            if ($sku !== '') {
+
+            // Priorizar siempre las referencias de combinación; después buscar productos simples.
+            foreach ($skuCandidates as $candidateSku) {
                 $attribute = $db->getRow(
-                    "SELECT id_product, id_product_attribute FROM " . _DB_PREFIX_ . "product_attribute WHERE TRIM(reference) = '" . pSQL($sku) . "' ORDER BY id_product_attribute ASC"
+                    "SELECT id_product, id_product_attribute FROM " . _DB_PREFIX_ . "product_attribute WHERE TRIM(reference) = '" . pSQL($candidateSku) . "' ORDER BY id_product_attribute ASC"
                 );
                 if (!empty($attribute)) {
                     $psProductId = (int) $attribute['id_product'];
                     $psProductAttributeId = (int) $attribute['id_product_attribute'];
-                } else {
+                    break;
+                }
+            }
+            if ($psProductId === null) {
+                foreach ($skuCandidates as $candidateSku) {
                     $productId = (int) $db->getValue(
-                        "SELECT id_product FROM " . _DB_PREFIX_ . "product WHERE TRIM(reference) = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                        "SELECT id_product FROM " . _DB_PREFIX_ . "product WHERE TRIM(reference) = '" . pSQL($candidateSku) . "' ORDER BY id_product ASC"
                     );
                     if ($productId > 0) {
                         $psProductId = $productId;
+                        break;
                     }
                 }
             }
