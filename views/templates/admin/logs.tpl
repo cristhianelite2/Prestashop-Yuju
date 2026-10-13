@@ -29,6 +29,15 @@
         </span>
     </div>
     <div class="panel-body">
+        <div class="form-inline" style="margin-bottom:15px;">
+            <label for="yuju-recover-task-id" style="margin-right:6px;">Recuperar tarea existente de Yuju:</label>
+            <input type="text" class="form-control" id="yuju-recover-task-id" placeholder="ID de tarea (ej. 322954981)" style="max-width:220px;">
+            <button type="button" class="btn btn-primary" id="yuju-recover-bulk-offer-task">
+                <i class="icon-download"></i> Recuperar del servidor Yuju
+            </button>
+            <span id="yuju-recover-task-message" style="margin-left:8px;"></span>
+            <p class="help-block">Consulta el ID en Yuju y lo agrega al historial local; no vuelve a enviar ofertas.</p>
+        </div>
         <div class="table-responsive">
             <table class="table table-bordered table-striped table-condensed" id="yuju-bulk-offer-task-table">
                 <thead>
@@ -151,6 +160,32 @@
     }
     $(function () {
         $('#yuju-refresh-bulk-offer-tasks').on('click', function () { refreshTasks(true); });
+        $('#yuju-recover-bulk-offer-task').on('click', function () {
+            var id = $.trim($('#yuju-recover-task-id').val() || '');
+            var $button = $(this);
+            var $message = $('#yuju-recover-task-message');
+            if (!id) {
+                $message.removeClass('text-success').addClass('text-danger').text('Escriba el ID de tarea.');
+                return;
+            }
+            $button.prop('disabled', true);
+            $message.removeClass('text-success text-danger').text('Consultando Yuju...');
+            $.ajax({
+                url: endpoint, type: 'POST', dataType: 'json', timeout: 60000,
+                data: {ldelim}ajax: 1, action: 'recoverBulkOfferTask', task_id: id{rdelim}
+            }).done(function (response) {
+                if (response && response.success) {
+                    renderTasks(response.tasks || []);
+                    $message.removeClass('text-danger').addClass('text-success').text(response.message || 'Tarea recuperada.');
+                } else {
+                    $message.removeClass('text-success').addClass('text-danger').text((response && response.message) || 'No se pudo recuperar la tarea.');
+                }
+            }).fail(function (xhr) {
+                var message = 'Falló la consulta de recuperación.';
+                if (xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
+                $message.removeClass('text-success').addClass('text-danger').text(message);
+            }).always(function () { $button.prop('disabled', false); });
+        });
         $(document).on('click', '.yuju-bulk-task-details', function () {
             var id = String($(this).attr('data-task-id') || '');
             $.ajax({
