@@ -106,7 +106,16 @@ class YujuProductReportReconciler
             }
 
             $field = isset($mapping['yuju_field']) ? $mapping['yuju_field'] : '';
-            if ($field === '' || !array_key_exists($field, $prestashop_data)) {
+            $prestashop_field = isset($mapping['prestashop_field']) ? $mapping['prestashop_field'] : $field;
+
+            // Compare by the configured mapping. Reconciliation normally receives the
+            // already transformed Yuju payload, but accepting the original PrestaShop
+            // key here prevents accidental comparisons against the wrong field.
+            $prestashop_key = array_key_exists($field, $prestashop_data)
+                ? $field
+                : $prestashop_field;
+
+            if ($field === '' || !array_key_exists($prestashop_key, $prestashop_data)) {
                 if ($field !== '') {
                     $comparison['uncomparable'][] = $field;
                 }
@@ -121,10 +130,10 @@ class YujuProductReportReconciler
             }
 
             $field_type = isset($mapping['field_type']) ? $mapping['field_type'] : 'string';
-            if (!self::valuesEqual($prestashop_data[$field], $yuju_data[$field], $field_type)) {
+            if (!self::valuesEqual($prestashop_data[$prestashop_key], $yuju_data[$field], $field_type)) {
                 $comparison['differences'][] = [
                     'field' => $field,
-                    'prestashop' => $prestashop_data[$field],
+                    'prestashop' => $prestashop_data[$prestashop_key],
                     'yuju' => $yuju_data[$field],
                 ];
             }
