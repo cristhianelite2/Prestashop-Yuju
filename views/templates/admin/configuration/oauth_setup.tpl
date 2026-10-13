@@ -20,32 +20,32 @@
     <div class="panel">
         <div class="panel-heading">
             <i class="icon-cogs"></i>
-            {l s='Yuju OAuth Configuration' mod='prestashopyuju'}
+            {l s='Configuración OAuth de Yuju' mod='prestashopyuju'}
         </div>
         
         <div class="panel-body">
             {if isset($oauth_status) && $oauth_status.is_connected}
                 <div class="alert alert-success">
                     <i class="icon-check"></i>
-                    {l s='Successfully connected to Yuju API' mod='prestashopyuju'}
+                    {l s='Conexión exitosa con la API de Yuju' mod='prestashopyuju'}
                     <br>
-                    <small>{l s='Connected as:' mod='prestashopyuju'} {$oauth_status.user_info.name|default:'Unknown'|escape:'html':'UTF-8'}</small>
+                    <small>{l s='Conectado como:' mod='prestashopyuju'} {$oauth_status.user_info.name|default:'Unknown'|escape:'html':'UTF-8'}</small>
                 </div>
                 
                 <div class="row">
                     <div class="col-lg-6">
                         <h4>{l s='Detalles de conexión' mod='prestashopyuju'}</h4>
                         <dl class="dl-horizontal">
-                            <dt>{l s='Environment:' mod='prestashopyuju'}</dt>
+                            <dt>{l s='Entorno:' mod='prestashopyuju'}</dt>
                             <dd><span class="label label-info">{$oauth_status.environment|upper|escape:'html':'UTF-8'}</span></dd>
                             
                             <dt>{l s='Client ID:' mod='prestashopyuju'}</dt>
                             <dd><code>{$oauth_status.client_id|escape:'html':'UTF-8'}</code></dd>
                             
-                            <dt>{l s='Connected At:' mod='prestashopyuju'}</dt>
+                            <dt>{l s='Conectado el:' mod='prestashopyuju'}</dt>
                             <dd>{$oauth_status.connected_at|escape:'html':'UTF-8'}</dd>
                             
-                            <dt>{l s='Token Expires:' mod='prestashopyuju'}</dt>
+                            <dt>{l s='El token vence:' mod='prestashopyuju'}</dt>
                             <dd>{$oauth_status.expires_at|escape:'html':'UTF-8'}</dd>
                         </dl>
                     </div>
@@ -76,19 +76,19 @@
                     </button>
                     
                     <button type="button" class="btn btn-info" id="yuju-test-api">
-                        <i class="icon-check"></i> {l s='Test Connection' mod='prestashopyuju'}
+                        <i class="icon-check"></i> {l s='Probar conexión' mod='prestashopyuju'}
                     </button>
                 </div>
             {else}
                 <div class="alert alert-warning">
                     <i class="icon-warning"></i>
-                    {l s='Not connected to Yuju API. Save your Client ID and Secret Key and run the connectivity test, or connect from Yuju (Configuraciones > Aplicaciones > Conectar).' mod='prestashopyuju'}
+                    {l s='No estás conectado a la API de Yuju. Guarda tu ID de cliente y secreto, y ejecuta la prueba de conectividad; también puedes conectar desde Yuju (Configuraciones > Aplicaciones > Conectar).' mod='prestashopyuju'}
                 </div>
                 
                 <form action="{$current_index|escape:'html':'UTF-8'}&token={$token|escape:'html':'UTF-8'}" method="post" class="form-horizontal">
                     <div class="form-group">
                         <label class="control-label col-lg-3 required">
-                            {l s='Environment' mod='prestashopyuju'}
+                            {l s='Entorno' mod='prestashopyuju'}
                         </label>
                         <div class="col-lg-9">
                             <select name="environment" class="form-control" required>
@@ -105,21 +105,21 @@
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3 required">
-                            {l s='Client ID' mod='prestashopyuju'}
+                            {l s='ID de cliente' mod='prestashopyuju'}
                         </label>
                         <div class="col-lg-9">
                             <input type="text" name="client_id" value="{$oauth_status.client_id|escape:'html':'UTF-8'}" class="form-control" required>
-                            <p class="help-block">{l s='Your Yuju application Client ID' mod='prestashopyuju'}</p>
+                            <p class="help-block">{l s='ID de cliente de tu aplicación de Yuju' mod='prestashopyuju'}</p>
                         </div>
                     </div>
                     
                     <div class="form-group">
                         <label class="control-label col-lg-3 required">
-                            {l s='Client Secret' mod='prestashopyuju'}
+                            {l s='Secreto de cliente' mod='prestashopyuju'}
                         </label>
                         <div class="col-lg-9">
                             <input type="password" name="client_secret" value="{$oauth_status.client_secret|escape:'html':'UTF-8'}" class="form-control" required>
-                            <p class="help-block">{l s='Your Yuju application Client Secret' mod='prestashopyuju'}</p>
+                            <p class="help-block">{l s='Secreto de cliente de tu aplicación de Yuju' mod='prestashopyuju'}</p>
                         </div>
                     </div>
                     
@@ -135,7 +135,7 @@
                     
                     <div class="panel-footer">
                         <button type="submit" name="submitOAuthConfig" class="btn btn-primary">
-                            <i class="icon-save"></i> {l s='Save Configuration' mod='prestashopyuju'}
+                            <i class="icon-save"></i> {l s='Guardar configuración' mod='prestashopyuju'}
                         </button>
                         <p class="help-block">
                             La conexión se completa desde Yuju (Configuraciones &gt; Aplicaciones &gt; Conectar):
@@ -152,7 +152,7 @@
     <div class="panel">
         <div class="panel-heading">
             <i class="icon-wrench"></i>
-            {l s='General Settings' mod='prestashopyuju'}
+            {l s='Configuración general' mod='prestashopyuju'}
         </div>
         
         <div class="panel-body">
@@ -164,75 +164,75 @@
                     <div class="col-lg-9">
                         <span class="switch prestashop-switch fixed-width-lg">
                             <input type="radio" name="auto_sync" id="auto_sync_on" value="1" {if Configuration::get('YUJU_AUTO_SYNC')}checked="checked"{/if}>
-                            <label for="auto_sync_on">{l s='Yes' mod='prestashopyuju'}</label>
+                            <label for="auto_sync_on">{l s='Sí' mod='prestashopyuju'}</label>
                             <input type="radio" name="auto_sync" id="auto_sync_off" value="0" {if !Configuration::get('YUJU_AUTO_SYNC')}checked="checked"{/if}>
                             <label for="auto_sync_off">{l s='No' mod='prestashopyuju'}</label>
                             <a class="slide-button btn"></a>
                         </span>
-                        <p class="help-block">{l s='Enable automatic synchronization when products are updated' mod='prestashopyuju'}</p>
+                        <p class="help-block">{l s='Activar la sincronización automática cuando se actualicen productos' mod='prestashopyuju'}</p>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Sync Frequency' mod='prestashopyuju'}
+                        {l s='Frecuencia de sincronización' mod='prestashopyuju'}
                     </label>
                     <div class="col-lg-9">
                         <select name="sync_frequency" class="form-control">
-                            <option value="5" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '5'}selected{/if}>{l s='Every 5 minutes' mod='prestashopyuju'}</option>
-                            <option value="15" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '15'}selected{/if}>{l s='Every 15 minutes' mod='prestashopyuju'}</option>
-                            <option value="30" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '30'}selected{/if}>{l s='Every 30 minutes' mod='prestashopyuju'}</option>
-                            <option value="60" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '60'}selected{/if}>{l s='Every hour' mod='prestashopyuju'}</option>
-                            <option value="360" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '360'}selected{/if}>{l s='Every 6 hours' mod='prestashopyuju'}</option>
-                            <option value="1440" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '1440'}selected{/if}>{l s='Daily' mod='prestashopyuju'}</option>
+                            <option value="5" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '5'}selected{/if}>{l s='Cada 5 minutos' mod='prestashopyuju'}</option>
+                            <option value="15" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '15'}selected{/if}>{l s='Cada 15 minutos' mod='prestashopyuju'}</option>
+                            <option value="30" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '30'}selected{/if}>{l s='Cada 30 minutos' mod='prestashopyuju'}</option>
+                            <option value="60" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '60'}selected{/if}>{l s='Cada hora' mod='prestashopyuju'}</option>
+                            <option value="360" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '360'}selected{/if}>{l s='Cada 6 horas' mod='prestashopyuju'}</option>
+                            <option value="1440" {if Configuration::get('YUJU_SYNC_FREQUENCY') == '1440'}selected{/if}>{l s='Diariamente' mod='prestashopyuju'}</option>
                         </select>
-                        <p class="help-block">{l s='How often to run automatic synchronization' mod='prestashopyuju'}</p>
+                        <p class="help-block">{l s='Frecuencia con la que se ejecutará la sincronización automática' mod='prestashopyuju'}</p>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Batch Size' mod='prestashopyuju'}
+                        {l s='Tamaño del lote' mod='prestashopyuju'}
                     </label>
                     <div class="col-lg-9">
                         <input type="number" name="batch_size" value="{Configuration::get('YUJU_BATCH_SIZE')|default:50|escape:'html':'UTF-8'}" class="form-control" min="1" max="500">
-                        <p class="help-block">{l s='Number of items to process in each batch (1-500)' mod='prestashopyuju'}</p>
+                        <p class="help-block">{l s='Número de elementos que se procesan por lote (1-500)' mod='prestashopyuju'}</p>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Log Level' mod='prestashopyuju'}
+                        {l s='Nivel de registro' mod='prestashopyuju'}
                     </label>
                     <div class="col-lg-9">
                         <select name="log_level" class="form-control">
-                            <option value="error" {if Configuration::get('YUJU_LOG_LEVEL') == 'error'}selected{/if}>{l s='Error only' mod='prestashopyuju'}</option>
-                            <option value="warning" {if Configuration::get('YUJU_LOG_LEVEL') == 'warning'}selected{/if}>{l s='Warning and above' mod='prestashopyuju'}</option>
-                            <option value="info" {if Configuration::get('YUJU_LOG_LEVEL') == 'info'}selected{/if}>{l s='Info and above' mod='prestashopyuju'}</option>
-                            <option value="debug" {if Configuration::get('YUJU_LOG_LEVEL') == 'debug'}selected{/if}>{l s='Debug (all)' mod='prestashopyuju'}</option>
+                            <option value="error" {if Configuration::get('YUJU_LOG_LEVEL') == 'error'}selected{/if}>{l s='Solo errores' mod='prestashopyuju'}</option>
+                            <option value="warning" {if Configuration::get('YUJU_LOG_LEVEL') == 'warning'}selected{/if}>{l s='Advertencias y errores' mod='prestashopyuju'}</option>
+                            <option value="info" {if Configuration::get('YUJU_LOG_LEVEL') == 'info'}selected{/if}>{l s='Información y niveles superiores' mod='prestashopyuju'}</option>
+                            <option value="debug" {if Configuration::get('YUJU_LOG_LEVEL') == 'debug'}selected{/if}>{l s='Depuración (todos los mensajes)' mod='prestashopyuju'}</option>
                         </select>
-                        <p class="help-block">{l s='Level of detail for logging' mod='prestashopyuju'}</p>
+                        <p class="help-block">{l s='Nivel de detalle de los registros' mod='prestashopyuju'}</p>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label class="control-label col-lg-3">
-                        {l s='Log Retention' mod='prestashopyuju'}
+                        {l s='Retención de registros' mod='prestashopyuju'}
                     </label>
                     <div class="col-lg-9">
                         <select name="log_retention" class="form-control">
-                            <option value="7" {if Configuration::get('YUJU_LOG_RETENTION') == '7'}selected{/if}>{l s='7 days' mod='prestashopyuju'}</option>
-                            <option value="30" {if Configuration::get('YUJU_LOG_RETENTION') == '30'}selected{/if}>{l s='30 days' mod='prestashopyuju'}</option>
-                            <option value="90" {if Configuration::get('YUJU_LOG_RETENTION') == '90'}selected{/if}>{l s='90 days' mod='prestashopyuju'}</option>
-                            <option value="365" {if Configuration::get('YUJU_LOG_RETENTION') == '365'}selected{/if}>{l s='1 year' mod='prestashopyuju'}</option>
+                            <option value="7" {if Configuration::get('YUJU_LOG_RETENTION') == '7'}selected{/if}>{l s='7 días' mod='prestashopyuju'}</option>
+                            <option value="30" {if Configuration::get('YUJU_LOG_RETENTION') == '30'}selected{/if}>{l s='30 días' mod='prestashopyuju'}</option>
+                            <option value="90" {if Configuration::get('YUJU_LOG_RETENTION') == '90'}selected{/if}>{l s='90 días' mod='prestashopyuju'}</option>
+                            <option value="365" {if Configuration::get('YUJU_LOG_RETENTION') == '365'}selected{/if}>{l s='1 año' mod='prestashopyuju'}</option>
                         </select>
-                        <p class="help-block">{l s='How long to keep log files' mod='prestashopyuju'}</p>
+                        <p class="help-block">{l s='Tiempo durante el que se conservarán los archivos de registro' mod='prestashopyuju'}</p>
                     </div>
                 </div>
                 
                 <div class="panel-footer">
                     <button type="submit" name="submitGeneralConfig" class="btn btn-primary">
-                        <i class="icon-save"></i> {l s='Save Settings' mod='prestashopyuju'}
+                        <i class="icon-save"></i> {l s='Guardar ajustes' mod='prestashopyuju'}
                     </button>
                 </div>
             </form>
