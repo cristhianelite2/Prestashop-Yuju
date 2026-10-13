@@ -178,6 +178,7 @@
         <i class="icon-sitemap"></i>
         Mapeo de Categorías
         <div class="panel-heading-action">
+{if isset($madkting_mapping_available) && $madkting_mapping_available}<button type="button" class="btn btn-info btn-sm" id="btn-import-madkting-mappings"><i class="icon-random"></i> Importar mapeos Madkting ({$madkting_mapping_count|intval})</button>{/if}
             <button class="btn btn-success btn-sm" onclick="openMappingModal()">
                 <i class="icon-plus"></i> Nuevo Mapeo de Categoría
             </button>
@@ -674,6 +675,7 @@ $(document).ready(function() {
     });
 });
 
+$('#btn-import-madkting-mappings').on('click',function(){if(!confirm('Importar referencias Madkting sin sobrescribir mapeos existentes. ¿Continuar?'))return;var b=$(this);b.prop('disabled',true);$.ajax({url:'{$ajax_url|escape:'javascript':'UTF-8'}',type:'POST',dataType:'json',data:{ajax:true,action:'importMadktingMappings',token:'{$token|escape:'javascript':'UTF-8'}'},success:function(r){alert(r.message);if(r.success)location.reload();else b.prop('disabled',false);},error:function(){alert('Error de importación.');b.prop('disabled',false);}});});
 function deleteMapping(mappingId) {
     if (!confirm('¿Estás seguro de eliminar este mapeo?')) {
         return;
