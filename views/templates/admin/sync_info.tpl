@@ -752,9 +752,27 @@ $(function() {
                 endWorkflow(4, 'Falló la petición de reconciliación.');
                 showMessage('Los reportes se descargaron, pero falló la petición de reconciliación.', 'alert-danger');
             });
-        }, function() {
-            endWorkflow(3, 'No se pudo conectar para obtener stock/precio.');
-            showMessage('No se pudo descargar el reporte de stock/precio. La reconciliación no se ejecutó.', 'alert-danger');
+        }, function(xhr, status, error) {
+            var detail = 'No se pudo completar la petición de stock/precio.';
+            if (xhr && xhr.status) {
+                detail += ' HTTP ' + xhr.status + '.';
+            }
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                detail += ' ' + xhr.responseJSON.message;
+            } else if (xhr && xhr.responseText) {
+                // Preserve a short diagnostic for timeouts, PHP errors, and non-JSON responses.
+                var responseText = String(xhr.responseText).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (responseText) {
+                    detail += ' Respuesta del servidor: ' + responseText.substring(0, 500);
+                }
+            } else if (error) {
+                detail += ' ' + String(error);
+            }
+            if (status === 'timeout') {
+                detail += ' La petición agotó el tiempo de espera.';
+            }
+            endWorkflow(3, detail);
+            showMessage(detail + ' La reconciliación no se ejecutó.', 'alert-danger');
         });
     }
 
