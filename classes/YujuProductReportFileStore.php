@@ -461,7 +461,7 @@ class YujuProductReportFileStore
     /**
      * Remove only expired files created by this class.
      */
-    public function cleanupExpired($max_age = 86400)
+    public function cleanupExpired($max_age = 86400, $protected_cache_ids = [])
     {
         $this->ensurePrivateDirectory();
         $deleted = 0;
@@ -471,7 +471,13 @@ class YujuProductReportFileStore
         );
 
         foreach ($files as $path) {
-            if (is_link($path) || !preg_match('/^[a-f0-9]{32}\.(jsonl|json)$/', basename($path))) {
+            if (is_link($path) || !preg_match('/^([a-f0-9]{32})\.(jsonl|json)$/', basename($path), $matches)) {
+                continue;
+            }
+
+            // Never delete a report currently referenced by Configuration. A cached
+            // report must remain usable across repeated visits to the sync screen.
+            if (in_array($matches[1], (array) $protected_cache_ids, true)) {
                 continue;
             }
 
