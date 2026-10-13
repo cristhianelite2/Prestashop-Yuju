@@ -1007,7 +1007,6 @@
             type: 'POST',
             dataType: 'text',
             timeout: 180000,
-            traditional: true,
             data: {
                 ajax: 1,
                 action: 'updateSelectedToYuju',
