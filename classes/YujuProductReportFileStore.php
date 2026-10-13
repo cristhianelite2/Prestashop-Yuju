@@ -100,6 +100,39 @@ class YujuProductReportFileStore
     }
 
     /**
+     * Save a JSON response privately without assuming its schema.
+     */
+    public function saveJsonPayload($payload)
+    {
+        $this->ensurePrivateDirectory();
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new RuntimeException('The Yuju offer report response could not be encoded as JSON.');
+        }
+        if (strlen($json) > $this->max_report_bytes) {
+            throw new RuntimeException('The Yuju offer report response exceeds the configured size limit.');
+        }
+        $cache_id = bin2hex(random_bytes(16));
+        $path = $this->directory . DIRECTORY_SEPARATOR . $cache_id . '.json';
+        $written = file_put_contents($path, $json, LOCK_EX);
+        if ($written === false || $written !== strlen($json)) {
+            @unlink($path);
+            throw new RuntimeException('The Yuju offer report response could not be saved to disk.');
+        }
+        @chmod($path, 0600);
+        return ['cache_id' => $cache_id, 'relative_path' => 'var/reports/' . $cache_id . '.json', 'size_bytes' => (int) $written, 'saved_at' => time()];
+    }
+
+    public function deleteJsonPayload($cache_id)
+    {
+        if (!is_string($cache_id) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+            throw new InvalidArgumentException('Invalid Yuju report cache ID.');
+        }
+        $path = $this->directory . DIRECTORY_SEPARATOR . $cache_id . '.json';
+        return !file_exists($path) || (!is_link($path) && unlink($path));
+    }
+
+    /**
      * Stream validated parent product rows from a cached JSONL file.
      *
      * @param string $cache_id
