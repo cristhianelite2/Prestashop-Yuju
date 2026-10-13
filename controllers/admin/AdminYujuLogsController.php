@@ -362,7 +362,7 @@ class AdminYujuLogsController extends ModuleAdminController
             $files = scandir($log_dir);
 
             foreach ($files as $file) {
-                if (pathinfo($file, PATHINFO_EXTENSION) === 'log') {
+                if (pathinfo($file, PATHINFO_EXTENSION) === 'log' || $file === 'yuju_bulk_offer_tasks.json') {
                     $logs[] = [
                         'filename' => $file,
                         'size' => filesize($log_dir . $file),
