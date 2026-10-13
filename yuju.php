@@ -43,16 +43,19 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.2.2';
+        $this->version = '1.2.3';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
+        $this->bootstrap = true;
+
+        parent::__construct();
+
+        // Establecer la compatibilidad después del constructor padre para evitar
+        // que cualquier inicialización/caché de Module altere el rango requerido.
         $this->ps_versions_compliancy = [
             'min' => '9.0.0',
             'max' => '9.99.99',
         ];
-        $this->bootstrap = true;
-
-        parent::__construct();
 
         $this->displayName = $this->trans('Yuju Integration', array(), 'Modules.Yuju.Admin');
         $this->description = $this->trans('Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.', array(), 'Modules.Yuju.Admin');
