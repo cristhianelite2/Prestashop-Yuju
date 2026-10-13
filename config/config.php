@@ -41,7 +41,7 @@ define('YUJU_ENDPOINT_MANUFACTURERS', '/api/v1/manufacturers');
 
 // Module Configuration
 define('YUJU_MODULE_NAME', 'prestashopyuju');
-define('YUJU_MODULE_VERSION', '1.0.6');
+define('YUJU_MODULE_VERSION', '1.1.8');
 define('YUJU_LOG_DIR', _PS_MODULE_DIR_ . 'prestashopyuju/logs/');
 define('YUJU_CONFIG_DIR', _PS_MODULE_DIR_ . 'prestashopyuju/config/');
 
