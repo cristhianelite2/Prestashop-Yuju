@@ -274,10 +274,10 @@ class YujuProductReportManager
                 ];
             }
 
-            $payload = $response['data'] ?? null;
-            $url = is_array($payload) && isset($payload['url']) && is_string($payload['url'])
-                ? trim($payload['url'])
-                : '';
+            // Yuju's response has appeared both as {"url":"..."} and inside
+            // wrapper objects (for example {"data":{"url":"..."}}). Do not assume
+            // that the URL must be at exactly one nesting level.
+            $url = $this->extractOfferReportUrl($response);
             $response_http_code = (int) ($response['http_code'] ?? 200);
 
             if ($url === '') {
@@ -377,6 +377,61 @@ class YujuProductReportManager
         } catch (Exception $e) {
             return false;
         }
+    }
+
+    /**
+     * Extract Yuju's temporary report URL from known response envelopes.
+     *
+     * Supports the API client's decoded response, JSON strings, and common
+     * data/result/payload wrappers without mistaking the downloaded product
+     * JSON for a report URL. The URL is validated by the file store before use.
+     *
+     * @param mixed $response
+     * @return string
+     */
+    protected function extractOfferReportUrl($response)
+    {
+        $candidates = [$response];
+        $seen = 0;
+
+        while ($candidates && $seen < 32) {
+            $candidate = array_shift($candidates);
+            ++$seen;
+
+            if (is_string($candidate)) {
+                $trimmed = trim($candidate);
+                if (preg_match('#^https://#i', $trimmed)) {
+                    return $trimmed;
+                }
+
+                $decoded = json_decode($trimmed, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $candidates[] = $decoded;
+                }
+                continue;
+            }
+
+            if (!is_array($candidate)) {
+                continue;
+            }
+
+            foreach (['url', 'download_url', 'report_url', 'signed_url'] as $key) {
+                if (isset($candidate[$key]) && is_string($candidate[$key])) {
+                    $url = trim($candidate[$key]);
+                    if (preg_match('#^https://#i', $url)) {
+                        return $url;
+                    }
+                }
+            }
+
+            foreach (['data', 'result', 'payload', 'report', 'response'] as $key) {
+                if (isset($candidate[$key]) && (is_array($candidate[$key]) || is_string($candidate[$key]))) {
+                    $candidates[] = $candidate[$key];
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
