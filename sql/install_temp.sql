@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS `ps_yuju_attribute_mapping` (
 CREATE TABLE IF NOT EXISTS `ps_yuju_product_status` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_product_id` int(11) DEFAULT NULL,
+    `prestashop_product_attribute_id` int(11) DEFAULT NULL,
     `yuju_product_id` varchar(255) DEFAULT NULL,
     `yuju_product_name` varchar(512) DEFAULT NULL,
     `yuju_variation_id` varchar(255) DEFAULT NULL,
