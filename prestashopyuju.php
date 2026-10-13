@@ -541,6 +541,41 @@ class Prestashopyuju extends Module
      *
      * Omite los hooks deshabilitados manualmente desde el back-office.
      */
+    /**
+     * Crea o repara la pestaña del panel de estado de productos por categoría.
+     * El actualizador propio copia archivos pero no ejecuta installTabs().
+     */
+    protected function ensureProductCategoryStatusTab()
+    {
+        $idTab = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab
+             WHERE class_name = "AdminYujuProductCategoryStatus"'
+        );
+
+        $parent = Tab::getInstanceFromClassName('AdminYuju');
+        $parentId = (Validate::isLoadedObject($parent) && isset($parent->id))
+            ? (int) $parent->id
+            : 0;
+
+        $tab = $idTab > 0 ? new Tab($idTab) : new Tab();
+        $tab->class_name = 'AdminYujuProductCategoryStatus';
+        $tab->module = $this->name;
+        $tab->active = 1;
+        $tab->id_parent = $parentId;
+
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[(int) $language['id_lang']] = 'Estado de productos por categoría';
+        }
+
+        if (!$tab->save()) {
+            PrestaShopLogger::addLog(
+                'Yuju: no se pudo crear/activar el tab AdminYujuProductCategoryStatus. ' .
+                print_r($tab->getErrors(), true),
+                2
+            );
+        }
+    }
+
     protected function registerHooks()
     {
         $disabled = $this->getDisabledHooks();
@@ -632,6 +667,7 @@ class Prestashopyuju extends Module
         // PrestaShop. Reparar/crear la sección desde la entrada de configuración,
         // sin depender de que displayBackOfficeHeader esté registrado.
         $this->ensureOrderStatusMappingTab();
+        $this->ensureProductCategoryStatusTab();
 
         // Redirigir al controlador personalizado de configuración
         $admin_link = $this->context->link->getAdminLink('AdminYujuConfiguration');
