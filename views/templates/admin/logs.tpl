@@ -143,6 +143,7 @@
             });
         });
         if ($('#yuju-bulk-offer-task-panel').length) {
+            refreshTasks(false);
             window.setInterval(function () { refreshTasks(false); }, 15000);
         }
     });
