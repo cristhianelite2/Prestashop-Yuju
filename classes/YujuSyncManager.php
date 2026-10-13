@@ -220,7 +220,7 @@ class YujuSyncManager
                 if ($productId <= 0 || $yujuId === '') {
                     continue;
                 }
-                $stock = (int) StockAvailable::getQuantityAvailableByProduct($productId);
+                $stock = max(0, (int) StockAvailable::getQuantityAvailableByProduct($productId));
                 $response = $this->api_client->updateProduct($yujuId, ['stock' => $stock]);
                 if (!empty($response['success'])) {
                     ++$results['updated_count'];
