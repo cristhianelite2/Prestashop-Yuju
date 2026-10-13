@@ -2123,6 +2123,115 @@ class AdminYujuProductStatusController extends ModuleAdminController
         return $stats;
     }
 
+    protected function importProductStatus($file_path)
+    {
+        $imported_count = 0;
+
+        if (($handle = fopen($file_path, 'r')) !== false) {
+            // Skip header row
+            fgetcsv($handle);
+
+            while (($data = fgetcsv($handle)) !== false) {
+                if (count($data) >= 4) {
+                    $prestashop_product_id = (int) $data[0];
+                    $yuju_product_id = $data[1];
+                    $sync_status = $data[2];
+                    $sync_enabled = (int) $data[3];
+
+                    // Check if product exists
+                    $product = new Product($prestashop_product_id);
+
+                    if (!Validate::isLoadedObject($product)) {
+                        continue;
+                    }
+
+                    // Check if status already exists
+                    $existing = Db::getInstance()->getRow(
+                        '
+                    SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
+                    WHERE prestashop_product_id = ' . (int) $prestashop_product_id
+                    );
+
+                    $status_data = [
+                    'prestashop_product_id' => $prestashop_product_id,
+                    'yuju_product_id' => pSQL($yuju_product_id),
+                    'sync_status' => pSQL($sync_status),
+                    'sync_enabled' => $sync_enabled,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                    ];
+
+                    if ($existing) {
+                        Db::getInstance()->update('yuju_product_status', $status_data, 'id = ' . (int) $existing['id']);
+                    } else {
+                        $status_data['created_at'] = date('Y-m-d H:i:s');
+                        Db::getInstance()->insert('yuju_product_status', $status_data);
+                    }
+
+                    ++$imported_count;
+                }
+            }
+
+            fclose($handle);
+        }
+
+        return $imported_count;
+    }
+
+    protected function exportProductStatus()
+    {
+        $export_file = tempnam(sys_get_temp_dir(), 'yuju_product_status_');
+
+        $handle = fopen($export_file, 'w');
+
+        // Write header
+        fputcsv($handle, [
+        'PrestaShop Product ID',
+        'PrestaShop Combination ID',
+        'Product Name',
+        'Yuju Product ID',
+        'Yuju Parent Product ID',
+        'Sync Status',
+        'Last Sync Date',
+        'Error Count',
+        'Last Error Message',
+        'Sync Enabled',
+        'Created At',
+        'Updated At',
+        ]);
+
+        // Get all product status records
+        $records = Db::getInstance()->executeS('
+        SELECT ps.*, pl.name as product_name
+        FROM ' . _DB_PREFIX_ . 'yuju_product_status ps
+        LEFT JOIN ' . _DB_PREFIX_ . 'product ype ON (ype.id_product = ps.prestashop_product_id)
+        LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON ps.prestashop_product_id = pl.id_product
+            AND pl.id_lang = ' . (int) Configuration::get('PS_LANG_DEFAULT') . '
+            AND pl.id_shop = ype.id_shop_default
+        ORDER BY ps.created_at DESC
+        ');
+
+        foreach ($records as $record) {
+            fputcsv($handle, [
+            $record['prestashop_product_id'],
+            $record['prestashop_product_attribute_id'] ?? '',
+            $record['product_name'],
+            $record['yuju_product_id'],
+            $record['parent_yuju_product_id'] ?? '',
+            $record['sync_status'],
+            $record['last_sync_at'],
+            $record['error_count'],
+            $record['last_error_message'],
+            $record['sync_enabled'],
+            $record['created_at'],
+            $record['updated_at'],
+            ]);
+        }
+
+        fclose($handle);
+
+        return $export_file;
+    }
+
     public function getProductName($value, $row)
     {
         if (isset($row['product_name']) && !empty($row['product_name'])) {
