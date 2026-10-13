@@ -63,16 +63,16 @@
                                 Mapeo de Atributos
                             </a>
                         </li>
-                        <li class="{if $current_controller == 'AdminYujuProductStatus'}active{/if}">
-                            <a href="{$link->getAdminLink('AdminYujuProductStatus')|escape:'html':'UTF-8'}">
-                                <i class="icon-info-circle"></i>
-                                Estado de Productos
-                            </a>
-                        </li>
                         <li class="{if $current_controller == 'AdminYujuOrderStatusMapping'}active{/if}">
                             <a href="{$link->getAdminLink('AdminYuju')|escape:'html':'UTF-8'}&amp;yuju_view=order_status_mapping">
                                 <i class="icon-exchange"></i>
                                 Mapeo de estados de pedidos
+                            </a>
+                        </li>
+                        <li class="{if $current_controller == 'AdminYujuProductStatus'}active{/if}">
+                            <a href="{$link->getAdminLink('AdminYujuProductStatus')|escape:'html':'UTF-8'}">
+                                <i class="icon-info-circle"></i>
+                                Estado de Productos
                             </a>
                         </li>
                         <li class="{if $current_controller == 'AdminYujuWebhook'}active{/if}">
