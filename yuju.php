@@ -1240,7 +1240,7 @@ class Yuju extends Module
             if (empty(Configuration::get('YUJU_CLIENT_ID')) || empty(Configuration::get('YUJU_CLIENT_SECRET'))
                 || !(bool) Configuration::get('YUJU_ENABLE_AUTO_SYNC')) { return; }
             $status = Db::getInstance()->getRow(
-                'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status` WHERE prestashop_product_id = ' . $productId
+                'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status` WHERE prestashop_product_id = ' . $productId . ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)
             );
             if (!$status || trim((string) ($status['yuju_product_id'] ?? '')) === '') { return; }
             $detector = new YujuProductChangeDetector();
@@ -1248,6 +1248,11 @@ class Yuju extends Module
             if (empty($changes['changed_fields'])) { return; }
             $data = $detector->prepareYujuUpdateData($product, $changes['changed_fields']);
             if (!is_array($data) || empty($data)) { return; }
+            $hasCombinations = (int) Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'product_attribute` WHERE id_product = ' . $productId
+            );
+            // El stock agregado del padre no se envía como si fuera una variación.
+            if ($hasCombinations > 0) { unset($data['stock']); }
 
             // Omitir solo el precio inválido o con variación superior al 50%.
             $dropFields = [];
@@ -1279,7 +1284,7 @@ class Yuju extends Module
             if ($queued) {
                 Db::getInstance()->update('yuju_product_status', [
                     'sync_status' => pSQL('queued'), 'last_error' => null, 'updated_at' => date('Y-m-d H:i:s'),
-                ], 'prestashop_product_id = ' . $productId);
+                ], 'prestashop_product_id = ' . $productId . ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)');
             }
         } catch (Throwable $e) {
             $logger->error('No se pudo encolar actualización automática de producto', [
