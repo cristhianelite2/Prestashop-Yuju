@@ -185,9 +185,11 @@ class YujuSyncManager
      *
      * @return array Result with counts and errors
      */
-    public function pushDifferencesToYuju($report)
+    public function pushDifferencesToYuju($report, $selected_product_ids = [], $urgent_only = true)
     {
-        return $this->product_manager->pushDifferencesToYuju($report);
+        // Forward the explicit PrestaShop selection and urgent-only flag from the admin controller.
+        // Dropping these arguments makes the product manager reject the request as an empty selection.
+        return $this->product_manager->pushDifferencesToYuju($report, $selected_product_ids, $urgent_only);
     }
 
     /**
