@@ -687,7 +687,7 @@ class AdminYujuAuditController extends ModuleAdminController
         parent::setMedia($isNewTheme);
         $moduleUri = $this->module->getPathUri();
         $version = rawurlencode((string) $this->module->version);
-        $this->addCSS($moduleUri . 'views/css/admin.css?v=20261013-audit-toolbar');
+        $this->addCSS($moduleUri . 'views/css/admin.css?v=20261013-audit-ui-v2');
         $this->addJS($moduleUri . 'views/js/admin.js?v=' . $version);
     }
 
