@@ -55,6 +55,9 @@ header('Content-Type: application/json; charset=utf-8');
 // Initialize logger
 $logger = new YujuLogger();
 $start_time = microtime(true);
+$ack_sent = false;
+ignore_user_abort(true);
+@set_time_limit(0);
 
 // Información de debug
 $debug_info = [
@@ -150,8 +153,50 @@ try {
     // Initialize webhook manager
     $webhook_manager = new YujuWebhookManager();
 
-    // Process webhook (esto enriquecerá los datos con fetch de la API)
-    $result = $webhook_manager->processWebhook($raw_payload, $headers);
+    // Yuju exige responder en menos de 500 ms. El manager registra primero el evento
+    // en yuju_webhook_logs y luego invoca este callback antes de llamar a la API.
+    // Así el evento aparece inmediatamente en el BO y la consulta/creación de orden
+    // continúa después de cerrar la respuesta HTTP.
+    $result = $webhook_manager->processWebhook(
+        $raw_payload,
+        $headers,
+        function ($webhook_log_id, $webhook_data) use (&$ack_sent, $yuju_headers_found) {
+            if ($ack_sent) {
+                return;
+            }
+
+            $response = [
+                'success' => true,
+                'message' => 'Webhook accepted for processing',
+                'webhook' => [
+                    'id' => $yuju_headers_found['x-yuju-id'] ?? 'unknown',
+                    'topic' => $yuju_headers_found['x-yuju-topic'] ?? 'unknown',
+                    'resource' => $yuju_headers_found['x-yuju-resource'] ?? null,
+                ],
+                'processing' => [
+                    'status' => 'accepted',
+                    'log_id' => (int) $webhook_log_id,
+                ],
+            ];
+
+            http_response_code(200);
+            header('Content-Type: application/json; charset=utf-8');
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+            echo json_encode($response, JSON_UNESCAPED_UNICODE);
+            $ack_sent = true;
+
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            } else {
+                // Fallback para servidores sin PHP-FPM. flush() no puede anular
+                // buffering externo de Apache/proxy, pero evita esperar a la lógica.
+                @ob_flush();
+                flush();
+            }
+        }
+    );
     
     // Obtener el payload enriquecido desde el resultado
     $enriched_payload = isset($result['enriched_data']) ? json_encode($result['enriched_data']) : $raw_payload;
@@ -175,33 +220,36 @@ try {
     $debug_info['execution_time_ms'] = $execution_time;
     $debug_info['processing_result'] = $result;
 
-    // Return success response
-    http_response_code(200);
-    
-    $response = [
-        'success' => true,
-        'message' => 'Webhook processed successfully',
-        'webhook' => [
-            'id' => $yuju_headers_found['x-yuju-id'] ?? 'unknown',
-            'topic' => $yuju_headers_found['x-yuju-topic'] ?? 'unknown',
-            'resource' => $yuju_headers_found['x-yuju-resource'] ?? null,
-            'attempts' => $yuju_headers_found['x-yuju-attempts'] ?? 1,
-        ],
-        'processing' => [
-            'status' => 'completed',
-            'execution_time_ms' => $execution_time,
-            'stored' => $storage_result ?? false,
-            'result' => $result,
-        ],
-        'debug' => $debug_info,
-        'timestamp' => date('Y-m-d H:i:s'),
-    ];
-    
-    // Limpiar buffer y enviar respuesta
-    ob_end_clean();
-    echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    // Si el servidor no tiene fastcgi_finish_request(), enviar la respuesta al final
+    // como fallback. Con PHP-FPM la respuesta ya fue enviada antes del procesamiento.
+    if (!$ack_sent) {
+        http_response_code(200);
+        $response = [
+            'success' => true,
+            'message' => 'Webhook processed successfully',
+            'webhook' => [
+                'id' => $yuju_headers_found['x-yuju-id'] ?? 'unknown',
+                'topic' => $yuju_headers_found['x-yuju-topic'] ?? 'unknown',
+                'resource' => $yuju_headers_found['x-yuju-resource'] ?? null,
+                'attempts' => $yuju_headers_found['x-yuju-attempts'] ?? 1,
+            ],
+            'processing' => [
+                'status' => 'completed',
+                'execution_time_ms' => $execution_time,
+                'stored' => $storage_result ?? false,
+                'result' => $result,
+            ],
+            'debug' => $debug_info,
+            'timestamp' => date('Y-m-d H:i:s'),
+        ];
 
-    $logger->log('Webhook processed successfully in ' . $execution_time . 'ms', 'info');
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    $logger->log('Webhook processed in ' . $execution_time . 'ms (ack_sent=' . ($ack_sent ? 'yes' : 'no') . ')', 'info');
     
 } catch (Exception $e) {
     $execution_time = round((microtime(true) - $start_time) * 1000, 2);
@@ -210,6 +258,11 @@ try {
     $logger->log('Webhook processing failed: ' . $e->getMessage(), 'error');
     $logger->log('Stack trace: ' . $e->getTraceAsString(), 'debug');
 
+    // Si ya confirmamos la recepción a Yuju, no podemos cambiar el HTTP status.
+    // La fila previamente insertada queda como failed y el error aparece en logs.
+    if ($ack_sent) {
+        $logger->log('Webhook failed after HTTP acknowledgement; inspect yuju_webhook_logs. Error: ' . $e->getMessage(), 'error');
+    } else {
     // Set appropriate HTTP status code based on error
     $error_code = 500;
     $error_type = 'internal_error';
@@ -255,8 +308,11 @@ try {
     ];
     
     // Limpiar buffer y enviar respuesta de error
-    ob_end_clean();
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
     echo json_encode($error_response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
 }
 
 // Flush output y terminar
