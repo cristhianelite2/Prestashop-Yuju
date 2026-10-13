@@ -41,44 +41,16 @@ class YujuCategoryManager
      */
     public function syncCategoriesFromYuju($force_update = false)
     {
-        try {
-            $this->logger->log('Starting category synchronization from Yuju', 'info');
-
-            $yuju_categories = $this->api_client->getCategories();
-
-            if (!$yuju_categories || !isset($yuju_categories['data'])) {
-                throw new Exception('No categories received from Yuju API');
-            }
-
-            $synced_count = 0;
-            $errors = [];
-
-            foreach ($yuju_categories['data'] as $yuju_category) {
-                try {
-                    if ($this->syncSingleCategoryFromYuju($yuju_category, $force_update)) {
-                        ++$synced_count;
-                    }
-                } catch (Exception $e) {
-                    $errors[] = 'Category ' . $yuju_category['id'] . ': ' . $e->getMessage();
-                    $this->logger->log('Error syncing category ' . $yuju_category['id'] . ': ' . $e->getMessage(), 'error');
-                }
-            }
-
-            $this->logger->log('Category synchronization completed. Synced: ' . $synced_count . ', Errors: ' . count($errors), 'info');
-
-            return [
-                'success' => true,
-                'synced_count' => $synced_count,
-                'errors' => $errors,
-            ];
-        } catch (Exception $e) {
-            $this->logger->log('Category synchronization failed: ' . $e->getMessage(), 'error');
-
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-            ];
-        }
+        // Política permanente: las categorías no se importan desde Yuju a PrestaShop.
+        $this->logger->log('Sincronización de categorías Yuju → PrestaShop bloqueada; PrestaShop es la fuente de verdad.', 'warning');
+        return [
+            'success' => false,
+            'synced_count' => 0,
+            'created_count' => 0,
+            'updated_count' => 0,
+            'errors' => ['La sincronización de categorías desde Yuju está deshabilitada.'],
+            'direction_blocked' => true,
+        ];
     }
 
     /**
@@ -132,39 +104,8 @@ class YujuCategoryManager
      */
     protected function syncSingleCategoryFromYuju($yuju_category, $force_update = false)
     {
-        // Check if category is mapped
-        $mapping = $this->getCategoryMappingByYujuId($yuju_category['id']);
-
-        if (!$mapping || !$mapping['sync_enabled']) {
-            return false;
-        }
-
-        $prestashop_category = new Category($mapping['prestashop_category_id']);
-
-        if (!Validate::isLoadedObject($prestashop_category)) {
-            throw new Exception('PrestaShop category not found: ' . $mapping['prestashop_category_id']);
-        }
-
-        // Check if update is needed
-        if (!$force_update && !$this->isCategoryUpdateNeeded($prestashop_category, $yuju_category)) {
-            return false;
-        }
-
-        // Update category data
-        $this->updateCategoryFromYujuData($prestashop_category, $yuju_category);
-
-        if ($prestashop_category->save()) {
-            $this->updateCategoryMapping($mapping['id_mapping'], [
-                'last_sync_at' => date('Y-m-d H:i:s'),
-                'sync_status' => 'success',
-            ]);
-
-            $this->logger->log('Category synced from Yuju: ' . $yuju_category['id'] . ' -> ' . $prestashop_category->id, 'info');
-
-            return true;
-        } else {
-            throw new Exception('Failed to save PrestaShop category');
-        }
+        // Método legado bloqueado para impedir escrituras de Yuju en PrestaShop.
+        return false;
     }
 
     /**
