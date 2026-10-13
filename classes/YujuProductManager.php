@@ -202,6 +202,31 @@ class YujuProductManager
             throw new Exception('Could not read active PrestaShop products.');
         }
 
+        // The self-updater copies module files but older updater versions did not
+        // execute upgrade scripts. Repair the module-owned local status table before
+        // querying columns introduced by the migration. Never access Yuju's external DB.
+        $status_table = _DB_PREFIX_ . 'yuju_product_status';
+        $status_columns = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . bqSQL($status_table) . '`');
+        if (!is_array($status_columns)) {
+            throw new Exception('No se pudo verificar la estructura de la tabla local ' . $status_table . '.');
+        }
+        $status_column_names = [];
+        foreach ($status_columns as $status_column) {
+            $status_column_names[$status_column['Field']] = true;
+        }
+        $required_status_columns = ['prestashop_product_attribute_id', 'yuju_product_name', 'yuju_variation_id', 'yuju_variation_sku'];
+        $missing_status_columns = array_diff($required_status_columns, array_keys($status_column_names));
+        if (!empty($missing_status_columns)) {
+            $migration_file = _PS_MODULE_DIR_ . 'prestashopyuju/upgrade/upgrade-1.1.7.php';
+            if (!is_file($migration_file)) {
+                throw new Exception('Falta la migración de la tabla local de estados Yuju. Actualice el módulo a la versión 1.1.8.');
+            }
+            require_once $migration_file;
+            if (!function_exists('upgrade_module_1_1_7') || !upgrade_module_1_1_7(Module::getInstanceByName('prestashopyuju'))) {
+                throw new Exception('No se pudo migrar la tabla local ' . $status_table . '. No se modificaron tablas externas de Yuju.');
+            }
+        }
+
         $status_rows = Db::getInstance()->executeS('
             SELECT prestashop_product_id, yuju_product_id, yuju_variation_id, sync_status, sync_enabled, last_sync_at
             FROM ' . _DB_PREFIX_ . 'yuju_product_status
