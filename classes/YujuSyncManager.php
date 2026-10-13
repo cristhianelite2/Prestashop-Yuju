@@ -164,6 +164,11 @@ class YujuSyncManager
         return $this->product_report_manager->pollReport($retry_download);
     }
 
+    public function downloadYujuOfferReport()
+    {
+        return $this->product_report_manager->downloadOfferReport();
+    }
+
     /**
      * Get the product report manager for direct access.
      */

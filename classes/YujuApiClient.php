@@ -83,6 +83,14 @@ class YujuApiClient
     }
 
     /**
+     * Request the current Yuju offer report endpoint.
+     */
+    public function getProductOfferReport()
+    {
+        return $this->get('products-offer-report');
+    }
+
+    /**
      * Check the status of a Yuju general-products report.
      *
      * @param string $task_id

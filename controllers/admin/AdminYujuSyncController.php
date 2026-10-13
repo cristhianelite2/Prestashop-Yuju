@@ -282,6 +282,15 @@ class AdminYujuSyncController extends ModuleAdminController
         }
     }
 
+    public function ajaxProcessDownloadYujuOfferReport()
+    {
+        try {
+            $this->respondWithJson($this->sync_manager->downloadYujuOfferReport());
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'status' => 'failed', 'message' => 'Error al guardar el reporte de ofertas: ' . $e->getMessage()]);
+        }
+    }
+
     public function ajaxProcessPollYujuProductReport()
     {
         $retry_download = (bool) Tools::getValue('retry_download', false);

@@ -26,8 +26,12 @@
         <button type="button" class="btn btn-primary btn-sm pull-right" id="yuju-start-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
             <i class="icon-refresh"></i> Iniciar sincronización
         </button>
+        <button type="button" class="btn btn-warning btn-sm pull-right" id="yuju-download-offer-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}" style="margin-right: 8px;">
+            <i class="icon-download"></i> Descargar reporte stock/precio
+        </button>
     </div>
     <div class="panel-body">
+        <div id="yuju-offer-report-result" class="alert alert-info" style="display:none;" role="status" aria-live="polite"></div>
         <div id="yuju-product-sync-report" class="hidden" role="status" aria-live="polite" style="margin-bottom: 20px;">
             <div id="yuju-product-sync-message" class="alert alert-info"></div>
             <div class="row">
@@ -181,6 +185,8 @@
 <script type="text/javascript">
 $(function() {
     var $startBtn = $('#yuju-start-report');
+    var $offerBtn = $('#yuju-download-offer-report');
+    var $offerResult = $('#yuju-offer-report-result');
     var $pollBtn = $('#yuju-poll-report');
     var $loadBtn = $('#yuju-load-reconciliation');
     var $pushBtn = $('#yuju-push-differences');
@@ -601,6 +607,24 @@ $(function() {
         $report.removeClass('hidden');
         $pollBtn.hide();
     }
+
+    $offerBtn.on('click', function() {
+        setLoading($offerBtn, true, 'Descargando reporte...');
+        $offerResult.removeClass('alert-danger alert-success').addClass('alert-info').text('Consultando products-offer-report y guardando la respuesta...').show();
+        ajaxAction('downloadYujuOfferReport', null, function(response) {
+            setLoading($offerBtn, false);
+            var message = response && response.message ? response.message : 'Yuju no devolvió un resultado interpretable.';
+            if (response && response.success) {
+                message += ' Archivo: ' + response.file_path + '; tamaño: ' + response.file_size_bytes + ' bytes; filas detectadas: ' + response.products_count + '; HTTP ' + response.http_code + '.';
+                $offerResult.removeClass('alert-info alert-danger').addClass('alert-success').text(message);
+            } else {
+                $offerResult.removeClass('alert-info alert-success').addClass('alert-danger').text(message);
+            }
+        }, function() {
+            setLoading($offerBtn, false);
+            $offerResult.removeClass('alert-info alert-success').addClass('alert-danger').text('No se pudo descargar el reporte de ofertas. Revisa los logs del módulo.').show();
+        });
+    });
 
     $startBtn.on('click', function() {
         setLoading($startBtn, true, 'Solicitando informe...');
