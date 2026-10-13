@@ -3489,3 +3489,109 @@ textarea#yuju-cron-manager-output.form-control:focus,
     width: 16px !important;
     float: none !important;
 }
+
+
+/* Auditoría: barra de búsqueda y acciones rediseñadas */
+.yuju-audit-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px;
+    margin: 0 0 14px;
+    background: linear-gradient(135deg, #f8fbff 0%, #f1f6fc 100%);
+    border: 1px solid #dce7f3;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(30, 64, 110, .06);
+}
+.yuju-audit-toolbar-search { flex: 1 1 320px; min-width: 220px; }
+.yuju-audit-searchbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 6px 0 14px;
+    background: #fff;
+    border: 1px solid #d3deeb;
+    border-radius: 9px;
+    box-shadow: 0 1px 3px rgba(20, 50, 90, .04);
+}
+.yuju-audit-search-icon { color: #7186a2; font-size: 15px; }
+.yuju-audit-searchbox .form-control {
+    height: 40px;
+    padding: 8px 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+.yuju-audit-searchbox .form-control:focus { box-shadow: none; }
+.yuju-audit-searchbox button {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    color: #fff;
+    background: #2563eb;
+    border: 0;
+    border-radius: 7px;
+}
+.yuju-audit-searchbox button:hover { background: #1d4ed8; }
+.yuju-audit-filter-label {
+    display: block;
+    margin: 8px 2px 0;
+    color: #64748b;
+    font-size: 11px;
+}
+.yuju-audit-toolbar-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.yuju-audit-toolbar-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 9px 13px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.yuju-audit-btn-update { color: #fff; background: #2563eb; border: 1px solid #2563eb; }
+.yuju-audit-btn-update:hover, .yuju-audit-btn-update:focus { color: #fff; background: #1d4ed8; border-color: #1d4ed8; }
+.yuju-audit-btn-update:disabled { color: #94a3b8; background: #e8edf4; border-color: #e0e7ef; cursor: not-allowed; }
+.yuju-audit-btn-export { color: #334155; background: #fff; border: 1px solid #cbd5e1; }
+.yuju-audit-btn-export:hover, .yuju-audit-btn-export:focus { color: #1d4ed8; background: #f8fafc; border-color: #93b4e8; }
+.yuju-audit-live-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+}
+.yuju-audit-live-heading h4 { margin: 0; font-weight: 600; color: #24364b; }
+.yuju-audit-selected-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+@media (max-width: 767px) {
+    .yuju-audit-toolbar { align-items: stretch; flex-direction: column; padding: 12px; gap: 12px; }
+    .yuju-audit-toolbar-search { min-width: 0; }
+    .yuju-audit-toolbar-actions { justify-content: stretch; }
+    .yuju-audit-toolbar-actions .btn { flex: 1 1 100%; }
+    .yuju-audit-toolbar-actions .btn span { white-space: normal; }
+    .yuju-audit-live-heading { align-items: flex-start; flex-direction: column; }
+}
