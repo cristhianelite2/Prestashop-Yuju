@@ -43,6 +43,10 @@ class AdminYujuController extends ModuleAdminController
         $webhookStats = $this->getWebhookStats();
         $accountInfo = $this->getCachedAccountInfo();
 
+        require_once dirname(__FILE__) . '/../../classes/YujuUpdateManager.php';
+        $updateManager = new YujuUpdateManager($this->module->version, $this->module->name);
+        $updateStatus = $updateManager->getUpdateStatus(false);
+
         $this->context->smarty->assign([
             'module_dir' => $this->module->getPathUri(),
             'module_name' => $this->module->displayName,
@@ -57,6 +61,7 @@ class AdminYujuController extends ModuleAdminController
             'yuju_account_info' => $accountInfo,
             'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
             'token' => $this->token,
+            'update_status' => $updateStatus,
         ]);
 
         $this->setTemplate('dashboard.tpl');
@@ -68,7 +73,12 @@ class AdminYujuController extends ModuleAdminController
             $action = (string) Tools::getValue('action');
             if ($action === 'refreshAccountInfo') {
                 $this->ajaxProcessRefreshAccountInfo();
+            } elseif ($action === 'checkUpdate') {
+                $this->ajaxProcessCheckUpdate();
+            } elseif ($action === 'performUpdate') {
+                $this->ajaxProcessPerformUpdate();
             } else {
+                header('Content-Type: application/json; charset=utf-8');
                 die(json_encode(['success' => false, 'message' => 'Acción no reconocida: ' . $action]));
             }
             exit;
@@ -87,6 +97,62 @@ class AdminYujuController extends ModuleAdminController
             $result = $this->fetchAndStoreAccountInfo();
             die(json_encode($result));
         } catch (Exception $e) {
+            die(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: consulta si la rama main tiene cambios no instalados.
+     */
+    public function ajaxProcessCheckUpdate()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            require_once dirname(__FILE__) . '/../../classes/YujuUpdateManager.php';
+            $manager = new YujuUpdateManager($this->module->version, $this->module->name);
+            $status = $manager->getUpdateStatus(true);
+
+            if (!empty($status['check_error'])) {
+                throw new Exception($status['check_error']);
+            }
+
+            $message = !empty($status['update_available'])
+                ? 'Se detectaron cambios en la rama main. Ya puede obtener la actualización.'
+                : 'El módulo ya está actualizado con la rama main.';
+
+            die(json_encode([
+                'success' => true,
+                'message' => $message,
+                'data' => $status,
+            ]));
+        } catch (Throwable $e) {
+            die(json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * AJAX: descarga el commit detectado y aplica los archivos al módulo instalado.
+     */
+    public function ajaxProcessPerformUpdate()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            require_once dirname(__FILE__) . '/../../classes/YujuUpdateManager.php';
+            $manager = new YujuUpdateManager($this->module->version, $this->module->name);
+            $result = $manager->performUpdate();
+
+            die(json_encode([
+                'success' => true,
+                'message' => $result['message'],
+                'data' => $result,
+            ]));
+        } catch (Throwable $e) {
             die(json_encode([
                 'success' => false,
                 'message' => $e->getMessage(),
