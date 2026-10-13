@@ -752,9 +752,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                 cm.last_sync_at,
                 cm.last_sync_at AS last_sync_date,
                 CASE
-                    WHEN cm.last_sync_at IS NOT NULL THEN 'synced'
-                    WHEN cm.sync_enabled = 1 THEN 'pending'
-                    ELSE 'disabled'
+                    WHEN cm.last_sync_at IS NOT NULL THEN \'synced\'
+                    WHEN cm.sync_enabled = 1 THEN \'pending\'
+                    ELSE \'disabled\'
                 END AS sync_status,
                 cm.created_at,
                 cl.name AS prestashop_category_name,
