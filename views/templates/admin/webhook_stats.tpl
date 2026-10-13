@@ -475,7 +475,7 @@ code {
     border-color: #adadad;
 }
 
-/* Custom styles for better integration */
+/* Estilos personalizados para mejorar la integración */
 .panel-heading {
     padding: 10px 15px;
     border-bottom: 1px solid transparent;
