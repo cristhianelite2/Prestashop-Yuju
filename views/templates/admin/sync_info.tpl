@@ -37,7 +37,7 @@
                 <div class="col-xs-6 col-sm-2"><strong>Diferencias urgentes:</strong> <span id="yuju-products-urgent-differences">0</span></div>
                 <div class="col-xs-6 col-sm-2"><strong>Diferencias no urgentes:</strong> <span id="yuju-products-non-urgent-differences">0</span></div>
             </div>
-            <div id="yuju-unsynced-products" class="table-responsive" style="margin-top: 15px;"></div>
+            <div id="yuju-unsynced-products" class="yuju-reconciliation" style="margin-top: 15px;"></div>
             <div id="yuju-report-actions" style="margin-top: 15px;">
                 <button type="button" class="btn btn-info" id="yuju-poll-report" style="display: none;">
                     <i class="icon-clock-o"></i> Ver progreso del informe
@@ -176,6 +176,30 @@
         {/if}
     </div>
 </div>
+
+<style type="text/css">
+    .yuju-reconciliation { width: 100%; min-width: 0; }
+    .yuju-reconciliation .form-control { max-width: 100%; }
+    .yuju-reconciliation-table-wrap { width: 100%; margin-top: 12px; border: 1px solid #d8dee5; border-radius: 4px; }
+    .yuju-reconciliation-table { width: 100%; min-width: 1120px; margin-bottom: 0; table-layout: fixed; font-size: 12px; }
+    .yuju-reconciliation-table thead th { background: #f3f6f9; color: #344054; font-weight: 600; vertical-align: middle; white-space: normal; }
+    .yuju-reconciliation-table th, .yuju-reconciliation-table td { padding: 8px 9px !important; line-height: 1.45; vertical-align: top !important; overflow-wrap: anywhere; word-break: normal; }
+    .yuju-reconciliation-table th:nth-child(1), .yuju-reconciliation-table td:nth-child(1) { width: 38px; text-align: center; }
+    .yuju-reconciliation-table th:nth-child(2), .yuju-reconciliation-table td:nth-child(2) { width: 70px; }
+    .yuju-reconciliation-table th:nth-child(3), .yuju-reconciliation-table td:nth-child(3) { width: 90px; }
+    .yuju-reconciliation-table th:nth-child(4), .yuju-reconciliation-table td:nth-child(4) { width: 22%; }
+    .yuju-reconciliation-table th:nth-child(5), .yuju-reconciliation-table td:nth-child(5) { width: 14%; }
+    .yuju-reconciliation-table th:nth-child(6), .yuju-reconciliation-table td:nth-child(6) { width: 110px; }
+    .yuju-reconciliation-table th:nth-child(7), .yuju-reconciliation-table td:nth-child(7) { width: 18%; }
+    .yuju-reconciliation-table th:nth-child(8), .yuju-reconciliation-table td:nth-child(8) { width: 76px; text-align: center; }
+    .yuju-reconciliation-table th:nth-child(9), .yuju-reconciliation-table td:nth-child(9) { width: 22%; }
+    .yuju-reconciliation-table tbody tr:hover { background: #f7fafc; }
+    .yuju-reconciliation-table td .btn { white-space: nowrap; }
+    @media (max-width: 767px) {
+        .yuju-reconciliation-table { min-width: 1050px; }
+        .yuju-reconciliation-table th, .yuju-reconciliation-table td { padding: 6px !important; }
+    }
+</style>
 
 <script type="text/javascript">
 $(function() {
@@ -380,7 +404,7 @@ $(function() {
         var $container = $('#yuju-reconciliation-results');
         $container.empty();
 
-        var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
+        var $table = $('<table class="table table-bordered table-striped yuju-reconciliation-table"><thead><tr>' +
             '<th><input type="checkbox" id="yuju-select-all-urgent" aria-label="Seleccionar todos los productos con diferencias urgentes"></th>' +
             '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Prioridad</th><th>Depurar</th><th>Diferencias</th>' +
             '</tr></thead><tbody></tbody></table>');
@@ -593,7 +617,7 @@ $(function() {
         $filters.append($statusColumn).append($pageSizeColumn).append($resetColumn).append($urgencyColumn);
         $container.append($filters).append('<p class="text-muted">Selecciona productos vinculados con diferencias urgentes. La actualización enviará únicamente stock y precio; los demás campos no se modificarán.</p>');
         $container.append('<div class="clearfix" style="margin: 10px 0;"><button type="button" class="btn btn-success" id="yuju-push-differences-top" style="display:none;"><i class="icon-refresh"></i> Actualizar urgentes seleccionados (0)</button></div>');
-        $container.append('<div id="yuju-reconciliation-results"></div>');
+        $container.append('<div id="yuju-reconciliation-results" class="table-responsive yuju-reconciliation-table-wrap"></div>');
 
         showMessage(
             message || ('Reconciliación cargada: ' + reconciliationProducts.length + ' productos de PrestaShop. La vista inicial muestra solo los que tienen diferencias.'),
