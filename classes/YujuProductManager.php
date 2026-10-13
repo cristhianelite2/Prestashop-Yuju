@@ -75,71 +75,17 @@ class YujuProductManager
      */
     public function syncProductsFromYuju($product_ids = null, $force_update = false)
     {
-        try {
-            $this->logger->log('Starting product synchronization from Yuju', 'info');
-
-            $filters = [];
-
-            if ($product_ids && is_array($product_ids)) {
-                $filters['ids'] = $product_ids;
-            }
-
-            $yuju_products = $this->api_client->getProducts($filters);
-
-            if (!$yuju_products || !isset($yuju_products['data'])) {
-                throw new Exception('No products received from Yuju API');
-            }
-
-            $synced_count = 0;
-            $created_count = 0;
-            $updated_count = 0;
-            $errors = [];
-
-            foreach ($yuju_products['data'] as $yuju_product) {
-                try {
-                    $result = $this->syncSingleProductFromYuju($yuju_product, $force_update);
-
-                    if ($result) {
-                        ++$synced_count;
-
-                        if ($result['action'] === 'created') {
-                            ++$created_count;
-                        } else {
-                            ++$updated_count;
-                        }
-                    }
-                } catch (Exception $e) {
-                    $errors[] = 'Product ' . $yuju_product['id'] . ': ' . $e->getMessage();
-                    $this->logger->log('Error syncing product ' . $yuju_product['id'] . ': ' . $e->getMessage(), 'error');
-                }
-            }
-
-            $this->logger->log('Product synchronization from Yuju completed. Synced: ' . $synced_count . ' (Created: ' . $created_count . ', Updated: ' . $updated_count . '), Errors: ' . count($errors), 'info');
-
-            YujuMonitor::tally('sync.product', (int) $synced_count, count($errors), [
-                'direction' => 'from_yuju',
-            ]);
-
-            return [
-                'success' => true,
-                'synced_count' => $synced_count,
-                'created_count' => $created_count,
-                'updated_count' => $updated_count,
-                'errors' => $errors,
-            ];
-        } catch (Exception $e) {
-            $this->logger->log('Product synchronization from Yuju failed: ' . $e->getMessage(), 'error');
-
-            YujuMonitor::tally('sync.error', 0, 1, [
-                'direction' => 'from_yuju',
-                'level' => 'error',
-            ]);
-
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-            ];
-        }
+        // Política permanente: Yuju no puede crear ni actualizar productos en PrestaShop.
+        $message = 'Sincronización Yuju → PrestaShop deshabilitada. PrestaShop es la fuente de verdad.';
+        $this->logger->log($message, 'warning');
+        return [
+            'success' => false,
+            'synced_count' => 0,
+            'created_count' => 0,
+            'updated_count' => 0,
+            'errors' => [$message],
+            'direction_blocked' => true,
+        ];
     }
 
     /**
@@ -213,41 +159,8 @@ class YujuProductManager
      */
     protected function syncSingleProductFromYuju($yuju_product, $force_update = false)
     {
-        // Check if product already exists in PrestaShop
-        $existing_product = $this->findProductByYujuId($yuju_product['id']);
-
-        if ($existing_product) {
-            // Update existing product
-            if (!$force_update && !$this->isProductUpdateNeeded($existing_product, $yuju_product)) {
-                return false;
-            }
-
-            $product = new Product($existing_product['id_product']);
-            $this->updateProductFromYujuData($product, $yuju_product);
-
-            if ($product->save()) {
-                $this->updateProductStatus($existing_product['id_product'], 'synced', null, $yuju_product['id']);
-                $this->logger->log('Product updated from Yuju: ' . $yuju_product['id'] . ' -> ' . $product->id, 'info');
-
-                return ['action' => 'updated', 'product_id' => $product->id];
-            } else {
-                throw new Exception('Failed to save updated product');
-            }
-        } else {
-            // Create new product
-            $product = new Product();
-            $this->updateProductFromYujuData($product, $yuju_product);
-
-            if ($product->save()) {
-                // Create product status record
-                $this->createProductStatus($product->id, 'synced', null, $yuju_product['id']);
-                $this->logger->log('Product created from Yuju: ' . $yuju_product['id'] . ' -> ' . $product->id, 'info');
-
-                return ['action' => 'created', 'product_id' => $product->id];
-            } else {
-                throw new Exception('Failed to save new product');
-            }
-        }
+        // Bloqueo de seguridad: jamás modificar el catálogo de PrestaShop con datos de Yuju.
+        return false;
     }
 
     /**
@@ -337,10 +250,6 @@ class YujuProductManager
         $data = [];
 
         foreach ($this->field_mappings as $mapping) {
-            if ($mapping['sync_direction'] === 'yuju_to_ps') {
-                continue; // Skip fields that only sync from Yuju to PS
-            }
-
             $ps_field = $mapping['prestashop_field'];
             $yuju_field = $mapping['yuju_field'];
             
