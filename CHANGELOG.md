@@ -1,3 +1,9 @@
+## [1.1.19] - 2026-10-13
+### Corregido
+- La sección **Estado de productos por categoría** ahora usa la ruta administrativa registrada `AdminYuju` con `yuju_view=product_category_status`, igual que la pantalla funcional de mapeo de estados.
+- El menú lateral genera un enlace autenticado mediante `getAdminLink('AdminYuju')`; ya no depende de que `AdminYujuProductCategoryStatus` esté registrado como pestaña independiente.
+- La vista de categorías incluye explícitamente la plantilla de estadísticas y recibe los datos agrupados por categoría.
+
 ## [1.1.18] - 2026-10-13
 ### Corregido
 - El actualizador registra y activa la pestaña administrativa `AdminYujuProductCategoryStatus` después de copiar los archivos. Evita que la sección de estado de productos por categoría muestre «Página no encontrada» en instalaciones existentes.
