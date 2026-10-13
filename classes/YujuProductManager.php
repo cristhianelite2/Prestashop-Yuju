@@ -203,7 +203,7 @@ class YujuProductManager
         }
 
         $status_rows = Db::getInstance()->executeS('
-            SELECT prestashop_product_id, yuju_product_id, sync_status, sync_enabled, last_sync_at
+            SELECT prestashop_product_id, yuju_product_id, yuju_variation_id, sync_status, sync_enabled, last_sync_at
             FROM ' . _DB_PREFIX_ . 'yuju_product_status
         ');
         if ($status_rows === false) {
@@ -211,8 +211,15 @@ class YujuProductManager
         }
 
         $status_by_product = [];
+        $status_by_yuju_item = [];
         foreach ($status_rows as $status_row) {
-            $status_by_product[(int) $status_row['prestashop_product_id']] = $status_row;
+            if (!empty($status_row['prestashop_product_id'])) {
+                $status_by_product[(int) $status_row['prestashop_product_id']] = $status_row;
+            }
+            if (!empty($status_row['yuju_product_id'])) {
+                $variation_key = isset($status_row['yuju_variation_id']) ? (string) $status_row['yuju_variation_id'] : '';
+                $status_by_yuju_item[json_encode([(string) $status_row['yuju_product_id'], $variation_key])] = $status_row;
+            }
         }
 
         $contexts = [];
@@ -342,7 +349,10 @@ class YujuProductManager
                 : null;
             $catalog_status = 'pending';
             $catalog_error = null;
-            $catalog_sync_enabled = 1;
+            $parent_status_key = json_encode([$yuju_product_id, '']);
+            $catalog_sync_enabled = isset($status_by_yuju_item[$parent_status_key])
+                ? (int) $status_by_yuju_item[$parent_status_key]['sync_enabled']
+                : 1;
 
             if ($prestashop_product_id !== null && isset($contexts[$prestashop_product_id])) {
                 $context = $contexts[$prestashop_product_id];
@@ -406,10 +416,13 @@ class YujuProductManager
                 $variation_status = $variation_ps_id !== null && isset($results[$variation_ps_id])
                     ? $results[$variation_ps_id]['status']
                     : 'pending';
-                $variation_enabled = $variation_ps_id !== null && isset($contexts[$variation_ps_id]['status_row'])
-                    && $contexts[$variation_ps_id]['status_row']
-                    ? (int) $contexts[$variation_ps_id]['status_row']['sync_enabled']
-                    : 1;
+                $variation_status_key = json_encode([$yuju_product_id, $variation_key]);
+                $variation_enabled = isset($status_by_yuju_item[$variation_status_key])
+                    ? (int) $status_by_yuju_item[$variation_status_key]['sync_enabled']
+                    : (($variation_ps_id !== null && isset($contexts[$variation_ps_id]['status_row'])
+                        && $contexts[$variation_ps_id]['status_row'])
+                        ? (int) $contexts[$variation_ps_id]['status_row']['sync_enabled']
+                        : 1);
                 $yuju_catalog_rows[] = [
                     'yuju_product_id' => $yuju_product_id,
                     'yuju_product_name' => $this->getYujuReportProductName($report_product),
