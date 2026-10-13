@@ -72,19 +72,66 @@ class Yuju extends Module
      */
     public function install()
     {
-        if (Shop::isFeatureActive()) {
-            Shop::setContext(Shop::CONTEXT_ALL);
+        $stage = 'preparar contexto de tiendas';
+
+        try {
+            if (Shop::isFeatureActive()) {
+                Shop::setContext(Shop::CONTEXT_ALL);
+            }
+
+            $stage = 'parent::install';
+            if (!parent::install()) {
+                $this->logInstallFailure($stage, 'PrestaShop rechazó la instalación base del módulo.');
+                return false;
+            }
+
+            $steps = [
+                'crear tablas SQL' => 'installDb',
+                'actualizar estados intermedios de productos' => 'ensureProductStatusIntermediateWebhookStates',
+                'crear tablas de auditoría' => 'ensureAuditTables',
+                'crear pestañas del panel administrativo' => 'installTabs',
+                'registrar hooks' => 'registerHooks',
+                'guardar configuración inicial' => 'installConfiguration',
+                'crear directorios del módulo' => 'createDirectories',
+                'crear transportista Yuju' => 'ensureYujuCarrier',
+            ];
+
+            foreach ($steps as $label => $method) {
+                $stage = $label;
+                if (!$this->{$method}()) {
+                    $this->logInstallFailure($stage, 'El paso devolvió false.');
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            $this->logInstallFailure(
+                $stage,
+                get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine()
+            );
+
+            return false;
+        }
+    }
+
+    /**
+     * Registra el paso exacto que hizo fallar la instalación, sin depender de
+     * YujuLogger (la tabla de logs puede no existir todavía).
+     */
+    protected function logInstallFailure($stage, $detail)
+    {
+        $message = '[Yuju install] Falló el paso "' . $stage . '": ' . $detail;
+
+        try {
+            PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
+        } catch (Throwable $loggingError) {
+            // No ocultar el error original si el logger de PrestaShop también falla.
         }
 
-        return parent::install()
-        && $this->installDb()
-        && $this->ensureProductStatusIntermediateWebhookStates()
-        && $this->ensureAuditTables()
-        && $this->installTabs()
-        && $this->registerHooks()
-        && $this->installConfiguration()
-        && $this->createDirectories()
-        && $this->ensureYujuCarrier();
+        if (isset($this->_errors) && is_array($this->_errors)) {
+            $this->_errors[] = $message;
+        }
     }
 
     /**
@@ -538,7 +585,7 @@ class Yuju extends Module
             }
 
             if (!$tab->save()) {
-                $this->logger->error('Failed to install tab: ' . $tab_data['class_name']);
+                PrestaShopLogger::addLog('[Yuju install] No se pudo guardar la pestaña: ' . $tab_data['class_name'], 3);
 
                 return false;
             }
@@ -783,7 +830,7 @@ class Yuju extends Module
 
         foreach ($hooks as $hook) {
             if (!$this->registerHook($hook)) {
-                $this->logger->error('Failed to register hook: ' . $hook);
+                PrestaShopLogger::addLog('[Yuju install] No se pudo registrar el hook: ' . $hook, 3);
 
                 return false;
             }
@@ -801,7 +848,7 @@ class Yuju extends Module
 
         foreach ($defaults as $key => $value) {
             if (!Configuration::updateValue($key, $value)) {
-                $this->logger->error('Failed to install configuration: ' . $key);
+                PrestaShopLogger::addLog('[Yuju install] No se pudo guardar la configuración: ' . $key, 3);
 
                 return false;
             }
@@ -838,7 +885,7 @@ class Yuju extends Module
         foreach ($directories as $dir) {
             if (!is_dir($dir)) {
                 if (!mkdir($dir, 0755, true)) {
-                    $this->logger->error('Failed to create directory: ' . $dir);
+                    PrestaShopLogger::addLog('[Yuju install] No se pudo crear el directorio: ' . $dir, 3);
 
                     return false;
                 }
