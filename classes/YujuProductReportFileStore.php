@@ -319,6 +319,76 @@ class YujuProductReportFileStore
         return null;
     }
 
+
+    /** Parse the downloaded offer JSON. Supports Yuju's JSON array and JSONL. */
+    public function readOfferProducts($cache_id)
+    {
+        if (!is_string($cache_id) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+            throw new InvalidArgumentException('Invalid Yuju offer report cache ID.');
+        }
+        $path = $this->directory . DIRECTORY_SEPARATOR . $cache_id . '.json';
+        if (!is_file($path) || is_link($path)) {
+            throw new RuntimeException('El archivo del reporte de ofertas ya no está disponible.');
+        }
+        $size = filesize($path);
+        if ($size === false || $size <= 0 || $size > $this->max_report_bytes) {
+            throw new RuntimeException('El archivo del reporte de ofertas está vacío o excede el tamaño permitido.');
+        }
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            throw new RuntimeException('No se pudo leer el archivo del reporte de ofertas.');
+        }
+        $decoded = json_decode($contents, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            if (isset($decoded['products']) && is_array($decoded['products'])) {
+                $decoded = $decoded['products'];
+            } elseif (isset($decoded['data']) && is_array($decoded['data']) && !isset($decoded['id_product'])) {
+                $decoded = $decoded['data'];
+            }
+            if (isset($decoded['id_product'])) {
+                $decoded = [$decoded];
+            }
+            if (!is_array($decoded)) {
+                throw new RuntimeException('El JSON del reporte de ofertas no contiene una lista de productos.');
+            }
+            $rows = $decoded;
+        } else {
+            $rows = [];
+            foreach (preg_split('/\r\n|\r|\n/', $contents) as $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                $row = json_decode($line, true);
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($row)) {
+                    throw new RuntimeException('El reporte de ofertas contiene una fila JSON inválida.');
+                }
+                $rows[] = $row;
+            }
+        }
+        $products = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                throw new RuntimeException('El reporte de ofertas contiene un registro inválido.');
+            }
+            $id = isset($row['id_product']) ? $row['id_product']
+                : (isset($row['id']) ? $row['id'] : (isset($row['product_id']) ? $row['product_id'] : null));
+            if (!is_scalar($id) || trim((string) $id) === '') {
+                throw new RuntimeException('Un producto del reporte de ofertas no tiene id_product.');
+            }
+            $product = ['id_product' => (string) $id];
+            foreach (['stock', 'price'] as $field) {
+                if (array_key_exists($field, $row) && is_scalar($row[$field]) && $row[$field] !== '') {
+                    if (!is_numeric($row[$field])) {
+                        throw new RuntimeException('El campo ' . $field . ' no es numérico en el reporte de ofertas.');
+                    }
+                    $product[$field] = $row[$field];
+                }
+            }
+            $products[] = $product;
+        }
+        if (!$products) throw new RuntimeException('El reporte de ofertas no contiene productos válidos.');
+        return $products;
+    }
+
     public function reportExists($cache_id)
     {
         $path = $this->getPath($cache_id);

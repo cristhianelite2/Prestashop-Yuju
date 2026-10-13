@@ -26,12 +26,7 @@
         <button type="button" class="btn btn-primary btn-sm pull-right" id="yuju-start-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}">
             <i class="icon-refresh"></i> Iniciar sincronización
         </button>
-        <button type="button" class="btn btn-warning btn-sm pull-right" id="yuju-download-offer-report" data-ajax-url="{$link->getAdminLink('AdminYujuSync')|escape:'html':'UTF-8'}" style="margin-right: 8px;">
-            <i class="icon-download"></i> Descargar reporte stock/precio
-        </button>
-    </div>
-    <div class="panel-body">
-        <div id="yuju-offer-report-result" class="alert alert-info" style="display:none;" role="status" aria-live="polite"></div>
+
         <div id="yuju-product-sync-report" class="hidden" role="status" aria-live="polite" style="margin-bottom: 20px;">
             <div id="yuju-product-sync-message" class="alert alert-info"></div>
             <div class="row">
@@ -185,8 +180,7 @@
 <script type="text/javascript">
 $(function() {
     var $startBtn = $('#yuju-start-report');
-    var $offerBtn = $('#yuju-download-offer-report');
-    var $offerResult = $('#yuju-offer-report-result');
+    var workflowRunning = false;
     var $pollBtn = $('#yuju-poll-report');
     var $loadBtn = $('#yuju-load-reconciliation');
     var $pushBtn = $('#yuju-push-differences');
@@ -254,12 +248,14 @@ $(function() {
                 }
             } else if (status === 'COMPLETED' && response.report_cached === true) {
                 stopAutoPoll();
-                showMessage('Informe descargado y listo. Cargue la reconciliación para ver las diferencias.', 'alert-success');
                 $pollBtn.hide();
-                $loadBtn.show();
+                $loadBtn.hide();
                 $pushBtn.hide();
-                if (response.product_count !== undefined) {
-                    $('#yuju-products-total').text(response.product_count);
+                if (response.product_count !== undefined) $('#yuju-products-total').text(response.product_count);
+                if (workflowRunning) finishCombinedWorkflow();
+                else {
+                    showMessage('Informe general descargado. Inicie el proceso completo para descargar stock/precio y reconciliar.', 'alert-success');
+                    $loadBtn.show();
                 }
             } else if (status === 'COMPLETED') {
                 // El estado remoto no garantiza que el archivo local se pueda leer.
@@ -608,44 +604,76 @@ $(function() {
         $pollBtn.hide();
     }
 
-    $offerBtn.on('click', function() {
-        setLoading($offerBtn, true, 'Descargando reporte...');
-        $offerResult.removeClass('alert-danger alert-success').addClass('alert-info').text('Consultando products-offer-report y guardando la respuesta...').show();
-        ajaxAction('downloadYujuOfferReport', null, function(response) {
-            setLoading($offerBtn, false);
-            var message = response && response.message ? response.message : 'Yuju no devolvió un resultado interpretable.';
-            if (response && response.success) {
-                message += ' Archivo: ' + response.file_path + '; tamaño: ' + response.file_size_bytes + ' bytes; filas detectadas: ' + response.products_count + '; HTTP ' + response.http_code + '.';
-                $offerResult.removeClass('alert-info alert-danger').addClass('alert-success').text(message);
-            } else {
-                $offerResult.removeClass('alert-info alert-success').addClass('alert-danger').text(message);
+    function finishCombinedWorkflow() {
+        showMessage('Informe general listo. Descargando el reporte de stock/precio...', 'alert-info');
+        ajaxAction('downloadYujuOfferReport', null, function(offerResponse) {
+            if (!offerResponse || !offerResponse.success) {
+                workflowRunning = false;
+                $startBtn.prop('disabled', false).html($startBtn.data('original-html'));
+                showMessage(offerResponse && offerResponse.message ? offerResponse.message : 'No se pudo descargar el reporte de stock/precio. La reconciliación no se ejecutó.', 'alert-danger');
+                return;
             }
+            showMessage('Reporte de stock/precio guardado (' + (offerResponse.products_count || 0) + ' productos). Combinando ambos reportes y detectando diferencias...', 'alert-info');
+            ajaxAction('getYujuProductSyncReport', null, function(reportResponse) {
+                workflowRunning = false;
+                $startBtn.prop('disabled', false).html($startBtn.data('original-html'));
+                if (reportResponse && reportResponse.success && reportResponse.report) {
+                    renderReconciliation(reportResponse.report, 'Sincronización de informes completada: catálogo general + stock/precio.');
+                    showMessage('Proceso terminado. Ambos reportes se descargaron, combinaron y reconciliaron.', 'alert-success');
+                } else {
+                    showMessage(reportResponse && reportResponse.message ? reportResponse.message : 'Los reportes se descargaron, pero no se pudo completar la reconciliación.', 'alert-danger');
+                }
+            }, function() {
+                workflowRunning = false;
+                $startBtn.prop('disabled', false).html($startBtn.data('original-html'));
+                showMessage('Los reportes se descargaron, pero falló la petición de reconciliación.', 'alert-danger');
+            });
         }, function() {
-            setLoading($offerBtn, false);
-            $offerResult.removeClass('alert-info alert-success').addClass('alert-danger').text('No se pudo descargar el reporte de ofertas. Revisa los logs del módulo.').show();
+            workflowRunning = false;
+            $startBtn.prop('disabled', false).html($startBtn.data('original-html'));
+            showMessage('No se pudo descargar el reporte de stock/precio. La reconciliación no se ejecutó.', 'alert-danger');
         });
-    });
+    }
 
     $startBtn.on('click', function() {
-        setLoading($startBtn, true, 'Solicitando informe...');
+        if (workflowRunning) return;
+        workflowRunning = true;
+        setLoading($startBtn, true, 'Solicitando informe general...');
         ajaxAction('startYujuProductReport', null, function(response) {
             handleReportState(response, true);
-            setLoading($startBtn, false);
+            if (response && response.success && (response.status === 'CREATED' || response.status === 'PROCESSING')) {
+                $startBtn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Generando informe general...');
+            } else if (response && response.success && response.status === 'COMPLETED' && response.report_cached === true) {
+                $startBtn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Completando reportes...');
+            } else {
+                workflowRunning = false;
+                setLoading($startBtn, false);
+            }
         }, function() {
+            workflowRunning = false;
             showMessage('Fallo al conectar con Yuju. Revise la conexión e intente nuevamente.', 'alert-danger');
             setLoading($startBtn, false);
         });
     });
 
     $pollBtn.on('click', function() {
+        if (workflowRunning) return;
+        workflowRunning = true;
+        setLoading($startBtn, true, 'Completando reportes...');
         setLoading($pollBtn, true, 'Comprobando / reintentando descarga...');
         // An explicit click also retries DOWNLOAD_ERROR using the same stored task.
         ajaxAction('pollYujuProductReport', {ldelim}retry_download: true{rdelim}, function(response) {
             handleReportState(response, false);
             setLoading($pollBtn, false);
+            if (!response || !response.success || (response.status !== 'CREATED' && response.status !== 'PROCESSING' && response.report_cached !== true)) {
+                workflowRunning = false;
+                setLoading($startBtn, false);
+            }
         }, function() {
+            workflowRunning = false;
             showMessage('No se pudo consultar o recuperar el informe. Inténtelo nuevamente.', 'alert-danger');
             setLoading($pollBtn, false);
+            setLoading($startBtn, false);
         });
     });
 

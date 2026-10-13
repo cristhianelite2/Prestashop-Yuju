@@ -346,7 +346,7 @@ class AdminYujuSyncController extends ModuleAdminController
         try {
             // Get the cached report from the report manager
             $report_manager = $this->sync_manager->getProductReportManager();
-            if (!method_exists($report_manager, 'getCachedReportProducts')) {
+            if (!method_exists($report_manager, 'getMergedCachedReportProducts')) {
                 throw new Exception('Report manager does not support cached report access.');
             }
 
@@ -377,7 +377,7 @@ class AdminYujuSyncController extends ModuleAdminController
             if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
                 // A discovered local report is valid even when its original task ID
                 // was lost from Configuration. The private JSONL is the source of truth.
-                $report_products = $report_manager->getCachedReportProducts();
+                $report_products = $report_manager->getMergedCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
                     $report_products = iterator_to_array($report_products);
@@ -394,7 +394,7 @@ class AdminYujuSyncController extends ModuleAdminController
                     $state = $report_manager->getStoredState();
 
                     if (!empty($recovery_result['success']) && $state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
-                        $report_products = $report_manager->getCachedReportProducts();
+                        $report_products = $report_manager->getMergedCachedReportProducts();
                         if ($report_products instanceof Traversable) {
                             $report_products = iterator_to_array($report_products);
                         }
@@ -466,7 +466,7 @@ class AdminYujuSyncController extends ModuleAdminController
             $state = $report_manager->getStoredState();
 
             if ($state['status'] === 'COMPLETED' && !empty($state['cache_id'])) {
-                $report_products = $report_manager->getCachedReportProducts();
+                $report_products = $report_manager->getMergedCachedReportProducts();
 
                 if ($report_products instanceof Traversable) {
                     $report_products = iterator_to_array($report_products);

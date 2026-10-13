@@ -13,6 +13,7 @@ class YujuProductReportManager
 {
     const STATE_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_STATE';
     const QUOTA_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_QUOTA';
+    const OFFER_STATE_CONFIG_KEY = 'YUJU_PRODUCTS_OFFER_REPORT_STATE';
 
     private $api_client;
     private $file_store;
@@ -229,12 +230,37 @@ class YujuProductReportManager
                 'report_downloaded_at' => $saved['saved_at'],
             ];
 
+            $offer_products = $this->file_store->readOfferProducts($saved['cache_id']);
+            $state['product_count'] = count($offer_products);
             if (!$this->saveReportMetadata($state, 'offer')) {
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
                 return [
                     'success' => false,
                     'status' => 'failed',
                     'message' => 'El archivo se descargó, pero no se pudieron registrar sus metadatos en la base de datos.',
+                ];
+            }
+            $offer_state = [
+                'cache_id' => $saved['cache_id'],
+                'product_count' => count($offer_products),
+                'report_size_bytes' => $saved['size_bytes'],
+                'report_downloaded_at' => $saved['saved_at'],
+            ];
+            if (!Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state))) {
+                $this->file_store->deleteJsonPayload($saved['cache_id']);
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'message' => 'El archivo de ofertas se descargó, pero no se pudo guardar su estado en la base de datos.',
+                ];
+            }
+            if (!$this->persistOfferProductsToDatabase($offer_products, $saved['cache_id'])) {
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, '');
+                $this->file_store->deleteJsonPayload($saved['cache_id']);
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'message' => 'El archivo se descargó, pero no se pudieron guardar sus productos de stock/precio en la base de datos.',
                 ];
             }
         } catch (Exception $e) {
@@ -253,9 +279,9 @@ class YujuProductReportManager
             'report_cached' => true,
             'file_path' => $saved['relative_path'],
             'file_size_bytes' => $saved['size_bytes'],
-            'products_count' => 0,
+            'products_count' => isset($offer_products) ? count($offer_products) : 0,
             'http_code' => (int) ($response['http_code'] ?? 200),
-            'message' => 'Archivo real del reporte de ofertas descargado desde la URL temporal de Yuju y guardado en almacenamiento privado. Las filas se inspeccionarán en la siguiente fase.',
+            'message' => 'Archivo real del reporte de ofertas descargado desde la URL temporal de Yuju y guardado en almacenamiento privado. El archivo se validó y está listo para combinar stock/precio con el reporte general.',
         ];
     }
 
@@ -434,6 +460,88 @@ class YujuProductReportManager
         }
 
         return $this->file_store->readProducts($state['cache_id']);
+    }
+
+
+
+    /**
+     * Persist the latest stock/price snapshot in a dedicated database table.
+     * The private JSON file remains the source used by the reconciliation reader.
+     */
+    protected function persistOfferProductsToDatabase($products, $cache_id)
+    {
+        $db = Db::getInstance();
+        $table = _DB_PREFIX_ . 'yuju_product_offer_rows';
+        $table_sql = chr(96) . bqSQL($table) . chr(96);
+        $create_sql = "CREATE TABLE IF NOT EXISTS {$table_sql} (
+            id_product varchar(64) NOT NULL,
+            sku varchar(255) DEFAULT NULL,
+            stock decimal(20,6) DEFAULT NULL,
+            price decimal(20,6) DEFAULT NULL,
+            report_cache_id char(32) NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY (id_product),
+            KEY idx_report_cache_id (report_cache_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        if (!$db->execute($create_sql) || !$db->execute('START TRANSACTION')) {
+            return false;
+        }
+
+        try {
+            if (!$db->execute('DELETE FROM ' . $table_sql)) {
+                $db->execute('ROLLBACK');
+                return false;
+            }
+
+            $updated_at = date('Y-m-d H:i:s');
+            foreach ($products as $product) {
+                $row = [
+                    'id_product' => pSQL((string) $product['id_product']),
+                    'sku' => isset($product['sku']) && is_scalar($product['sku']) ? pSQL((string) $product['sku']) : null,
+                    'stock' => isset($product['stock']) && is_numeric($product['stock']) ? (float) $product['stock'] : null,
+                    'price' => isset($product['price']) && is_numeric($product['price']) ? (float) $product['price'] : null,
+                    'report_cache_id' => pSQL($cache_id),
+                    'updated_at' => pSQL($updated_at),
+                ];
+                if (!$db->insert('yuju_product_offer_rows', $row, true)) {
+                    $db->execute('ROLLBACK');
+                    return false;
+                }
+            }
+
+            return $db->execute('COMMIT');
+        } catch (Exception $e) {
+            $db->execute('ROLLBACK');
+            return false;
+        }
+    }
+
+    /** Enrich general product rows with stock and price from the latest offer report. */
+    public function getMergedCachedReportProducts()
+    {
+        $products = [];
+        foreach ($this->getCachedReportProducts() as $product) $products[] = $product;
+
+        $offer_state = json_decode((string) Configuration::get(self::OFFER_STATE_CONFIG_KEY), true);
+        if (!is_array($offer_state) || empty($offer_state['cache_id'])
+            || !preg_match('/^[a-f0-9]{32}$/', (string) $offer_state['cache_id'])) {
+            throw new RuntimeException('Primero debes descargar el reporte de stock y precio de Yuju.');
+        }
+        $offer_rows = $this->file_store->readOfferProducts($offer_state['cache_id']);
+        $offer_by_id = [];
+        foreach ($offer_rows as $offer) $offer_by_id[(string) $offer['id_product']] = $offer;
+
+        foreach ($products as &$product) {
+            $id = isset($product['id_product']) ? (string) $product['id_product'] : '';
+            if ($id === '' || !isset($offer_by_id[$id])) continue;
+            foreach (['stock', 'price'] as $field) {
+                if (array_key_exists($field, $offer_by_id[$id])) $product[$field] = $offer_by_id[$id][$field];
+            }
+            $product['_offer_report_matched'] = true;
+        }
+        unset($product);
+        return $products;
     }
 
     protected function getCachedReportStatus($state)
