@@ -22,7 +22,7 @@
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-file-text"></i>
-        Visor de Logs - Yuju Integration
+        Visor de registros - Integración Yuju
     </div>
 
     <div class="panel-body">
@@ -119,7 +119,7 @@
                                 <div class="panel panel-info">
                                     <div class="panel-body text-center">
                                         <h3>{$log_stats.info}</h3>
-                                        <small>Info</small>
+                                        <small>Información</small>
                                     </div>
                                 </div>
                             </div>
@@ -129,7 +129,7 @@
                     <div class="row" style="margin-bottom: 15px;">
                         <div class="col-lg-6">
                             <strong>Archivo:</strong> {$view_filename|escape:'html':'UTF-8'}
-                            {if $view_is_json}<span class="label label-info">OAuth JSON</span>{else}<span class="label label-default">Log</span>{/if}<br>
+                            {if $view_is_json}<span class="label label-info">OAuth (JSON)</span>{else}<span class="label label-default">Registro</span>{/if}<br>
                             <strong>Tamaño:</strong> {$log_stats.size_human}<br>
                             <strong>Última modificación:</strong> {$log_stats.modified}
                         </div>
@@ -292,7 +292,7 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
                 </div>
             {/if}
 
-            <h4><i class="icon-file"></i> Otros archivos de log ({$logs|@count})</h4>
+            <h4><i class="icon-file"></i> Otros archivos de registro ({$logs|@count})</h4>
 
             {if $logs|@count > 0}
                 <div class="table-responsive">
@@ -315,9 +315,9 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
                                     </td>
                                     <td>
                                         {if $log.type == 'json'}
-                                            <span class="label label-info">OAuth JSON</span>
+                                            <span class="label label-info">OAuth (JSON)</span>
                                         {else}
-                                            <span class="label label-default">LOG</span>
+                                            <span class="label label-default">REGISTRO</span>
                                         {/if}
                                     </td>
                                     <td>{$log.size_human|escape:'html':'UTF-8'}</td>
@@ -338,7 +338,7 @@ document.querySelectorAll('.dropdown-menu a[data-lines]').forEach(function(link)
             {else}
                 <div class="alert alert-warning">
                     <i class="icon-warning-sign"></i>
-                    No se encontraron archivos de log en <code>{$module_dir|escape:'html':'UTF-8'}logs/</code>
+                    No se encontraron archivos de registro en <code>{$module_dir|escape:'html':'UTF-8'}logs/</code>
                 </div>
             {/if}
 
