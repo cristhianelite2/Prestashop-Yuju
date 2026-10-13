@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
+    KEY `idx_status_product_latest` (`prestashop_product_id`, `id`),
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
@@ -109,10 +110,12 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_queue` (
     `last_attempt_at` datetime DEFAULT NULL,
     `processed_at` datetime DEFAULT NULL,
     PRIMARY KEY (`id`),
+    KEY `idx_queue_product_action_status` (`prestashop_product_id`, `prestashop_product_attribute_id`, `action`, `status`),
     KEY `prestashop_product_id` (`prestashop_product_id`),
     KEY `status` (`status`),
     KEY `priority` (`priority`),
-    KEY `created_at` (`created_at`)
+    KEY `created_at` (`created_at`),
+    KEY `idx_queue_status_created` (`status`, `created_at`)
 ) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_sync_logs` (
