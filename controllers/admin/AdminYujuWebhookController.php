@@ -788,4 +788,16 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         return $csv_content;
     }
+
+
+    /** Carga los estilos y scripts propios del módulo en el back office. */
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        if ($this->module) {
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+        }
+    }
 }
