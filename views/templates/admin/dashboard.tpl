@@ -43,7 +43,7 @@
     </div>
 
     {* Actualizaciones desde GitHub (rama main) *}
-    <div class="panel panel-default yuju-dashboard-panel" id="yuju-update-panel">
+    <div class="panel {if isset($update_status.update_available) && $update_status.update_available}panel-warning{else}panel-default{/if} yuju-dashboard-panel" id="yuju-update-panel">
         <div class="panel-heading">
             <i class="icon-cloud-download"></i>
             Actualizaciones del módulo
