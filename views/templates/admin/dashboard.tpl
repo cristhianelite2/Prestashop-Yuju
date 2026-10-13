@@ -40,25 +40,14 @@
                         <strong>Versión en main:</strong>
                         <span id="yuju-remote-version">v{if isset($update_status.remote_version)}{$update_status.remote_version|escape:'html':'UTF-8'}{else}{$module_version|escape:'html':'UTF-8'}{/if}</span>
                     </p>
-                    <p id="yuju-update-message" class="{if isset($update_status.check_error) && $update_status.check_error}text-danger{elseif isset($update_status.update_available) && $update_status.update_available}text-warning{else}text-success{/if}">
+                    <p id="yuju-update-message" class="{if isset($update_status.check_error) && $update_status.check_error}text-danger{elseif isset($update_status.update_available) && $update_status.update_available}text-warning{else}text-success{/if}" style="margin:4px 0;">
                         {if isset($update_status.check_error) && $update_status.check_error}
-                            No se pudo comprobar la rama main.
+                            No se pudo comprobar.
                         {elseif isset($update_status.update_available) && $update_status.update_available}
-                            Hay cambios disponibles en GitHub. Puede obtenerlos desde este panel.
+                            Cambios disponibles.
                         {else}
-                            No se detectan cambios pendientes respecto de la rama main.
+                            Al día.
                         {/if}
-                    </p>
-                    <p class="text-muted" style="margin-bottom:8px;">
-                        <small>
-                            Última comprobación:
-                            <span id="yuju-update-last-check">{if isset($update_status.last_check) && $update_status.last_check}{$update_status.last_check|escape:'html':'UTF-8'}{else}Nunca{/if}</span>
-                            {if isset($update_status.remote_message) && $update_status.remote_message}
-                                &nbsp;·&nbsp;<span id="yuju-update-remote-message">{$update_status.remote_message|escape:'html':'UTF-8'}</span>
-                            {else}
-                                &nbsp;·&nbsp;<span id="yuju-update-remote-message"></span>
-                            {/if}
-                        </small>
                     </p>
                     <p>
                         <a href="https://github.com/cristhianelite2/Prestashop-Yuju/commits/main" target="_blank" rel="noopener noreferrer">
@@ -67,7 +56,7 @@
                     </p>
                 </div>
                 <div class="col-md-4 text-right">
-                    <button type="button" class="btn btn-default" id="yuju-check-update" style="margin-bottom:8px;">
+                    <button type="button" class="btn btn-link btn-xs" id="yuju-check-update" title="Buscar actualizaciones" style="padding:2px 4px; margin:0 0 4px; color:#777; font-size:11px;">
                         <i class="icon-refresh"></i> Buscar actualizaciones
                     </button>
                     <br>
@@ -76,9 +65,6 @@
                     </button>
                 </div>
             </div>
-            <p class="help-block" style="margin-top:10px;">
-                Descarga archivos del commit detectado en <code>main</code>. La configuración guardada en PrestaShop y los directorios locales <code>logs</code>, <code>cache</code> y <code>exports</code> se conservan.
-            </p>
         </div>
     </div>
 
@@ -364,7 +350,7 @@
                 $badge.removeClass('label-success label-warning').addClass('label-danger').text('Error');
                 $panel.removeClass('panel-warning').addClass('panel-default');
                 $message.removeClass('text-success text-warning').addClass('text-danger')
-                    .text('No se pudo comprobar la rama main.');
+                    .text('No se pudo comprobar.');
                 $('#yuju-perform-update').hide();
                 showUpdateAlert('danger', data.check_error);
                 return;
@@ -375,13 +361,13 @@
                 $badge.removeClass('label-success label-danger').addClass('label-warning').text('Disponible');
                 $panel.removeClass('panel-default').addClass('panel-warning');
                 $message.removeClass('text-success text-danger').addClass('text-warning')
-                    .text('Hay cambios disponibles en GitHub. Puede obtenerlos desde este panel.');
+                    .text('Cambios disponibles.');
                 $('#yuju-perform-update').show();
             } else {
                 $badge.removeClass('label-warning label-danger').addClass('label-success').text('Al día');
                 $panel.removeClass('panel-warning').addClass('panel-default');
                 $message.removeClass('text-warning text-danger').addClass('text-success')
-                    .text('No se detectan cambios pendientes respecto de la rama main.');
+                    .text('Al día.');
                 $('#yuju-perform-update').hide();
             }
         }
