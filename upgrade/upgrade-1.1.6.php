@@ -26,8 +26,12 @@ function upgrade_module_1_1_6($module)
             return false;
         }
     }
+    if (!isset($column_names['yuju_product_name'])
+        && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD `yuju_product_name` varchar(512) DEFAULT NULL AFTER `yuju_product_id`')) {
+        return false;
+    }
     if (!isset($column_names['yuju_variation_id'])
-        && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD `yuju_variation_id` varchar(255) DEFAULT NULL AFTER `yuju_product_id`')) {
+        && !$db->execute('ALTER TABLE `' . bqSQL($table) . '` ADD `yuju_variation_id` varchar(255) DEFAULT NULL AFTER `yuju_product_name`')) {
         return false;
     }
     if (!isset($column_names['yuju_variation_sku'])
