@@ -93,13 +93,13 @@
                         <div class="col-lg-9">
                             <select name="environment" class="form-control" required>
                                 <option value="sandbox" {if $oauth_status.environment == 'sandbox'}selected{/if}>
-                                    {l s='Sandbox (Testing)' mod='prestashopyuju'}
+                                    {l s='Pruebas (entorno sandbox)' mod='prestashopyuju'}
                                 </option>
                                 <option value="production" {if $oauth_status.environment == 'production'}selected{/if}>
-                                    {l s='Production' mod='prestashopyuju'}
+                                    {l s='Producción' mod='prestashopyuju'}
                                 </option>
                             </select>
-                            <p class="help-block">{l s='Select the Yuju environment to connect to' mod='prestashopyuju'}</p>
+                            <p class="help-block">{l s='Selecciona el entorno de Yuju al que deseas conectarte' mod='prestashopyuju'}</p>
                         </div>
                     </div>
                     
