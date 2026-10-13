@@ -843,13 +843,38 @@ $(function() {
                     renderReconciliation(response.report, response.message);
                 }
             } else {
-                showMessage(
-                    'Falló el envío a Yuju.',
-                    'alert-danger'
-                );
+                // Do not hide the server's actual reason behind a generic message.
+                var errorMessage = response && response.message
+                    ? response.message
+                    : 'Falló el envío a Yuju. El servidor no devolvió el motivo del error.';
+                var errorDetails = [];
+                if (response && response.errors && response.errors.length) {
+                    $.each(response.errors, function(i, item) {
+                        if (item && (item.message || item.reason)) {
+                            errorDetails.push((item.prestashop_product_id ? 'Producto PS #' + item.prestashop_product_id + ': ' : '') + (item.message || item.reason));
+                        }
+                    });
+                }
+                if (errorDetails.length) {
+                    errorMessage += ' ' + errorDetails.join(' | ');
+                }
+                if (window.console && typeof window.console.error === 'function') {
+                    window.console.error('[PrestashopYuju] pushDifferencesToYuju failed', response);
+                }
+                showMessage(errorMessage, 'alert-danger');
             }
-        }, function() {
+        }, function(xhr, status, error) {
             setLoading($button, false);
+            var errorMessage = 'Falló la comunicación al enviar a Yuju.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                errorMessage = xhr.responseJSON.message;
+            } else if (xhr && xhr.responseText) {
+                errorMessage += ' Respuesta HTTP: ' + xhr.status + '.';
+            }
+            if (window.console && typeof window.console.error === 'function') {
+                window.console.error('[PrestashopYuju] pushDifferencesToYuju AJAX error', status, error, xhr);
+            }
+            showMessage(errorMessage, 'alert-danger');
         });
     }
 
