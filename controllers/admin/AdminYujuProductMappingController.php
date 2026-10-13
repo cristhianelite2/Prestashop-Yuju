@@ -208,6 +208,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             'message' => '',
             'imported' => 0,
             'skipped_existing' => 0,
+            'defaults_filled' => 0,
             'failed' => 0,
         ];
 
@@ -245,6 +246,19 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 );
 
                 if ($exists) {
+                    // Completar únicamente valores por defecto vacíos; conservar cualquier valor ya configurado.
+                    if (trim((string) $mapping['default_value']) !== '') {
+                        $updated = Db::getInstance()->execute(
+                            'UPDATE `' . _DB_PREFIX_ . 'yuju_product_mapping`'
+                            . ' SET default_value = "' . pSQL($mapping['default_value']) . '", updated_at = "'
+                            . pSQL(date('Y-m-d H:i:s')) . '"'
+                            . ' WHERE id_mapping = ' . (int) $exists
+                            . ' AND (default_value IS NULL OR default_value = "")'
+                        );
+                        if ($updated && Db::getInstance()->Affected_Rows() > 0) {
+                            ++$response['defaults_filled'];
+                        }
+                    }
                     ++$response['skipped_existing'];
                     continue;
                 }
@@ -272,7 +286,8 @@ class AdminYujuProductMappingController extends ModuleAdminController
 
             $response['success'] = $response['failed'] === 0;
             $response['message'] = 'Importación finalizada. Nuevos: ' . $response['imported']
-                . '; existentes sin cambios: ' . $response['skipped_existing']
+                . '; existentes revisados: ' . $response['skipped_existing']
+                . '; valores por defecto completados: ' . $response['defaults_filled']
                 . '; errores: ' . $response['failed'] . '.';
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
