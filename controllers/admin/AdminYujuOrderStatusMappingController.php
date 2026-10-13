@@ -66,7 +66,10 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
     {
         $table = _DB_PREFIX_ . 'mad_mapping_status_orders';
         $exists = Db::getInstance()->getValue(
-            'SHOW TABLES LIKE "' . pSQL($table) . '"'
+            'SELECT COUNT(*)
+             FROM information_schema.tables
+             WHERE table_schema = DATABASE()
+               AND table_name = "' . pSQL($table) . '"'
         );
 
         if (!$exists) {
