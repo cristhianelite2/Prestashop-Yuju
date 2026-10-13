@@ -48,7 +48,7 @@ class Prestashopyuju extends Module
     {
         $this->name = 'prestashopyuju';
         $this->tab = 'market_place';
-        $this->version = '1.1.8';
+        $this->version = '1.1.9';
         $this->author = 'Yuju Integration Team';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -206,6 +206,13 @@ class Prestashopyuju extends Module
         'active' => 1,
         ],
         [
+        'class_name' => 'AdminYujuOrderStatusMapping',
+        'name' => 'Order Status Mapping',
+        'parent_class_name' => 'AdminYuju',
+        'module' => $this->name,
+        'active' => 1,
+        ],
+        [
         'class_name' => 'AdminYujuProductStatus',
         'name' => $this->trans('Product Status', array(), 'Modules.Prestashopyuju.Admin'),
         'parent_class_name' => 'AdminYuju',
@@ -260,6 +267,7 @@ class Prestashopyuju extends Module
         $tab_classes = [
         'AdminYujuLogs',
         'AdminYujuWebhook',
+        'AdminYujuOrderStatusMapping',
         'AdminYujuProductStatus',
         'AdminYujuAttributeMapping',
         'AdminYujuProductMapping',
@@ -472,6 +480,33 @@ class Prestashopyuju extends Module
         }
 
         Configuration::updateValue('YUJU_HOOKS_SCHEMA', '1.1.5');
+    }
+
+    /**
+     * Crea el tab de mapeo de estados en instalaciones existentes.
+     * El actualizador propio no ejecuta necesariamente los scripts upgrade de PrestaShop.
+     */
+    protected function ensureOrderStatusMappingTab()
+    {
+        $tab = Tab::getInstanceFromClassName('AdminYujuOrderStatusMapping');
+        if (Validate::isLoadedObject($tab) && (int) $tab->id > 0) {
+            return;
+        }
+
+        $parent = Tab::getInstanceFromClassName('AdminYuju');
+        $newTab = new Tab();
+        $newTab->class_name = 'AdminYujuOrderStatusMapping';
+        $newTab->module = $this->name;
+        $newTab->active = 1;
+        $newTab->id_parent = (Validate::isLoadedObject($parent) && isset($parent->id)) ? (int) $parent->id : 0;
+
+        foreach (Language::getLanguages(false) as $language) {
+            $newTab->name[(int) $language['id_lang']] = 'Mapeo de estados de pedidos';
+        }
+
+        if (!$newTab->save()) {
+            PrestaShopLogger::addLog('Yuju: no se pudo crear el tab AdminYujuOrderStatusMapping.', 2);
+        }
     }
 
     /**
@@ -691,6 +726,7 @@ class Prestashopyuju extends Module
         // tiendas que se actualizan con el actualizador propio del módulo (que
         // no ejecuta los scripts `upgrade/` de PrestaShop).
         $this->ensureHookMigration();
+        $this->ensureOrderStatusMappingTab();
 
         $controller = Tools::getValue('controller');
         
