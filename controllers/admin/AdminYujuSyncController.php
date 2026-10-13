@@ -284,6 +284,12 @@ class AdminYujuSyncController extends ModuleAdminController
 
     public function ajaxProcessDownloadYujuOfferReport()
     {
+        // Offer reports may require an API request plus a large file download.
+        // Avoid PHP's short default execution limit killing the AJAX response mid-request.
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(180);
+        }
+
         try {
             $this->respondWithJson($this->sync_manager->downloadYujuOfferReport());
         } catch (Exception $e) {
