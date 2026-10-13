@@ -61,7 +61,6 @@ class AdminYujuController extends ModuleAdminController
             'yuju_account_info' => $accountInfo,
             'ajax_url' => $this->context->link->getAdminLink('AdminYuju'),
             'token' => $this->token,
-            'admin_yuju_token' => Tools::getAdminTokenLite('AdminYuju'),
             'update_status' => $updateStatus,
         ]);
 
