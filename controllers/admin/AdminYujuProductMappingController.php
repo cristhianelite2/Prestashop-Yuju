@@ -221,7 +221,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 ['prestashop_field' => 'quantity', 'yuju_field' => 'stock', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => '0'],
                 ['prestashop_field' => 'price', 'yuju_field' => 'price', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '0'],
                 ['prestashop_field' => 'manufacturer_name', 'yuju_field' => 'brand', 'field_type' => 'string', 'is_required' => 1, 'default_value' => ''],
-                ['prestashop_field' => 'shipping_cost', 'yuju_field' => 'shipping', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => '1'],
+                ['prestashop_field' => 'available_for_order', 'yuju_field' => 'shipping', 'field_type' => 'integer', 'is_required' => 1, 'default_value' => '1'],
                 ['prestashop_field' => 'unit_dimension', 'yuju_field' => 'dimensions_unit', 'field_type' => 'string', 'is_required' => 1, 'default_value' => 'cm'],
                 ['prestashop_field' => 'width', 'yuju_field' => 'shipping_width', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
                 ['prestashop_field' => 'depth', 'yuju_field' => 'shipping_depth', 'field_type' => 'decimal', 'is_required' => 1, 'default_value' => '1'],
@@ -274,10 +274,8 @@ class AdminYujuProductMappingController extends ModuleAdminController
             $response['message'] = 'Importación finalizada. Nuevos: ' . $response['imported']
                 . '; existentes sin cambios: ' . $response['skipped_existing']
                 . '; errores: ' . $response['failed'] . '.';
-            $this->logger->log('Importación aditiva de campos de producto Yuju: ' . $response['message'], 'info');
         } catch (Exception $e) {
             $response['message'] = $e->getMessage();
-            $this->logger->log('Error importando campos de producto Yuju: ' . $e->getMessage(), 'error');
         }
 
         header('Content-Type: application/json; charset=utf-8');
