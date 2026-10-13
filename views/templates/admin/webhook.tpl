@@ -47,6 +47,45 @@
     padding: 0;
     background: transparent;
 }
+.yuju-webhook-shell {
+    margin-bottom: 18px;
+    border: 1px solid #d9dee3;
+    border-radius: 4px;
+    box-shadow: none;
+}
+.yuju-webhook-shell > .panel-heading {
+    min-height: 42px;
+    padding: 11px 15px;
+    color: #444;
+    background: #f7f8f9;
+    border-bottom: 1px solid #d9dee3;
+    font-size: 14px;
+    font-weight: 600;
+}
+.yuju-webhook-shell > .panel-heading > i {
+    margin-right: 6px;
+    color: #777;
+}
+.yuju-webhook-shell > .panel-body.yuju-webhook-content {
+    padding: 15px;
+}
+.yuju-webhook-content > .alert {
+    border-radius: 3px;
+    box-shadow: none;
+}
+.yuju-webhook-content .table {
+    margin-bottom: 0;
+}
+.yuju-webhook-content .table > thead > tr > th {
+    background: #f7f8f9;
+    color: #555;
+    border-bottom: 1px solid #d9dee3;
+    font-weight: 600;
+}
+.yuju-webhook-content .pagination > li > a,
+.yuju-webhook-content .pagination > li > span {
+    border-radius: 2px;
+}
 .yuju-webhook-header {
     margin: 0 0 15px;
     padding: 0 0 14px;
