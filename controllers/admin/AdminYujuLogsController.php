@@ -37,7 +37,7 @@ class AdminYujuLogsController extends ModuleAdminController
         parent::__construct();
 
         $this->bootstrap = true;
-        $this->meta_title = $this->trans('Yuju Logs', [], 'Modules.Prestashopyuju.Admin');
+        $this->meta_title = $this->trans('Registros de Yuju', [], 'Modules.Prestashopyuju.Admin');
         $this->logger = new YujuLogger();
     }
 
