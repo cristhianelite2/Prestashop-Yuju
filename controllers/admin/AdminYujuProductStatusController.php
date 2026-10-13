@@ -895,35 +895,55 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Filter products without reference and/or name
         $where .= ' AND p.reference IS NOT NULL AND p.reference != "" AND pl.name IS NOT NULL AND pl.name != ""';
         
-        // Una sola fila yuju por producto (MAX id) por si en BD hubiera duplicados sin índice único
-        $yps_join = '
-                      LEFT JOIN (
-                          SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`last_error`
-                          FROM `' . _DB_PREFIX_ . 'yuju_product_status` y
-                          INNER JOIN (
-                              SELECT `prestashop_product_id`, MAX(`id`) AS `max_id`
-                              FROM `' . _DB_PREFIX_ . 'yuju_product_status`
-                              GROUP BY `prestashop_product_id`
-                          ) ylast ON y.`prestashop_product_id` = ylast.`prestashop_product_id` AND y.`id` = ylast.`max_id`
-                      ) yps ON (yps.`prestashop_product_id` = p.`id_product`)';
+        // Solo necesitamos unir el historial de estado para filtrar por estado/fecha/ID Yuju.
+        // Sin esos filtros, agrupar TODA yuju_product_status en cada apertura es innecesario y costoso.
+        $needs_yps_filter = ($sync_status !== '' || $date_from !== '' || $date_to !== '' || $yuju_id_search !== '');
+        $status_table = '`' . _DB_PREFIX_ . 'yuju_product_status`';
+        if ($needs_yps_filter) {
+            // Los filtros deben evaluarse contra el último estado registrado de cada producto.
+            $yps_join = '
+                LEFT JOIN (
+                    SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`last_error`
+                    FROM ' . $status_table . ' y
+                    INNER JOIN (
+                        SELECT `prestashop_product_id`, MAX(`id`) AS `max_id`
+                        FROM ' . $status_table . '
+                        GROUP BY `prestashop_product_id`
+                    ) ylast ON y.`prestashop_product_id` = ylast.`prestashop_product_id` AND y.`id` = ylast.`max_id`
+                ) yps ON (yps.`prestashop_product_id` = p.`id_product`)';
+        } else {
+            // Para el listado normal, buscar el último registro por producto usando el índice
+            // (prestashop_product_id, id), en lugar de agrupar toda la tabla.
+            $yps_join = '
+                LEFT JOIN ' . $status_table . ' yps
+                    ON yps.`id` = (
+                        SELECT MAX(ys.`id`)
+                        FROM ' . $status_table . ' ys
+                        WHERE ys.`prestashop_product_id` = p.`id_product`
+                    )';
+        }
 
         // Multitienda: product_lang y category_lang tienen id_shop; sin filtrarlo, el JOIN duplica una fila por tienda
         $pl_shop = ' AND pl.`id_shop` = p.`id_shop_default` ';
         $cl_shop = ' AND cl.`id_shop` = p.`id_shop_default` ';
 
-        // Count total products - SIN JOIN con category_product
+        // El contador no debe leer yuju_product_status si ningún filtro depende de esa tabla.
+        $count_status_join = $needs_yps_filter ? $yps_join : '';
         $count_sql = 'SELECT COUNT(DISTINCT p.id_product) as total
                       FROM ' . _DB_PREFIX_ . 'product p
-                      LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl 
-                          ON p.id_product = pl.id_product 
+                      LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                          ON p.id_product = pl.id_product
                           AND pl.id_lang = ' . (int)$this->context->language->id . '
                           ' . $pl_shop . '
-                      ' . $yps_join . '
+                      ' . $count_status_join . '
                       WHERE ' . $where;
         
         $total_result = Db::getInstance()->getRow($count_sql);
         $total_products = (int)$total_result['total'];
         
+        // Evitar división entre cero y límites arbitrarios enviados por URL.
+        $per_page = max(1, min(100, (int) $per_page));
+
         // Calculate pagination
         $total_pages = ceil($total_products / $per_page);
         $page = max(1, min($page, $total_pages ?: 1));
