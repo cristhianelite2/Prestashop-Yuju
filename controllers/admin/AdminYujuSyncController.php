@@ -294,6 +294,44 @@ class AdminYujuSyncController extends ModuleAdminController
         }
     }
 
+    /**
+     * Show a mapped payload and its cached Yuju report row for read-only debugging.
+     */
+    public function ajaxProcessGetYujuProductPayload()
+    {
+        try {
+            $product_id = (int) Tools::getValue('product_id');
+            if ($product_id <= 0) {
+                throw new InvalidArgumentException('El ID de producto no es válido.');
+            }
+
+            $debug = $this->sync_manager->getMappedProductPayloadForDebug($product_id);
+            $debug['yuju_report_product'] = null;
+            $debug['yuju_report_note'] = 'No se encontró el producto vinculado en el reporte Yuju cacheado.';
+
+            $report_manager = $this->sync_manager->getProductReportManager();
+            $state = $report_manager->getStoredState();
+            if ($state['status'] === 'COMPLETED' && !empty($state['cache_id']) && !empty($debug['yuju_product_id'])) {
+                $report_products = $report_manager->getCachedReportProducts();
+                if ($report_products instanceof Traversable || is_array($report_products)) {
+                    foreach ($report_products as $report_product) {
+                        if (isset($report_product['id_product'])
+                            && (string) $report_product['id_product'] === (string) $debug['yuju_product_id']
+                        ) {
+                            $debug['yuju_report_product'] = $report_product;
+                            $debug['yuju_report_note'] = 'Registro original del reporte general cacheado de Yuju, sin transformar.';
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $this->respondWithJson(['success' => true, 'debug' => $debug]);
+        } catch (Exception $e) {
+            $this->respondWithJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     public function ajaxProcessGetYujuProductSyncReport()
     {
         try {

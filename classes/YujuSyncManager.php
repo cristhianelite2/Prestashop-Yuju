@@ -130,6 +130,14 @@ class YujuSyncManager
     }
 
     /**
+     * Return a read-only preview of a product payload after applying Yuju field mappings.
+     */
+    public function getMappedProductPayloadForDebug($product_id)
+    {
+        return $this->product_manager->getMappedProductPayloadForDebug($product_id);
+    }
+
+    /**
      * Get Yuju products and compare them with the module's saved product IDs.
      */
     public function getYujuProductSyncReport($report_index = null, $report_products = null)

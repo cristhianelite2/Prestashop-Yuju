@@ -997,6 +997,32 @@ class YujuProductManager
     }
 
     /**
+     * Build a read-only debug view of the payload produced by the active mappings.
+     * This method never calls Yuju or changes product data.
+     *
+     * @param int $product_id
+     *
+     * @return array
+     */
+    public function getMappedProductPayloadForDebug($product_id)
+    {
+        $product_id = (int) $product_id;
+        $product = new Product($product_id);
+
+        if (!Validate::isLoadedObject($product)) {
+            throw new Exception('PrestaShop product not found: ' . $product_id);
+        }
+
+        return [
+            'prestashop_product_id' => $product_id,
+            'yuju_product_id' => $this->getYujuProductId($product_id),
+            'product_name' => $this->getProductDisplayName($product),
+            'mapped_payload' => $this->prepareProductDataForYuju($product),
+            'variations' => $this->getProductVariationsForYuju($product),
+        ];
+    }
+
+    /**
      * Prepare PrestaShop product data for Yuju.
      */
     protected function prepareProductDataForYuju($product)

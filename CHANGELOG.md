@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Se añade un botón JSON por producto en la reconciliación para inspeccionar el payload generado por los mapeos activos de PrestaShop→Yuju, las variaciones y el registro original correspondiente del reporte Yuju cacheado, sin realizar escrituras en la API.
+
 - Se separan diferencias urgentes (nombre, stock y precio) de las no urgentes; se agregan selección individual/masiva y actualización limitada a esos campos, con reconciliación automática posterior.
 - El resumen de reconciliación desglosa el número de productos con diferencias urgentes y no urgentes, además del total general de productos con diferencias.
 - Se añaden filtros interactivos a la reconciliación (diferencias por defecto, productos ausentes en Yuju, sincronizados, revisión manual, SKU ambiguo, deshabilitados y todos), paginación de 100 por defecto con opciones 20/50/500 y contadores de catálogo.
