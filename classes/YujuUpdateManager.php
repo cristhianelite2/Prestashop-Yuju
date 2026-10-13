@@ -207,12 +207,14 @@ class YujuUpdateManager
 
             $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
-            // Order-status mapping now uses the existing AdminYuju route and does not
-            // require a separate Tab record to be created during updates.
+            // The custom updater copies files but does not execute installTabs().
+            // Repair this controller's Tab record so PrestaShop can resolve the
+            // category-status route immediately after updating.
+            $this->ensureProductCategoryStatusTab();
 
-            // The custom updater copies files but does not execute PrestaShop's
-            // upgrade scripts automatically. Apply the module-owned local schema
-            // migration explicitly before marking the update as installed.
+            // The custom updater does not execute PrestaShop's upgrade scripts
+            // automatically. Apply the module-owned local schema migration before
+            // marking the update as installed.
             $this->runLocalSchemaUpgrade();
 
             $newVersion = $this->parseVersionFromFile($this->moduleDir . 'prestashopyuju.php');
@@ -407,6 +409,42 @@ class YujuUpdateManager
 
         if (!$tab->save()) {
             throw new Exception('No se pudo crear/activar la pestaña AdminYujuOrderStatusMapping: ' . print_r($tab->getErrors(), true));
+        }
+    }
+
+    /**
+     * Ensure the category-status controller has a valid PrestaShop Tab record.
+     * Without it, PrestaShop may report "page not found" after file-only updates.
+     * This is idempotent and only touches this module's own Tab entry.
+     *
+     * @throws Exception
+     */
+    private function ensureProductCategoryStatusTab()
+    {
+        $className = 'AdminYujuProductCategoryStatus';
+        $idTab = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab WHERE class_name = "' . pSQL($className) . '"'
+        );
+
+        $parentId = (int) Db::getInstance()->getValue(
+            'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab WHERE class_name = "AdminYuju"'
+        );
+        if ($parentId <= 0) {
+            throw new Exception('No se encontró la pestaña padre AdminYuju; no se pudo registrar el estado de productos por categoría.');
+        }
+
+        $tab = $idTab > 0 ? new Tab($idTab) : new Tab();
+        $tab->class_name = $className;
+        $tab->module = 'prestashopyuju';
+        $tab->id_parent = $parentId;
+        $tab->active = 1;
+
+        foreach (Language::getLanguages(false) as $language) {
+            $tab->name[(int) $language['id_lang']] = 'Estado de productos por categoría';
+        }
+
+        if (!$tab->save()) {
+            throw new Exception('No se pudo crear/activar la pestaña AdminYujuProductCategoryStatus: ' . print_r($tab->getErrors(), true));
         }
     }
 
