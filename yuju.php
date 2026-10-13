@@ -884,6 +884,7 @@ class Yuju extends Module
     {
         $hooks = [
             'actionProductUpdate',
+            'actionProductAttributeUpdate',
             'actionProductDelete',
             'actionUpdateQuantity',
             'displayBackOfficeHeader',
@@ -1010,19 +1011,21 @@ class Yuju extends Module
             return;
         }
         try {
-            // Las combinaciones quedan fuera por ahora: no enviar stock de variación como stock padre.
-            if ((int) ($params['id_product_attribute'] ?? 0) > 0) {
-                return;
-            }
+            $attributeId = max(0, (int) ($params['id_product_attribute'] ?? 0));
             $hasCombinations = (int) Db::getInstance()->getValue(
                 'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'product_attribute` WHERE id_product = ' . $productId
             );
-            if ($hasCombinations > 0) {
+            // El stock padre no representa ninguna variación. Los productos simples
+            // continúan usando id_product_attribute = 0.
+            if ($attributeId === 0 && $hasCombinations > 0) {
                 return;
             }
             $status = Db::getInstance()->getRow(
-                'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status`
-                 WHERE prestashop_product_id = ' . $productId
+                'SELECT yuju_product_id, parent_yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                 WHERE prestashop_product_id = ' . $productId . '
+                   AND ' . ($attributeId > 0
+                       ? 'prestashop_product_attribute_id = ' . $attributeId
+                       : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)')
             );
             if (!$status || trim((string) ($status['yuju_product_id'] ?? '')) === '') {
                 return;
@@ -1035,15 +1038,85 @@ class Yuju extends Module
             // La petición HTTP se ejecuta en cron/process_queue.php, no en checkout/guardado.
             $queue = new YujuSyncQueue();
             $queued = $queue->addToQueue($productId, 'update', 'high', [
-                'origin' => 'auto_stock', 'direct_update' => 1, 'defer' => 1, 'stock' => $stock,
+                'origin' => 'auto_stock', 'direct_update' => 1, 'defer' => 1,
+                'id_product_attribute' => $attributeId, 'stock' => $stock,
             ]);
             if ($queued) {
                 Db::getInstance()->update('yuju_product_status', [
                     'sync_status' => pSQL('queued'), 'last_error' => null, 'updated_at' => date('Y-m-d H:i:s'),
-                ], 'prestashop_product_id = ' . $productId);
+                ], 'prestashop_product_id = ' . $productId . ' AND ' . ($attributeId > 0
+                    ? 'prestashop_product_attribute_id = ' . $attributeId
+                    : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
             }
         } catch (Throwable $e) {
             error_log('[Yuju] No se pudo encolar stock del producto ' . $productId . ': ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Detecta cambios de precio de una variación PrestaShop y los encola.
+     * id_product_attribute identifica la variación de forma independiente.
+     */
+    public function hookActionProductAttributeUpdate($params)
+    {
+        try {
+            if (!(bool) Configuration::get('YUJU_ENABLE_AUTO_SYNC')
+                || empty(Configuration::get('YUJU_CLIENT_ID'))
+                || empty(Configuration::get('YUJU_CLIENT_SECRET'))) {
+                return;
+            }
+            $attributeId = max(0, (int) ($params['id_product_attribute'] ?? $params['product_attribute']->id ?? 0));
+            if ($attributeId <= 0) {
+                return;
+            }
+            require_once dirname(__FILE__) . '/classes/YujuSyncQueue.php';
+            $attribute = new Combination($attributeId);
+            if (!Validate::isLoadedObject($attribute)) {
+                return;
+            }
+            $productId = (int) $attribute->id_product;
+            $status = Db::getInstance()->getRow(
+                'SELECT yuju_product_id, parent_yuju_product_id, last_sync_data
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                 WHERE prestashop_product_id = ' . $productId . '
+                   AND prestashop_product_attribute_id = ' . $attributeId
+            );
+            if (!$status || trim((string) ($status['yuju_product_id'] ?? '')) === ''
+                || trim((string) ($status['parent_yuju_product_id'] ?? '')) === '') {
+                return;
+            }
+
+            $price = (float) Product::getPriceStatic($productId, false, $attributeId, 2, null, false, false);
+            $payload = ['id_product_attribute' => $attributeId];
+            $dropFields = [];
+            $old = json_decode((string) ($status['last_sync_data'] ?? ''), true);
+            $oldPrice = is_array($old) && isset($old['price']) && is_numeric($old['price'])
+                ? (float) $old['price'] : null;
+            $invalidPrice = !is_finite($price) || $price <= 0;
+            $abruptPrice = $oldPrice !== null && $oldPrice > 0 && abs($price - $oldPrice) / $oldPrice > 0.5;
+            if (!$invalidPrice && !$abruptPrice) {
+                $payload['price'] = round($price, 2);
+            } else {
+                $dropFields[] = 'price';
+                (new YujuLogger())->warning('Precio de variación omitido en actualización automática de Yuju', [
+                    'product_id' => $productId,
+                    'id_product_attribute' => $attributeId,
+                    'old_price' => $oldPrice,
+                    'new_price' => $price,
+                    'reason' => $invalidPrice ? 'precio menor o igual a cero/no válido' : 'cambio superior al 50%',
+                ]);
+            }
+
+            // No se usa el stock padre: consulta explícita de la variación.
+            $payload['stock'] = max(0, (int) StockAvailable::getQuantityAvailableByProduct($productId, $attributeId));
+            (new YujuSyncQueue())->addToQueue($productId, 'update', 'high', array_merge($payload, [
+                'origin' => 'auto_variation',
+                'direct_update' => 1,
+                'defer' => 1,
+                'drop_fields' => $dropFields,
+            ]));
+        } catch (Throwable $e) {
+            error_log('[Yuju] No se pudo encolar actualización de variación: ' . $e->getMessage());
         }
     }
 
