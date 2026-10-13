@@ -114,6 +114,15 @@ $sameNameWithHtmlEntities = YujuProductReportReconciler::compareMappedFields(
 );
 assertSameValue([], $sameNameWithHtmlEntities['differences'], 'Equivalent HTML-encoded and decoded product names must compare equal.');
 
+$sameNameWithInvisibleUnicode = YujuProductReportReconciler::compareMappedFields(
+    ['name' => 'Frente para HONDA NISSAN varios modelos 1990 al 2004'],
+    ['name' => "Frente\u{00A0}para HONDA\u{200B} NISSAN varios modelos 1990 al 2004"],
+    [
+        ['prestashop_field' => 'name', 'yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+    ]
+);
+assertSameValue([], $sameNameWithInvisibleUnicode['differences'], 'Unicode non-breaking spaces and zero-width characters must not create false name differences.');
+
 $variation_comparison = YujuProductReportReconciler::compareVariations(
     [
         ['sku' => 'TEE-M', 'size' => 'M', 'color' => 'blue', 'price' => 20, 'stock' => 3],
