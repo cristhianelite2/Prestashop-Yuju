@@ -1094,7 +1094,7 @@ class Yuju extends Module
                 ? (float) $old['price'] : null;
             $invalidPrice = !is_finite($price) || $price <= 0;
             $abruptPrice = $oldPrice !== null && $oldPrice > 0 && abs($price - $oldPrice) / $oldPrice > 0.5;
-            if (!$invalidPrice && !$abruptPrice) {
+            if (!$invalidPrice && !$abruptPrice && $oldPrice !== null) {
                 $payload['price'] = round($price, 2);
             } else {
                 $dropFields[] = 'price';
@@ -1103,7 +1103,9 @@ class Yuju extends Module
                     'id_product_attribute' => $attributeId,
                     'old_price' => $oldPrice,
                     'new_price' => $price,
-                    'reason' => $invalidPrice ? 'precio menor o igual a cero/no válido' : 'cambio superior al 50%',
+                    'reason' => $invalidPrice
+                        ? 'precio menor o igual a cero/no válido'
+                        : ($abruptPrice ? 'cambio superior al 50%' : 'no existe precio anterior sincronizado para validar'),
                 ]);
             }
 
