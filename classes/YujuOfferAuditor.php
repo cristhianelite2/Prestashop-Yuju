@@ -1754,8 +1754,18 @@ class YujuOfferAuditor
                 'total_rows' => count($offers),
                 'success_count' => 0,
                 'errors_count' => 0,
-                'message' => (string) ($data['message'] ?? 'Tarea masiva aceptada por Yuju.'),
+                'message' => (string) ($data['message'] ?? 'Yuju aceptó la solicitud y creó la tarea; aún no confirma el resultado de cada SKU.'),
                 'skus' => $skus,
+                // Datos exactos enviados por SKU para comparar con el resultado posterior.
+                'submitted_offers' => array_values($offers),
+                // Guardar la respuesta de creación por separado de la consulta de estado.
+                'submission_response' => [
+                    'success' => !empty($response['success']),
+                    'http_code' => (int) ($response['http_code'] ?? 0),
+                    'message' => (string) ($response['message'] ?? ''),
+                    'data' => $data,
+                    'raw_response' => (string) ($response['raw_response'] ?? ''),
+                ],
             ]);
             $out['tasks'][] = [
                 'id_task' => $taskId,
