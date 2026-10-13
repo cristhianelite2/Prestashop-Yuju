@@ -27,6 +27,11 @@
                 <button type="button" class="btn btn-default" id="refresh-yuju-attributes">
                     <i class="icon-refresh"></i> Actualizar Atributos Yuju
                 </button>
+                {if isset($madkting_attribute_mapping_available) && $madkting_attribute_mapping_available}
+                    <button type="button" class="btn btn-info" id="btn-import-madkting-attribute-mappings">
+                        <i class="icon-random"></i> Importar mapeos de atributos Madkting ({$madkting_attribute_mapping_count|intval})
+                    </button>
+                {/if}
                 <button type="button" class="btn btn-primary" id="add-attribute-mapping">
                     <i class="icon-plus"></i> Nuevo Mapeo
                 </button>
@@ -488,6 +493,35 @@
                     error: function() {
                         alert('Error de conexión');
                         location.reload();
+                    }
+                });
+            });
+
+            // Importar mapeos de atributos Madkting sin modificar la tabla de origen.
+            $('#btn-import-madkting-attribute-mappings').click(function() {
+                if (!confirm('Se importarán únicamente los mapeos cuyo grupo de PrestaShop exista y cuyo ID de atributo coincida con un atributo disponible en la caché de Yuju. Los mapeos existentes no se sobrescribirán. ¿Desea continuar?')) {
+                    return;
+                }
+
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="icon-refresh icon-spin"></i> Importando...');
+                $.ajax({
+                    url: ajaxUrl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { ajax: true, action: 'importMadktingAttributeMappings' },
+                    success: function(data) {
+                        if (data.success) {
+                            alert(data.message);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                            btn.prop('disabled', false).html('<i class="icon-random"></i> Importar mapeos de atributos Madkting');
+                        }
+                    },
+                    error: function() {
+                        alert('Error al importar los mapeos de atributos de Madkting.');
+                        btn.prop('disabled', false).html('<i class="icon-random"></i> Importar mapeos de atributos Madkting');
                     }
                 });
             });
