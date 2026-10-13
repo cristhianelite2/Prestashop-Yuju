@@ -31,8 +31,24 @@ class YujuProductReportManager
      */
     public function startOrResumeReport()
     {
-        $this->file_store->cleanupExpired();
+        // Recover existing files before retention cleanup. The previous order deleted
+        // an active report after 24 hours, forcing needless downloads on the next visit.
         $state = $this->getStoredState();
+        $offer_state = $this->getStoredOfferState();
+        if (empty($offer_state['cache_id'])) {
+            $local_offer = $this->file_store->discoverLatestValidOfferReport();
+            if (is_array($local_offer) && !empty($local_offer['cache_id'])) {
+                $offer_state = array_merge($offer_state, $local_offer);
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
+            }
+        }
+        $protected_cache_ids = [];
+        foreach ([$state, $offer_state] as $cached_state) {
+            if (!empty($cached_state['cache_id']) && preg_match('/^[a-f0-9]{32}$/', (string) $cached_state['cache_id'])) {
+                $protected_cache_ids[] = (string) $cached_state['cache_id'];
+            }
+        }
+        $this->file_store->cleanupExpired(86400, $protected_cache_ids);
 
         $has_cached_report = !empty($state['cache_id'])
             && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
@@ -191,13 +207,37 @@ class YujuProductReportManager
      */
     public function downloadOfferReport()
     {
-        // Reuse the actual local file first. The API endpoint should only be queried
-        // when neither a usable cache nor a previously obtained download URL exists.
+        // Reuse the actual local file first. The configuration pointer may have been
+        // lost during an upgrade, so discover a valid local offer file before touching Yuju.
         $offer_state = $this->getStoredOfferState();
+        if (empty($offer_state['cache_id']) || !$this->isUsableOfferCache($offer_state['cache_id'])) {
+            $local_offer = $this->file_store->discoverLatestValidOfferReport();
+            if (is_array($local_offer) && !empty($local_offer['cache_id'])) {
+                $offer_state = array_merge($offer_state, $local_offer);
+                $offer_state['downloaded_at'] = isset($local_offer['saved_at']) ? $local_offer['saved_at'] : time();
+                Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
+            }
+        }
         if (!empty($offer_state['cache_id'])) {
             try {
                 $cached_products = $this->file_store->readOfferProducts($offer_state['cache_id']);
                 if (!empty($cached_products)) {
+                    // Restore the index and state even when the JSON file predates the
+                    // current Configuration pointer or the metadata table was incomplete.
+                    $this->persistOfferProductsToDatabase($cached_products, $offer_state['cache_id']);
+                    $offer_state['product_count'] = count($cached_products);
+                    $offer_state['report_size_bytes'] = isset($offer_state['report_size_bytes'])
+                        ? (int) $offer_state['report_size_bytes']
+                        : (int) @filesize(dirname(__DIR__) . '/var/reports/' . $offer_state['cache_id'] . '.json');
+                    $offer_state['download_url'] = $this->getSavedOfferReportUrl($offer_state);
+                    Configuration::updateValue(self::OFFER_STATE_CONFIG_KEY, json_encode($offer_state));
+                    $this->saveReportMetadata([
+                        'cache_id' => $offer_state['cache_id'],
+                        'product_count' => count($cached_products),
+                        'report_size_bytes' => $offer_state['report_size_bytes'],
+                        'report_downloaded_at' => isset($offer_state['report_downloaded_at']) ? (int) $offer_state['report_downloaded_at'] : time(),
+                        'download_url' => !empty($offer_state['download_url']) ? $offer_state['download_url'] : null,
+                    ], 'offer');
                     return [
                         'success' => true,
                         'status' => 'completed',
@@ -206,7 +246,7 @@ class YujuProductReportManager
                         'reused' => true,
                         'products_count' => count($cached_products),
                         'file_size_bytes' => (int) ($offer_state['report_size_bytes'] ?? 0),
-                        'message' => 'Se reutilizó el reporte de stock/precio ya descargado; no se volvió a consultar ni descargar desde Yuju.',
+                        'message' => 'Se reutilizó el reporte de stock/precio local; no se solicitó un reporte nuevo a Yuju.',
                     ];
                 }
             } catch (Exception $e) {
@@ -325,6 +365,21 @@ class YujuProductReportManager
     }
 
     /**
+     * Check that the cache identifier points to a readable local offer file.
+     */
+    protected function isUsableOfferCache($cache_id)
+    {
+        if (!is_string($cache_id) || !preg_match('/^[a-f0-9]{32}$/', $cache_id)) {
+            return false;
+        }
+        try {
+            return count($this->file_store->readOfferProducts($cache_id)) > 0;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
      * Return the saved offer-report state, including a local cache ID or URL.
      */
     protected function getStoredOfferState()
@@ -359,9 +414,15 @@ class YujuProductReportManager
             $table_sql = chr(96) . bqSQL($table) . chr(96);
             $exists = $db->getValue("SHOW TABLES LIKE '" . pSQL(_DB_PREFIX_ . "yuju_product_reports") . "'");
             if ($exists) {
+                // Older installations keep the table but lack this column. Migrate it
+                // before selecting the URL instead of silently falling back to Yuju.
+                $has_url_column = $db->getValue("SHOW COLUMNS FROM " . $table_sql . " LIKE 'download_url'");
+                if (!$has_url_column) {
+                    $db->execute("ALTER TABLE " . $table_sql . " ADD COLUMN download_url TEXT NULL");
+                }
                 $url = $db->getValue("SELECT download_url FROM " . $table_sql
                     . " WHERE report_type = 'offer' AND download_url IS NOT NULL AND download_url <> ''"
-                    . " ORDER BY id DESC");
+                    . " ORDER BY id DESC LIMIT 1");
                 if (is_string($url) && trim($url) !== '') {
                     return trim($url);
                 }
@@ -719,6 +780,13 @@ class YujuProductReportManager
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
             if (!$db->execute($create_sql)) {
+                return false;
+            }
+
+            // CREATE TABLE IF NOT EXISTS does not upgrade an existing table. Ensure
+            // installations upgraded from older versions can store and recover URLs.
+            $has_url_column = $db->getValue("SHOW COLUMNS FROM " . $table_sql . " LIKE 'download_url'");
+            if (!$has_url_column && !$db->execute("ALTER TABLE " . $table_sql . " ADD COLUMN download_url TEXT NULL")) {
                 return false;
             }
 
