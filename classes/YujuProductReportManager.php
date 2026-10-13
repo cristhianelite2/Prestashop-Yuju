@@ -186,7 +186,7 @@ class YujuProductReportManager
     }
 
     /**
-     * Phase one: request and persist the offer-report response without assuming its schema.
+     * Request the offer report, then download and persist the actual file from its temporary URL.
      */
     public function downloadOfferReport()
     {
@@ -195,29 +195,57 @@ class YujuProductReportManager
         } catch (Exception $e) {
             return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo consultar el reporte de ofertas de Yuju.'];
         }
+
         if (empty($response['success'])) {
-            return ['success' => false, 'status' => 'failed', 'http_code' => (int) ($response['http_code'] ?? 0), 'message' => isset($response['message']) ? (string) $response['message'] : 'Yuju rechazó la solicitud del reporte de ofertas.'];
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'http_code' => (int) ($response['http_code'] ?? 0),
+                'message' => isset($response['message']) ? (string) $response['message'] : 'Yuju rechazó la solicitud del reporte de ofertas.',
+            ];
         }
-        if (!array_key_exists('data', $response)) {
-            return ['success' => false, 'status' => 'failed', 'message' => 'Yuju respondió sin contenido JSON para el reporte de ofertas.'];
+
+        $payload = $response['data'] ?? null;
+        $url = is_array($payload) && isset($payload['url']) && is_string($payload['url'])
+            ? trim($payload['url'])
+            : '';
+
+        if ($url === '') {
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'http_code' => (int) ($response['http_code'] ?? 200),
+                'message' => 'Yuju respondió, pero no incluyó una URL de descarga válida en el campo "url".',
+            ];
         }
+
         try {
-            $saved = $this->file_store->saveJsonPayload($response['data']);
-            $products_count = $this->countOfferRows($response['data']);
+            $saved = $this->file_store->downloadRawReportFile($url);
             $state = [
                 'cache_id' => $saved['cache_id'],
                 'task_id' => null,
-                'product_count' => $products_count,
+                'product_count' => 0,
                 'report_size_bytes' => $saved['size_bytes'],
                 'report_downloaded_at' => $saved['saved_at'],
             ];
+
             if (!$this->saveReportMetadata($state, 'offer')) {
                 $this->file_store->deleteJsonPayload($saved['cache_id']);
-                return ['success' => false, 'status' => 'failed', 'message' => 'El archivo se recibió, pero no se pudo registrar en la tabla de reportes.'];
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'message' => 'El archivo se descargó, pero no se pudieron registrar sus metadatos en la base de datos.',
+                ];
             }
         } catch (Exception $e) {
-            return ['success' => false, 'status' => 'failed', 'message' => 'No se pudo guardar el reporte de ofertas: ' . $e->getMessage()];
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'http_code' => (int) ($response['http_code'] ?? 200),
+                'message' => 'No se pudo descargar o guardar el archivo real del reporte de ofertas: ' . $e->getMessage(),
+            ];
         }
+
         return [
             'success' => true,
             'status' => 'completed',
@@ -225,9 +253,9 @@ class YujuProductReportManager
             'report_cached' => true,
             'file_path' => $saved['relative_path'],
             'file_size_bytes' => $saved['size_bytes'],
-            'products_count' => $products_count,
+            'products_count' => 0,
             'http_code' => (int) ($response['http_code'] ?? 200),
-            'message' => 'Respuesta de products-offer-report guardada en almacenamiento privado y registrada en la base de datos. El formato aún no se interpreta; inspeccionaremos el archivo en la siguiente fase.',
+            'message' => 'Archivo real del reporte de ofertas descargado desde la URL temporal de Yuju y guardado en almacenamiento privado. Las filas se inspeccionarán en la siguiente fase.',
         ];
     }
 
