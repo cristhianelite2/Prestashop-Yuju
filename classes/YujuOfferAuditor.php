@@ -3016,7 +3016,6 @@ class YujuOfferAuditor
                     'diffs_json' => $detail['diffs_json'] !== null ? pSQL($detail['diffs_json'], true) : null,
                     'result' => pSQL($detail['result']),
                     'message' => pSQL($detail['message'], true),
-                    'created_at' => date('Y-m-d H:i:s'),
                 ];
                 foreach ($row as $key => $value) {
                     if ($value === null) {
