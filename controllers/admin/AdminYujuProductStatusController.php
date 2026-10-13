@@ -76,11 +76,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'class' => 'fixed-width-sm',
         'callback' => 'displaySyncStatus',
         ],
-        'sync_direction' => [
-        'title' => 'Dirección',
-        'align' => 'center',
-        'class' => 'fixed-width-sm',
-        ],
         'last_sync_at' => [
             'title' => 'Última Sincronización',
             'align' => 'center',
@@ -2211,7 +2206,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'Product Name',
         'Yuju Product ID',
         'Sync Status',
-        'Sync Direction',
         'Last Sync Date',
         'Error Count',
         'Last Error Message',
@@ -2237,7 +2231,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $record['product_name'],
             $record['yuju_product_id'],
             $record['sync_status'],
-            $record['sync_direction'],
             $record['last_sync_at'],
             $record['error_count'],
             $record['last_error_message'],
@@ -2419,20 +2412,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
         ['id' => 'pending', 'name' => 'Pendiente'],
         ['id' => 'error', 'name' => 'Error'],
         ['id' => 'disabled', 'name' => 'Deshabilitado'],
-        ],
-        'id' => 'id',
-        'name' => 'name',
-        ],
-        ],
-        [
-        'type' => 'select',
-        'label' => 'Dirección de Sincronización',
-        'name' => 'sync_direction',
-        'options' => [
-        'query' => [
-        ['id' => 'bidirectional', 'name' => 'Bidireccional'],
-        ['id' => 'yuju_to_ps', 'name' => 'Yuju a PrestaShop'],
-        ['id' => 'ps_to_yuju', 'name' => 'PrestaShop a Yuju'],
         ],
         'id' => 'id',
         'name' => 'name',
