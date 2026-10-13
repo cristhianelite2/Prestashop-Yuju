@@ -72,6 +72,9 @@ class AdminYujuLogsController extends ModuleAdminController
                 case 'refreshBulkOfferTasks':
                     $this->ajaxProcessRefreshBulkOfferTasks();
                     break;
+                case 'recoverBulkOfferTask':
+                    $this->ajaxProcessRecoverBulkOfferTask();
+                    break;
                 case 'getCleanupStats':
                     $this->ajaxProcessGetCleanupStats();
                     break;
@@ -91,6 +94,19 @@ class AdminYujuLogsController extends ModuleAdminController
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
         $tasks = YujuOfferAuditor::refreshBulkOfferTaskHistory();
         die(json_encode(['success' => true, 'tasks' => $tasks], JSON_UNESCAPED_UNICODE));
+    }
+
+    protected function ajaxProcessRecoverBulkOfferTask()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
+
+        $taskId = trim((string) Tools::getValue('task_id', ''));
+        $result = YujuOfferAuditor::recoverBulkOfferTaskById($taskId);
+        if (!empty($result['success'])) {
+            $result['tasks'] = YujuOfferAuditor::getBulkOfferTaskHistory(false);
+        }
+        die(json_encode($result, JSON_UNESCAPED_UNICODE));
     }
 
     /**
