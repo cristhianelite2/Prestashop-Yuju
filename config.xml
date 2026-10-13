@@ -2,7 +2,7 @@
 <module>
     <name>prestashopyuju</name>
     <displayName><![CDATA[Integración Yuju]]></displayName>
-    <version><![CDATA[1.1.18]]></version>
+    <version><![CDATA[1.1.19]]></version>
     <description><![CDATA[Sincroniza tu tienda PrestaShop con Yuju para administrar productos, inventario y pedidos.]]></description>
     <author><![CDATA[Equipo de integración Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>
