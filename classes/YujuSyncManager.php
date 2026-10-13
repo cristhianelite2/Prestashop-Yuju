@@ -66,10 +66,12 @@ class YujuSyncManager
     /**
      * Execute full synchronization.
      */
-    public function executeFullSync($direction = 'bidirectional', $force_update = false)
+    public function executeFullSync($direction = 'ps_to_yuju', $force_update = false)
     {
+        // La fuente de verdad del catálogo siempre es PrestaShop; ignorar direcciones heredadas.
+        $direction = 'ps_to_yuju';
         $start_time = time();
-        $this->logger->log('Starting full synchronization (direction: ' . $direction . ')', 'info');
+        $this->logger->log('Starting full synchronization (direction: PrestaShop -> Yuju)', 'info');
 
         $results = [
             'categories' => [],
@@ -146,18 +148,9 @@ class YujuSyncManager
         ];
 
         try {
-            // Get updated items from Yuju
-            $updated_items = $this->api_client->getUpdatedItems($since_date);
-
-            if (isset($updated_items['categories']) && !empty($updated_items['categories'])) {
-                $category_ids = array_column($updated_items['categories'], 'id');
-                $results['categories'] = $this->category_manager->syncCategoriesFromYuju(true);
-            }
-
-            if (isset($updated_items['products']) && !empty($updated_items['products'])) {
-                $product_ids = array_column($updated_items['products'], 'id');
-                $results['products'] = $this->product_manager->syncProductsFromYuju($product_ids, true);
-            }
+            // No importar cambios de catálogo desde Yuju. Volver a enviar el catálogo local.
+            $results['categories'] = $this->category_manager->syncCategoriesToYuju();
+            $results['products'] = $this->product_manager->syncProductsToYuju();
 
             // Update last sync date
             $this->updateLastSyncDate();
@@ -173,90 +166,41 @@ class YujuSyncManager
     /**
      * Synchronize categories.
      */
-    protected function syncCategories($direction, $force_update = false)
+    protected function syncCategories($direction = 'ps_to_yuju', $force_update = false)
     {
-        $results = ['success' => true, 'errors' => []];
-
+        // Las categorías también se envían únicamente desde PrestaShop a Yuju.
         try {
-            if ($direction === 'yuju_to_ps' || $direction === 'bidirectional') {
-                $from_yuju = $this->category_manager->syncCategoriesFromYuju($force_update);
-                $results = array_merge_recursive($results, $from_yuju);
-            }
-
-            if ($direction === 'ps_to_yuju' || $direction === 'bidirectional') {
-                $to_yuju = $this->category_manager->syncCategoriesToYuju();
-                $results = array_merge_recursive($results, $to_yuju);
-            }
+            return $this->category_manager->syncCategoriesToYuju();
         } catch (Exception $e) {
-            $results['success'] = false;
-            $results['errors'][] = $e->getMessage();
+            return ['success' => false, 'errors' => [$e->getMessage()]];
         }
-
-        return $results;
     }
 
     /**
      * Synchronize products.
      */
-    protected function syncProducts($direction, $force_update = false)
+    protected function syncProducts($direction = 'ps_to_yuju', $force_update = false)
     {
-        $results = ['success' => true, 'errors' => []];
-
+        // Ignorar cualquier dirección heredada: Yuju nunca actualiza el catálogo local.
         try {
-            if ($direction === 'yuju_to_ps' || $direction === 'bidirectional') {
-                $from_yuju = $this->product_manager->syncProductsFromYuju(null, $force_update);
-                $results = array_merge_recursive($results, $from_yuju);
-            }
-
-            if ($direction === 'ps_to_yuju' || $direction === 'bidirectional') {
-                $to_yuju = $this->product_manager->syncProductsToYuju();
-                $results = array_merge_recursive($results, $to_yuju);
-            }
+            return $this->product_manager->syncProductsToYuju();
         } catch (Exception $e) {
-            $results['success'] = false;
-            $results['errors'][] = $e->getMessage();
+            return ['success' => false, 'errors' => [$e->getMessage()]];
         }
-
-        return $results;
     }
 
     /**
      * Synchronize specific products by category.
      */
-    public function syncProductsByCategory($category_ids, $direction = 'bidirectional')
+    public function syncProductsByCategory($category_ids, $direction = 'ps_to_yuju')
     {
-        $this->logger->log('Starting product synchronization for categories: ' . implode(',', $category_ids), 'info');
-
-        $results = ['success' => true, 'errors' => []];
-
+        $this->logger->log('Starting PrestaShop-to-Yuju product synchronization for categories: ' . implode(',', (array) $category_ids), 'info');
         try {
-            if ($direction === 'yuju_to_ps' || $direction === 'bidirectional') {
-                // Get Yuju products for mapped categories
-                $mapped_categories = $this->getMappedCategoriesByPrestashopIds($category_ids);
-                $yuju_category_ids = array_column($mapped_categories, 'yuju_category_id');
-
-                if (!empty($yuju_category_ids)) {
-                    $yuju_products = $this->api_client->getProductsByCategories($yuju_category_ids);
-
-                    if ($yuju_products && isset($yuju_products['data'])) {
-                        $product_ids = array_column($yuju_products['data'], 'id');
-                        $from_yuju = $this->product_manager->syncProductsFromYuju($product_ids, true);
-                        $results = array_merge_recursive($results, $from_yuju);
-                    }
-                }
-            }
-
-            if ($direction === 'ps_to_yuju' || $direction === 'bidirectional') {
-                $to_yuju = $this->product_manager->syncProductsToYuju(null, $category_ids);
-                $results = array_merge_recursive($results, $to_yuju);
-            }
+            return $this->product_manager->syncProductsToYuju(null, (array) $category_ids);
         } catch (Exception $e) {
-            $results['success'] = false;
-            $results['errors'][] = $e->getMessage();
             $this->logger->log('Category-specific product synchronization failed: ' . $e->getMessage(), 'error');
+            return ['success' => false, 'errors' => [$e->getMessage()]];
         }
-
-        return $results;
     }
 
     /**
@@ -267,34 +211,8 @@ class YujuSyncManager
         if (!$this->config['sync_stock']) {
             return ['success' => false, 'error' => 'Stock synchronization is disabled'];
         }
-
-        $this->logger->log('Starting stock synchronization', 'info');
-
-        $results = [
-            'success' => true,
-            'updated_count' => 0,
-            'errors' => [],
-        ];
-
-        try {
-            // Get products to sync
-            $products = $this->getProductsForStockSync($product_ids);
-
-            foreach ($products as $product_data) {
-                try {
-                    $this->syncSingleProductStock($product_data);
-                    ++$results['updated_count'];
-                } catch (Exception $e) {
-                    $results['errors'][] = 'Product ' . $product_data['id_product'] . ': ' . $e->getMessage();
-                }
-            }
-        } catch (Exception $e) {
-            $results['success'] = false;
-            $results['errors'][] = $e->getMessage();
-            $this->logger->log('Stock synchronization failed: ' . $e->getMessage(), 'error');
-        }
-
-        return $results;
+        // El stock se toma de PrestaShop y se envía a Yuju con el payload de producto.
+        return $this->product_manager->syncProductsToYuju($product_ids);
     }
 
     /**
@@ -305,34 +223,8 @@ class YujuSyncManager
         if (!$this->config['sync_prices']) {
             return ['success' => false, 'error' => 'Price synchronization is disabled'];
         }
-
-        $this->logger->log('Starting price synchronization', 'info');
-
-        $results = [
-            'success' => true,
-            'updated_count' => 0,
-            'errors' => [],
-        ];
-
-        try {
-            // Get products to sync
-            $products = $this->getProductsForPriceSync($product_ids);
-
-            foreach ($products as $product_data) {
-                try {
-                    $this->syncSingleProductPrice($product_data);
-                    ++$results['updated_count'];
-                } catch (Exception $e) {
-                    $results['errors'][] = 'Product ' . $product_data['id_product'] . ': ' . $e->getMessage();
-                }
-            }
-        } catch (Exception $e) {
-            $results['success'] = false;
-            $results['errors'][] = $e->getMessage();
-            $this->logger->log('Price synchronization failed: ' . $e->getMessage(), 'error');
-        }
-
-        return $results;
+        // El precio se toma de PrestaShop y se envía a Yuju con el payload de producto.
+        return $this->product_manager->syncProductsToYuju($product_ids);
     }
 
     /**
@@ -460,7 +352,7 @@ class YujuSyncManager
         $log_data = [
             'sync_type' => 'full',
             'entity_type' => 'products',
-            'sync_direction' => 'bidirectional',
+            'sync_direction' => 'prestashop_to_yuju',
             'status' => $results['success'] ? 'completed' : 'failed',
             'total_items' => isset($results['total_items']) ? $results['total_items'] : 0,
             'processed_items' => isset($results['processed_items']) ? $results['processed_items'] : 0,
