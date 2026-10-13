@@ -321,7 +321,7 @@ class AdminYujuSyncController extends ModuleAdminController
             $report_manager = $this->sync_manager->getProductReportManager();
             $state = $report_manager->getStoredState();
             if ($state['status'] === 'COMPLETED' && !empty($state['cache_id']) && !empty($debug['yuju_product_id'])) {
-                $report_products = $report_manager->getCachedReportProducts();
+                $report_products = $report_manager->getMergedCachedReportProducts();
                 if ($report_products instanceof Traversable || is_array($report_products)) {
                     foreach ($report_products as $report_product) {
                         if (isset($report_product['id_product'])
@@ -346,7 +346,7 @@ class AdminYujuSyncController extends ModuleAdminController
         try {
             // Get the cached report from the report manager
             $report_manager = $this->sync_manager->getProductReportManager();
-            if (!method_exists($report_manager, 'getCachedReportProducts')) {
+            if (!method_exists($report_manager, 'getMergedCachedReportProducts')) {
                 throw new Exception('Report manager does not support cached report access.');
             }
 
