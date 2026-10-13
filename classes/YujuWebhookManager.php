@@ -53,6 +53,7 @@ class YujuWebhookManager
         /** @var int|false|null $webhook_id */
         $webhook_id = null;
         $orderLockId = null;
+        $orderLockAcquired = false;
 
         try {
             // Verify webhook signature (solo si hay payload y secret configurado)
@@ -90,8 +91,11 @@ class YujuWebhookManager
                 }
             }
 
-            // Serializar TODA la pipeline de la misma orden (enrich + create/update)
-            // antes de que dos new-order en ms creen pedidos duplicados.
+            // Registrar primero cada llegada para que incluso los eventos concurrentes
+            // o bloqueados aparezcan en el panel con un estado diagnosticable.
+            $webhook_id = $this->logWebhookReception($webhook_data, $headers);
+
+            // Serializar la pipeline de la misma orden (enrich + create/update).
             if ($topic && strpos($topic, 'order') !== false) {
                 $orderLockId = $webhook_data['resource_id']
                     ?? $webhook_data['id_order']
@@ -100,7 +104,10 @@ class YujuWebhookManager
                 if ($orderLockId) {
                     if (!$this->order_manager->acquireOrderLockPublic($orderLockId, 45)) {
                         $this->logger->log('Order webhook lock busy for entity ' . $orderLockId, 'warning');
-                        // false → Yuju puede reintentar; true ocultaría un updated-order de estado
+                        $this->updateWebhookLog($webhook_id, [
+                            'success' => false,
+                            'error' => 'Order webhook deferred: another process is still handling this order',
+                        ]);
                         return [
                             'success' => false,
                             'message' => 'Order webhook deferred: another process is still handling this order',
@@ -109,16 +116,12 @@ class YujuWebhookManager
                             'topic' => $topic,
                         ];
                     }
+                    $orderLockAcquired = true;
                 }
             }
-            
-            // Registrar la recepción ANTES de llamadas externas: el panel debe mostrar
-            // el evento aunque Yuju API tarde o falle al consultar la orden.
-            $webhook_id = $this->logWebhookReception($webhook_data, $headers);
 
-            // Confirmar recepción en cuanto el evento quedó registrado. El callback
-            // envía el HTTP 200 dentro del límite de Yuju (<500 ms); el trabajo pesado
-            // continúa después de cerrar la respuesta.
+            // Confirmar recepción en cuanto el evento quedó registrado y la exclusión
+            // de orden adquirida. El trabajo lento continúa después de cerrar HTTP.
             if (is_callable($onAccepted)) {
                 call_user_func($onAccepted, $webhook_id, $webhook_data);
             }
@@ -157,7 +160,7 @@ class YujuWebhookManager
 
             throw $e;
         } finally {
-            if ($orderLockId) {
+            if ($orderLockAcquired && $orderLockId) {
                 $this->order_manager->releaseOrderLockPublic($orderLockId);
             }
         }
