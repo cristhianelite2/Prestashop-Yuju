@@ -3595,3 +3595,237 @@ textarea#yuju-cron-manager-output.form-control:focus,
     .yuju-audit-toolbar-actions .btn span { white-space: normal; }
     .yuju-audit-live-heading { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* Auditoría de productos: interfaz sobria, compacta y consistente con el panel Yuju. */
+#content.bootstrap .yuju-admin-layout .yuju-audit-run-panel > .panel-body { padding: 18px !important; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher {
+    margin: 0 0 18px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-grid {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -7px !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card {
+    float: none !important;
+    padding: 0 7px !important;
+    margin: 0 0 14px !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > * {
+    margin-top: 0;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > p.yuju-audit-launcher-title {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 46px;
+    margin: 0 0 13px !important;
+    padding: 0 0 11px !important;
+    border-bottom: 1px solid #eaecf0;
+    color: #344054;
+    font-size: 13px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > p.yuju-audit-launcher-title strong {
+    color: #101828;
+    font-size: 14px;
+    font-weight: 600;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > p.yuju-audit-launcher-title small {
+    color: #667085;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card {
+    box-sizing: border-box;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card:before {
+    content: "";
+    display: block;
+    position: relative;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > .input-group { width: 100%; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card .form-control {
+    height: 38px !important;
+    border-color: #d0d5dd !important;
+    border-radius: 5px 0 0 5px !important;
+    box-shadow: none !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card .input-group-btn .btn {
+    height: 38px;
+    border-radius: 0 5px 5px 0;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card > .btn {
+    min-height: 36px;
+    margin: 0 5px 5px 0;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: none;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card .btn-primary {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card .btn-primary:hover { background: #1d4ed8; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-toolbar {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 0 0 12px !important;
+    padding: 12px 14px !important;
+    background: #fff !important;
+    border: 1px solid #e4e7ec !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04) !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-search {
+    flex: 1 1 360px;
+    min-width: 230px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-searchbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 5px 0 11px;
+    background: #fff;
+    border: 1px solid #cfd4dc;
+    border-radius: 5px;
+    box-shadow: none;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-search-icon { color: #667085; font-size: 14px; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-searchbox .form-control {
+    width: 100%;
+    height: 36px !important;
+    padding: 7px 0 !important;
+    border: 0 !important;
+    outline: 0;
+    box-shadow: none !important;
+    font-size: 12px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-searchbox button {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    color: #475467;
+    background: #f2f4f7;
+    border: 0;
+    border-radius: 4px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-searchbox button:hover { color: #1d4ed8; background: #eaf0ff; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-filter-label {
+    display: block;
+    margin: 7px 0 0 1px;
+    color: #667085;
+    font-size: 11px;
+    line-height: 1.4;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 8px 11px;
+    border-radius: 5px;
+    font-size: 11px;
+    line-height: 1.3;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: none;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-btn-update { color: #fff; background: #2563eb; border: 1px solid #2563eb; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-btn-update:hover { color: #fff; background: #1d4ed8; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-btn-update:disabled { color: #98a2b3; background: #f2f4f7; border-color: #e4e7ec; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-btn-export { color: #344054; background: #fff; border: 1px solid #d0d5dd; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-btn-export:hover { color: #1d4ed8; background: #f9fafb; border-color: #98a2b3; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-live-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 18px 0 10px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-live-heading h4 { margin: 0; color: #101828; font-size: 14px; font-weight: 600; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-selected-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    color: #344054;
+    background: #f9fafb;
+    border: 1px solid #e4e7ec;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+}
+#content.bootstrap .yuju-admin-layout .yuju-audit-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 5px;
+    color: #667085;
+    font-size: 11px;
+}
+.yuju-audit-pagination-summary { color: #667085; }
+.yuju-audit-pagination-summary strong { color: #344054; font-weight: 600; }
+.yuju-audit-pagination-controls { display: flex; align-items: center; gap: 7px; }
+.yuju-audit-pagination-controls label { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: #667085; font-weight: 400; }
+.yuju-audit-page-size {
+    height: 30px;
+    padding: 4px 22px 4px 7px;
+    color: #344054;
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+}
+.yuju-audit-page-btn {
+    min-height: 30px;
+    padding: 5px 9px;
+    color: #344054;
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    font-size: 11px;
+}
+.yuju-audit-page-btn:hover:not(:disabled) { color: #1d4ed8; background: #f9fafb; border-color: #98a2b3; }
+.yuju-audit-page-btn:disabled { color: #c0c5ce; background: #f9fafb; cursor: not-allowed; }
+.yuju-audit-page-current { min-width: 85px; color: #475467; text-align: center; }
+#content.bootstrap .yuju-admin-layout .yuju-audit-table-wrap { border: 1px solid #e4e7ec; border-radius: 5px; }
+#content.bootstrap .yuju-admin-layout #yuju-audit-diff-table { margin: 0 !important; }
+@media (max-width: 991px) {
+    #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar { align-items: stretch; flex-direction: column; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-search { min-width: 0; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-actions { justify-content: flex-start; flex-wrap: wrap; }
+}
+@media (max-width: 767px) {
+    #content.bootstrap .yuju-admin-layout .yuju-audit-run-panel > .panel-body { padding: 10px !important; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-launcher-grid { display: block; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-launcher-card { width: 100%; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-actions { display: grid; grid-template-columns: 1fr; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-toolbar-actions .btn { width: 100%; white-space: normal; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-live-heading { align-items: flex-start; flex-direction: column; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-pagination { align-items: stretch; flex-direction: column; }
+    #content.bootstrap .yuju-admin-layout .yuju-audit-pagination-controls { flex-wrap: wrap; justify-content: space-between; }
+}
