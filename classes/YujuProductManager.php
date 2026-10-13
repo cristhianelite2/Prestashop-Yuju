@@ -2311,9 +2311,7 @@ class YujuProductManager
         }
 
         foreach ($this->field_mappings as $mapping) {
-            if ($mapping['sync_direction'] === 'yuju_to_ps') {
-                continue;
-            }
+            // La dirección del catálogo es fija: todos los campos mapeados se evalúan para envío a Yuju.
             if (empty($mapping['is_required'])) {
                 continue;
             }
