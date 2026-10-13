@@ -13,8 +13,8 @@ class AdminYujuProductCategoryStatusController extends AdminYujuProductStatusCon
 {
     public function initContent()
     {
-        $this->context->smarty->assign('current_controller', 'AdminYujuProductCategoryStatus');
         parent::initContent();
+        $this->context->smarty->assign('current_controller', 'AdminYujuProductCategoryStatus');
         $this->setTemplate('product_category_status.tpl');
     }
 
