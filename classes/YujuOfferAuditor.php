@@ -2997,7 +2997,7 @@ class YujuOfferAuditor
                      WHERE id_audit_run = ' . $runId . '
                        AND prestashop_product_id = ' . $productId . '
                        AND (sku IS NULL OR sku = \'\')
-                     ORDER BY id ASC LIMIT 1'
+                     ORDER BY id ASC'
                 );
             }
 
