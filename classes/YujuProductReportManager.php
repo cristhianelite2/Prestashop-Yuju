@@ -329,8 +329,18 @@ class YujuProductReportManager
      */
     protected function getStoredOfferState()
     {
-        $state = json_decode((string) Configuration::get(self::OFFER_STATE_CONFIG_KEY), true);
-        return is_array($state) ? $state : [];
+        $raw_state = trim((string) Configuration::get(self::OFFER_STATE_CONFIG_KEY));
+        $state = json_decode($raw_state, true);
+        if (is_array($state)) {
+            return $state;
+        }
+
+        // Some earlier builds may have stored only the temporary report URL.
+        if (preg_match('#^https://#i', $raw_state)) {
+            return ['download_url' => $raw_state];
+        }
+
+        return [];
     }
 
     /**
