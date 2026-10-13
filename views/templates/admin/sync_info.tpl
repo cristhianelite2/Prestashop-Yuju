@@ -55,6 +55,24 @@
             </p>
         </div>
 
+        <div class="modal fade" id="yuju-payload-debug-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-payload-debug-title">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                        <h4 class="modal-title" id="yuju-payload-debug-title">JSON de depuración del producto</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted">Vista de solo lectura. <code>mapped_payload</code> es el resultado del mapeo activo; <code>yuju_report_product</code> es el registro original del reporte cacheado, si se encontró.</p>
+                        <pre id="yuju-payload-debug-json" style="max-height:60vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere;">Selecciona el icono JSON de un producto.</pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row" style="margin-top: 20px;">
             <div class="col-md-3">
                 <div class="sync-status-card">
@@ -362,7 +380,7 @@ $(function() {
 
         var $table = $('<table class="table table-bordered table-striped"><thead><tr>' +
             '<th><input type="checkbox" id="yuju-select-all-urgent" aria-label="Seleccionar todos los productos con diferencias urgentes"></th>' +
-            '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Prioridad</th><th>Diferencias</th>' +
+            '<th>ID PS</th><th>ID Yuju</th><th>Producto</th><th>SKU</th><th>Estado</th><th>Prioridad</th><th>Depurar</th><th>Diferencias</th>' +
             '</tr></thead><tbody></tbody></table>');
 
         $.each(pageProducts, function(index, product) {
@@ -402,6 +420,30 @@ $(function() {
             if (urgentDifferences.length) priorityText.push('Urgentes: ' + urgentDifferences.map(function(d) { return d.field; }).join(', '));
             if (nonUrgentDifferences.length) priorityText.push('No urgentes: ' + nonUrgentDifferences.map(function(d) { return d.field; }).join(', '));
             $row.append($('<td></td>').text(priorityText.length ? priorityText.join(' | ') : '—'));
+            var $debugCell = $('<td></td>');
+            var $debugButton = $('<button type="button" class="btn btn-default btn-xs" title="Ver JSON mapeado y datos del reporte Yuju"><i class="icon-code"></i> JSON</button>');
+            $debugButton.on('click', function() {
+                var $button = $(this);
+                $button.prop('disabled', true);
+                $('#yuju-payload-debug-title').text('JSON de depuración — producto PrestaShop ' + productId);
+                $('#yuju-payload-debug-json').text('Cargando payload y reporte cacheado...');
+                $('#yuju-payload-debug-modal').modal('show');
+                ajaxAction('GetYujuProductPayload', {ldelim}product_id: productId{rdelim}, function(response) {
+                    if (response && response.success && response.debug) {
+                        $('#yuju-payload-debug-json').text(JSON.stringify(response.debug, null, 2));
+                    } else {
+                        $('#yuju-payload-debug-json').text((response && response.message) || 'No se pudo obtener el JSON de depuración.');
+                    }
+                }, function(error) {
+                    $('#yuju-payload-debug-json').text(error || 'No se pudo obtener el JSON de depuración.');
+                });
+                // Re-enable when the modal closes; ajaxAction reports failures via its error callback.
+                $('#yuju-payload-debug-modal').one('hidden.bs.modal', function() {
+                    $button.prop('disabled', false);
+                });
+            });
+            $debugCell.append($debugButton);
+            $row.append($debugCell);
             $row.append($('<td></td>').text(diffFields.length ? diffFields.join(', ') + (msg ? ' — ' + msg : '') : (msg || '—')));
             $table.find('tbody').append($row);
         });
