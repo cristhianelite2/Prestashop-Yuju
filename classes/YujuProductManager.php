@@ -371,11 +371,19 @@ class YujuProductManager
         // Parent products and each nested variation receive their own row; an unmatched
         // Yuju item remains visible with prestashop_product_id = NULL.
         $yuju_catalog_rows = [];
+        $seen_report_product_ids = [];
         foreach ($report_products as $report_product) {
             $yuju_product_id = isset($report_product['id_product']) ? trim((string) $report_product['id_product']) : '';
             if ($yuju_product_id === '') {
+                throw new InvalidArgumentException('The Yuju report contains a product with an empty ID. Catalog reconciliation was cancelled.');
+            }
+
+            // Store each parent once. indexReportRows has already rejected conflicting
+            // copies of the same ID and this pass ignores exact repeated rows.
+            if (isset($seen_report_product_ids[$yuju_product_id])) {
                 continue;
             }
+            $seen_report_product_ids[$yuju_product_id] = true;
 
             $prestashop_product_id = isset($selected_products[$yuju_product_id])
                 && !isset($report_index['duplicate_ids'][$yuju_product_id])
@@ -448,6 +456,7 @@ class YujuProductManager
             $variations = isset($report_product['variations']) && is_array($report_product['variations'])
                 ? $report_product['variations']
                 : [];
+            $seen_variation_keys = [];
             foreach ($variations as $variation) {
                 if (!is_array($variation)) {
                     continue;
@@ -461,8 +470,16 @@ class YujuProductManager
                     continue;
                 }
 
-                // Stable Yuju variation ID when available; otherwise use its SKU as identity.
-                $variation_key = $variation_id !== '' ? 'id:' . $variation_id : 'sku:' . $variation_sku;
+                // Ignore repeated copies of the same variation within one parent.
+                // Use Yuju's stable variation ID when available; otherwise its normalized SKU.
+                $variation_key = $variation_id !== ''
+                    ? 'id:' . $variation_id
+                    : 'sku:' . YujuProductReportReconciler::normalizeSku($variation_sku);
+                if (isset($seen_variation_keys[$variation_key])) {
+                    continue;
+                }
+                $seen_variation_keys[$variation_key] = true;
+
                 $variation_ps_id = $prestashop_product_id;
                 $variation_ps_attribute_id = null;
                 if ($variation_sku !== '') {
