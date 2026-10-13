@@ -107,12 +107,15 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
         $mappings = $this->getCategoryMappings();
         $prestashop_categories = $this->getPrestashopCategories();
         $yuju_categories = $this->getYujuCategories();
-        
+        $madkting_status = $this->getMadktingMappingStatus();
+
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuCategoryMapping',
             'category_mappings' => $mappings,
             'prestashop_categories' => $prestashop_categories,
             'yuju_categories' => $yuju_categories,
+            'madkting_mapping_available' => $madkting_status['available'],
+            'madkting_mapping_count' => $madkting_status['count'],
             'ajax_url' => $this->context->link->getAdminLink('AdminYujuCategoryMapping'),
             'token' => $this->token
         ]);
@@ -308,6 +311,189 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             $this->errors[] = $this->trans('Error synchronizing Yuju categories: ', array(), 'Modules.Prestashopyuju.Admin') . $e->getMessage();
             $this->logger->log('Error synchronizing Yuju categories: ' . $e->getMessage(), 'error');
         }
+    }
+
+    /**
+     * Detecta los mapeos de Madkting sin modificar su tabla.
+     */
+    protected function getMadktingMappingStatus()
+    {
+        $tableName = _DB_PREFIX_ . 'mad_mapping_categories';
+        $exists = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema = DATABASE()
+             AND table_name = "' . pSQL($tableName) . '"'
+        );
+
+        if (!$exists) {
+            return ['available' => false, 'count' => 0];
+        }
+
+        $count = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM ' . bqSQL($tableName)
+        );
+
+        return ['available' => $count > 0, 'count' => $count];
+    }
+
+    /**
+     * Importa únicamente IDs que coinciden con categorías oficiales de Yuju.
+     * La tabla de Madkting se consulta en modo lectura y nunca se modifica.
+     */
+    public function ajaxProcessImportMadktingMappings()
+    {
+        $response = [
+            'success' => false,
+            'message' => '',
+            'imported' => 0,
+            'skipped_existing' => 0,
+            'skipped_invalid_category' => 0,
+            'errors' => 0
+        ];
+
+        try {
+            $tableName = _DB_PREFIX_ . 'mad_mapping_categories';
+            $exists = (int) Db::getInstance()->getValue(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema = DATABASE()
+                 AND table_name = "' . pSQL($tableName) . '"'
+            );
+            if (!$exists) {
+                throw new Exception('No existe la tabla de mapeos de Madkting.');
+            }
+
+            $rows = Db::getInstance()->executeS(
+                'SELECT id_category_prestashop, id_category_madkting
+                 FROM ' . bqSQL($tableName) . '
+                 ORDER BY id_mapping_category ASC'
+            );
+            if ($rows === false) {
+                throw new Exception('No fue posible leer los mapeos de Madkting.');
+            }
+
+            $yujuCategories = $this->getOfficialYujuCategoryNames();
+            $now = date('Y-m-d H:i:s');
+
+            foreach ($rows as $row) {
+                $prestashopId = (int) $row['id_category_prestashop'];
+                $yujuId = (string) (int) $row['id_category_madkting'];
+
+                if ($prestashopId <= 0 || !isset($yujuCategories[$yujuId])) {
+                    ++$response['skipped_invalid_category'];
+                    continue;
+                }
+
+                $existing = Db::getInstance()->getValue(
+                    'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                     WHERE prestashop_category_id = ' . $prestashopId
+                );
+                if ($existing) {
+                    ++$response['skipped_existing'];
+                    continue;
+                }
+
+                $inserted = Db::getInstance()->insert('yuju_category_mapping', [
+                    'prestashop_category_id' => $prestashopId,
+                    'yuju_category_id' => pSQL($yujuId),
+                    'yuju_category_name' => pSQL($yujuCategories[$yujuId]),
+                    'sync_enabled' => 1,
+                    'last_sync_at' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now
+                ]);
+
+                if ($inserted) {
+                    ++$response['imported'];
+                } else {
+                    ++$response['errors'];
+                }
+            }
+
+            $response['success'] = true;
+            $response['message'] = 'Importación terminada. Importados: ' . $response['imported']
+                . '; ya existentes: ' . $response['skipped_existing']
+                . '; categoría Yuju no reconocida: ' . $response['skipped_invalid_category']
+                . '; errores: ' . $response['errors'] . '.';
+            $this->logger->log('Importación Madkting -> Yuju: ' . $response['message'], 'info');
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error al importar mapeos de Madkting: ' . $e->getMessage(), 'error');
+        }
+
+        header('Content-Type: application/json');
+        die(json_encode($response));
+    }
+
+    /**
+     * IDs y nombres oficiales publicados por Yuju.
+     */
+    protected function getOfficialYujuCategoryNames()
+    {
+        return [
+            '510' => 'Herramientas',
+            '511' => 'Vehículos y Repuestos',
+            '516' => 'Instrumentos musicales',
+            '517' => 'Juguetes y juegos de mesa',
+            '518' => 'Libros',
+            '519' => 'Música y Películas',
+            '520' => 'Oficina y Papelería',
+            '523' => 'Software',
+            '524' => 'Alimentos y Bebidas',
+            '525' => 'Inmuebles',
+            '526' => 'Arte',
+            '527' => 'Maletas y Equipaje',
+            '530' => 'Cupones de regalo',
+            '533' => 'Accesorios',
+            '534' => 'Electrónica > TV y Audio',
+            '535' => 'Electrónica > Cámaras y accesorios',
+            '536' => 'Electrónica > Consolas y Videojuegos',
+            '537' => 'Electrónica > Celulares y Tablets',
+            '538' => 'Electrónica > Computación',
+            '539' => 'Deportes > Accesorios',
+            '540' => 'Deportes > Vitaminas y Suplementos',
+            '541' => 'Deportes > Calzado',
+            '542' => 'Deportes > Ropa Deportiva',
+            '543' => 'Hogar > Electrodomésticos',
+            '544' => 'Hogar > Iluminación',
+            '545' => 'Hogar > Muebles',
+            '546' => 'Hogar > Decoración',
+            '547' => 'Hogar > Accesorios',
+            '548' => 'Hogar > Colchones y Almohadas',
+            '549' => 'Hogar > Textiles y Blancos',
+            '550' => 'Productos Industriales y Científicos > Vidriería',
+            '551' => 'Productos Industriales y Científicos > Materiales Químicos',
+            '552' => 'Productos Industriales y Científicos > Materiales de Construcción',
+            '553' => 'Productos Industriales y Científicos > Accesorios Científicos',
+            '554' => 'Moda > Accesorios',
+            '555' => 'Moda > Joyería',
+            '556' => 'Moda > Lentes',
+            '557' => 'Moda > Relojes',
+            '558' => 'Moda > Bolsas y Carteras',
+            '559' => 'Moda > Calzado',
+            '560' => 'Moda > Ropa',
+            '561' => 'Belleza, Salud y Bienestar > Cuidado personal',
+            '562' => 'Belleza, Salud y Bienestar > Belleza',
+            '563' => 'Belleza, Salud y Bienestar > Bienestar y accesorios',
+            '564' => 'Belleza, Salud y Bienestar > Equipos Médicos',
+            '565' => 'Belleza, Salud y Bienestar > Medicinas',
+            '566' => 'Belleza, Salud y Bienestar > Salud',
+            '567' => 'Mascotas > Accesorios',
+            '568' => 'Mascotas > Medicinas',
+            '569' => 'Mascotas > Muebles',
+            '570' => 'Mascotas > Ropa',
+            '571' => 'Mascotas > Alimentos',
+            '572' => 'Bebés y niños pequeños > Maternidad',
+            '573' => 'Bebés y niños pequeños > Monitores',
+            '574' => 'Bebés y niños pequeños > Higiene',
+            '575' => 'Bebés y niños pequeños > Alimento',
+            '576' => 'Bebés y niños pequeños > Calzado',
+            '577' => 'Bebés y niños pequeños > Ropa',
+            '578' => 'Bebés y niños pequeños > Muebles',
+            '579' => 'Jardín y Exteriores > Accesorios',
+            '580' => 'Jardín y Exteriores > Iluminación',
+            '581' => 'Jardín y Exteriores > Muebles',
+            '582' => 'Otros'
+        ];
     }
 
     protected function getYujuCategories()
