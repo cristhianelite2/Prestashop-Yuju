@@ -59,8 +59,8 @@
         <target>Configuración Yuju</target>
       </trans-unit>
       <trans-unit id="11" resname="Modules.Yuju.Admin">
-        <source>Yuju Integration Configuration</source>
-        <target>Configuración de Integración Yuju</target>
+        <source>Yuju Configuration</source>
+        <target>Configuración Yuju</target>
       </trans-unit>
       <trans-unit id="12" resname="Modules.Yuju.Admin">
         <source>Configuración de API</source>
