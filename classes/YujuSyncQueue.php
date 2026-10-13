@@ -467,7 +467,8 @@ class YujuSyncQueue
         $this->updateQueueStatus($item['id'], 'processing');
         $this->setProductStatusForQueueAction(
             (int) $item['prestashop_product_id'],
-            $action
+            $action,
+            (int) ($item['prestashop_product_attribute_id'] ?? 0)
         );
 
         $itemDetail = [
@@ -689,7 +690,7 @@ class YujuSyncQueue
      * Marcar el estado intermedio del producto en yuju_product_status según la
      * acción que se está procesando en la cola.
      */
-    private function setProductStatusForQueueAction($product_id, $action)
+    private function setProductStatusForQueueAction($product_id, $action, $attributeId = 0)
     {
         try {
             $map = [
@@ -706,7 +707,7 @@ class YujuSyncQueue
                     'last_error' => null,
                     'updated_at' => date('Y-m-d H:i:s')
                 ],
-                'prestashop_product_id = ' . (int) $product_id
+                'prestashop_product_id = ' . (int) $product_id . ' AND ' . ((int) $attributeId > 0 ? 'prestashop_product_attribute_id = ' . (int) $attributeId : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)')
             );
         } catch (Exception $e) {
             // Silencioso: no debe interrumpir el procesamiento de la cola
