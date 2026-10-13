@@ -459,23 +459,13 @@ class YujuWebhookManager
      */
     protected function processStockWebhook($webhook_data, $topic = null)
     {
-        $stock_data = $webhook_data['data'];
-
-        // Find PrestaShop product
-        $product_id = $this->findProductByYujuId($stock_data['product_id']);
-
-        if (!$product_id) {
-            throw new Exception('Product not found for Yuju ID: ' . $stock_data['product_id']);
-        }
-
-        // Update stock
-        StockAvailable::setQuantity(
-            $product_id,
-            0, // id_product_attribute
-            (int) $stock_data['quantity']
-        );
-
-        $this->logger->log('Updated stock for product ' . $product_id . ': ' . $stock_data['quantity'], 'info');
+        // Política permanente: el stock local nunca se modifica desde un webhook de Yuju.
+        $this->logger->log('Webhook de stock de Yuju recibido e ignorado: PrestaShop es la fuente de verdad.', 'warning');
+        return [
+            'success' => true,
+            'message' => 'Webhook recibido; stock no aplicado en PrestaShop por política unidireccional.',
+            'direction_blocked' => true,
+        ];
 
         return [
             'success' => true,
