@@ -15,6 +15,7 @@ class YujuProductReportManager
     const QUOTA_CONFIG_KEY = 'YUJU_PRODUCTS_REPORT_QUOTA';
     const OFFER_STATE_CONFIG_KEY = 'YUJU_PRODUCTS_OFFER_REPORT_STATE';
     // Yuju limits report generation to two per day, so a stock/price file is reused for 12 hours.
+    const GENERAL_REPORT_TTL = 43200;
     const OFFER_REPORT_TTL = 43200;
     // The offer download URL is temporary: keep it only briefly to retry a failed transfer.
     const OFFER_URL_TTL = 300;
@@ -58,6 +59,19 @@ class YujuProductReportManager
             && preg_match('/^[a-f0-9]{32}$/', (string) $state['cache_id'])
             && $this->file_store->reportExists($state['cache_id']);
 
+        // Reuse the general report for 12 hours. Prefer its recorded download time;
+        // if older state lacks that field, use the private cache file's mtime.
+        $report_downloaded_at = !empty($state['report_downloaded_at'])
+            ? (int) $state['report_downloaded_at']
+            : 0;
+        if ($has_cached_report && $report_downloaded_at <= 0) {
+            $report_path = dirname(__DIR__) . '/var/reports/' . $state['cache_id'] . '.jsonl';
+            $report_downloaded_at = is_file($report_path) ? (int) @filemtime($report_path) : 0;
+        }
+        // If the timestamp cannot be recovered, prefer reuse over an accidental duplicate request.
+        $has_fresh_cached_report = $has_cached_report
+            && ($report_downloaded_at <= 0 || $report_downloaded_at >= time() - self::GENERAL_REPORT_TTL);
+
         if (!empty($state['task_id']) && in_array($state['status'], ['CREATED', 'PROCESSING'], true)) {
             return [
                 'success' => true,
@@ -71,7 +85,7 @@ class YujuProductReportManager
         // A validated local report is reusable even if Configuration lost the task ID.
         // getStoredState() can recover this state from var/reports/ after checking the
         // downloaded file; requiring task_id here caused an unnecessary new request to Yuju.
-        if ($state['status'] === 'COMPLETED' && $has_cached_report) {
+        if ($state['status'] === 'COMPLETED' && $has_fresh_cached_report) {
             if (!empty($state['local_report_recovered'])) {
                 // Persist the recovered pointer so subsequent requests use the same cache.
                 $this->storeJson(self::STATE_CONFIG_KEY, $state);
