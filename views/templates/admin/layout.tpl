@@ -76,7 +76,7 @@
                             </a>
                         </li>
                         <li class="{if $current_controller == 'AdminYujuProductCategoryStatus'}active{/if}">
-                            <a href="{$link->getAdminLink('AdminYujuProductCategoryStatus')|escape:'html':'UTF-8'}">
+                            <a href="{$link->getAdminLink('AdminYuju')|escape:'html':'UTF-8'}&amp;yuju_view=product_category_status">
                                 <i class="icon-folder-open"></i>
                                 Estado de productos por categoría
                             </a>
