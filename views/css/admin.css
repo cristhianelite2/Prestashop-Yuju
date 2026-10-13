@@ -3339,6 +3339,123 @@ textarea#yuju-cron-manager-output.form-control:focus,
 }
 
 
+
+/* AdminYujuWebhook: rediseño forzado sobre los estilos globales del Back Office. */
+#content.bootstrap .yuju-admin-layout .yuju-webhook-container {
+    color: #344054 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-shell {
+    border: 1px solid #d8dee6 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, .04) !important;
+    overflow: hidden !important;
+    background: #fff !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-shell > .panel-heading {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    min-height: 44px !important;
+    height: auto !important;
+    padding: 12px 16px !important;
+    background: #f8fafc !important;
+    color: #344054 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #e4e7ec !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-shell > .panel-heading > i {
+    color: #667085 !important;
+    margin-right: 7px !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-shell > .panel-body.yuju-webhook-content {
+    display: block !important;
+    padding: 16px !important;
+    background: #f9fafb !important;
+    overflow: visible !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .panel {
+    border: 1px solid #e4e7ec !important;
+    border-radius: 5px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    margin-bottom: 16px !important;
+    background: #fff !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .panel > .panel-heading {
+    padding: 10px 14px !important;
+    background: #f8fafc !important;
+    color: #475467 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #eaecf0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .panel > .panel-body {
+    padding: 14px !important;
+    background: #fff !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .alert {
+    border-radius: 5px !important;
+    box-shadow: none !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .table {
+    background: #fff !important;
+    border-color: #e4e7ec !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .table > thead > tr > th {
+    padding: 9px 10px !important;
+    background: #f8fafc !important;
+    color: #475467 !important;
+    border-bottom: 1px solid #e4e7ec !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-webhook-content .table > tbody > tr > td {
+    padding: 9px 10px !important;
+    vertical-align: middle !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-order-search-bar {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    margin: 0 0 16px !important;
+    background: #fff !important;
+    border: 1px solid #e4e7ec !important;
+    border-radius: 5px !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-order-search-bar label {
+    margin-bottom: 0 !important;
+    color: #475467 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-order-search-bar .form-control {
+    height: 32px !important;
+    border: 1px solid #d0d5dd !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-order-search-bar .btn {
+    border-radius: 4px !important;
+    box-shadow: none !important;
+}
+@media (max-width: 768px) {
+    #content.bootstrap .yuju-admin-layout .yuju-webhook-shell > .panel-body.yuju-webhook-content {
+        padding: 10px !important;
+    }
+    #content.bootstrap .yuju-admin-layout .yuju-order-search-bar {
+        align-items: stretch !important;
+    }
+    #content.bootstrap .yuju-admin-layout .yuju-order-search-bar .form-control {
+        width: 100% !important;
+    }
+}
+
 /* Fix de prioridad frente a los estilos nav-pills/nav-stacked de PrestaShop.
    El submenú debe conservar su sangría y el estado activo debe aplicarse al enlace hijo. */
 #content.bootstrap .yuju-admin-layout .yuju-sidebar .yuju-nav > li.yuju-nav-group > ul.yuju-nav-submenu > li > a,
