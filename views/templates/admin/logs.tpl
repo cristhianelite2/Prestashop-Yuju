@@ -568,25 +568,6 @@
             </div>
         {/if}
         
-        <div class="panel panel-default">
-            <div class="panel-heading">
-                <h4>Información de Registros</h4>
-            </div>
-            <div class="panel-body">
-                <p>Los archivos de registro se crean automáticamente durante los procesos de sincronización. Contienen información detallada sobre:</p>
-                <ul>
-                    <li>Solicitudes y respuestas de API</li>
-                    <li>Resultados de sincronización</li>
-                    <li>Mensajes de error e información de depuración</li>
-                    <li>Métricas de rendimiento</li>
-                </ul>
-                
-                <div class="alert alert-warning">
-                    <strong>Nota:</strong>
-                    Los archivos de registro se rotan automáticamente y los archivos antiguos se eliminan según su configuración.
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {/block}
