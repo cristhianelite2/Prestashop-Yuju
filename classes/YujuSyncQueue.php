@@ -296,7 +296,7 @@ class YujuSyncQueue
             }
         }
 
-        // Un solo item pendiente por producto+acción (el más antiguo),
+        // Un solo item pendiente por producto+variación+acción (el más antiguo),
         // por si quedaron duplicados históricos antes del dedupe.
         // Orden por tipo: delete → create → update (opción 5: carriles separados).
         $items = Db::getInstance()->executeS('
@@ -308,7 +308,7 @@ class YujuSyncQueue
                 WHERE status = "pending"
                   AND attempts < max_attempts
                   ' . $actionFilter . '
-                GROUP BY prestashop_product_id, action
+                GROUP BY prestashop_product_id, prestashop_product_attribute_id, action
             ) t ON t.id = q.id
             ORDER BY FIELD(q.action, "delete", "create", "update"),
                      q.priority DESC,
