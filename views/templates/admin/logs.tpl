@@ -24,7 +24,7 @@
         <i class="icon-tasks"></i> Estado de tareas masivas de ofertas Yuju
         <span class="pull-right">
             <button type="button" class="btn btn-default btn-xs" id="yuju-refresh-bulk-offer-tasks">
-                <i class="icon-refresh"></i> Actualizar estado
+                <i class="icon-refresh"></i> <span class="yuju-refresh-label">Actualizar estado</span>
             </button>
         </span>
     </div>
@@ -32,7 +32,6 @@
         <p class="help-block">
             Histórico en un solo archivo (<code>logs/yuju_bulk_offer_tasks.json</code>). El estado se consulta a Yuju automáticamente cada 15 segundos mientras haya tareas pendientes.
         </p>
-        <div id="yuju-bulk-offer-task-alert" class="alert alert-info" style="display:none;"></div>
         <div class="table-responsive">
             <table class="table table-bordered table-striped table-condensed" id="yuju-bulk-offer-task-table">
                 <thead>
@@ -102,28 +101,47 @@
         });
         $body.html(html);
     }
-    function refreshTasks(showMessage) {
+    function setRefreshButtonState(state) {
+        var $button = $('#yuju-refresh-bulk-offer-tasks');
+        var $icon = $button.find('i');
+        var labels = {
+            loading: 'Obteniendo...',
+            updated: 'Actualizado',
+            error: 'Error al actualizar',
+            idle: 'Actualizar estado'
+        };
+        $button.find('span.yuju-refresh-label').text(labels[state] || labels.idle);
+        $icon.removeClass('icon-refresh icon-check icon-warning-sign icon-spin');
+        if (state === 'loading') {
+            $icon.addClass('icon-refresh icon-spin');
+            $button.prop('disabled', true);
+        } else if (state === 'updated') {
+            $icon.addClass('icon-check');
+            $button.prop('disabled', false);
+        } else if (state === 'error') {
+            $icon.addClass('icon-warning-sign');
+            $button.prop('disabled', false);
+        } else {
+            $icon.addClass('icon-refresh');
+            $button.prop('disabled', false);
+        }
+    }
+    function refreshTasks(showStatus) {
         if (busy) return;
         busy = true;
+        if (showStatus) setRefreshButtonState('loading');
         $.ajax({
             url: endpoint, type: 'POST', dataType: 'json', timeout: 60000,
             data: {ldelim}ajax: 1, action: 'refreshBulkOfferTasks'{rdelim}
         }).done(function (response) {
             if (response && response.success) {
                 renderTasks(response.tasks || []);
-                if (showMessage) {
-                    $('#yuju-bulk-offer-task-alert').removeClass('alert-danger').addClass('alert-success')
-                        .text('Estado de tareas actualizado.').show();
-                }
-            } else if (showMessage) {
-                $('#yuju-bulk-offer-task-alert').removeClass('alert-success').addClass('alert-danger')
-                    .text('No se pudo actualizar el estado de las tareas.').show();
+                if (showStatus) setRefreshButtonState('updated');
+            } else if (showStatus) {
+                setRefreshButtonState('error');
             }
         }).fail(function () {
-            if (showMessage) {
-                $('#yuju-bulk-offer-task-alert').removeClass('alert-success').addClass('alert-danger')
-                    .text('Error al consultar el estado de las tareas masivas.').show();
-            }
+            if (showStatus) setRefreshButtonState('error');
         }).always(function () { busy = false; });
     }
     $(function () {
