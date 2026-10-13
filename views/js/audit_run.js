@@ -1146,14 +1146,14 @@
             var lines = lastUpdateIssues.map(function (item, index) {
                 var sku = item.sku ? String(item.sku) : '(SKU no disponible)';
                 var message = item.message ? String(item.message) : 'Error sin detalle devuelto por Yuju.';
-                return (index + 1) + '. SKU: ' + sku + '\\n   Detalle: ' + message;
+                return (index + 1) + '. SKU: ' + sku + '\n   Detalle: ' + message;
             });
             if (!lines.length) {
                 lines.push('La respuesta indicó errores u omitidos, pero no incluyó detalles por producto.');
                 lines.push('Errores: ' + ($('#yuju-audit-status').text().match(/errores:\\s*([^;]+)/i) || [null, 'no disponible'])[1]);
             }
             $('#yujuAuditErrorModal .modal-title').text('Detalles de errores al actualizar en Yuju');
-            $('#yuju-audit-error-json').text(lines.join('\\n\\n'));
+            $('#yuju-audit-error-json').text(lines.join('\n\n'));
             $('#yujuAuditErrorModal').modal('show');
         });
 
