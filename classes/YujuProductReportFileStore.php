@@ -100,6 +100,59 @@ class YujuProductReportFileStore
     }
 
     /**
+     * Download the raw report file from a temporary URL returned by Yuju.
+     * The URL is validated on every redirect to prevent SSRF.
+     *
+     * @param string $url
+     * @return array
+     */
+    public function downloadRawReportFile($url)
+    {
+        $this->ensurePrivateDirectory();
+        $cache_id = bin2hex(random_bytes(16));
+        $path = $this->directory . DIRECTORY_SEPARATOR . $cache_id . '.json';
+        $current_url = $url;
+
+        try {
+            for ($redirect = 0; $redirect <= self::MAX_REDIRECTS; ++$redirect) {
+                $target = $this->validateReportUrl($current_url);
+                $result = $this->downloadOnce($current_url, $path, $target['host'], $target['ip']);
+
+                if ($result['status'] >= 300 && $result['status'] < 400) {
+                    if ($redirect === self::MAX_REDIRECTS || empty($result['location'])) {
+                        throw new RuntimeException('La descarga del reporte excedió el número permitido de redirecciones.');
+                    }
+                    $current_url = $this->resolveRedirect($current_url, $result['location']);
+                    continue;
+                }
+
+                if ($result['status'] < 200 || $result['status'] >= 300) {
+                    throw new RuntimeException('La descarga del archivo de ofertas falló con HTTP ' . (int) $result['status'] . '.');
+                }
+
+                clearstatcache(true, $path);
+                if (!is_file($path) || is_link($path) || filesize($path) <= 0 || filesize($path) > $this->max_report_bytes) {
+                    throw new RuntimeException('El archivo de ofertas descargado está vacío o excede el tamaño permitido.');
+                }
+
+                @chmod($path, 0600);
+                return [
+                    'cache_id' => $cache_id,
+                    'relative_path' => 'var/reports/' . $cache_id . '.json',
+                    'size_bytes' => (int) filesize($path),
+                    'saved_at' => time(),
+                ];
+            }
+        } catch (Exception $e) {
+            @unlink($path);
+            throw $e;
+        }
+
+        @unlink($path);
+        throw new RuntimeException('La descarga del archivo de ofertas no pudo completarse.');
+    }
+
+    /**
      * Save a JSON response privately without assuming its schema.
      */
     public function saveJsonPayload($payload)
