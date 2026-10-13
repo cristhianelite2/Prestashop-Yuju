@@ -924,7 +924,9 @@ class YujuApiClient
             'success' => $ok,
             'http_code' => $httpCode,
             'data' => $decoded,
-            'message' => (string) ($decoded['message'] ?? ($ok ? 'Tarea masiva creada.' : 'Yuju rechazó la actualización masiva.')),
+            // Conservar el cuerpo original: puede contener errores que no se reflejan en JSON.
+            'raw_response' => (string) $responseBody,
+            'message' => (string) ($decoded['message'] ?? ($ok ? 'Yuju aceptó la solicitud y creó la tarea; esto no confirma el procesamiento de cada SKU.' : 'Yuju rechazó la actualización masiva.')),
         ];
         $this->logger->log($ok ? 'info' : 'error', 'Yuju bulk offer task submitted', [
             'endpoint' => 'products-offer',
