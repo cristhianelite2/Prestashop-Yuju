@@ -2,7 +2,7 @@
 <module>
     <name>yuju</name>
     <displayName><![CDATA[Yuju]]></displayName>
-    <version><![CDATA[1.0.1]]></version>
+    <version><![CDATA[1.0.2]]></version>
     <description><![CDATA[Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.]]></description>
     <author><![CDATA[Yuju]]></author>
     <tab><![CDATA[market_place]]></tab>
