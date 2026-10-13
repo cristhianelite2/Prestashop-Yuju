@@ -59,9 +59,9 @@ class Prestashopyuju extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin');
-        $this->description = $this->trans('Synchronize your PrestaShop store with the Yuju platform for perfect inventory, product and order management.', array(), 'Modules.Prestashopyuju.Admin');
-        $this->confirmUninstall = $this->trans('Are you sure you want to uninstall the Yuju Integration module? This will remove all synchronization data.', array(), 'Modules.Prestashopyuju.Admin');
+        $this->displayName = 'Integración Yuju';
+        $this->description = 'Sincroniza tu tienda PrestaShop con Yuju para administrar productos, inventario y pedidos.';
+        $this->confirmUninstall = '¿Seguro que deseas desinstalar el módulo Integración Yuju? Se eliminarán los datos de sincronización.';
 
         // Initialize components
         // Temporarily commented for installation
@@ -172,7 +172,7 @@ class Prestashopyuju extends Module
         $tabs = [
         [
         'class_name' => 'AdminYuju',
-        'name' => $this->trans('Yuju Integration', array(), 'Modules.Prestashopyuju.Admin'),
+        'name' => 'Integración Yuju',
         'parent_class_name' => 'CONFIGURE',
         'module' => $this->name,
         'active' => 1,
@@ -207,7 +207,7 @@ class Prestashopyuju extends Module
         ],
         [
         'class_name' => 'AdminYujuOrderStatusMapping',
-        'name' => 'Order Status Mapping',
+        'name' => 'Mapeo de estados de pedidos',
         'parent_class_name' => 'AdminYuju',
         'module' => $this->name,
         'active' => 1,
