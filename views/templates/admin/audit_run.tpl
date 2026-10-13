@@ -143,6 +143,9 @@
                     <small class="text-muted" id="yuju-audit-filter-label">Filtro: todos</small>
                 </div>
                 <div class="col-sm-6 text-right">
+                    <button type="button" class="btn btn-primary" id="yuju-audit-update-selected-btn" disabled>
+                        <i class="icon-refresh"></i> Actualizar seleccionados en Yuju
+                    </button>
                     <button type="button" class="btn btn-default" id="yuju-audit-export-btn" disabled>
                         <i class="icon-download"></i> Descargar Excel (CSV)
                     </button>
@@ -154,6 +157,7 @@
                 <table class="table table-bordered table-striped table-condensed" id="yuju-audit-diff-table">
                     <thead>
                         <tr>
+                            <th class="text-center"><input type="checkbox" id="yuju-audit-select-all" title="Seleccionar todos los productos visibles"></th>
                             <th>SKU</th>
                             <th>Nombre</th>
                             <th class="text-center">Stock<br><small class="text-muted">PS / Yuju</small></th>
@@ -164,7 +168,7 @@
                     </thead>
                     <tbody>
                         <tr class="yuju-audit-empty">
-                            <td colspan="6" class="text-center text-muted">Ejecute o reanalice para ver el comparativo.</td>
+                            <td colspan="7" class="text-center text-muted">Ejecute o reanalice para ver el comparativo.</td>
                         </tr>
                     </tbody>
                 </table>
