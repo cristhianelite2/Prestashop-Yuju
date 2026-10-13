@@ -1,3 +1,8 @@
+## [1.1.10] - 2026-10-12
+
+### Corregido
+- Se incrementa la versión para que el actualizador detecte e instale los cambios recientes de la sección de mapeo de estados de pedidos; se sincroniza la versión interna usada por el actualizador.
+
 ## [Unreleased]
 
 ## [1.1.9] - 2026-10-12
