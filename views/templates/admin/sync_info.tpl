@@ -437,7 +437,7 @@ $(function() {
 
     function isUrgentDifference(field) {
         var parts = String(field || '').toLowerCase().split('.');
-        var normalized = parts[parts.length - 1].replace(/[\\s-]/g, '_');
+        var normalized = parts[parts.length - 1].replace(/[\s-]/g, '_');
         return $.inArray(normalized, ['stock', 'price']) !== -1;
     }
 
