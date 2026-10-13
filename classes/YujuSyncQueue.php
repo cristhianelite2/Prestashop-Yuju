@@ -523,10 +523,16 @@ class YujuSyncQueue
                 if (!empty($data['direct_update']) && $action === 'update') {
                     if ($lastApiAt !== null) { $this->waitForApiGap($lastApiAt, $apiGapUs); }
                     $productId = (int) $item['prestashop_product_id'];
-                    $yujuId = trim((string) Db::getInstance()->getValue(
-                        'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status`
-                         WHERE prestashop_product_id = ' . $productId
-                    ));
+                    $attributeId = max(0, (int) ($data['id_product_attribute'] ?? $item['prestashop_product_attribute_id'] ?? 0));
+                    $statusSql = 'SELECT yuju_product_id, parent_yuju_product_id
+                                  FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                                  WHERE prestashop_product_id = ' . $productId
+                                  . ' AND ' . ($attributeId > 0
+                                      ? 'prestashop_product_attribute_id = ' . $attributeId
+                                      : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)');
+                    $statusRow = Db::getInstance()->getRow($statusSql);
+                    $yujuId = trim((string) ($statusRow['yuju_product_id'] ?? ''));
+                    $parentYujuId = trim((string) ($statusRow['parent_yuju_product_id'] ?? ''));
                     $payload = [];
                     foreach (['stock', 'price', 'name', 'sku_simple', 'weight', 'description', 'short_description', 'ean'] as $field) {
                         if (array_key_exists($field, $data)) { $payload[$field] = $data[$field]; }
@@ -547,10 +553,18 @@ class YujuSyncQueue
                         $send_res = ['success' => true, 'message' => 'Campos descartados; no fue necesaria una petición a Yuju.', 'http_code' => 0];
                     } elseif (empty($payload)) {
                         $send_res = ['success' => false, 'message' => 'No hay campos válidos para enviar.', 'http_code' => 0];
+                    } elseif ($attributeId > 0 && $parentYujuId === '') {
+                        $send_res = [
+                            'success' => false,
+                            'message' => 'La variación no tiene vinculado el ID del producto padre de Yuju.',
+                            'http_code' => 0,
+                        ];
                     } else {
                         require_once dirname(__FILE__) . '/YujuApiClient.php';
                         $api = new YujuApiClient();
-                        $send_res = $api->updateProduct($yujuId, $payload);
+                        $send_res = $attributeId > 0
+                            ? $api->updateVariation($parentYujuId, $yujuId, $payload)
+                            : $api->updateProduct($yujuId, $payload);
                         $lastApiAt = microtime(true);
                         $madeApiCall = true;
                     }
