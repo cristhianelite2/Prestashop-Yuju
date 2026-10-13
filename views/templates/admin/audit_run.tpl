@@ -132,27 +132,31 @@
                 </div>
             </div>
 
-            <div class="row" id="yuju-audit-table-tools" style="display:none; margin-bottom:10px;">
-                <div class="col-sm-6">
-                    <div class="input-group">
-                        <input type="text" id="yuju-audit-search" class="form-control" placeholder="Buscar SKU o nombre…">
-                        <span class="input-group-btn">
-                            <button type="button" class="btn btn-default" id="yuju-audit-search-btn"><i class="icon-search"></i></button>
-                        </span>
+            <div class="yuju-audit-toolbar" id="yuju-audit-table-tools" style="display:none;">
+                <div class="yuju-audit-toolbar-search">
+                    <div class="yuju-audit-searchbox">
+                        <i class="icon-search yuju-audit-search-icon"></i>
+                        <input type="text" id="yuju-audit-search" class="form-control" placeholder="Buscar por SKU o nombre del producto…">
+                        <button type="button" id="yuju-audit-search-btn" aria-label="Buscar" title="Buscar"><i class="icon-arrow-right"></i></button>
                     </div>
-                    <small class="text-muted" id="yuju-audit-filter-label">Filtro: todos</small>
+                    <small class="yuju-audit-filter-label" id="yuju-audit-filter-label">Filtro: todos</small>
                 </div>
-                <div class="col-sm-6 text-right">
-                    <button type="button" class="btn btn-primary" id="yuju-audit-update-selected-btn" disabled>
-                        <i class="icon-refresh"></i> Actualizar seleccionados en Yuju
+                <div class="yuju-audit-toolbar-actions">
+                    <button type="button" class="btn yuju-audit-btn-update" id="yuju-audit-update-selected-btn" disabled>
+                        <i class="icon-refresh"></i><span>Actualizar seleccionados en Yuju</span>
                     </button>
-                    <button type="button" class="btn btn-default" id="yuju-audit-export-btn" disabled>
-                        <i class="icon-download"></i> Descargar Excel (CSV)
+                    <button type="button" class="btn yuju-audit-btn-export" id="yuju-audit-export-btn" disabled>
+                        <i class="icon-download"></i><span>Descargar CSV</span>
                     </button>
                 </div>
             </div>
 
-            <h4 style="margin-top:0;">Actividad en vivo</h4>
+            <div class="yuju-audit-live-heading">
+                <h4>Actividad en vivo</h4>
+                <span id="yuju-audit-selected-count" class="yuju-audit-selected-count" aria-live="polite">
+                    <i class="icon-check-square"></i> 0 seleccionados
+                </span>
+            </div>
             <div class="table-responsive" style="max-height:420px; overflow:auto;">
                 <table class="table table-bordered table-striped table-condensed" id="yuju-audit-diff-table">
                     <thead>
