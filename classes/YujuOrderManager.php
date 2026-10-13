@@ -314,13 +314,40 @@ class YujuOrderManager
         return $this->lastCarrierError;
     }
 
+    /** Comprueba que el carrier tenga al menos un rango y su tarifa asociada. */
+    protected function isYujuCarrierReady($carrierId)
+    {
+        $carrierId = (int) $carrierId;
+        if ($carrierId <= 0) {
+            return false;
+        }
+
+        $rangeId = (int) Db::getInstance()->getValue(
+            'SELECT id_range_price FROM `' . _DB_PREFIX_ . 'range_price`
+             WHERE id_carrier = ' . $carrierId . ' ORDER BY id_range_price DESC'
+        );
+        if ($rangeId <= 0) {
+            return false;
+        }
+
+        return (bool) Db::getInstance()->getValue(
+            'SELECT id_delivery FROM `' . _DB_PREFIX_ . 'delivery`
+             WHERE id_carrier = ' . $carrierId . ' AND id_range_price = ' . $rangeId
+        );
+    }
+
     public function ensureYujuCarrierPublic()
     {
         $configuredId = (int) Configuration::get('YUJU_CARRIER_ID');
         if ($configuredId > 0) {
             $configuredCarrier = new Carrier($configuredId);
             if (Validate::isLoadedObject($configuredCarrier) && !(int) $configuredCarrier->deleted) {
-                return (int) $configuredCarrier->id;
+                if ($this->isYujuCarrierReady($configuredId)) {
+                    return (int) $configuredCarrier->id;
+                }
+                // Una instalación anterior pudo dejar el carrier creado pero sin tarifas.
+                Db::getInstance()->update('carrier', ['deleted' => 1, 'active' => 0], 'id_carrier = ' . $configuredId);
+                Configuration::deleteByName('YUJU_CARRIER_ID');
             }
         }
 
@@ -330,8 +357,12 @@ class YujuOrderManager
              ORDER BY active DESC, id_carrier DESC'
         );
         if ($existingId > 0) {
-            Configuration::updateValue('YUJU_CARRIER_ID', $existingId);
-            return $existingId;
+            if ($this->isYujuCarrierReady($existingId)) {
+                Configuration::updateValue('YUJU_CARRIER_ID', $existingId);
+                return $existingId;
+            }
+            // No reutilizar transportistas incompletos de intentos de instalación previos.
+            Db::getInstance()->update('carrier', ['deleted' => 1, 'active' => 0], 'id_carrier = ' . $existingId);
         }
 
         $carrierId = (int) $this->createYujuCarrier();
@@ -2538,13 +2569,23 @@ class YujuOrderManager
             ]);
 
             return (int) $carrier->id;
-        } catch (Exception $e) {
-            $this->lastCarrierError = get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
-            $this->logger->error('Error al crear el transportista Yuju: ' . $this->lastCarrierError);
-            error_log('[Yuju carrier] Error: ' . $this->lastCarrierError);
-            return 0;
         } catch (Throwable $e) {
             $this->lastCarrierError = get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
+
+            // Si algo falla después de crear el carrier, no dejarlo activo e incompleto.
+            if ($createdCarrierId > 0) {
+                try {
+                    Db::getInstance()->delete('delivery', 'id_carrier = ' . (int) $createdCarrierId);
+                    Db::getInstance()->delete('range_price', 'id_carrier = ' . (int) $createdCarrierId);
+                    Db::getInstance()->delete('carrier_shop', 'id_carrier = ' . (int) $createdCarrierId);
+                    Db::getInstance()->delete('carrier_group', 'id_carrier = ' . (int) $createdCarrierId);
+                    Db::getInstance()->delete('carrier_zone', 'id_carrier = ' . (int) $createdCarrierId);
+                    Db::getInstance()->update('carrier', ['deleted' => 1, 'active' => 0], 'id_carrier = ' . (int) $createdCarrierId);
+                } catch (Throwable $cleanupError) {
+                    $this->lastCarrierError .= '; no se pudo limpiar el carrier parcial: ' . $cleanupError->getMessage();
+                }
+            }
+
             $this->logger->error('Error al crear el transportista Yuju: ' . $this->lastCarrierError);
             error_log('[Yuju carrier] Error: ' . $this->lastCarrierError);
             return 0;
