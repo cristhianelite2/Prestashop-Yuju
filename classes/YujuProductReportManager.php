@@ -735,6 +735,7 @@ class YujuProductReportManager
                 'products_count' => isset($state['product_count']) ? (int) $state['product_count'] : 0,
                 'file_path' => pSQL($relative_path),
                 'file_size' => isset($state['report_size_bytes']) ? (int) $state['report_size_bytes'] : 0,
+                'download_url' => !empty($state['download_url']) ? pSQL((string) $state['download_url']) : null,
                 'error_message' => null,
                 'meta_json' => pSQL(json_encode($meta)),
                 'completed_at' => date('Y-m-d H:i:s', $downloaded_at),
