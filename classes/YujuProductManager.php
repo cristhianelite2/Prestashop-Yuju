@@ -393,7 +393,7 @@ class YujuProductManager
                 }
 
                 // Stable Yuju variation ID when available; otherwise use its SKU as identity.
-                $variation_key = $variation_id !== '' ? $variation_id : 'sku:' . $variation_sku;
+                $variation_key = $variation_id !== '' ? 'id:' . $variation_id : 'sku:' . $variation_sku;
                 $variation_ps_id = $prestashop_product_id;
                 if ($variation_ps_id === null && $variation_sku !== '') {
                     $normalized_sku = YujuProductReportReconciler::normalizeSku($variation_sku);
@@ -433,6 +433,9 @@ class YujuProductManager
                 if (!$this->saveYujuCatalogStatus($catalog_row)) {
                     throw new Exception('Could not save Yuju catalog status for product ' . $catalog_row['yuju_product_id'] . '.');
                 }
+            }
+            if (!$this->pruneYujuCatalogStatuses($yuju_catalog_rows)) {
+                throw new Exception('Could not remove stale entries from the Yuju product status catalog.');
             }
 
             if (!$db->execute('COMMIT')) {
@@ -726,6 +729,49 @@ class YujuProductManager
         return isset($product->name[$language_id]) && is_scalar($product->name[$language_id])
             ? (string) $product->name[$language_id]
             : '';
+    }
+
+    /**
+     * Remove obsolete PrestaShop-only rows and duplicate/stale Yuju catalog rows.
+     * The report is the source of truth for this table.
+     */
+    protected function pruneYujuCatalogStatuses($catalog_rows)
+    {
+        $valid = [];
+        foreach ($catalog_rows as $row) {
+            $valid[json_encode([(string) $row['yuju_product_id'], (string) $row['yuju_variation_id']])] = true;
+        }
+
+        $db = Db::getInstance();
+        $rows = $db->executeS('
+            SELECT id, yuju_product_id, yuju_variation_id
+            FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            ORDER BY id ASC
+        ');
+        if (!is_array($rows)) {
+            return false;
+        }
+
+        $seen = [];
+        $delete_ids = [];
+        foreach ($rows as $row) {
+            $yuju_id = isset($row['yuju_product_id']) ? (string) $row['yuju_product_id'] : '';
+            $variation_id = isset($row['yuju_variation_id']) ? (string) $row['yuju_variation_id'] : '';
+            $key = json_encode([$yuju_id, $variation_id]);
+            if ($yuju_id === '' || !isset($valid[$key]) || isset($seen[$key])) {
+                $delete_ids[] = (int) $row['id'];
+                continue;
+            }
+            $seen[$key] = true;
+        }
+
+        foreach (array_chunk($delete_ids, 400) as $batch) {
+            if (!$db->execute('DELETE FROM ' . _DB_PREFIX_ . 'yuju_product_status WHERE id IN (' . implode(',', array_map('intval', $batch)) . ')')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     protected function getYujuReportProductName($product)
