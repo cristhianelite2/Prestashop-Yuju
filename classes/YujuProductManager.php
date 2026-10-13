@@ -1228,11 +1228,74 @@ class YujuProductManager
             return ['success' => false, 'message' => 'resource_id vacío'];
         }
 
-        // Solo tratar como variación cuando parent_id es realmente informativo (no "0"/"null"/vacío).
+        // Una variación tiene ID Yuju propio y se relaciona con el producto padre por parent_id.
+        // Resolver su SKU contra product_attribute.reference y guardar ambos IDs de PrestaShop.
         if ($parent_id_norm !== '') {
-            $this->logger->log('Yuju webhook product-created: variación (parent_id=' . $parent_id . '), sin actualizar estado PS padre', 'info');
+            try {
+                if (!$this->hasProductAttributeStatusColumn()) {
+                    require_once dirname(__FILE__) . '/YujuSchemaRepair.php';
+                    $schemaRepair = new YujuSchemaRepair();
+                    $schemaRepair->repairTable('yuju_product_status');
+                }
 
-            return ['success' => true, 'message' => 'Variación ignorada para estado PrestaShop'];
+                $attribute = false;
+                foreach (array_values(array_unique(array_filter([$sku, $sku_simple]))) as $candidateSku) {
+                    $attribute = Db::getInstance()->getRow(
+                        "SELECT id_product, id_product_attribute FROM " . _DB_PREFIX_ . "product_attribute
+                         WHERE TRIM(reference) = '" . pSQL($candidateSku) . "' ORDER BY id_product_attribute ASC"
+                    );
+                    if (!empty($attribute)) {
+                        break;
+                    }
+                }
+
+                if (empty($attribute)) {
+                    $this->logger->log('Variación Yuju ' . $resource_id . ' no vinculada: SKU sin coincidencia en product_attribute.reference.', 'warning');
+                    return ['success' => false, 'message' => 'No se encontró la combinación PrestaShop por SKU.'];
+                }
+
+                $idProduct = (int) $attribute['id_product'];
+                $idAttribute = (int) $attribute['id_product_attribute'];
+                $existingId = (int) Db::getInstance()->getValue(
+                    "SELECT id FROM " . _DB_PREFIX_ . "yuju_product_status
+                     WHERE yuju_product_id = '" . pSQL($resource_id) . "'"
+                );
+                $now = date('Y-m-d H:i:s');
+                $data = [
+                    'prestashop_product_id' => $idProduct,
+                    'prestashop_product_attribute_id' => $idAttribute,
+                    'yuju_product_id' => pSQL($resource_id),
+                    'parent_yuju_product_id' => pSQL($parent_id_norm),
+                    'sync_status' => 'synced',
+                    'last_sync_at' => $now,
+                    'last_error' => null,
+                    'updated_at' => $now,
+                    'last_sync_data' => pSQL(json_encode([
+                        'source' => 'product_created_webhook',
+                        'sku' => $sku !== '' ? $sku : $sku_simple,
+                        'parent_yuju_id' => $parent_id_norm,
+                        'prestashop_product_attribute_id' => $idAttribute,
+                    ], JSON_UNESCAPED_UNICODE), true),
+                ];
+
+                if ($existingId > 0) {
+                    Db::getInstance()->update('yuju_product_status', $data, 'id = ' . $existingId);
+                } else {
+                    $data['error_count'] = 0;
+                    $data['sync_enabled'] = 1;
+                    $data['created_at'] = $now;
+                    Db::getInstance()->insert('yuju_product_status', $data, true);
+                }
+
+                $this->logger->log('Variación Yuju vinculada a combinación PrestaShop ' . $idAttribute . ' (producto padre ' . $idProduct . ').', 'info');
+                return ['success' => true, 'message' => 'Variación vinculada a la combinación PrestaShop.', 'prestashop_product_id' => $idProduct, 'prestashop_product_attribute_id' => $idAttribute];
+            } catch (Exception $e) {
+                $this->logger->log('Error al vincular variación Yuju ' . $resource_id . ': ' . $e->getMessage(), 'error');
+                return ['success' => false, 'message' => $e->getMessage()];
+            } catch (Throwable $e) {
+                $this->logger->log('Error al vincular variación Yuju ' . $resource_id . ': ' . $e->getMessage(), 'error');
+                return ['success' => false, 'message' => $e->getMessage()];
+            }
         }
 
         $matched = null;
