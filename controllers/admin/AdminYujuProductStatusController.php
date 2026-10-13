@@ -131,7 +131,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         ],
         ];
 
-        $this->_select = 'pl.name as product_name';
+        $this->_select = 'pl.name as product_name, a.yuju_product_name as yuju_product_name';
         $this->_join = 'LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl ON (a.prestashop_product_id = pl.id_product AND pl.id_lang = ' . (int) $this->context->language->id . ')';
 
         $this->_orderBy = 'last_sync_at';
@@ -375,7 +375,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 return;
             }
 
-            $results = $this->product_manager->syncSpecificProducts([$status['prestashop_product_id']]);
+            if (empty($status['prestashop_product_id'])) {
+                $this->errors[] = 'Este producto o variación de Yuju todavía no está enlazado con PrestaShop. Enlázalo por SKU antes de sincronizarlo.';
+
+                return;
+            }
+
+            $results = $this->product_manager->syncSpecificProducts([(int) $status['prestashop_product_id']]);
 
             if ($results['success']) {
                 $this->confirmations[] = 'Producto sincronizado exitosamente';
@@ -555,6 +561,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'PrestaShop Product ID',
         'Product Name',
         'Yuju Product ID',
+        'Yuju Product Name',
+        'Yuju Variation ID',
+        'Yuju Variation SKU',
         'Sync Status',
         'Last Sync Date',
         'Error Count',
@@ -577,6 +586,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $record['prestashop_product_id'],
             $record['product_name'],
             $record['yuju_product_id'],
+            $record['yuju_product_name'],
+            $record['yuju_variation_id'],
+            $record['yuju_variation_sku'],
             $record['sync_status'],
             $record['last_sync_at'],
             $record['error_count'],
@@ -599,9 +611,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
 
         if (empty($row['prestashop_product_id'])) {
-            return !empty($row['yuju_variation_sku'])
-                ? 'Variación Yuju sin enlazar (' . $row['yuju_variation_sku'] . ')'
-                : 'Producto Yuju sin enlazar';
+            $name = !empty($row['yuju_product_name']) ? $row['yuju_product_name'] : 'Producto Yuju sin enlazar';
+            if (!empty($row['yuju_variation_sku'])) {
+                $name .= ' — Variación ' . $row['yuju_variation_sku'];
+            }
+
+            return $name;
         }
 
         $product = new Product((int) $row['prestashop_product_id'], false, $this->context->language->id);
