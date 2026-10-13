@@ -34,7 +34,7 @@
                 
                 <div class="row">
                     <div class="col-lg-6">
-                        <h4>{l s='Connection Details' mod='prestashopyuju'}</h4>
+                        <h4>{l s='Detalles de conexión' mod='prestashopyuju'}</h4>
                         <dl class="dl-horizontal">
                             <dt>{l s='Environment:' mod='prestashopyuju'}</dt>
                             <dd><span class="label label-info">{$oauth_status.environment|upper|escape:'html':'UTF-8'}</span></dd>
@@ -54,16 +54,16 @@
                         <h4>{l s='Estadísticas de la API' mod='prestashopyuju'}</h4>
                         {if isset($api_stats)}
                             <dl class="dl-horizontal">
-                                <dt>{l s='Total Requests:' mod='prestashopyuju'}</dt>
+                                <dt>{l s='Solicitudes totales:' mod='prestashopyuju'}</dt>
                                 <dd>{$api_stats.total_requests|default:0|escape:'html':'UTF-8'}</dd>
                                 
-                                <dt>{l s='Successful:' mod='prestashopyuju'}</dt>
+                                <dt>{l s='Exitosas:' mod='prestashopyuju'}</dt>
                                 <dd>{$api_stats.successful_requests|default:0|escape:'html':'UTF-8'}</dd>
                                 
-                                <dt>{l s='Failed:' mod='prestashopyuju'}</dt>
+                                <dt>{l s='Fallidas:' mod='prestashopyuju'}</dt>
                                 <dd>{$api_stats.failed_requests|default:0|escape:'html':'UTF-8'}</dd>
                                 
-                                <dt>{l s='Last Request:' mod='prestashopyuju'}</dt>
+                                <dt>{l s='Última solicitud:' mod='prestashopyuju'}</dt>
                                 <dd>{$api_stats.last_request|default:'-'|escape:'html':'UTF-8'}</dd>
                             </dl>
                         {/if}
