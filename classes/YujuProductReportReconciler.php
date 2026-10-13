@@ -108,7 +108,7 @@ class YujuProductReportReconciler
             $field = isset($mapping['yuju_field']) ? $mapping['yuju_field'] : '';
             if ($field === '' || !array_key_exists($field, $prestashop_data)) {
                 if ($field !== '') {
-                    $comparison['uncomparable'][] = $field . ' (no disponible en los datos de PrestaShop)';
+                    $comparison['uncomparable'][] = $field;
                 }
                 continue;
             }
