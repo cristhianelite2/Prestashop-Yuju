@@ -365,6 +365,28 @@ class YujuSchemaRepair
         }
 
         if ($shortName === 'yuju_product_status') {
+            $table = '`' . _DB_PREFIX_ . 'yuju_product_status`';
+            try {
+                $cols = Db::getInstance()->executeS('SHOW COLUMNS FROM ' . $table);
+                $names = [];
+                foreach ((array) $cols as $col) {
+                    $names[strtolower($col['Field'])] = true;
+                }
+                if (!isset($names['prestashop_product_attribute_id'])) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' ADD COLUMN `prestashop_product_attribute_id` INT(11) NULL DEFAULT NULL AFTER `prestashop_product_id`');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Columna prestashop_product_attribute_id agregada para distinguir combinaciones'];
+                }
+                if (!isset($names['parent_yuju_product_id'])) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' ADD COLUMN `parent_yuju_product_id` VARCHAR(255) NULL DEFAULT NULL AFTER `yuju_product_id`');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Columna parent_yuju_product_id agregada para guardar el padre de cada variación Yuju'];
+                }
+                if (isset($names['sync_direction'])) {
+                    Db::getInstance()->execute('ALTER TABLE ' . $table . ' DROP COLUMN `sync_direction`');
+                    $actions[] = ['type' => 'patch', 'detail' => 'Columna sync_direction eliminada: la sincronización de productos siempre va de PrestaShop a Yuju'];
+                }
+            } catch (Exception $e) {
+                $actions[] = ['type' => 'patch_skip', 'detail' => 'Patch columnas de variaciones/dirección: ' . $e->getMessage()];
+            }
             try {
                 Db::getInstance()->execute(
                     'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_product_status` MODIFY COLUMN `sync_status` ENUM(
