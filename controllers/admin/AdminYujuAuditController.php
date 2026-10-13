@@ -179,6 +179,22 @@ class AdminYujuAuditController extends ModuleAdminController
         $this->setTemplate('audit_run.tpl');
     }
 
+    /**
+     * Envía una respuesta AJAX JSON compatible con PrestaShop 8/9.
+     * AdminController::ajaxDie() no está disponible en todas las versiones.
+     *
+     * @param string $content
+     */
+    protected function yujuAjaxResponse($content)
+    {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            header('X-Content-Type-Options: nosniff');
+        }
+        echo (string) $content;
+        exit;
+    }
+
     public function postProcess()
     {
         if (Tools::getValue('ajax')) {
@@ -217,7 +233,7 @@ class AdminYujuAuditController extends ModuleAdminController
                     $this->ajaxProcessGetProgress();
                     break;
                 case 'getSyncStatus':
-                    $this->ajaxDie(json_encode([
+                    $this->yujuAjaxResponse(json_encode([
                         'success' => true,
                         'ignored' => true,
                         'data' => [
@@ -228,7 +244,7 @@ class AdminYujuAuditController extends ModuleAdminController
                     ]));
                     break;
                 default:
-                    $this->ajaxDie(json_encode([
+                    $this->yujuAjaxResponse(json_encode([
                         'success' => false,
                         'message' => 'Acción AJAX no reconocida: ' . $action,
                     ]));
@@ -285,7 +301,7 @@ class AdminYujuAuditController extends ModuleAdminController
     {
         try {
             if (YujuConfig::get('YUJU_AUDIT_UI_ENABLED', 1) === '0') {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxResponse(json_encode([
                     'success' => false,
                     'message' => 'La interfaz gráfica de auditoría está deshabilitada en Configuración.',
                 ]));
@@ -293,7 +309,7 @@ class AdminYujuAuditController extends ModuleAdminController
 
             $fields = $this->getAuditFieldsFromRequest();
             if (empty($fields['stock']) && empty($fields['price']) && empty($fields['images'])) {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxResponse(json_encode([
                     'success' => false,
                     'message' => 'Seleccione al menos stock, precio o imágenes.',
                 ]));
@@ -301,14 +317,14 @@ class AdminYujuAuditController extends ModuleAdminController
 
             // Con imágenes → reporte general; sin imágenes → solo ofertas
             if (!empty($fields['images'])) {
-                $this->ajaxDie(json_encode($this->requestGralAndMaybeStartCompare($fields)));
+                $this->yujuAjaxResponse(json_encode($this->requestGralAndMaybeStartCompare($fields)));
             }
 
-            $this->ajaxDie(json_encode($this->requestOfferAndStartCompare($fields)));
+            $this->yujuAjaxResponse(json_encode($this->requestOfferAndStartCompare($fields)));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -414,7 +430,7 @@ class AdminYujuAuditController extends ModuleAdminController
         try {
             $reportId = (int) Tools::getValue('report_id');
             if ($reportId <= 0) {
-                $this->ajaxDie(json_encode(['success' => false, 'message' => 'report_id requerido']));
+                $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => 'report_id requerido']));
             }
 
             $service = new YujuProductGralReport();
@@ -422,7 +438,7 @@ class AdminYujuAuditController extends ModuleAdminController
 
             if (empty($poll['finished']) || empty($poll['success'])) {
                 $report = $service->getReport($reportId);
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxResponse(json_encode([
                     'success' => true,
                     'phase' => 'waiting',
                     'message' => $poll['message'] ?? 'Aún generando el JSONL…',
@@ -446,11 +462,11 @@ class AdminYujuAuditController extends ModuleAdminController
                 ]
             );
             $started['phase'] = 'compare';
-            $this->ajaxDie(json_encode($started));
+            $this->yujuAjaxResponse(json_encode($started));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -461,7 +477,7 @@ class AdminYujuAuditController extends ModuleAdminController
     {
         try {
             if (YujuConfig::get('YUJU_AUDIT_UI_ENABLED', 1) === '0') {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxResponse(json_encode([
                     'success' => false,
                     'message' => 'La interfaz gráfica de auditoría está deshabilitada en Configuración.',
                 ]));
@@ -469,7 +485,7 @@ class AdminYujuAuditController extends ModuleAdminController
 
             $reportId = (int) Tools::getValue('report_id');
             if ($reportId <= 0) {
-                $this->ajaxDie(json_encode([
+                $this->yujuAjaxResponse(json_encode([
                     'success' => false,
                     'message' => 'Seleccione un reporte completado para reanalizar.',
                 ]));
@@ -488,11 +504,11 @@ class AdminYujuAuditController extends ModuleAdminController
                 ]
             );
             $started['phase'] = 'compare';
-            $this->ajaxDie(json_encode($started));
+            $this->yujuAjaxResponse(json_encode($started));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -504,11 +520,11 @@ class AdminYujuAuditController extends ModuleAdminController
             $limit = (int) Tools::getValue('limit', YujuConfig::get('YUJU_AUDIT_CHUNK_SIZE', 75));
             $auditor = new YujuOfferAuditor();
             $result = $auditor->processChunk($runId, $limit);
-            $this->ajaxDie(json_encode($result));
+            $this->yujuAjaxResponse(json_encode($result));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -516,11 +532,11 @@ class AdminYujuAuditController extends ModuleAdminController
     {
         try {
             $auditor = new YujuOfferAuditor();
-            $this->ajaxDie(json_encode($auditor->pauseRun((int) Tools::getValue('run_id'))));
+            $this->yujuAjaxResponse(json_encode($auditor->pauseRun((int) Tools::getValue('run_id'))));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -528,11 +544,11 @@ class AdminYujuAuditController extends ModuleAdminController
     {
         try {
             $auditor = new YujuOfferAuditor();
-            $this->ajaxDie(json_encode($auditor->resumeRun((int) Tools::getValue('run_id'))));
+            $this->yujuAjaxResponse(json_encode($auditor->resumeRun((int) Tools::getValue('run_id'))));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -546,7 +562,7 @@ class AdminYujuAuditController extends ModuleAdminController
                 (string) Tools::getValue('search', '')
             );
             if (empty($result['success'])) {
-                $this->ajaxDie(json_encode($result));
+                $this->yujuAjaxResponse(json_encode($result));
             }
             // Descarga directa
             header('Content-Type: text/csv; charset=utf-8');
@@ -554,9 +570,9 @@ class AdminYujuAuditController extends ModuleAdminController
             echo $result['csv'];
             exit;
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -614,15 +630,15 @@ class AdminYujuAuditController extends ModuleAdminController
                 ];
             }
 
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxResponse(json_encode([
                 'success' => true,
                 'rows' => $ui,
                 'progress' => $auditor->getProgress($runId),
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
@@ -632,14 +648,14 @@ class AdminYujuAuditController extends ModuleAdminController
             $this->ensureAuditInfra();
             $runId = (int) Tools::getValue('run_id');
             $auditor = new YujuOfferAuditor();
-            $this->ajaxDie(json_encode([
+            $this->yujuAjaxResponse(json_encode([
                 'success' => true,
                 'progress' => $auditor->getProgress($runId),
             ]));
         } catch (Exception $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         } catch (Throwable $e) {
-            $this->ajaxDie(json_encode(['success' => false, 'message' => $e->getMessage()]));
+            $this->yujuAjaxResponse(json_encode(['success' => false, 'message' => $e->getMessage()]));
         }
     }
 
