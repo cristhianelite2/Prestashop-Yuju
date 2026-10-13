@@ -675,7 +675,7 @@ $(document).ready(function() {
     });
 });
 
-$('#btn-import-madkting-mappings').on('click',function(){if(!confirm('Importar referencias Madkting sin sobrescribir mapeos existentes. ¿Continuar?'))return;var b=$(this);b.prop('disabled',true);$.ajax({url:'{$ajax_url|escape:'javascript':'UTF-8'}',type:'POST',dataType:'json',data:{ajax:true,action:'importMadktingMappings',token:'{$token|escape:'javascript':'UTF-8'}'},success:function(r){alert(r.message);if(r.success)location.reload();else b.prop('disabled',false);},error:function(){alert('Error de importación.');b.prop('disabled',false);}});});
+$('#btn-import-madkting-mappings').on('click',function(){if(!confirm('Importar referencias Madkting sin sobrescribir mapeos existentes. ¿Continuar?'))return;var b=$(this);b.prop('disabled',true);$.ajax({url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},type:'POST',dataType:'json',data:{ajax:true,action:'importMadktingMappings',token: {/literal}'{$token|escape:'javascript':'UTF-8'}'{literal}},success:function(r){alert(r.message);if(r.success)location.reload();else b.prop('disabled',false);},error:function(){alert('Error de importación.');b.prop('disabled',false);}});});
 function deleteMapping(mappingId) {
     if (!confirm('¿Estás seguro de eliminar este mapeo?')) {
         return;
