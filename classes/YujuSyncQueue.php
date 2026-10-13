@@ -43,7 +43,7 @@ class YujuSyncQueue
 
             // Ya en cola (pending o processing) → actualizar datos del más antiguo, no insertar otro
             $existing = Db::getInstance()->getRow('
-                SELECT id, status
+                SELECT id, status, data
                 FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
                 WHERE prestashop_product_id = ' . $product_id . '
                   AND action = "' . pSQL($action) . '"
@@ -54,8 +54,30 @@ class YujuSyncQueue
             if ($existing) {
                 // Si está processing, no tocar el payload en vuelo; solo evitar duplicado
                 if ((string) $existing['status'] === 'pending') {
+                    $existingData = json_decode((string) ($existing['data'] ?? ''), true);
+                    if (!is_array($existingData)) {
+                        $existingData = [];
+                    }
+
+                    // Fusionar cambios pendientes del mismo producto para que un evento
+                    // de stock no borre un cambio de precio/nombre y viceversa.
+                    $mergedData = array_merge($existingData, $data);
+                    $dropFields = array_unique(array_merge(
+                        (array) ($existingData['drop_fields'] ?? []),
+                        (array) ($data['drop_fields'] ?? [])
+                    ));
+                    foreach (['stock', 'price', 'name', 'sku_simple', 'weight', 'description', 'short_description', 'ean'] as $field) {
+                        if (array_key_exists($field, $data)) {
+                            $dropFields = array_values(array_diff($dropFields, [$field]));
+                        }
+                    }
+                    foreach ($dropFields as $field) {
+                        unset($mergedData[$field]);
+                    }
+                    $mergedData['drop_fields'] = $dropFields;
+
                     Db::getInstance()->update('yuju_sync_queue', [
-                        'data' => pSQL(json_encode($data)),
+                        'data' => pSQL(json_encode($mergedData)),
                         'priority' => pSQL($priority),
                         'created_at' => date('Y-m-d H:i:s'),
                     ], 'id = ' . (int) $existing['id']);
@@ -480,12 +502,17 @@ class YujuSyncQueue
                         $price = (float) $payload['price'];
                         if (!is_finite($price) || $price <= 0) { unset($payload['price']); }
                     }
-                    if ($yujuId === '' || empty($payload)) {
+                    if ($yujuId === '') {
                         $send_res = [
                             'success' => false,
-                            'message' => $yujuId === '' ? 'El producto ya no tiene vínculo con Yuju.' : 'No hay campos válidos para enviar.',
+                            'message' => 'El producto ya no tiene vínculo con Yuju.',
                             'http_code' => 0,
                         ];
+                    } elseif (empty($payload) && !empty($data['drop_fields'])) {
+                        // No-op intencional: descartar un campo pendiente sin mandar datos inválidos.
+                        $send_res = ['success' => true, 'message' => 'Campos descartados; no fue necesaria una petición a Yuju.', 'http_code' => 0];
+                    } elseif (empty($payload)) {
+                        $send_res = ['success' => false, 'message' => 'No hay campos válidos para enviar.', 'http_code' => 0];
                     } else {
                         require_once dirname(__FILE__) . '/YujuApiClient.php';
                         $api = new YujuApiClient();
