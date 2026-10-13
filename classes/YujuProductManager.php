@@ -326,31 +326,99 @@ class YujuProductManager
             }
         }
 
+        // Build the status catalog from Yuju's report, not from the PrestaShop catalog.
+        // Parent products and each nested variation receive their own row; an unmatched
+        // Yuju item remains visible with prestashop_product_id = NULL.
+        $yuju_catalog_rows = [];
         foreach ($report_products as $report_product) {
-            $yuju_product_id = isset($report_product['id_product']) ? (string) $report_product['id_product'] : '';
-            if ($yuju_product_id === '' || !isset($selected_products[$yuju_product_id])
-                || isset($report_index['duplicate_ids'][$yuju_product_id])
-            ) {
+            $yuju_product_id = isset($report_product['id_product']) ? trim((string) $report_product['id_product']) : '';
+            if ($yuju_product_id === '') {
                 continue;
             }
 
-            $prestashop_product_id = $selected_products[$yuju_product_id];
-            $context = $contexts[$prestashop_product_id];
-            $result = $this->compareProductWithYujuReport($context, $report_product);
-            $result['prestashop_product_id'] = $prestashop_product_id;
-            $result['yuju_product_id'] = $yuju_product_id;
-            $result['sku'] = $context['display_sku'];
-            $result['name'] = $this->getProductDisplayName($context['product']);
+            $prestashop_product_id = isset($selected_products[$yuju_product_id])
+                && !isset($report_index['duplicate_ids'][$yuju_product_id])
+                ? (int) $selected_products[$yuju_product_id]
+                : null;
+            $catalog_status = 'pending';
+            $catalog_error = null;
+            $catalog_sync_enabled = 1;
 
-            $status_row = $context['status_row'];
-            if ($status_row && empty($status_row['sync_enabled'])) {
-                $result['status'] = 'disabled';
-                $result['reconciliation_status'] = 'disabled';
-                $result['syncable'] = false;
-                $result['message'] = 'La sincronización de este producto está deshabilitada en el módulo.';
+            if ($prestashop_product_id !== null && isset($contexts[$prestashop_product_id])) {
+                $context = $contexts[$prestashop_product_id];
+                $result = $this->compareProductWithYujuReport($context, $report_product);
+                $result['prestashop_product_id'] = $prestashop_product_id;
+                $result['yuju_product_id'] = $yuju_product_id;
+                $result['sku'] = $context['display_sku'];
+                $result['name'] = $this->getProductDisplayName($context['product']);
+
+                $status_row = $context['status_row'];
+                if ($status_row && empty($status_row['sync_enabled'])) {
+                    $result['status'] = 'disabled';
+                    $result['reconciliation_status'] = 'disabled';
+                    $result['syncable'] = false;
+                    $result['message'] = 'La sincronización de este producto está deshabilitada en el módulo.';
+                }
+                $catalog_status = isset($result['status']) ? $result['status'] : 'pending';
+                $catalog_error = isset($result['message']) ? $result['message'] : null;
+                $catalog_sync_enabled = $status_row && isset($status_row['sync_enabled']) ? (int) $status_row['sync_enabled'] : 1;
+                $results[$prestashop_product_id] = $result;
             }
 
-            $results[$prestashop_product_id] = $result;
+            $yuju_catalog_rows[] = [
+                'yuju_product_id' => $yuju_product_id,
+                'yuju_variation_id' => '',
+                'yuju_variation_sku' => null,
+                'prestashop_product_id' => $prestashop_product_id,
+                'sync_status' => $catalog_status,
+                'sync_enabled' => $catalog_sync_enabled,
+                'last_error' => $catalog_error,
+            ];
+
+            $variations = isset($report_product['variations']) && is_array($report_product['variations'])
+                ? $report_product['variations']
+                : [];
+            foreach ($variations as $variation) {
+                if (!is_array($variation)) {
+                    continue;
+                }
+                $variation_sku = isset($variation['sku']) && is_scalar($variation['sku'])
+                    ? trim((string) $variation['sku'])
+                    : '';
+                $variation_id = isset($variation['id_variation']) ? trim((string) $variation['id_variation'])
+                    : (isset($variation['variation_id']) ? trim((string) $variation['variation_id']) : '');
+                if ($variation_sku === '' && $variation_id === '') {
+                    continue;
+                }
+
+                // Stable Yuju variation ID when available; otherwise use its SKU as identity.
+                $variation_key = $variation_id !== '' ? $variation_id : 'sku:' . $variation_sku;
+                $variation_ps_id = $prestashop_product_id;
+                if ($variation_ps_id === null && $variation_sku !== '') {
+                    $normalized_sku = YujuProductReportReconciler::normalizeSku($variation_sku);
+                    $owners = isset($sku_owners[$normalized_sku]) ? array_keys($sku_owners[$normalized_sku]) : [];
+                    if (count($owners) === 1) {
+                        $variation_ps_id = (int) $owners[0];
+                    }
+                }
+
+                $variation_status = $variation_ps_id !== null && isset($results[$variation_ps_id])
+                    ? $results[$variation_ps_id]['status']
+                    : 'pending';
+                $variation_enabled = $variation_ps_id !== null && isset($contexts[$variation_ps_id]['status_row'])
+                    && $contexts[$variation_ps_id]['status_row']
+                    ? (int) $contexts[$variation_ps_id]['status_row']['sync_enabled']
+                    : 1;
+                $yuju_catalog_rows[] = [
+                    'yuju_product_id' => $yuju_product_id,
+                    'yuju_variation_id' => $variation_key,
+                    'yuju_variation_sku' => $variation_sku !== '' ? $variation_sku : null,
+                    'prestashop_product_id' => $variation_ps_id,
+                    'sync_status' => $variation_status,
+                    'sync_enabled' => $variation_enabled,
+                    'last_error' => null,
+                ];
+            }
         }
 
         $db = Db::getInstance();
@@ -359,11 +427,9 @@ class YujuProductManager
         }
 
         try {
-            foreach ($contexts as $prestashop_product_id => $context) {
-                $result = $results[$prestashop_product_id];
-                $current_yuju_id = $result['yuju_product_id'];
-                if (!$this->saveProductReportStatus($prestashop_product_id, $current_yuju_id, $result)) {
-                    throw new Exception('Could not save the synchronization state for PrestaShop product ' . (int) $prestashop_product_id . '.');
+            foreach ($yuju_catalog_rows as $catalog_row) {
+                if (!$this->saveYujuCatalogStatus($catalog_row)) {
+                    throw new Exception('Could not save Yuju catalog status for product ' . $catalog_row['yuju_product_id'] . '.');
                 }
             }
 
@@ -660,6 +726,41 @@ class YujuProductManager
             : '';
     }
 
+    /**
+     * Upsert one Yuju parent product or variation in the Yuju-centric status catalog.
+     */
+    protected function saveYujuCatalogStatus($row)
+    {
+        $db = Db::getInstance();
+        $yuju_product_id = pSQL((string) $row['yuju_product_id']);
+        $variation_id = pSQL((string) $row['yuju_variation_id']);
+        $existing = $db->getRow('
+            SELECT id FROM ' . _DB_PREFIX_ . 'yuju_product_status
+            WHERE yuju_product_id = "' . $yuju_product_id . '"
+              AND (yuju_variation_id = "' . $variation_id . '" OR (yuju_variation_id IS NULL AND "' . $variation_id . '" = ""))
+            ORDER BY id ASC
+        ');
+
+        $data = [
+            'prestashop_product_id' => $row['prestashop_product_id'] !== null ? (int) $row['prestashop_product_id'] : null,
+            'yuju_product_id' => $yuju_product_id,
+            'yuju_variation_id' => $variation_id,
+            'yuju_variation_sku' => $row['yuju_variation_sku'] !== null ? pSQL((string) $row['yuju_variation_sku']) : null,
+            'sync_status' => pSQL((string) $row['sync_status']),
+            'sync_enabled' => (int) $row['sync_enabled'],
+            'last_error' => $row['last_error'] !== null ? pSQL((string) $row['last_error']) : null,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ];
+
+        if ($existing) {
+            return $db->update('yuju_product_status', $data, 'id = ' . (int) $existing['id']);
+        }
+
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $data['last_sync_at'] = null;
+        return $db->insert('yuju_product_status', $data);
+    }
+
     protected function saveProductReportStatus($prestashop_product_id, $yuju_product_id, $result)
     {
         $db = Db::getInstance();
@@ -678,7 +779,6 @@ class YujuProductManager
         $data = [
             'yuju_product_id' => $yuju_product_id !== null && $yuju_product_id !== '' ? pSQL($yuju_product_id) : null,
             'sync_status' => pSQL($result['status']),
-            'sync_direction' => 'prestashop_to_yuju',
             'last_error' => $error !== null ? pSQL($error) : null,
             'last_sync_data' => pSQL(json_encode([
                 'differences' => array_values(array_unique($difference_fields)),
