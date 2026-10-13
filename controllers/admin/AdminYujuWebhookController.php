@@ -274,7 +274,14 @@ class AdminYujuWebhookController extends ModuleAdminController
 
         $color = isset($status_colors[$value]) ? $status_colors[$value] : 'default';
 
-        return '<span class="label label-' . $color . '">' . ucfirst($value) . '</span>';
+        $status_labels = [
+            'processing' => 'En proceso',
+            'processed' => 'Procesado',
+            'failed' => 'Fallido',
+        ];
+        $label = isset($status_labels[$value]) ? $status_labels[$value] : ucfirst((string) $value);
+
+        return '<span class="label label-' . $color . '">' . Tools::safeOutput($label) . '</span>';
     }
 
     protected function getWebhookUrl()
