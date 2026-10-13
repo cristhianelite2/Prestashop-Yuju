@@ -1,3 +1,8 @@
+## [1.1.14] - 2026-10-13
+### Corregido
+- La pantalla de mapeo de estados se sirve desde el controlador administrativo existente `AdminYuju`, evitando depender de una pestaña de administración que puede no estar registrada en instalaciones existentes.
+- El menú lateral dirige a la ruta autenticada de `AdminYuju` y conserva la importación de mapeos heredados en modo de solo lectura sobre Madkting.
+
 ## [1.1.13] - 2026-10-12
 
 ### Corregido
