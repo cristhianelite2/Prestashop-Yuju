@@ -29,9 +29,6 @@
         </span>
     </div>
     <div class="panel-body">
-        <p class="help-block">
-            Histórico en un solo archivo (<code>logs/yuju_bulk_offer_tasks.json</code>). El estado se consulta a Yuju automáticamente cada 15 segundos mientras haya tareas pendientes.
-        </p>
         <div class="table-responsive">
             <table class="table table-bordered table-striped table-condensed" id="yuju-bulk-offer-task-table">
                 <thead>
@@ -172,11 +169,6 @@
         <i class="icon-database"></i> Limpieza de datos históricos (solo tablas de log / auditoría)
     </div>
     <div class="panel-body">
-        <p class="help-block">
-            Permite borrar registros antiguos que <strong>no</strong> son necesarios para el funcionamiento del módulo
-            (historial de envíos, logs de sync, webhooks, cola ya terminada, etc.).
-            No modifica mapeos, tokens OAuth ni estados de productos.
-        </p>
         <button type="button" class="btn btn-warning" id="yuju-open-cleanup-modal" data-toggle="modal" data-target="#yujuCleanupModal">
             <i class="icon-trash"></i> Abrir asistente de limpieza…
         </button>
@@ -399,12 +391,6 @@
     </div>
     <div class="panel-body">
         <div class="row">
-            <div class="col-md-12">
-                <div class="alert alert-info">
-                    <i class="icon-info-circle"></i> 
-                    <strong>Sistema de Lotes Activo:</strong> Los cambios en productos (excepto precio/stock) se procesan por lotes cada 5 minutos.
-                </div>
-            </div>
         </div>
         <div class="row text-center">
             <div class="col-md-2">
