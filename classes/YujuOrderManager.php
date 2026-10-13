@@ -31,6 +31,8 @@ class YujuOrderManager
     private $logger;
     private $status_mapping;
     private $context;
+    /** @var string Último error al crear el transportista Yuju. */
+    private $lastCarrierError = '';
 
     /** @var array<string,int> Contador de locks anidados por yuju_order_id (GET_LOCK no es reentrante) */
     private $orderLocksHeld = [];
@@ -306,6 +308,12 @@ class YujuOrderManager
      *
      * @return int
      */
+    /** Devuelve el último motivo de fallo al crear el transportista. */
+    public function getLastCarrierError()
+    {
+        return $this->lastCarrierError;
+    }
+
     public function ensureYujuCarrierPublic()
     {
         $configuredId = (int) Configuration::get('YUJU_CARRIER_ID');
@@ -2398,6 +2406,7 @@ class YujuOrderManager
             $carrier->shipping_handling = 0;
             $carrier->range_behavior = 0;
             $carrier->is_free = 0;
+            $carrier->id_tax_rules_group = 0;
             // 2 = SHIPPING_METHOD_PRICE (rango por precio; tarifa base 0, costo real en el pedido)
             $carrier->shipping_method = 2;
             $carrier->max_width = 0;
@@ -2437,8 +2446,18 @@ class YujuOrderManager
 
             // Tiendas (multistore)
             $shopIds = Shop::getContextListShopID();
+            if (!is_array($shopIds) || empty($shopIds)) {
+                $shopIds = Shop::getShops(true, null, true);
+            }
+            if (!is_array($shopIds) || empty($shopIds)) {
+                $defaultShopId = (int) Configuration::get('PS_SHOP_DEFAULT');
+                if ($defaultShopId > 0) {
+                    $shopIds = [$defaultShopId];
+                }
+            }
+            $shopIds = array_values(array_unique(array_filter(array_map('intval', (array) $shopIds))));
             if (empty($shopIds)) {
-                $shopIds = [(int) $this->context->shop->id];
+                throw new Exception('No se pudo resolver ninguna tienda para asociar el transportista Yuju.');
             }
             foreach ($shopIds as $id_shop) {
                 Db::getInstance()->execute(
@@ -2484,8 +2503,9 @@ class YujuOrderManager
                 );
 
                 // delivery: precio 0 → flexible (gratis o se sobrescribe en el pedido)
-                $id_shop = (int) $this->context->shop->id;
-                $id_shop_group = (int) $this->context->shop->id_shop_group;
+                $id_shop = (int) $shopIds[0];
+                $shop = new Shop($id_shop);
+                $id_shop_group = Validate::isLoadedObject($shop) ? (int) $shop->id_shop_group : 0;
                 Db::getInstance()->execute(
                     'INSERT INTO `' . _DB_PREFIX_ . 'delivery`
                     (`id_carrier`, `id_range_price`, `id_range_weight`, `id_zone`, `id_shop`, `id_shop_group`, `price`)
@@ -2519,12 +2539,14 @@ class YujuOrderManager
 
             return (int) $carrier->id;
         } catch (Exception $e) {
-            $this->logger->error('Error al crear el transportista Yuju: ' . $e->getMessage(), ['file' => basename($e->getFile()), 'line' => $e->getLine()]);
-            error_log('[Yuju carrier] Error: ' . get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine());
+            $this->lastCarrierError = get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
+            $this->logger->error('Error al crear el transportista Yuju: ' . $this->lastCarrierError);
+            error_log('[Yuju carrier] Error: ' . $this->lastCarrierError);
             return 0;
         } catch (Throwable $e) {
-            $this->logger->error('Error al crear el transportista Yuju: ' . $e->getMessage(), ['file' => basename($e->getFile()), 'line' => $e->getLine()]);
-            error_log('[Yuju carrier] Error: ' . get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine());
+            $this->lastCarrierError = get_class($e) . ': ' . $e->getMessage() . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
+            $this->logger->error('Error al crear el transportista Yuju: ' . $this->lastCarrierError);
+            error_log('[Yuju carrier] Error: ' . $this->lastCarrierError);
             return 0;
         }
     }
