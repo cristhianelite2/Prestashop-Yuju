@@ -1242,7 +1242,7 @@ class Yuju extends Module
             if (empty(Configuration::get('YUJU_CLIENT_ID')) || empty(Configuration::get('YUJU_CLIENT_SECRET'))
                 || !(bool) Configuration::get('YUJU_ENABLE_AUTO_SYNC')) { return; }
             $status = Db::getInstance()->getRow(
-                'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status` WHERE prestashop_product_id = ' . $productId . ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)
+                'SELECT yuju_product_id FROM `' . _DB_PREFIX_ . 'yuju_product_status` WHERE prestashop_product_id = ' . $productId . ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'
             );
             if (!$status || trim((string) ($status['yuju_product_id'] ?? '')) === '') { return; }
             $detector = new YujuProductChangeDetector();
