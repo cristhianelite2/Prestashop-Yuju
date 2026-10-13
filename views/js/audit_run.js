@@ -561,6 +561,7 @@
 
         $tbody.html(html);
         refreshTooltips($tbody);
+        updateSelectionUi();
         $('#yuju-audit-filter-label').text(
             'Filtro: ' + filterLabel(activeFilter) +
             ' · mostrando ' + Math.min(rows.length, 400) + ' de ' + rows.length
@@ -650,20 +651,8 @@
         unlockUi();
         stopClock(progress && progress.duration_seconds);
         $('#yuju-audit-progress-bar').removeClass('active progress-bar-info').addClass('progress-bar-success');
-        var p = progress || {};
-        var mon = monitoringLink
-            ? ' · <a href="' + escapeHtml(monitoringLink) + '">Ver en Monitoreo</a>'
-            : '';
-        setStatus(
-            'success',
-            '<strong>Auditoría finalizada.</strong> ' +
-            'Sincronizados: ' + (p.matched || 0) +
-            ' · Diferencias: ' + (p.diff_found || 0) +
-            ' · Corregidos: ' + (p.fixed || 0) +
-            ' · Errores: ' + (p.errors || 0) +
-            ' · No encontrados: ' + (p.not_found || 0) +
-            ' · Tiempo: ' + (p.duration_human || formatDuration(elapsedMs())) + mon
-        );
+        // No mostrar el resumen verde de finalización: los resultados ya están en los KPI y la tabla.
+        $('#yuju-audit-status').remove();
         // Recargar desde BD (durante el run solo se streameron diffs / no_found)
         applyKpiFilter('diff');
     }
@@ -983,6 +972,7 @@
 
     function updateSelectionUi() {
         var count = $('.yuju-audit-select-product:checked').length;
+        $('#yuju-audit-selected-count').html('<i class="icon-check-square"></i> ' + count + ' seleccionado' + (count === 1 ? '' : 's'));
         $('#yuju-audit-update-selected-btn').prop('disabled', count === 0 || running);
     }
 
