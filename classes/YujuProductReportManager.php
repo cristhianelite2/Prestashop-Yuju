@@ -354,11 +354,12 @@ class YujuProductReportManager
             ];
 
             if (!$this->saveReportMetadata($state, 'offer')) {
-                $this->file_store->deleteJsonPayload($saved['cache_id']);
+                // Keep the downloaded JSON: a later retry can discover it locally
+                // and repair/replace its metadata row without downloading again.
                 return [
                     'success' => false,
                     'status' => 'failed',
-                    'message' => 'El archivo se descargó, pero no se pudieron registrar sus metadatos en la base de datos.',
+                    'message' => 'El archivo se descargó y se conservó, pero no se pudieron registrar sus metadatos en la base de datos. Reintenta para registrar el archivo existente sin volver a descargarlo.',
                 ];
             }
 
@@ -968,11 +969,22 @@ class YujuProductReportManager
             $extension = $report_type === 'offer' ? '.json' : '.jsonl';
             $relative_path = 'var/reports/' . $state['cache_id'] . $extension;
             $task_id = !empty($state['task_id']) ? (string) $state['task_id'] : null;
-            $where = "file_path = '" . pSQL($relative_path) . "'";
-            if ($task_id !== null) {
-                $where .= " OR id_task = '" . pSQL($task_id) . "'";
+            // For offer reports, replace the existing offer snapshot even when its
+            // cache filename changed. Older versions stored id_task='offer', so
+            // matching only by the new file_path attempted a second insert instead
+            // of updating the existing row (and could leave stale metadata behind).
+            $match_conditions = ["file_path = '" . pSQL($relative_path) . "'"];
+            if ($report_type === 'offer') {
+                $match_conditions[] = "report_type = 'offer'";
             }
-            $existing_id = (int) $db->getValue('SELECT id FROM ' . $table_sql . ' WHERE (' . $where . ') ORDER BY id DESC');
+            if ($task_id !== null) {
+                $match_conditions[] = "id_task = '" . pSQL($task_id) . "'";
+            }
+            $where = '(' . implode(' OR ', $match_conditions) . ')';
+            $existing_id = (int) $db->getValue(
+                'SELECT id FROM ' . $table_sql . ' WHERE ' . $where
+                . ($report_type === 'offer' ? " ORDER BY CASE WHEN report_type = 'offer' THEN 0 ELSE 1 END, id DESC" : ' ORDER BY id DESC')
+            );
 
             $downloaded_at = isset($state['report_downloaded_at']) ? (int) $state['report_downloaded_at'] : time();
             $meta = [
