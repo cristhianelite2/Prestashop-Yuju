@@ -106,10 +106,17 @@ class YujuProductReportReconciler
             }
 
             $field = isset($mapping['yuju_field']) ? $mapping['yuju_field'] : '';
-            if ($field === '' || !array_key_exists($field, $prestashop_data) || !array_key_exists($field, $yuju_data)) {
+            if ($field === '' || !array_key_exists($field, $prestashop_data)) {
                 if ($field !== '') {
-                    $comparison['uncomparable'][] = $field;
+                    $comparison['uncomparable'][] = $field . ' (no disponible en los datos de PrestaShop)';
                 }
+                continue;
+            }
+
+            // A report may legitimately omit fields that its endpoint does not expose.
+            // Do not block an update of comparable urgent fields (for example name) just
+            // because price or stock was not included in this particular report payload.
+            if (!array_key_exists($field, $yuju_data)) {
                 continue;
             }
 
