@@ -1594,7 +1594,18 @@ class YujuOfferAuditor
         $active = ['CREATED', 'PENDING', 'PROCESSING', 'IN_PROGRESS', 'RUNNING', 'QUEUED'];
         $changed = false;
         foreach ($store['tasks'] as $id => &$task) {
-            if (!in_array(strtoupper((string) ($task['status'] ?? '')), $active, true)) {
+            $currentStatus = strtoupper((string) ($task['status'] ?? ''));
+            if (!in_array($currentStatus, $active, true)) {
+                // También corrige mensajes antiguos de tareas terminales sin volver a consultar la API.
+                $currentMessage = self::getBulkOfferTaskStatusMessage(
+                    $currentStatus,
+                    $task['success_count'] ?? 0,
+                    $task['errors_count'] ?? 0
+                );
+                if (($task['message'] ?? '') !== $currentMessage) {
+                    $task['message'] = $currentMessage;
+                    $changed = true;
+                }
                 continue;
             }
             $response = $api->getBulkOfferTaskStatus($id);
