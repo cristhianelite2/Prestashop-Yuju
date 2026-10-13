@@ -333,6 +333,24 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
             'SELECT COUNT(*) FROM ' . bqSQL($tableName)
         );
 
+        // Si ya se marcó una importación exitosa, no volver a ofrecer el botón.
+        if ((bool) Configuration::get('PRESTASHOPYUJU_MADKTING_MAPPINGS_IMPORTED')) {
+            return ['available' => false, 'count' => $count];
+        }
+
+        // Reconocer importaciones realizadas antes de guardar el indicador: si todas las
+        // categorías PrestaShop de origen ya tienen un mapeo Yuju, no hay nada pendiente.
+        $unmapped = (int) Db::getInstance()->getValue(
+            'SELECT COUNT(*) FROM ' . bqSQL($tableName) . ' source
+             LEFT JOIN ' . _DB_PREFIX_ . 'yuju_category_mapping target
+               ON target.prestashop_category_id = source.id_category_prestashop
+             WHERE target.id IS NULL'
+        );
+        if ($unmapped === 0 && $count > 0) {
+            Configuration::updateValue('PRESTASHOPYUJU_MADKTING_MAPPINGS_IMPORTED', 1);
+            return ['available' => false, 'count' => $count];
+        }
+
         return ['available' => $count > 0, 'count' => $count];
     }
 
@@ -408,6 +426,9 @@ class AdminYujuCategoryMappingController extends ModuleAdminController
                     ++$response['errors'];
                 }
             }
+
+            // Persistir que el proceso de importación se ejecutó para ocultar el botón.
+            Configuration::updateValue('PRESTASHOPYUJU_MADKTING_MAPPINGS_IMPORTED', 1);
 
             $response['success'] = true;
             $response['message'] = 'Importación terminada. Importados: ' . $response['imported']
