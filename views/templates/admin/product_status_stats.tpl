@@ -1,4 +1,3 @@
-{block name="content"}
 <div class="panel panel-default yuju-module">
     <div class="panel-heading">
         <i class="icon-bar-chart"></i>
@@ -49,4 +48,4 @@
         {/if}
     </div>
 </div>
-{/block}
+
