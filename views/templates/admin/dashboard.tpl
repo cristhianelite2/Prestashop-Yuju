@@ -378,6 +378,7 @@
     $(function () {
         var ajaxUrl = '{$ajax_url|escape:'javascript':'UTF-8'}';
         var token = '{$token|escape:'javascript':'UTF-8'}';
+        var adminYujuToken = '{$admin_yuju_token|escape:'javascript':'UTF-8'}';
 
         function showUpdateAlert(type, message) {
             $('#yuju-update-alert')
@@ -435,7 +436,7 @@
                 type: 'POST',
                 dataType: 'json',
                 timeout: 60000,
-                data: { ajax: 1, action: 'checkUpdate', token: token }
+                data: { ajax: 1, action: 'CheckUpdate', token: adminYujuToken }
             }).done(function (response) {
                 if (response && response.success) {
                     applyUpdateStatus(response.data);
@@ -468,7 +469,7 @@
                 type: 'POST',
                 dataType: 'json',
                 timeout: 300000,
-                data: { ajax: 1, action: 'performUpdate', token: token }
+                data: { ajax: 1, action: 'PerformUpdate', token: adminYujuToken }
             }).done(function (response) {
                 if (response && response.success) {
                     showUpdateAlert('success', response.message || 'Actualización completada.');
