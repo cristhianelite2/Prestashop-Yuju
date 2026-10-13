@@ -1594,7 +1594,7 @@ class YujuOfferAuditor
             return [];
         }
 
-        $detailKeys = ['details', 'error_details', 'errors_details', 'errorDetails', 'errorsDetails', 'items', 'results', 'rows'];
+        $detailKeys = ['details', 'error_details', 'errors_details', 'errorDetails', 'errorsDetails', 'errors', 'items', 'results', 'rows'];
         foreach ($detailKeys as $key) {
             if (isset($payload[$key]) && is_array($payload[$key])) {
                 $candidate = $payload[$key];
