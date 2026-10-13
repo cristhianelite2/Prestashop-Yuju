@@ -139,7 +139,6 @@
                         <input type="text" id="yuju-audit-search" class="form-control" placeholder="Buscar por SKU o nombre del producto…">
                         <button type="button" id="yuju-audit-search-btn" aria-label="Buscar" title="Buscar"><i class="icon-search"></i></button>
                     </div>
-                    <small class="yuju-audit-filter-label" id="yuju-audit-filter-label">Filtro: todos</small>
                 </div>
                 <div class="yuju-audit-toolbar-actions">
                     <button type="button" class="btn yuju-audit-btn-update" id="yuju-audit-update-selected-btn" disabled>
@@ -198,7 +197,7 @@
             </div>
 
             <script type="application/json" id="yuju-audit-config">{$audit_js_config nofilter}</script>
-            <script type="text/javascript" src="{$module_dir|escape:'html':'UTF-8'}views/js/audit_run.js?v=20261013g"></script>
+            <script type="text/javascript" src="{$module_dir|escape:'html':'UTF-8'}views/js/audit_run.js?v=20261013h"></script>
         {/if}
     </div>
 </div>
