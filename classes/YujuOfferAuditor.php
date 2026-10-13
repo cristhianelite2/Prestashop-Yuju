@@ -32,6 +32,9 @@ class YujuOfferAuditor
     /** @var string */
     protected $cacheDir;
 
+    /** @var int */
+    protected $activeBulkRunId = 0;
+
     public function __construct()
     {
         $this->api = new YujuApiClient();
@@ -1674,6 +1677,75 @@ class YujuOfferAuditor
     }
 
     /**
+     * Envía ofertas en lote. Si Yuju rechaza un lote por validación de SKU,
+     * lo divide recursivamente para aislar los SKU problemáticos sin perder los válidos.
+     *
+     * Los errores de conexión/autorización/servidor no se reintentan por SKU para
+     * evitar multiplicar llamadas cuando el problema no depende de un producto.
+     */
+    protected function submitBulkOffersResiliently(array $offers)
+    {
+        $out = ['tasks' => [], 'failed' => []];
+        if (empty($offers)) {
+            return $out;
+        }
+
+        $response = $this->api->createBulkOfferTask($offers);
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $taskId = trim((string) ($data['id_task'] ?? ''));
+        $accepted = !empty($response['success']) && $taskId !== '';
+
+        if ($accepted) {
+            $status = strtoupper((string) ($data['status'] ?? 'CREATED'));
+            $skus = array_values(array_map(static function ($offer) {
+                return (string) ($offer['sku'] ?? '');
+            }, $offers));
+            $historySaved = self::recordBulkOfferTask([
+                'id_task' => $taskId,
+                'run_id' => (int) ($this->activeBulkRunId ?? 0),
+                'status' => $status,
+                'sku_count' => count($offers),
+                'total_rows' => count($offers),
+                'success_count' => 0,
+                'errors_count' => 0,
+                'message' => (string) ($data['message'] ?? 'Tarea masiva aceptada por Yuju.'),
+                'skus' => $skus,
+            ]);
+            $out['tasks'][] = [
+                'id_task' => $taskId,
+                'offers' => $offers,
+                'history_saved' => $historySaved,
+            ];
+            return $out;
+        }
+
+        $httpCode = (int) ($response['http_code'] ?? 0);
+        $apiStatus = strtoupper((string) ($data['status'] ?? ''));
+        $message = trim((string) ($response['message'] ?? 'Yuju rechazó la actualización masiva.'));
+        $validationRejection = in_array($httpCode, [400, 422], true)
+            || $apiStatus === 'REJECTED';
+
+        if ($validationRejection && count($offers) > 1) {
+            $middle = (int) floor(count($offers) / 2);
+            $left = $this->submitBulkOffersResiliently(array_slice($offers, 0, $middle));
+            $right = $this->submitBulkOffersResiliently(array_slice($offers, $middle));
+            return [
+                'tasks' => array_merge($left['tasks'], $right['tasks']),
+                'failed' => array_merge($left['failed'], $right['failed']),
+            ];
+        }
+
+        foreach ($offers as $offer) {
+            $out['failed'][] = [
+                'sku' => (string) ($offer['sku'] ?? ''),
+                'success' => false,
+                'message' => $message !== '' ? $message : 'Yuju rechazó este SKU.',
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Envía stock/precio de todos los productos seleccionados en una sola tarea masiva.
      * Las imágenes, cuando están habilitadas, se actualizan aparte porque no forman parte
      * del endpoint de ofertas masivas. PrestaShop sigue siendo la fuente de verdad.
@@ -1785,26 +1857,27 @@ class YujuOfferAuditor
         }
 
         if (!empty($bulkOffers)) {
-            $response = $this->api->createBulkOfferTask($bulkOffers);
-            $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-            $taskId = trim((string) ($data['id_task'] ?? ''));
-            if (!empty($response['success']) && $taskId !== '') {
-                $results['task_id'] = $taskId;
-                $results['submitted'] = count($bulkOffers);
-                $results['updated'] += count($bulkOffers);
-                $status = strtoupper((string) ($data['status'] ?? 'CREATED'));
-                $historySaved = self::recordBulkOfferTask([
-                    'id_task' => $taskId,
-                    'run_id' => $runId,
-                    'status' => $status,
-                    'sku_count' => count($bulkOffers),
-                    'total_rows' => count($bulkOffers),
-                    'success_count' => 0,
-                    'errors_count' => 0,
-                    'message' => (string) ($data['message'] ?? 'Tarea masiva aceptada por Yuju.'),
-                    'skus' => array_column($bulkOffers, 'sku'),
-                ]);
-                if (!$historySaved) {
+            $this->activeBulkRunId = $runId;
+            $bulkResult = $this->submitBulkOffersResiliently($bulkOffers);
+            unset($this->activeBulkRunId);
+
+            foreach ($bulkResult['tasks'] as $task) {
+                $taskId = (string) $task['id_task'];
+                $results['task_id'] = $results['task_id'] ?: $taskId;
+                $count = count($task['offers']);
+                $results['submitted'] += $count;
+                $results['updated'] += $count;
+
+                foreach ($task['offers'] as $offer) {
+                    $sku = (string) ($offer['sku'] ?? '');
+                    if (isset($bulkDetailIds[$sku])) {
+                        Db::getInstance()->update('yuju_audit_run_details', [
+                            'message' => pSQL('Enviado a tarea masiva de Yuju #' . $taskId . ' (pendiente de confirmación).'),
+                        ], 'id = ' . (int) $bulkDetailIds[$sku] . ' AND id_audit_run = ' . (int) $runId);
+                    }
+                }
+
+                if (empty($task['history_saved'])) {
                     $results['failed']++;
                     $results['items'][] = [
                         'sku' => '',
@@ -1812,23 +1885,16 @@ class YujuOfferAuditor
                         'message' => 'Yuju aceptó la tarea #' . $taskId . ', pero no se pudo guardar su histórico en logs/yuju_bulk_offer_tasks.json. Verifique permisos de escritura del directorio logs.',
                     ];
                 }
-                foreach ($bulkDetailIds as $sku => $detailId) {
-                    Db::getInstance()->update('yuju_audit_run_details', [
-                        'message' => pSQL('Enviado a tarea masiva de Yuju #' . $taskId . ' (pendiente de confirmación).'),
-                    ], 'id = ' . (int) $detailId . ' AND id_audit_run = ' . (int) $runId);
-                }
                 $results['items'][] = [
                     'sku' => '',
                     'success' => true,
-                    'message' => count($bulkOffers) . ' SKU enviados en una sola tarea masiva. ID de tarea: ' . $taskId,
+                    'message' => $count . ' SKU enviados en una tarea masiva. ID de tarea: ' . $taskId,
                 ];
-            } else {
-                $results['failed'] += count($bulkOffers);
-                $results['items'][] = [
-                    'sku' => '',
-                    'success' => false,
-                    'message' => (string) ($response['message'] ?? 'Yuju no aceptó la tarea masiva.'),
-                ];
+            }
+
+            foreach ($bulkResult['failed'] as $failedItem) {
+                $results['failed']++;
+                $results['items'][] = $failedItem;
             }
         }
 
