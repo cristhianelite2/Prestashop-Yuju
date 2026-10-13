@@ -1353,7 +1353,7 @@ class YujuProductManager
         $is_urgent_field = function($field) {
             $parts = explode('.', strtolower((string) $field));
             $name = preg_replace('/[\\s-]+/', '_', end($parts));
-            return in_array($name, ['name', 'product_name', 'stock', 'quantity', 'price'], true);
+            return in_array($name, ['stock', 'price'], true);
         };
 
         $results = [
@@ -1377,7 +1377,7 @@ class YujuProductManager
                     }
                 }
                 if (empty($urgent_parent_differences) && !$urgent_variation_differences) {
-                    $results['products'][] = ['prestashop_product_id' => $prestashop_product_id, 'status' => 'skipped', 'reason' => 'The selected product has no urgent name, stock, or price differences.'];
+                    $results['products'][] = ['prestashop_product_id' => $prestashop_product_id, 'status' => 'skipped', 'reason' => 'The selected product has no urgent stock or price differences.'];
                     continue;
                 }
             }
