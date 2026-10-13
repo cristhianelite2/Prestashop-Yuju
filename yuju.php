@@ -54,9 +54,9 @@ class Yuju extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->trans('Yuju', array(), 'Modules.Yuju.Admin');
-        $this->description = $this->trans('Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.', array(), 'Modules.Yuju.Admin');
-        $this->confirmUninstall = $this->trans('¿Seguro que deseas desinstalar el módulo Yuju? Se eliminarán los datos de sincronización.', array(), 'Modules.Yuju.Admin');
+        $this->displayName = 'Yuju';
+        $this->description = 'Conecta tu tienda PrestaShop con Yuju para sincronizar inventario, productos y pedidos.';
+        $this->confirmUninstall = '¿Seguro que deseas desinstalar el módulo Yuju? Se eliminarán los datos de sincronización.';
 
         // Initialize components
         // Temporarily commented for installation
@@ -776,15 +776,16 @@ class Yuju extends Module
         if ($done) {
             return true;
         }
-        $done = true;
 
         try {
             $existing = (int) Db::getInstance()->getValue(
                 'SELECT id_carrier FROM ' . _DB_PREFIX_ . 'carrier
                  WHERE name = "Yuju" AND deleted = 0
-                 ORDER BY id_carrier DESC'
+                 ORDER BY active DESC, id_carrier DESC'
             );
             if ($existing > 0) {
+                Configuration::updateValue('YUJU_CARRIER_ID', $existing);
+                $done = true;
                 return true;
             }
 
@@ -792,34 +793,30 @@ class Yuju extends Module
             $manager = new YujuOrderManager();
             $carrierId = (int) $manager->ensureYujuCarrierPublic();
 
-            if ($carrierId > 0) {
-                return true;
+            if ($carrierId <= 0) {
+                $message = '[Yuju install] No se creó el transportista Yuju. Revisa el registro de errores del módulo para ver el motivo.';
+                error_log($message);
+                try {
+                    PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
+                } catch (Throwable $loggingError) {
+                    // No reemplazar el error original por un fallo de logging.
+                }
+                return false;
             }
 
-            // El transportista es auxiliar: no debe impedir instalar el módulo.
-            $message = '[Yuju install] Advertencia: no se pudo crear el transportista Yuju. '
-                . 'La instalación continuará; revisa los permisos y los registros de PrestaShop.';
-            error_log($message);
-            try {
-                PrestaShopLogger::addLog($message, 2, null, 'Module', (int) $this->id, true);
-            } catch (Throwable $loggingError) {
-                // Mantener la instalación aunque no se pueda guardar la advertencia.
-            }
-
+            $done = true;
             return true;
         } catch (Throwable $e) {
-            $message = '[Yuju install] Advertencia al preparar el transportista: '
+            $message = '[Yuju install] Error al crear el transportista: '
                 . get_class($e) . ': ' . $e->getMessage()
-                . ' en ' . basename($e->getFile()) . ':' . $e->getLine()
-                . '. La instalación continuará.';
+                . ' en ' . basename($e->getFile()) . ':' . $e->getLine();
             error_log($message);
             try {
-                PrestaShopLogger::addLog($message, 2, null, 'Module', (int) $this->id, true);
+                PrestaShopLogger::addLog($message, 3, null, 'Module', (int) $this->id, true);
             } catch (Throwable $loggingError) {
-                // No bloquear la instalación por un fallo secundario de logging.
+                // No reemplazar el error original por un fallo de logging.
             }
-
-            return true;
+            return false;
         }
     }
 
