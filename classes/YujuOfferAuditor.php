@@ -1585,6 +1585,46 @@ class YujuOfferAuditor
     }
 
     /**
+     * Recupera los detalles por SKU aunque Yuju los anide bajo data/results/items.
+     * Se conserva también la respuesta completa para diagnóstico si Yuju solo devuelve contadores.
+     */
+    protected static function extractBulkOfferTaskDetails($payload)
+    {
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $detailKeys = ['details', 'error_details', 'errors_details', 'errorDetails', 'errorsDetails', 'items', 'results', 'rows'];
+        foreach ($detailKeys as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                $candidate = $payload[$key];
+                if (isset($candidate['sku']) || isset($candidate['SKU'])) {
+                    $candidate = [$candidate];
+                }
+                if (array_values($candidate) === $candidate && !empty($candidate)) {
+                    return $candidate;
+                }
+                if (!empty($candidate)) {
+                    $nested = self::extractBulkOfferTaskDetails($candidate);
+                    if (!empty($nested)) {
+                        return $nested;
+                    }
+                }
+            }
+        }
+
+        foreach ($payload as $value) {
+            if (is_array($value)) {
+                $nested = self::extractBulkOfferTaskDetails($value);
+                if (!empty($nested)) {
+                    return $nested;
+                }
+            }
+        }
+        return [];
+    }
+
+    /**
      * Actualiza el estado de las tareas activas y guarda el histórico en el mismo archivo.
      */
     public static function refreshBulkOfferTaskHistory()
@@ -1626,7 +1666,8 @@ class YujuOfferAuditor
                 'found_skus' => (int) ($data['found_skus'] ?? $data['data']['found_skus'] ?? ($task['found_skus'] ?? 0)),
                 'success_count' => (int) ($data['success'] ?? $data['data']['success'] ?? ($task['success_count'] ?? 0)),
                 'errors_count' => (int) ($data['errors'] ?? $data['data']['errors'] ?? ($task['errors_count'] ?? 0)),
-                'details' => $data['details'] ?? $data['data']['details'] ?? ($task['details'] ?? []),
+                'details' => self::extractBulkOfferTaskDetails($data) ?: ($task['details'] ?? []),
+                'api_response' => $data,
                 'updated_at' => date('Y-m-d H:i:s'),
             ];
             $oldStatus = strtoupper((string) ($task['status'] ?? ''));
