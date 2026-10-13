@@ -106,7 +106,16 @@ class YujuProductReportReconciler
             }
 
             $field = isset($mapping['yuju_field']) ? $mapping['yuju_field'] : '';
-            if ($field === '' || !array_key_exists($field, $prestashop_data)) {
+            $prestashop_field = isset($mapping['prestashop_field']) ? $mapping['prestashop_field'] : $field;
+
+            // Compare by the configured mapping. Reconciliation normally receives the
+            // already transformed Yuju payload, but accepting the original PrestaShop
+            // key here prevents accidental comparisons against the wrong field.
+            $prestashop_key = array_key_exists($field, $prestashop_data)
+                ? $field
+                : $prestashop_field;
+
+            if ($field === '' || !array_key_exists($prestashop_key, $prestashop_data)) {
                 if ($field !== '') {
                     $comparison['uncomparable'][] = $field;
                 }
@@ -121,10 +130,10 @@ class YujuProductReportReconciler
             }
 
             $field_type = isset($mapping['field_type']) ? $mapping['field_type'] : 'string';
-            if (!self::valuesEqual($prestashop_data[$field], $yuju_data[$field], $field_type)) {
+            if (!self::valuesEqual($prestashop_data[$prestashop_key], $yuju_data[$field], $field_type)) {
                 $comparison['differences'][] = [
                     'field' => $field,
-                    'prestashop' => $prestashop_data[$field],
+                    'prestashop' => $prestashop_data[$prestashop_key],
                     'yuju' => $yuju_data[$field],
                 ];
             }
@@ -289,7 +298,18 @@ class YujuProductReportReconciler
     private static function normalizeValue($value)
     {
         if (is_string($value)) {
-            return trim($value);
+            // Reportes de Yuju pueden serializar el mismo texto con entidades HTML,
+            // espacios repetidos o saltos de línea. Normalizar antes de declarar diferencias.
+            $value = html_entity_decode($value, ENT_QUOTES, 'UTF-8');
+            $value = preg_replace('/\\s+/u', ' ', trim($value));
+            if (class_exists('Normalizer')) {
+                $normalized = Normalizer::normalize($value, Normalizer::FORM_C);
+                if ($normalized !== false) {
+                    $value = $normalized;
+                }
+            }
+
+            return $value;
         }
 
         if (!is_array($value)) {

@@ -87,6 +87,33 @@ $mapped_name_comparison = YujuProductReportReconciler::compareMappedFields(
 );
 assertSameValue(['name', 'stock'], array_column($mapped_name_comparison['differences'], 'field'), 'Product name and canonical PrestaShop-to-Yuju fields must be compared using Yuju API names.');
 
+$mappedSourceField = YujuProductReportReconciler::compareMappedFields(
+    ['product_title' => 'Frente para HONDA NISSAN varios modelos 1990 al 2004'],
+    ['name' => 'Frente para HONDA NISSAN varios modelos 1990 al 2004'],
+    [
+        ['prestashop_field' => 'product_title', 'yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+    ]
+);
+assertSameValue([], $mappedSourceField['differences'], 'The configured PrestaShop field must be mapped to the Yuju field before comparison.');
+
+$sameNameAfterMappingNormalization = YujuProductReportReconciler::compareMappedFields(
+    ['name' => 'Frente para HONDA NISSAN varios modelos 1990 al 2004'],
+    ['name' => ' Frente para HONDA NISSAN varios modelos 1990 al 2004 '],
+    [
+        ['prestashop_field' => 'name', 'yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+    ]
+);
+assertSameValue([], $sameNameAfterMappingNormalization['differences'], 'The same mapped product name must not be reported as different because of surrounding whitespace.');
+
+$sameNameWithHtmlEntities = YujuProductReportReconciler::compareMappedFields(
+    ['name' => 'Repuesto & Accesorio'],
+    ['name' => 'Repuesto &amp; Accesorio'],
+    [
+        ['prestashop_field' => 'name', 'yuju_field' => 'name', 'field_type' => 'string', 'sync_direction' => 'prestashop_to_yuju', 'is_active' => 1],
+    ]
+);
+assertSameValue([], $sameNameWithHtmlEntities['differences'], 'Equivalent HTML-encoded and decoded product names must compare equal.');
+
 $variation_comparison = YujuProductReportReconciler::compareVariations(
     [
         ['sku' => 'TEE-M', 'size' => 'M', 'color' => 'blue', 'price' => 20, 'stock' => 3],
