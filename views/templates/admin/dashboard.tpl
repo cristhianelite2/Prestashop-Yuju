@@ -21,11 +21,11 @@
 {block name="content"}
 <div class="yuju-dashboard">
     {* Actualizaciones desde GitHub (rama main) *}
-    <div class="panel {if isset($update_status.update_available) && $update_status.update_available}panel-warning{else}panel-default{/if} yuju-dashboard-panel" id="yuju-update-panel">
+    <div class="panel panel-default yuju-dashboard-panel" id="yuju-update-panel">
         <div class="panel-heading">
-            <i class="icon-cloud-download"></i>
-            Actualizaciones del módulo
-            <span class="label {if isset($update_status.update_available) && $update_status.update_available}label-warning{else}label-success{/if}" id="yuju-update-badge">
+            <i class="icon-cloud-download text-muted"></i>
+            <span style="font-weight:normal; color:#777;">Actualizaciones</span>
+            <span class="label label-default" id="yuju-update-badge" style="font-weight:normal; font-size:10px;">
                 {if isset($update_status.update_available) && $update_status.update_available}Disponible{else}Al día{/if}
             </span>
         </div>
@@ -339,8 +339,7 @@
             var available = !!data.update_available;
 
             if (data.check_error) {
-                $badge.removeClass('label-success label-warning').addClass('label-danger').text('Error');
-                $panel.removeClass('panel-warning').addClass('panel-default');
+                $badge.removeClass('label-default').addClass('label-danger').text('Error');
                 $message.removeClass('text-success text-warning').addClass('text-danger')
                     .text('No se pudo comprobar.');
                 $('#yuju-perform-update').hide();
@@ -350,14 +349,12 @@
 
             $('#yuju-update-alert').hide();
             if (available) {
-                $badge.removeClass('label-success label-danger').addClass('label-warning').text('Disponible');
-                $panel.removeClass('panel-default').addClass('panel-warning');
+                $badge.removeClass('label-danger').addClass('label-default').text('Disponible');
                 $message.removeClass('text-success text-danger').addClass('text-warning')
                     .text('Cambios disponibles.');
                 $('#yuju-perform-update').show();
             } else {
-                $badge.removeClass('label-warning label-danger').addClass('label-success').text('Al día');
-                $panel.removeClass('panel-warning').addClass('panel-default');
+                $badge.removeClass('label-danger').addClass('label-default').text('Al día');
                 $message.removeClass('text-warning text-danger').addClass('text-success')
                     .text('Al día.');
                 $('#yuju-perform-update').hide();
@@ -377,7 +374,6 @@
             }).done(function (response) {
                 if (response && response.success) {
                     applyUpdateStatus(response.data);
-                    showUpdateAlert('success', response.message || 'Comprobación terminada.');
                 } else {
                     showUpdateAlert('danger', response && response.message ? response.message : 'No se pudieron comprobar las actualizaciones.');
                 }
