@@ -1,3 +1,11 @@
+## [1.1.21] - 2026-10-13
+### Integrado
+- Se recupera la interfaz avanzada de **Estado de Productos** desde `belltec`: filtros, listado paginado, selección masiva, detalles e historial.
+- Se conserva el panel de estadísticas como resumen independiente encima del listado.
+- Se agregan los controladores AJAX y las dependencias de historial/detalle necesarias para la interfaz.
+- Se mantiene el botón **Buscar actualizaciones** del panel principal.
+- No se modifican tablas externas de Yuju ni se agregan migraciones de base de datos.
+
 ## [1.1.20] - 2026-10-13
 ### Corregido
 - Se restaura el panel de **Estado de Productos** con tarjetas de totales, porcentaje de sincronización, última actividad, actividad reciente y errores recientes, seguido del listado detallado de productos.
