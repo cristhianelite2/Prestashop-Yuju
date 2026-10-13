@@ -75,6 +75,12 @@
                                 Estado de Productos
                             </a>
                         </li>
+                        <li class="{if $current_controller == 'AdminYujuProductCategoryStatus'}active{/if}">
+                            <a href="{$link->getAdminLink('AdminYujuProductCategoryStatus')|escape:'html':'UTF-8'}">
+                                <i class="icon-folder-open"></i>
+                                Estado de productos por categoría
+                            </a>
+                        </li>
                         <li class="{if $current_controller == 'AdminYujuWebhook'}active{/if}">
                             <a href="{$link->getAdminLink('AdminYujuWebhook')|escape:'html':'UTF-8'}">
                                 <i class="icon-link"></i>
