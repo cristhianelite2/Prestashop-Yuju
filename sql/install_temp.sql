@@ -81,7 +81,6 @@ CREATE TABLE IF NOT EXISTS `ps_yuju_product_status` (
     KEY `idx_prestashop_product` (`prestashop_product_id`),
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_yuju_variation_sku` (`yuju_variation_sku`),
-    UNIQUE KEY `unique_yuju_catalog_item` (`yuju_product_id`, `yuju_variation_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
