@@ -10,6 +10,36 @@ class YujuSyncQueue
     {
         require_once dirname(__FILE__) . '/YujuLogger.php';
         $this->logger = new YujuLogger();
+        $this->ensureVariationQueueColumn();
+    }
+
+    /**
+     * Compatibilidad con instalaciones existentes: identifica cada combinación
+     * como una entidad independiente dentro de la cola.
+     */
+    private function ensureVariationQueueColumn()
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        try {
+            $column = Db::getInstance()->executeS(
+                'SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'yuju_sync_queue` LIKE \'prestashop_product_attribute_id\''
+            );
+            if (empty($column)) {
+                Db::getInstance()->execute(
+                    'ALTER TABLE `' . _DB_PREFIX_ . 'yuju_sync_queue`
+                     ADD COLUMN `prestashop_product_attribute_id` INT(11) NOT NULL DEFAULT 0
+                     AFTER `prestashop_product_id`'
+                );
+            }
+        } catch (Throwable $e) {
+            $this->logger->warning('No se pudo preparar la columna de variaciones en la cola', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
     
     /**
@@ -31,6 +61,7 @@ class YujuSyncQueue
                 $data = [];
             }
             $forceResend = !empty($data['force_resend_create']);
+            $attributeId = max(0, (int) ($data['id_product_attribute'] ?? 0));
 
             // defer=1 permite que el worker ejecute la API fuera del hook de PrestaShop.
             if ($priority === 'high' && empty($data['defer'])) {
@@ -46,6 +77,7 @@ class YujuSyncQueue
                 SELECT id, status, data
                 FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
                 WHERE prestashop_product_id = ' . $product_id . '
+                  AND prestashop_product_attribute_id = ' . $attributeId . '
                   AND action = "' . pSQL($action) . '"
                   AND status IN ("pending", "processing")
                 ORDER BY id ASC
@@ -84,7 +116,7 @@ class YujuSyncQueue
                 }
 
                 // Cancelar cualquier otro pending duplicado del mismo producto+acción
-                $this->cancelDuplicatePendingItems($product_id, $action, (int) $existing['id']);
+                $this->cancelDuplicatePendingItems($product_id, $action, (int) $existing['id'], $attributeId);
 
                 $this->logger->info('Cola: Sin duplicar — registro activo actualizado/reutilizado', [
                     'queue_id' => $existing['id'],
@@ -113,6 +145,7 @@ class YujuSyncQueue
 
             Db::getInstance()->insert('yuju_sync_queue', [
                 'prestashop_product_id' => $product_id,
+                'prestashop_product_attribute_id' => $attributeId,
                 'action' => pSQL($action),
                 'priority' => pSQL($priority),
                 'status' => 'pending',
@@ -124,7 +157,7 @@ class YujuSyncQueue
 
             $newId = (int) Db::getInstance()->Insert_ID();
             if ($newId > 0) {
-                $this->cancelDuplicatePendingItems($product_id, $action, $newId);
+                $this->cancelDuplicatePendingItems($product_id, $action, $newId, $attributeId);
             }
 
             $this->logger->info('Cola: Producto agregado', [
@@ -153,7 +186,7 @@ class YujuSyncQueue
      *
      * @return void
      */
-    protected function cancelDuplicatePendingItems($product_id, $action, $keepId)
+    protected function cancelDuplicatePendingItems($product_id, $action, $keepId, $attributeId = 0)
     {
         $product_id = (int) $product_id;
         $keepId = (int) $keepId;
@@ -167,6 +200,7 @@ class YujuSyncQueue
                 error_message = "Cancelado: duplicado en cola (mismo producto/acción)",
                 processed_at = "' . pSQL(date('Y-m-d H:i:s')) . '"
             WHERE prestashop_product_id = ' . $product_id . '
+              AND prestashop_product_attribute_id = ' . (int) $attributeId . '
               AND action = "' . pSQL($action) . '"
               AND status = "pending"
               AND id <> ' . $keepId
