@@ -198,8 +198,9 @@ class YujuOfferAuditor
                 continue;
             }
 
+            // Db::getValue() agrega LIMIT 1 automáticamente; no incluirlo en el SQL.
             $exists = $db->getValue(
-                "SELECT id FROM " . bqSQL($table) . " WHERE yuju_product_id = '" . pSQL($yujuId) . "' LIMIT 1"
+                "SELECT id FROM " . bqSQL($table) . " WHERE yuju_product_id = '" . pSQL($yujuId) . "'"
             );
             if ($exists) {
                 $stats['existing']++;
