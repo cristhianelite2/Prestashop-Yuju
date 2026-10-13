@@ -796,7 +796,7 @@ class AdminYujuWebhookController extends ModuleAdminController
         parent::setMedia($isNewTheme);
 
         if ($this->module) {
-            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css?v=20261013-webhook-redesign');
             $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
         }
     }
