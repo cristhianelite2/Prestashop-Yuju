@@ -448,7 +448,8 @@ class YujuProductManager
 
         $report = [
             'total' => count($contexts),
-            'yuju_total' => isset($report_index['product_count']) ? (int) $report_index['product_count'] : 0,
+            // Count parent products plus each nested Yuju variation shown in the catalog table.
+            'yuju_total' => count($yuju_catalog_rows),
             'synced_count' => 0,
             'unsynced_count' => 0,
             'disabled_count' => 0,
