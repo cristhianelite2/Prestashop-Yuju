@@ -107,7 +107,7 @@
         busy = true;
         $.ajax({
             url: endpoint, type: 'POST', dataType: 'json', timeout: 60000,
-            data: {ajax: 1, action: 'refreshBulkOfferTasks'}
+            data: {ldelim}ajax: 1, action: 'refreshBulkOfferTasks'{rdelim}
         }).done(function (response) {
             if (response && response.success) {
                 renderTasks(response.tasks || []);
@@ -132,7 +132,7 @@
             var id = String($(this).attr('data-task-id') || '');
             $.ajax({
                 url: endpoint, type: 'POST', dataType: 'json',
-                data: {ajax: 1, action: 'refreshBulkOfferTasks'}
+                data: {ldelim}ajax: 1, action: 'refreshBulkOfferTasks'{rdelim}
             }).done(function (response) {
                 var task = null;
                 (response.tasks || []).some(function (candidate) {
