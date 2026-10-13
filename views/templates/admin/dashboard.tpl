@@ -53,7 +53,7 @@
                         <i class="icon-refresh"></i> Buscar actualizaciones
                     </button>
                     <br>
-                    <button type="button" class="btn btn-warning" id="yuju-perform-update" {if !isset($update_status.update_available) || !$update_status.update_available}style="display:none;"{/if}>
+                    <button type="button" class="btn btn-default btn-sm" id="yuju-perform-update" style="color:#666; border-color:#ddd; background:#f7f7f7; padding:4px 8px; font-size:11px; {if !isset($update_status.update_available) || !$update_status.update_available}display:none;{/if}">
                         <i class="icon-download"></i> Obtener actualizaciones
                     </button>
                 </div>
