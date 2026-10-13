@@ -47,8 +47,11 @@ class AdminYujuLogsController extends ModuleAdminController
         $logs = $this->getLogs();
         $queue_stats = $this->getQueueStats();
         $sync_history_errors = $this->getRecentSyncHistoryErrors(40);
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
+        $bulk_offer_tasks = YujuOfferAuditor::refreshBulkOfferTaskHistory();
 
         $this->context->smarty->assign([
+            'bulk_offer_tasks' => $bulk_offer_tasks,
             'logs' => $logs,
             'queue_stats' => $queue_stats,
             'sync_history_errors' => $sync_history_errors,
@@ -66,6 +69,9 @@ class AdminYujuLogsController extends ModuleAdminController
         if (Tools::isSubmit('ajax') && Tools::getValue('ajax')) {
             $action = (string) Tools::getValue('action');
             switch ($action) {
+                case 'refreshBulkOfferTasks':
+                    $this->ajaxProcessRefreshBulkOfferTasks();
+                    break;
                 case 'getCleanupStats':
                     $this->ajaxProcessGetCleanupStats();
                     break;
@@ -77,6 +83,14 @@ class AdminYujuLogsController extends ModuleAdminController
         }
 
         return parent::postProcess();
+    }
+
+    protected function ajaxProcessRefreshBulkOfferTasks()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
+        $tasks = YujuOfferAuditor::refreshBulkOfferTaskHistory();
+        die(json_encode(['success' => true, 'tasks' => $tasks], JSON_UNESCAPED_UNICODE));
     }
 
     /**
