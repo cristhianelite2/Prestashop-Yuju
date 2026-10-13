@@ -45,39 +45,52 @@ class YujuOrderManager
     {
         $this->status_mapping = [
             'ps_to_yuju' => [
-                '1' => 'pending',           // Payment accepted
-                '2' => 'processing',        // Payment error
-                '3' => 'processing',        // Preparation in progress
-                '4' => 'shipped',           // Shipped
-                '5' => 'delivered',         // Delivered
-                '6' => 'cancelled',         // Canceled
-                '7' => 'refunded',          // Refunded
-                '8' => 'error',             // Payment error
-                '9' => 'processing',        // On backorder (paid)
-                '10' => 'processing',       // Awaiting bank wire payment
-                '11' => 'processing',       // Remote payment accepted
-                '12' => 'processing',       // On backorder (not paid)
+                '1' => 'pending',
+                '2' => 'processing',
+                '3' => 'processing',
+                '4' => 'shipped',
+                '5' => 'delivered',
+                '6' => 'canceled',
+                '7' => 'refunded',
+                '8' => 'error',
+                '9' => 'processing',
+                '10' => 'processing',
+                '11' => 'processing',
+                '12' => 'processing',
             ],
             'yuju_to_ps' => [
-                'pending' => '1',           // Payment accepted
-                'processing' => '3',        // Preparation in progress
-                'shipped' => '4',           // Shipped
-                'delivered' => '5',         // Delivered
-                'cancelled' => '6',         // Canceled
-                'refunded' => '7',          // Refunded
-                'error' => '8',             // Payment error
+                'pending' => '1',
+                'processing' => '3',
+                'shipped' => '4',
+                'delivered' => '5',
+                'canceled' => '6',
+                'cancelled' => '6',
+                'refunded' => '7',
+                'error' => '8',
             ],
         ];
 
-        // Load custom mappings from database if they exist
+        // Only active mappings are applied. Stable order makes legacy imports deterministic.
         $custom_mappings = Db::getInstance()->executeS('
-        SELECT prestashop_status_id, yuju_status_name
-        FROM ' . _DB_PREFIX_ . 'yuju_order_status_mapping
+            SELECT prestashop_status_id, yuju_status_name
+            FROM ' . _DB_PREFIX_ . 'yuju_order_status_mapping
+            WHERE is_active = 1
+            ORDER BY id ASC
         ');
 
         foreach ($custom_mappings as $mapping) {
-            $this->status_mapping['ps_to_yuju'][$mapping['prestashop_status_id']] = $mapping['yuju_status_name'];
-            $this->status_mapping['yuju_to_ps'][$mapping['yuju_status_name']] = $mapping['prestashop_status_id'];
+            $psStatusId = (string) (int) $mapping['prestashop_status_id'];
+            $yujuStatus = strtolower(trim((string) $mapping['yuju_status_name']));
+            if ($yujuStatus === 'cancelled') {
+                $yujuStatus = 'canceled';
+            }
+
+            // The first mapping for a PrestaShop status wins; don't silently override
+            // a mapping when several legacy rows point to different Yuju statuses.
+            if (!isset($this->status_mapping['ps_to_yuju'][$psStatusId]) || $psStatusId === '') {
+                $this->status_mapping['ps_to_yuju'][$psStatusId] = $yujuStatus;
+            }
+            $this->status_mapping['yuju_to_ps'][$yujuStatus] = $psStatusId;
         }
     }
 
@@ -652,6 +665,11 @@ class YujuOrderManager
 
     protected function mapYujuStatusToPrestaShop($yuju_status)
     {
+        $yuju_status = strtolower(trim((string) $yuju_status));
+        if ($yuju_status === 'cancelled') {
+            $yuju_status = 'canceled';
+        }
+
         return isset($this->status_mapping['yuju_to_ps'][$yuju_status])
             ? $this->status_mapping['yuju_to_ps'][$yuju_status]
             : Configuration::get('PS_OS_PREPARATION');
