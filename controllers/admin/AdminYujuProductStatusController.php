@@ -284,11 +284,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 WHERE id = ' . (int) $status_id
                 );
 
-                if ($status) {
-                    $prestashop_product_ids[] = $status['prestashop_product_id'];
+                if ($status && !empty($status['prestashop_product_id'])) {
+                    $prestashop_product_ids[] = (int) $status['prestashop_product_id'];
                 }
             }
 
+            $prestashop_product_ids = array_values(array_unique($prestashop_product_ids));
             if (!empty($prestashop_product_ids)) {
                 $results = $this->product_manager->syncSpecificProducts($prestashop_product_ids);
 
@@ -300,6 +301,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 } else {
                     $this->errors[] = 'Error en la sincronización: ' . implode(', ', $results['errors']);
                 }
+            } else {
+                $this->errors[] = 'Los registros seleccionados no tienen un producto enlazado en PrestaShop.';
             }
         } catch (Exception $e) {
             $this->errors[] = 'Error de sincronización: ' . $e->getMessage();
