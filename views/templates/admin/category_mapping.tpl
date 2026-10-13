@@ -66,7 +66,6 @@
                         <th>Categoría Padre</th>
                         <th>Categoría Yuju</th>
                         <th>Estado de Sincronización</th>
-                        <th>Última Sincronización</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -106,32 +105,20 @@
                                     {/if}
                                 </td>
                                 <td>
-                                    {if $mapping.last_sync_date}
-                                        {$mapping.last_sync_date|date_format:'%d/%m/%Y %H:%M'}
-                                    {else}
-                                        <span class="text-muted">Nunca</span>
-                                    {/if}
-                                </td>
-                                <td>
                                     <div class="btn-group">
-                                        <button type="button" class="btn btn-default btn-sm btn-edit-mapping" data-mapping-id="{$mapping.id}">
-                                            <i class="icon-edit"></i> Editar
+                                        <button type="button" class="btn btn-default btn-sm btn-edit-mapping" data-mapping-id="{$mapping.id}" title="Editar" aria-label="Editar">
+                                            <i class="icon-edit"></i>
                                         </button>
-                                        <button type="button" class="btn btn-danger btn-sm btn-delete-mapping" data-mapping-id="{$mapping.id}">
-                                            <i class="icon-trash"></i> Eliminar
+                                        <button type="button" class="btn btn-danger btn-sm btn-delete-mapping" data-mapping-id="{$mapping.id}" title="Eliminar" aria-label="Eliminar">
+                                            <i class="icon-trash"></i>
                                         </button>
-                                        {if $mapping.sync_status != 'synced'}
-                                            <button type="button" class="btn btn-success btn-sm btn-sync-single" data-mapping-id="{$mapping.id}">
-                                                <i class="icon-refresh"></i> Sincronizar
-                                            </button>
-                                        {/if}
                                     </div>
                                 </td>
                             </tr>
                         {/foreach}
                     {else}
                         <tr>
-                            <td colspan="7" class="text-center">
+                            <td colspan="6" class="text-center">
                                 <p class="text-muted">No hay mapeos de categorías configurados.</p>
                                 <button type="button" class="btn btn-primary" id="btn-create-first-mapping">
                                     <i class="icon-plus"></i> Crear Primer Mapeo
