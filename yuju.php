@@ -1033,7 +1033,7 @@ class Yuju extends Module
             // Cero es válido; usar la BD solo si el hook no incluyó quantity.
             $stock = array_key_exists('quantity', $params)
                 ? (int) $params['quantity']
-                : (int) StockAvailable::getQuantityAvailableByProduct($productId);
+                : (int) StockAvailable::getQuantityAvailableByProduct($productId, $attributeId);
             $stock = max(0, $stock);
             // La petición HTTP se ejecuta en cron/process_queue.php, no en checkout/guardado.
             $queue = new YujuSyncQueue();
