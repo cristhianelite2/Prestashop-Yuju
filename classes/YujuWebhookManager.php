@@ -405,7 +405,8 @@ class YujuWebhookManager
                 return $this->product_manager->syncSingleProductFromYuju($product_data, true);
             }
             if ($legacy === 'product.deleted') {
-                return $this->handleProductDeletion($webhook_data['data'] ?? []);
+                $this->logger->log('Webhook legacy product.deleted ignorado por política unidireccional.', 'warning');
+                return ['success' => true, 'direction_blocked' => true, 'message' => 'El evento no modifica el catálogo local.'];
             }
         }
 
@@ -416,9 +417,8 @@ class YujuWebhookManager
                 return array_merge(['topic' => $topic], $confirm);
 
             case 'product-deleted':
-                $confirm = $this->product_manager->confirmProductDeletedFromWebhook($resource_id, $sku, $parent_id);
-
-                return array_merge(['topic' => $topic], $confirm);
+                $this->logger->log('Webhook product-deleted de Yuju ignorado: PrestaShop es la fuente de verdad del catálogo.', 'warning');
+                return ['topic' => $topic, 'success' => true, 'direction_blocked' => true, 'message' => 'El evento no modifica PrestaShop ni su índice de sincronización.'];
 
             case 'products-gral-report':
                 require_once dirname(__FILE__) . '/YujuProductGralReport.php';
@@ -467,11 +467,6 @@ class YujuWebhookManager
             'direction_blocked' => true,
         ];
 
-        return [
-            'success' => true,
-            'product_id' => $product_id,
-            'new_quantity' => $stock_data['quantity'],
-        ];
     }
 
     /**
@@ -479,38 +474,12 @@ class YujuWebhookManager
      */
     protected function processPriceWebhook($webhook_data, $topic = null)
     {
-        $price_data = $webhook_data['data'];
-
-        // Find PrestaShop product
-        $product_id = $this->findProductByYujuId($price_data['product_id']);
-
-        if (!$product_id) {
-            throw new Exception('Product not found for Yuju ID: ' . $price_data['product_id']);
-        }
-
-        // Update price
-        $product = new Product($product_id);
-
-        if (!Validate::isLoadedObject($product)) {
-            throw new Exception('Product not found in PrestaShop: ' . $product_id);
-        }
-
-        $product->price = (float) $price_data['price'];
-
-        if (isset($price_data['cost_price'])) {
-            $product->wholesale_price = (float) $price_data['cost_price'];
-        }
-
-        if (!$product->save()) {
-            throw new Exception('Failed to save product price');
-        }
-
-        $this->logger->log('Updated price for product ' . $product_id . ': ' . $price_data['price'], 'info');
-
+        // Política unidireccional: los precios siempre se originan en PrestaShop.
+        $this->logger->log('Webhook de precio de Yuju recibido e ignorado; no se modifica PrestaShop.', 'warning');
         return [
             'success' => true,
-            'product_id' => $product_id,
-            'new_price' => $price_data['price'],
+            'message' => 'Webhook recibido; precio no aplicado en PrestaShop por política unidireccional.',
+            'direction_blocked' => true,
         ];
     }
 
@@ -519,20 +488,13 @@ class YujuWebhookManager
      */
     protected function processCategoryWebhook($webhook_data, $topic = null)
     {
-        $event_type = $webhook_data['event'];
-        $category_data = $webhook_data['data'];
-
-        switch ($event_type) {
-            case 'category.created':
-            case 'category.updated':
-                return $this->syncCategoryFromWebhook($category_data);
-
-            case 'category.deleted':
-                return $this->handleCategoryDeletion($category_data);
-
-            default:
-                throw new Exception('Unknown category webhook event: ' . $event_type);
-        }
+        // Política unidireccional: las categorías se envían desde PrestaShop a Yuju.
+        $this->logger->log('Webhook de categoría de Yuju recibido e ignorado; no se modifica PrestaShop.', 'warning');
+        return [
+            'success' => true,
+            'message' => 'Webhook recibido; categoría no aplicada en PrestaShop por política unidireccional.',
+            'direction_blocked' => true,
+        ];
     }
 
     /**
