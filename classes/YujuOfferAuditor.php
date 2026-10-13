@@ -154,6 +154,103 @@ class YujuOfferAuditor
      *
      * @return array
      */
+    /**
+     * Importa el reporte al índice de estado solo cuando el ID Yuju no existe todavía.
+     * Resuelve SKU contra product.reference y product_attribute.reference (variaciones).
+     * No modifica filas existentes ni cambia productos de PrestaShop.
+     */
+    protected function importReportProductsToStatusTable(array $offers)
+    {
+        $db = Db::getInstance();
+        $table = _DB_PREFIX_ . 'yuju_product_status';
+        $stats = ['inserted' => 0, 'existing' => 0, 'unmapped' => 0, 'skipped' => 0];
+
+        $tableExists = $db->executeS("SHOW TABLES LIKE '" . pSQL($table) . "'");
+        if (empty($tableExists)) {
+            return $stats;
+        }
+
+        // Permitir varias variaciones por producto padre y productos sin mapeo local.
+        try {
+            $db->execute('ALTER TABLE ' . bqSQL($table) . ' MODIFY prestashop_product_id INT(11) NULL');
+            $indexes = $db->executeS("SHOW INDEX FROM " . bqSQL($table) . " WHERE Key_name = 'unique_prestashop_product'");
+            if (!empty($indexes)) {
+                $db->execute('ALTER TABLE ' . bqSQL($table) . ' DROP INDEX unique_prestashop_product');
+            }
+        } catch (Exception $e) {
+            $this->logger->warning('No se pudo preparar yuju_product_status para variaciones: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->logger->warning('No se pudo preparar yuju_product_status para variaciones: ' . $e->getMessage());
+        }
+
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                $stats['skipped']++;
+                continue;
+            }
+            $yujuId = $offer['id'] ?? ($offer['id_product'] ?? null);
+            $yujuId = is_scalar($yujuId) ? trim((string) $yujuId) : '';
+            if ($yujuId === '') {
+                $stats['skipped']++;
+                continue;
+            }
+
+            $exists = $db->getValue(
+                "SELECT id FROM " . bqSQL($table) . " WHERE yuju_product_id = '" . pSQL($yujuId) . "' LIMIT 1"
+            );
+            if ($exists) {
+                $stats['existing']++;
+                continue;
+            }
+
+            $sku = trim((string) ($offer['sku'] ?? ($offer['sku_simple'] ?? '')));
+            $psProductId = null;
+            if ($sku !== '') {
+                $psProductId = (int) $db->getValue(
+                    "SELECT id_product FROM " . _DB_PREFIX_ . "product WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                );
+                if ($psProductId <= 0) {
+                    $psProductId = (int) $db->getValue(
+                        "SELECT id_product FROM " . _DB_PREFIX_ . "product_attribute WHERE reference = '" . pSQL($sku) . "' ORDER BY id_product ASC"
+                    );
+                }
+                if ($psProductId <= 0) {
+                    $psProductId = null;
+                }
+            }
+
+            $now = date('Y-m-d H:i:s');
+            $data = [
+                'prestashop_product_id' => $psProductId,
+                'yuju_product_id' => pSQL($yujuId),
+                'sync_status' => 'synced',
+                'last_sync_at' => null,
+                'last_sync_data' => pSQL(json_encode([
+                    'source' => 'audit_report',
+                    'sku' => $sku !== '' ? $sku : null,
+                    'name' => (string) ($offer['name'] ?? ''),
+                    'parent_yuju_id' => isset($offer['parent_id']) ? (string) $offer['parent_id'] : null,
+                ], JSON_UNESCAPED_UNICODE)),
+                'last_error' => null,
+                'error_count' => 0,
+                'sync_enabled' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+            if ($db->insert('yuju_product_status', $data, true)) {
+                $stats['inserted']++;
+                if ($psProductId === null) {
+                    $stats['unmapped']++;
+                }
+            } else {
+                // Si ya existía o falló una restricción, nunca sobrescribir la fila existente.
+                $stats['skipped']++;
+            }
+        }
+
+        return $stats;
+    }
+
     public function startRunFromSavedReport($reportId, $trigger = 'manual', $mode = 'silent', $fieldOverrides = null, array $options = [])
     {
         $auditStock = $fieldOverrides !== null
@@ -202,6 +299,8 @@ class YujuOfferAuditor
         }
 
         $offers = $loaded['offers'];
+        // Registrar los productos y variaciones del reporte sin modificar registros existentes.
+        $statusImport = $this->importReportProductsToStatusTable($offers);
         $total = count($offers);
         $report = $loaded['report'];
 
