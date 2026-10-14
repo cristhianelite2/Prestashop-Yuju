@@ -245,6 +245,12 @@ function retryWebhook(webhookId, button) {
         },
         success: function(response) {
             if (response && response.success) {
+                if (response.new_webhook_id) {
+                    // Abrir el registro recién generado, donde están los pasos reales de este intento.
+                    window.location.href = '{$link->getAdminLink('AdminYujuWebhook')|escape:'javascript':'UTF-8'}&viewyuju_webhook_logs=1&id='
+                        + encodeURIComponent(response.new_webhook_id);
+                    return;
+                }
                 if (response.processing_success) {
                     alert('El webhook se reintentó y el procesamiento terminó correctamente.');
                 } else {
