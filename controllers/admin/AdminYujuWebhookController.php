@@ -711,6 +711,7 @@ class AdminYujuWebhookController extends ModuleAdminController
                 'success' => true,
                 'processing_success' => $processed,
                 'message' => $message,
+                'new_webhook_id' => !empty($result['webhook_log_id']) ? (int) $result['webhook_log_id'] : null,
                 'result' => $result,
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
         } catch (Throwable $e) {
