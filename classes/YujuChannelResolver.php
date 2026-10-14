@@ -64,6 +64,7 @@ class YujuChannelResolver
 
         YujuConfig::set(self::CACHE_KEY, $normalized, 'json');
         YujuConfig::set(self::UPDATED_KEY, date('Y-m-d H:i:s'), 'string');
+        YujuConfig::set(self::LAST_ATTEMPT_KEY, date('Y-m-d H:i:s'), 'string');
 
         $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
         if (is_string($map)) {
