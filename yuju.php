@@ -901,6 +901,8 @@ class Yuju extends Module
             'displayAdminOrder',
             'displayAdminOrderTabOrder',
             'displayAdminOrderTabContentOrder',
+            'actionOrderGridDefinitionModifier',
+            'actionOrderGridQueryBuilderModifier',
         ];
 
         foreach ($hooks as $hook) {
@@ -935,6 +937,8 @@ class Yuju extends Module
             'displayAdminOrder',
             'displayAdminOrderTabOrder',
             'displayAdminOrderTabContentOrder',
+            'actionOrderGridDefinitionModifier',
+            'actionOrderGridQueryBuilderModifier',
         ];
 
         foreach ($hooks as $hook) {
@@ -1418,6 +1422,57 @@ window.yujuOrderMetadata = ' . $metaJson . ';
                 Media::addJsDef(['yujuOrderMetadata' => $meta]);
             }
         }
+    }
+
+    /**
+     * Añade el marketplace de origen a la tabla de pedidos del back office.
+     */
+    public function hookActionOrderGridDefinitionModifier(array $params)
+    {
+        if (empty($params['definition'])) {
+            return;
+        }
+
+        $definition = $params['definition'];
+        $columns = $definition->getColumns();
+        if ($columns->has('yuju_marketplace')) {
+            return;
+        }
+
+        $column = (new \PrestaShop\PrestaShop\Core\Grid\Column\Type\DataColumn('yuju_marketplace'))
+            ->setName($this->trans('Marketplace', [], 'Modules.Yuju.Admin'))
+            ->setOptions(['field' => 'yuju_marketplace']);
+
+        try {
+            $columns->addBefore('date_add', $column);
+        } catch (Throwable $e) {
+            // No romper la página si el identificador de fecha cambia.
+            $columns->add($column);
+        }
+    }
+
+    /**
+     * Las órdenes vinculadas con Yuju muestran el canal; el resto, PrestaShop.
+     */
+    public function hookActionOrderGridQueryBuilderModifier(array $params)
+    {
+        if (empty($params['search_query_builder'])) {
+            return;
+        }
+
+        $queryBuilder = $params['search_query_builder'];
+        $mappingTable = '`' . _DB_PREFIX_ . 'yuju_order_mapping`';
+        $queryBuilder->addSelect(
+            "CASE WHEN yuju_order_mapping.prestashop_order_id IS NOT NULL "
+            . "THEN COALESCE(NULLIF(yuju_order_mapping.channel_name, ''), 'Yuju') "
+            . "ELSE 'Prestashop' END AS yuju_marketplace"
+        );
+        $queryBuilder->leftJoin(
+            'o',
+            $mappingTable,
+            'yuju_order_mapping',
+            'yuju_order_mapping.prestashop_order_id = o.id_order'
+        );
     }
 
     public function hookDisplayAdminOrderMainBottom($params)
