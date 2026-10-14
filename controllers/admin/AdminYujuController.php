@@ -201,14 +201,15 @@ class AdminYujuController extends ModuleAdminController
      */
     protected function fetchAndStoreAccountInfo()
     {
-        require_once dirname(__FILE__) . '/../../config/config.php';
+        require_once dirname(__FILE__) . '/../../classes/YujuChannelResolver.php';
         require_once dirname(__FILE__) . '/../../classes/YujuApiClient.php';
 
         $api = new YujuApiClient();
         $response = $api->getAccount();
-
-        if (empty($response['success']) && !isset($response['id_account']) && !isset($response['data']['id_account'])) {
-            $msg = $response['message'] ?? 'No se pudo obtener la información de la cuenta Yuju.';
+        if (!is_array($response) || !YujuChannelResolver::storeAccount($response)) {
+            $msg = is_array($response)
+                ? ($response['message'] ?? 'No se pudo obtener la información de la cuenta Yuju.')
+                : 'Respuesta no válida al consultar la cuenta Yuju.';
 
             return [
                 'success' => false,
@@ -217,43 +218,10 @@ class AdminYujuController extends ModuleAdminController
             ];
         }
 
-        $payload = $response;
-        if (isset($response['data']) && is_array($response['data'])) {
-            $payload = $response['data'];
-        }
-
-        $normalized = [
-            'id_account' => $payload['id_account'] ?? null,
-            'account_name' => $payload['account_name'] ?? null,
-            'id_shop' => $payload['id_shop'] ?? null,
-            'shop_name' => $payload['shop_name'] ?? null,
-            'channels' => [],
-        ];
-
-        if (!empty($payload['channels']) && is_array($payload['channels'])) {
-            foreach ($payload['channels'] as $ch) {
-                if (!is_array($ch)) {
-                    continue;
-                }
-                $normalized['channels'][] = [
-                    'id_channel' => $ch['id_channel'] ?? null,
-                    'name' => $ch['name'] ?? '',
-                    'generic_name' => $ch['generic_name'] ?? '',
-                ];
-            }
-        }
-
-        $now = date('Y-m-d H:i:s');
-        YujuConfig::set('YUJU_ACCOUNT_INFO_CACHE', $normalized, 'json');
-        YujuConfig::set('YUJU_ACCOUNT_INFO_UPDATED_AT', $now, 'string');
-
-        $this->syncChannelMarketplaceMap($normalized['channels']);
-
         $account = $this->getCachedAccountInfo();
-
         return [
             'success' => true,
-            'message' => 'Información de Yuju actualizada (' . count($normalized['channels']) . ' canales).',
+            'message' => 'Información de Yuju actualizada (' . count($account['channels']) . ' canales).',
             'account' => $account,
         ];
     }
