@@ -206,6 +206,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_mapping` (
     `prestashop_order_id` int(11) NOT NULL,
     `yuju_order_id` varchar(255) NOT NULL,
     `id_channel` varchar(64) DEFAULT NULL,
+    `channel_name` varchar(255) DEFAULT NULL,
     `outbound_external_pk` varchar(64) DEFAULT NULL,
     `outbound_status` varchar(32) DEFAULT NULL,
     `outbound_updated_at` datetime DEFAULT NULL,
