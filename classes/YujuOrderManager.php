@@ -1654,22 +1654,32 @@ class YujuOrderManager
         }
 
         // TikTok puede ocultar parcialmente el nombre del destinatario. Limpiar los
-        // caracteres no admitidos por PrestaShop y aplicar un fallback válido.
-        $firstname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $firstname);
-        $lastname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $lastname);
-        $firstname = trim(preg_replace('/\s+/', ' ', (string) $firstname));
-        $lastname = trim(preg_replace('/\s+/', ' ', (string) $lastname));
+        // caracteres no admitidos y validar con la misma regla que usa PrestaShop.
+        // No conservar dígitos: Validate::isName() los rechaza en firstname/lastname.
+        $firstname = preg_replace('/[^a-zA-Z\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $firstname);
+        $lastname = preg_replace('/[^a-zA-Z\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $lastname);
+        $firstname = trim(preg_replace('/\s+/', ' ', is_string($firstname) ? $firstname : ''));
+        $lastname = trim(preg_replace('/\s+/', ' ', is_string($lastname) ? $lastname : ''));
 
-        if (!$isUsableName($firstname)) {
+        // Tools::substr evita cortar un carácter UTF-8 por la mitad.
+        $firstname = Tools::substr($firstname, 0, 32);
+        $lastname = Tools::substr($lastname, 0, 32);
+
+        if (!$isUsableName($firstname) || !Validate::isName($firstname)) {
             $firstname = 'Cliente';
         }
-        if (!$isUsableName($lastname)) {
+        if (!$isUsableName($lastname) || !Validate::isName($lastname)) {
             $lastname = 'Yuju';
         }
 
-        // PrestaShop limita ambos campos a 32 caracteres.
-        $firstname = substr($firstname, 0, 32);
-        $lastname = substr($lastname, 0, 32);
+        // Última barrera antes de asignar propiedades Customer: no permitir que un
+        // override de Validate o caracteres inesperados vuelvan a bloquear la orden.
+        if (!Validate::isName($firstname)) {
+            $firstname = 'Cliente';
+        }
+        if (!Validate::isName($lastname)) {
+            $lastname = 'Yuju';
+        }
         
         $customer->email = $email;
         $customer->firstname = $firstname;
