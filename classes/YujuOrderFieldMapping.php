@@ -75,6 +75,12 @@ class YujuOrderFieldMapping
         $data['customer']['first_name'] = self::validName($rawCustomerFirst, 'Cliente');
         $data['customer']['last_name'] = self::validName($rawCustomerLast, 'Yuju');
         $data['customer']['email'] = self::validEmail($data['customer']['email'] ?? '');
+        if (array_key_exists('phone', $data['customer'])) {
+            $data['customer']['phone'] = self::validPhone($data['customer']['phone']);
+        }
+        if (array_key_exists('doc_number', $data['customer'])) {
+            $data['customer']['doc_number'] = self::validIdentifier($data['customer']['doc_number'], 16, '00000000');
+        }
         $addressSections = ['shipping_address'];
         if (isset($data['billing_address']) && is_array($data['billing_address']) && !empty($data['billing_address'])) {
             $addressSections[] = 'billing_address';
@@ -82,17 +88,17 @@ class YujuOrderFieldMapping
         foreach ($addressSections as $section) {
             $data[$section]['first_name'] = self::validName($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
             $data[$section]['last_name'] = self::validName($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
-            $data[$section]['company'] = self::validText($data[$section]['company'] ?? '', 'not found');
-            $data[$section]['address_line_1'] = self::validText($data[$section]['address_line_1'] ?? '', 'Dirección no especificada');
-            $data[$section]['address_line_2'] = self::validText($data[$section]['address_line_2'] ?? '', '');
-            $data[$section]['city'] = self::validText($data[$section]['city'] ?? '', 'Ciudad no especificada');
-            $data[$section]['postal_code'] = self::validText($data[$section]['postal_code'] ?? '', '00000');
-            // PrestaShop valida Address->phone con Validate::isPhoneNumber().
-            // Los comodines ausentes pueden producir el literal "not found", que no es un teléfono.
+            // Sanitizar siempre los valores, incluso cuando el origen sí contiene datos.
+            // Límites alineados con las propiedades Address de PrestaShop.
+            $data[$section]['company'] = self::sanitizeFieldText($data[$section]['company'] ?? '', 64, '');
+            $data[$section]['address_line_1'] = self::sanitizeFieldText($data[$section]['address_line_1'] ?? '', 128, 'Dirección no especificada');
+            $data[$section]['address_line_2'] = self::sanitizeFieldText($data[$section]['address_line_2'] ?? '', 128, '');
+            $data[$section]['city'] = self::sanitizeFieldText($data[$section]['city'] ?? '', 64, 'Ciudad no especificada');
+            $data[$section]['postal_code'] = self::sanitizePostalCode($data[$section]['postal_code'] ?? '');
             $data[$section]['phone'] = self::validPhone($data[$section]['phone'] ?? '');
-            $data[$section]['country_code'] = self::validText($data[$section]['country_code'] ?? '', 'MX');
-            $data[$section]['state_code'] = self::validText($data[$section]['state_code'] ?? '', 'MEX');
-            $data[$section]['dni'] = self::validText($data[$section]['dni'] ?? '', '00000000');
+            $data[$section]['country_code'] = self::sanitizeCode($data[$section]['country_code'] ?? '', 2, 'MX');
+            $data[$section]['state_code'] = self::sanitizeCode($data[$section]['state_code'] ?? '', 32, 'MEX');
+            $data[$section]['dni'] = self::validIdentifier($data[$section]['dni'] ?? '', 16, '00000000');
         }
         // Cuando el marketplace pone un ID numérico en first_name, preferir el nombre de envío.
         if (self::isInvalidName($rawCustomerFirst)) {
@@ -265,6 +271,54 @@ class YujuOrderFieldMapping
      * Devuelve un teléfono compatible con PrestaShop; evita enviar placeholders
      * como "not found" o cadenas con letras a Address->phone.
      */
+    private static function isPlaceholder($value)
+    {
+        return in_array(strtolower(trim((string) $value)), [
+            '', 'not found', 'not found.', 'null', 'undefined', 'n/a', 'na', 'none'
+        ], true);
+    }
+
+    private static function sanitizeFieldText($value, $maxLength, $fallback)
+    {
+        if (is_array($value) || is_object($value) || is_bool($value) || $value === null) {
+            $value = '';
+        }
+        $value = trim((string) $value);
+        // Quitar controles invisibles, conservando acentos y puntuación válida en direcciones.
+        $value = preg_replace('/[\\x00-\\x1F\\x7F]/u', ' ', $value);
+        $value = preg_replace('/\\s+/u', ' ', (string) $value);
+        $value = trim((string) $value);
+        if (self::isPlaceholder($value)) {
+            return $fallback;
+        }
+        return function_exists('mb_substr')
+            ? mb_substr($value, 0, $maxLength, 'UTF-8')
+            : substr($value, 0, $maxLength);
+    }
+
+    private static function sanitizePostalCode($value)
+    {
+        $value = self::sanitizeFieldText($value, 12, '00000');
+        $value = preg_replace('/[^a-zA-Z0-9\\- ]/', '', $value);
+        $value = trim(substr($value, 0, 12));
+        return $value !== '' ? $value : '00000';
+    }
+
+    private static function sanitizeCode($value, $maxLength, $fallback)
+    {
+        $value = self::sanitizeFieldText($value, $maxLength, $fallback);
+        $value = strtoupper(preg_replace('/[^a-zA-Z0-9_-]/', '', $value));
+        return $value !== '' ? substr($value, 0, $maxLength) : $fallback;
+    }
+
+    private static function validIdentifier($value, $maxLength, $fallback)
+    {
+        $value = self::sanitizeFieldText($value, $maxLength, $fallback);
+        // Identificadores fiscales/documentales pueden ser alfanuméricos.
+        $value = strtoupper(preg_replace('/[^a-zA-Z0-9-]/', '', $value));
+        return $value !== '' ? substr($value, 0, $maxLength) : $fallback;
+    }
+
     private static function validPhone($value)
     {
         if (is_array($value) || is_object($value) || is_bool($value) || $value === null) {
@@ -272,17 +326,24 @@ class YujuOrderFieldMapping
         }
 
         $value = trim((string) $value);
-        if ($value === '' || in_array(strtolower($value), ['not found', 'not found.', 'null', 'undefined', 'n/a', 'na'], true)) {
+        if (self::isPlaceholder($value)) {
             return '0000000000';
         }
 
-        // Conservar únicamente dígitos para evitar formatos/caracteres rechazados por PrestaShop.
+        // Normalizar teléfonos con prefijos, espacios, guiones o paréntesis a dígitos.
         $digits = preg_replace('/[^0-9]/', '', $value);
         if (!is_string($digits) || strlen($digits) < 3) {
             return '0000000000';
         }
+        $digits = substr($digits, 0, 32);
 
-        return substr($digits, 0, 32);
+        // Si PrestaShop está disponible, comprobar su validador antes de devolverlo.
+        if (class_exists('Validate') && method_exists('Validate', 'isPhoneNumber')
+            && !Validate::isPhoneNumber($digits)) {
+            return '0000000000';
+        }
+
+        return $digits;
     }
 
     private static function validEmail($value)
