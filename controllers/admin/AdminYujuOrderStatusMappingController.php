@@ -28,6 +28,26 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
         parent::__construct();
 
         $this->logger = new YujuLogger();
+        $this->ensureFieldMappingTable();
+    }
+
+    protected function ensureFieldMappingTable()
+    {
+        Db::getInstance()->execute(
+            'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'yuju_order_field_mapping` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `target_path` varchar(190) NOT NULL,
+                `template` text NOT NULL,
+                `field_type` enum(\'string\',\'integer\',\'decimal\',\'boolean\') NOT NULL DEFAULT \'string\',
+                `default_value` varchar(255) DEFAULT NULL,
+                `is_active` tinyint(1) NOT NULL DEFAULT 1,
+                `created_at` datetime NOT NULL,
+                `updated_at` datetime NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_target_path` (`target_path`),
+                KEY `idx_active` (`is_active`)
+            ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4'
+        );
     }
 
     public function initContent()
