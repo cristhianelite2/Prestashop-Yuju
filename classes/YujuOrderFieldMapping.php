@@ -110,8 +110,9 @@ class YujuOrderFieldMapping
             foreach (['quantity', 'qty', 'product_quantity'] as $quantityKey) {
                 if (array_key_exists($quantityKey, $item)) {
                     $raw = $item[$quantityKey];
-                    $data['items'][$index][$quantityKey] = is_numeric($raw) && is_finite((float) $raw)
-                        ? max(0, (int) $raw) : 0;
+                    // PrestaShop no puede crear una línea de pedido con cantidad 0.
+                    $data['items'][$index][$quantityKey] = is_numeric($raw) && is_finite((float) $raw) && (int) $raw > 0
+                        ? (int) $raw : 1;
                 }
             }
             foreach (['price', 'unit_price', 'unit_price_tax_excl', 'total', 'total_price', 'total_price_tax_excl', 'total_price_tax_incl', 'amount'] as $priceKey) {
