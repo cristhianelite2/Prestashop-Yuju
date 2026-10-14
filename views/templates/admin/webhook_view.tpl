@@ -76,7 +76,7 @@
                     <h4 class="yuju-card__title"><i class="icon-cogs"></i> Acciones</h4>
                     <div class="yuju-actions">
                         {if $webhook_log.status == 'failed'}
-                            <button type="button" class="btn btn-primary btn-block" onclick="retryWebhook({$webhook_log.id|escape:'javascript':'UTF-8'})">
+                            <button type="button" class="btn btn-primary btn-block" onclick="retryWebhook({$webhook_log.id|escape:'javascript':'UTF-8'}, this)">
                                 <i class="icon-refresh"></i> Reintentar webhook
                             </button>
                         {/if}
@@ -218,10 +218,22 @@
 </div>
 
 <script>
-function retryWebhook(webhookId) {
+function retryWebhook(webhookId, button) {
     if (!confirm('¿Desea reintentar este webhook?')) {
         return;
     }
+
+    // Bloquear el botón y mostrar el estado mientras el servidor procesa el reintento.
+    if (button) {
+        if (button.getAttribute('data-retrying') === '1') {
+            return;
+        }
+        button.setAttribute('data-retrying', '1');
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.innerHTML = '<i class="icon-refresh icon-spin"></i> Reintentando...';
+    }
+
     $.ajax({
         url: '{$link->getAdminLink('AdminYujuWebhook')|escape:'javascript':'UTF-8'}',
         type: 'POST',
@@ -247,6 +259,12 @@ function retryWebhook(webhookId) {
         },
         error: function() {
             alert('Error de conexión al reintentar webhook');
+            if (button) {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+                button.removeAttribute('data-retrying');
+                button.innerHTML = '<i class="icon-refresh"></i> Reintentar webhook';
+            }
         }
     });
 }
