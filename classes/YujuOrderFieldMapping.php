@@ -87,7 +87,9 @@ class YujuOrderFieldMapping
             $data[$section]['address_line_2'] = self::validText($data[$section]['address_line_2'] ?? '', '');
             $data[$section]['city'] = self::validText($data[$section]['city'] ?? '', 'Ciudad no especificada');
             $data[$section]['postal_code'] = self::validText($data[$section]['postal_code'] ?? '', '00000');
-            $data[$section]['phone'] = self::validText($data[$section]['phone'] ?? '', '0000000000');
+            // PrestaShop valida Address->phone con Validate::isPhoneNumber().
+            // Los comodines ausentes pueden producir el literal "not found", que no es un teléfono.
+            $data[$section]['phone'] = self::validPhone($data[$section]['phone'] ?? '');
             $data[$section]['country_code'] = self::validText($data[$section]['country_code'] ?? '', 'MX');
             $data[$section]['state_code'] = self::validText($data[$section]['state_code'] ?? '', 'MEX');
             $data[$section]['dni'] = self::validText($data[$section]['dni'] ?? '', '00000000');
@@ -257,6 +259,30 @@ class YujuOrderFieldMapping
             return $fallback;
         }
         return $value;
+    }
+
+    /**
+     * Devuelve un teléfono compatible con PrestaShop; evita enviar placeholders
+     * como "not found" o cadenas con letras a Address->phone.
+     */
+    private static function validPhone($value)
+    {
+        if (is_array($value) || is_object($value) || is_bool($value) || $value === null) {
+            return '0000000000';
+        }
+
+        $value = trim((string) $value);
+        if ($value === '' || in_array(strtolower($value), ['not found', 'not found.', 'null', 'undefined', 'n/a', 'na'], true)) {
+            return '0000000000';
+        }
+
+        // Conservar únicamente dígitos para evitar formatos/caracteres rechazados por PrestaShop.
+        $digits = preg_replace('/[^0-9]/', '', $value);
+        if (!is_string($digits) || strlen($digits) < 3) {
+            return '0000000000';
+        }
+
+        return substr($digits, 0, 32);
     }
 
     private static function validEmail($value)
