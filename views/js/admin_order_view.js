@@ -170,7 +170,7 @@
         }
 
         if (!channelName) {
-            channelName = 'Mercado Libre';
+            channelName = 'No disponible';
         }
 
         // Si ya existen las filas, actualizar valores si cambiaron
