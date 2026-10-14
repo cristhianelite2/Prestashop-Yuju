@@ -86,6 +86,31 @@ class YujuOrderFieldMapping
         if (!isset($data['items']) || !is_array($data['items'])) {
             $data['items'] = [];
         }
+        foreach ($data['items'] as $index => $item) {
+            if (!is_array($item)) {
+                $data['items'][$index] = [];
+                $item = [];
+            }
+            foreach (['quantity', 'qty', 'product_quantity'] as $quantityKey) {
+                if (array_key_exists($quantityKey, $item)) {
+                    $raw = $item[$quantityKey];
+                    $data['items'][$index][$quantityKey] = is_numeric($raw) && is_finite((float) $raw)
+                        ? max(0, (int) $raw) : 0;
+                }
+            }
+            foreach (['price', 'unit_price', 'total', 'total_price', 'amount'] as $priceKey) {
+                if (array_key_exists($priceKey, $item)) {
+                    $raw = $item[$priceKey];
+                    $data['items'][$index][$priceKey] = is_numeric($raw) && is_finite((float) $raw)
+                        ? (float) $raw : 0.0;
+                }
+            }
+            foreach (['name', 'product_name', 'sku', 'reference'] as $textKey) {
+                if (array_key_exists($textKey, $item)) {
+                    $data['items'][$index][$textKey] = self::validText($item[$textKey], 'not found');
+                }
+            }
+        }
         $data['currency'] = self::validText($data['currency'] ?? '', 'MXN');
         if (isset($data['total']) && !is_numeric($data['total'])) {
             $data['total'] = 0;
