@@ -40,12 +40,34 @@ if ($prestashopRoot === false || $prestashopRoot === null) {
     exit;
 }
 
-// El front controller se encarga de inicializar PrestaShop y cargar el módulo.
+// Enrutar internamente a PrestaShop sin redirigir al cliente.
+// Es importante ajustar REQUEST_URI: algunas instalaciones en subdirectorios
+// redirigen al home si conservan la URL pública /modules/yuju/webhook.php.
+$documentRootPath = realpath($_SERVER['DOCUMENT_ROOT'] ?? $documentRoot);
+if ($documentRootPath === false) {
+    $documentRootPath = realpath($documentRoot);
+}
+
+$relativeRoot = str_replace(
+    DIRECTORY_SEPARATOR,
+    '/',
+    ltrim(substr($prestashopRoot, strlen(rtrim($documentRootPath, DIRECTORY_SEPARATOR))), DIRECTORY_SEPARATOR)
+);
+$baseUri = $relativeRoot !== '' ? '/' . trim($relativeRoot, '/') : '';
+$scriptUri = $baseUri . '/index.php';
+
 $_GET['fc'] = 'module';
 $_GET['module'] = 'yuju';
 $_GET['controller'] = 'webhook';
 $_REQUEST['fc'] = 'module';
 $_REQUEST['module'] = 'yuju';
 $_REQUEST['controller'] = 'webhook';
+
+$queryString = http_build_query($_GET);
+$_SERVER['REQUEST_URI'] = $scriptUri . ($queryString !== '' ? '?' . $queryString : '');
+$_SERVER['QUERY_STRING'] = $queryString;
+$_SERVER['SCRIPT_NAME'] = $scriptUri;
+$_SERVER['PHP_SELF'] = $scriptUri;
+$_SERVER['SCRIPT_FILENAME'] = $prestashopRoot . '/index.php';
 
 require $prestashopRoot . '/index.php';

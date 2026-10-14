@@ -52,6 +52,10 @@ class YujuWebhookModuleFrontController extends ModuleFrontController
             $normalized[strtolower((string) $name)] = $value;
         }
 
+        // Normalizar las claves antes de pasar las cabeceras a gestor y almacenamiento.
+        // Se conservan intactos los valores de las cabeceras y el cuerpo HTTP.
+        $headers = $normalized;
+
         $topic = trim((string) ($normalized['x-yuju-topic'] ?? ''));
         $yujuId = trim((string) ($normalized['x-yuju-id'] ?? ''));
 
@@ -81,7 +85,13 @@ class YujuWebhookModuleFrontController extends ModuleFrontController
 
         try {
             $logger->log('Webhook received via public entrypoint', 'info');
-            $logger->log('Yuju headers: ' . json_encode($normalized, JSON_UNESCAPED_UNICODE), 'info');
+            // No registrar firmas ni cabeceras que puedan contener datos sensibles.
+            $safeHeaders = array_intersect_key($normalized, array_flip([
+                'x-yuju-topic', 'x-yuju-id', 'x-yuju-resource',
+                'x-yuju-id-account', 'x-yuju-id-shop', 'x-yuju-id-channel',
+                'x-yuju-attempts', 'x-yuju-woo-id',
+            ]));
+            $logger->log('Yuju webhook metadata: ' . json_encode($safeHeaders, JSON_UNESCAPED_UNICODE), 'info');
             $logger->log('Webhook payload bytes: ' . strlen($rawPayload), 'debug');
 
             $result = $manager->processWebhook(
