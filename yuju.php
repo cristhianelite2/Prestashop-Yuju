@@ -96,8 +96,8 @@ class Yuju extends Module
                 'actualizar estados intermedios de productos' => 'ensureProductStatusIntermediateWebhookStates',
                 'crear tablas de auditoría' => 'ensureAuditTables',
                 'crear pestañas del panel administrativo' => 'installTabs',
-                // Los hooks NO se registran durante la instalación.
-                // Su activación deberá hacerse manualmente en una fase posterior.
+                // Registrar solo el hook visual del detalle de pedidos; los hooks de sincronización siguen manuales.
+                'registrar hook de detalle de órdenes' => 'registerOrderDetailHook',
                 'guardar configuración inicial' => 'installConfiguration',
                 'crear directorios del módulo' => 'createDirectories',
                 // El transportista se crea de forma diferida; nunca bloquea la instalación.
@@ -889,6 +889,7 @@ class Yuju extends Module
             'actionUpdateQuantity',
             'displayBackOfficeHeader',
             'displayAdminProductsExtra',
+            'displayAdminOrderMainBottom',
         ];
 
         foreach ($hooks as $hook) {
@@ -900,6 +901,11 @@ class Yuju extends Module
         }
 
         return true;
+    }
+
+    protected function registerOrderDetailHook()
+    {
+        return $this->registerHook('displayAdminOrderMainBottom');
     }
 
     /**
@@ -978,6 +984,28 @@ class Yuju extends Module
 
 
     // Hook implementations
+
+    public function hookDisplayAdminOrderMainBottom($params)
+    {
+        $orderId = (int) ($params['id_order'] ?? 0);
+        if ($orderId <= 0 && isset($params['order']) && is_object($params['order'])) {
+            $orderId = (int) ($params['order']->id ?? 0);
+        }
+        if ($orderId <= 0) { return ''; }
+        try {
+            $table = _DB_PREFIX_ . 'yuju_order_mapping';
+            $cols = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "channel_name"');
+            $nameSelect = !empty($cols) ? ', `channel_name`' : ', NULL AS `channel_name`';
+            $row = Db::getInstance()->getRow('SELECT `yuju_order_id`, `id_channel`' . $nameSelect . ' FROM `' . bqSQL($table) . '` WHERE `prestashop_order_id` = ' . $orderId);
+            if (!$row) { return ''; }
+            $channelName = trim((string) ($row['channel_name'] ?? ''));
+            $channelOrderId = trim((string) ($row['yuju_order_id'] ?? ''));
+            return '<section class="card mt-2"><div class="card-header"><h3 class="card-header-title">Origen del pedido</h3></div><div class="card-body"><dl class="row mb-0">'
+                . '<dt class="col-sm-4">Nombre del canal</dt><dd class="col-sm-8">' . Tools::safeOutput($channelName !== '' ? $channelName : 'No disponible') . '</dd>'
+                . '<dt class="col-sm-4">ID de la orden del canal</dt><dd class="col-sm-8"><code>' . Tools::safeOutput($channelOrderId !== '' ? $channelOrderId : 'No disponible') . '</code></dd>'
+                . '</dl></div></section>';
+        } catch (Throwable $e) { error_log('[Yuju] Error mostrando metadatos de orden: ' . $e->getMessage()); return ''; }
+    }
 
     /**
      * Product delete hook.
