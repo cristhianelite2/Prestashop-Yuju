@@ -52,37 +52,37 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
         // Prellena las reglas comunes sin duplicar ni sobrescribir configuraciones existentes.
         $defaults = [
             'Cliente' => [
-                ['customer.first_name', '%customer.first_name%', 'string', 'Not Found'],
-                ['customer.last_name', '%customer.last_name%', 'string', 'Not Found'],
+                ['customer.first_name', '%customer.first_name%', 'string', 'Cliente'],
+                ['customer.last_name', '%customer.last_name%', 'string', 'Yuju'],
                 ['customer.email', '%customer.email%', 'string', 'Not Found'],
-                ['customer.phone', '%customer.phone%', 'string', 'Not Found'],
-                ['customer.doc_number', '%customer.doc_number%', 'string', 'Not Found'],
+                ['customer.phone', '%customer.phone%', 'string', '0000000000'],
+                ['customer.doc_number', '%customer.doc_number%', 'string', '00000000'],
             ],
             'Dirección de envío' => [
-                ['shipping_address.first_name', '%shipping_address.first_name%', 'string', 'Not Found'],
-                ['shipping_address.last_name', '%shipping_address.last_name%', 'string', 'Not Found'],
-                ['shipping_address.address_line_1', '%shipping_address.address_line_1%', 'string', 'Not Found'],
-                ['shipping_address.address_line_2', '%shipping_address.address_line_2%', 'string', 'Not Found'],
-                ['shipping_address.city', '%shipping_address.city%', 'string', 'Not Found'],
-                ['shipping_address.postal_code', '%shipping_address.postal_code%', 'string', 'Not Found'],
-                ['shipping_address.phone', '%shipping_address.phone%', 'string', 'Not Found'],
-                ['shipping_address.company', '%shipping_address.company%', 'string', 'Not Found'],
-                ['shipping_address.dni', '%shipping_address.dni%', 'string', 'Not Found'],
+                ['shipping_address.first_name', '%shipping_address.first_name%', 'string', 'Cliente'],
+                ['shipping_address.last_name', '%shipping_address.last_name%', 'string', 'Yuju'],
+                ['shipping_address.address_line_1', '%shipping_address.address_line_1%', 'string', 'Dirección no especificada'],
+                ['shipping_address.address_line_2', '%shipping_address.address_line_2%', 'string', ''],
+                ['shipping_address.city', '%shipping_address.city%', 'string', 'Ciudad no especificada'],
+                ['shipping_address.postal_code', '%shipping_address.postal_code%', 'string', '00000'],
+                ['shipping_address.phone', '%shipping_address.phone%', 'string', '0000000000'],
+                ['shipping_address.company', '%shipping_address.company%', 'string', ''],
+                ['shipping_address.dni', '%shipping_address.dni%', 'string', '00000000'],
                 ['shipping_address.country_code', '%shipping_address.country_code%', 'string', 'MX'],
-                ['shipping_address.state_code', '%shipping_address.state_code%', 'string', 'Not Found'],
+                ['shipping_address.state_code', '%shipping_address.state_code%', 'string', 'MEX'],
             ],
             'Dirección de facturación' => [
-                ['billing_address.first_name', '%billing_address.first_name%', 'string', 'Not Found'],
-                ['billing_address.last_name', '%billing_address.last_name%', 'string', 'Not Found'],
-                ['billing_address.address_line_1', '%billing_address.address_line_1%', 'string', 'Not Found'],
-                ['billing_address.address_line_2', '%billing_address.address_line_2%', 'string', 'Not Found'],
-                ['billing_address.city', '%billing_address.city%', 'string', 'Not Found'],
-                ['billing_address.postal_code', '%billing_address.postal_code%', 'string', 'Not Found'],
-                ['billing_address.phone', '%billing_address.phone%', 'string', 'Not Found'],
-                ['billing_address.company', '%billing_address.company%', 'string', 'Not Found'],
-                ['billing_address.dni', '%billing_address.dni%', 'string', 'Not Found'],
+                ['billing_address.first_name', '%billing_address.first_name%', 'string', 'Cliente'],
+                ['billing_address.last_name', '%billing_address.last_name%', 'string', 'Yuju'],
+                ['billing_address.address_line_1', '%billing_address.address_line_1%', 'string', 'Dirección no especificada'],
+                ['billing_address.address_line_2', '%billing_address.address_line_2%', 'string', ''],
+                ['billing_address.city', '%billing_address.city%', 'string', 'Ciudad no especificada'],
+                ['billing_address.postal_code', '%billing_address.postal_code%', 'string', '00000'],
+                ['billing_address.phone', '%billing_address.phone%', 'string', '0000000000'],
+                ['billing_address.company', '%billing_address.company%', 'string', ''],
+                ['billing_address.dni', '%billing_address.dni%', 'string', '00000000'],
                 ['billing_address.country_code', '%billing_address.country_code%', 'string', 'MX'],
-                ['billing_address.state_code', '%billing_address.state_code%', 'string', 'Not Found'],
+                ['billing_address.state_code', '%billing_address.state_code%', 'string', 'MEX'],
             ],
             'Carrito y productos' => [
                 ['currency', '%currency%', 'string', 'MXN'],
@@ -124,6 +124,41 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
                     'updated_at' => $now,
                 ]);
             }
+        }
+
+        // Migra únicamente los valores placeholder antiguos; conserva cualquier valor personalizado.
+        $legacyDefaults = [
+            'customer.first_name' => 'Cliente',
+            'customer.last_name' => 'Yuju',
+            'customer.phone' => '0000000000',
+            'customer.doc_number' => '00000000',
+            'shipping_address.first_name' => 'Cliente',
+            'shipping_address.last_name' => 'Yuju',
+            'shipping_address.address_line_1' => 'Dirección no especificada',
+            'shipping_address.address_line_2' => '',
+            'shipping_address.city' => 'Ciudad no especificada',
+            'shipping_address.postal_code' => '00000',
+            'shipping_address.phone' => '0000000000',
+            'shipping_address.company' => '',
+            'shipping_address.dni' => '00000000',
+            'shipping_address.state_code' => 'MEX',
+            'billing_address.first_name' => 'Cliente',
+            'billing_address.last_name' => 'Yuju',
+            'billing_address.address_line_1' => 'Dirección no especificada',
+            'billing_address.address_line_2' => '',
+            'billing_address.city' => 'Ciudad no especificada',
+            'billing_address.postal_code' => '00000',
+            'billing_address.phone' => '0000000000',
+            'billing_address.company' => '',
+            'billing_address.dni' => '00000000',
+            'billing_address.state_code' => 'MEX',
+        ];
+        foreach ($legacyDefaults as $targetPath => $defaultValue) {
+            Db::getInstance()->update(
+                'yuju_order_field_mapping',
+                ['default_value' => pSQL($defaultValue), 'updated_at' => date('Y-m-d H:i:s')],
+                'target_path = "' . pSQL($targetPath) . '" AND default_value = "Not Found"'
+            );
         }
     }
 
