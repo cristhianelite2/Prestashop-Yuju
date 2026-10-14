@@ -104,8 +104,45 @@ class YujuChannelResolver
                 return $name;
             }
             $generic = trim((string) ($channel['generic_name'] ?? ''));
-            return $generic;
+            if ($generic !== '') {
+                return $generic;
+            }
         }
+
+        // Consultar mapa local o por defecto de marketplaces
+        $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
+        if (is_string($map)) {
+            $decoded = json_decode($map, true);
+            $map = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($map) || empty($map)) {
+            if (class_exists('YujuStatusMappings') && method_exists('YujuStatusMappings', 'getDefaultChannelMarketplaceMap')) {
+                $map = YujuStatusMappings::getDefaultChannelMarketplaceMap();
+            }
+        }
+        if (is_array($map) && isset($map[$idChannel])) {
+            $slug = strtolower(trim((string) $map[$idChannel]));
+            $friendly = [
+                'mercadolibre' => 'Mercado Libre',
+                'amazon' => 'Amazon',
+                'liverpool' => 'Liverpool',
+                'walmart' => 'Walmart',
+                'claroshop' => 'Claro Shop',
+                'sears' => 'Sears',
+                'coppel' => 'Coppel',
+                'elektra' => 'Elektra',
+                'shopee' => 'Shopee',
+                'shopify' => 'Shopify',
+                'tiktok' => 'TikTok Shop',
+            ];
+            if (isset($friendly[$slug])) {
+                return $friendly[$slug];
+            }
+            if ($slug !== '') {
+                return ucfirst($slug);
+            }
+        }
+
         return '';
     }
 
@@ -116,9 +153,9 @@ class YujuChannelResolver
             return $name;
         }
 
-        // No consultar /account más de una vez por hora si Yuju está fallando o el canal no aparece.
+        // Limitar reintentos de consulta a /account a 2 minutos
         $lastAttempt = (string) YujuConfig::get(self::LAST_ATTEMPT_KEY, '');
-        if ($lastAttempt !== '' && (time() - strtotime($lastAttempt)) < 3600) {
+        if ($lastAttempt !== '' && (time() - strtotime($lastAttempt)) < 120) {
             return '';
         }
         YujuConfig::set(self::LAST_ATTEMPT_KEY, date('Y-m-d H:i:s'), 'string');
@@ -146,7 +183,8 @@ class YujuChannelResolver
         if ($yujuOrderId !== '' && $idChannel === '') {
             $attemptKey = 'YUJU_ORDER_CHANNEL_TRY_' . strtoupper(substr(md5($yujuOrderId), 0, 12));
             $lastAttempt = (string) YujuConfig::get($attemptKey, '');
-            $attemptedRecently = $lastAttempt !== '' && (time() - (int) strtotime($lastAttempt)) < 86400;
+            // Throttle de 2 minutos para permitir reintentos ágiles
+            $attemptedRecently = $lastAttempt !== '' && (time() - (int) strtotime($lastAttempt)) < 120;
 
             if (!$attemptedRecently) {
                 YujuConfig::set($attemptKey, date('Y-m-d H:i:s'), 'string');
@@ -160,13 +198,13 @@ class YujuChannelResolver
                             $payload = array_merge($payload['order_details'], $payload);
                         }
                         if (isset($payload['orders'][0]) && is_array($payload['orders'][0])) {
-                            $payload = $payload['orders'][0];
+                            $payload = array_merge($payload['orders'][0], $payload);
                         }
                         if ($idChannel === '') {
-                            $idChannel = trim((string) ($payload['id_channel'] ?? $payload['channel_id'] ?? ''));
+                            $idChannel = trim((string) ($payload['id_channel'] ?? ($payload['channel_id'] ?? ($payload['channel']['id'] ?? ''))));
                         }
                         if ($channelName === '') {
-                            $channelName = trim((string) ($payload['channel_name'] ?? ($payload['channel']['name'] ?? '')));
+                            $channelName = trim((string) ($payload['channel_name'] ?? ($payload['channel']['name'] ?? ($payload['channel']['generic_name'] ?? ($payload['marketplace'] ?? '')))));
                         }
                     }
                 } catch (Throwable $e) {
@@ -182,12 +220,14 @@ class YujuChannelResolver
         return ['id_channel' => $idChannel, 'channel_name' => $channelName];
     }
 
-    public static function persistOrderMetadata($yujuOrderId, $idChannel, $channelName = '')
+    public static function persistOrderMetadata($yujuOrderId, $idChannel, $channelName = '', $prestashopOrderId = 0)
     {
         $yujuOrderId = trim((string) $yujuOrderId);
         $idChannel = trim((string) $idChannel);
         $channelName = trim((string) $channelName);
-        if ($yujuOrderId === '' || ($idChannel === '' && $channelName === '')) {
+        $prestashopOrderId = (int) $prestashopOrderId;
+
+        if ($yujuOrderId === '' && $prestashopOrderId <= 0) {
             return false;
         }
 
@@ -211,14 +251,53 @@ class YujuChannelResolver
             if (isset($available['channel_name']) && $channelName !== '') {
                 $sets[] = '`channel_name` = "' . pSQL($channelName) . '"';
             }
-            if (empty($sets)) {
+            if (isset($available['prestashop_order_id']) && $prestashopOrderId > 0) {
+                $sets[] = '`prestashop_order_id` = ' . (int) $prestashopOrderId;
+            }
+
+            $whereParts = [];
+            if ($yujuOrderId !== '') {
+                $whereParts[] = '`yuju_order_id` = "' . pSQL($yujuOrderId) . '"';
+            }
+            if ($prestashopOrderId > 0) {
+                $whereParts[] = '`prestashop_order_id` = ' . (int) $prestashopOrderId;
+            }
+
+            if (empty($whereParts)) {
                 return false;
             }
-            $sets[] = '`updated_at` = "' . pSQL(date('Y-m-d H:i:s')) . '"';
-            return Db::getInstance()->execute(
-                'UPDATE `' . bqSQL($table) . '` SET ' . implode(', ', $sets)
-                . ' WHERE `yuju_order_id` = "' . pSQL($yujuOrderId) . '"'
+
+            $existingId = (int) Db::getInstance()->getValue(
+                'SELECT `id` FROM `' . bqSQL($table) . '` WHERE ' . implode(' OR ', $whereParts) . ' ORDER BY `id` DESC'
             );
+
+            if ($existingId > 0 && !empty($sets)) {
+                $sets[] = '`updated_at` = "' . pSQL(date('Y-m-d H:i:s')) . '"';
+                return Db::getInstance()->execute(
+                    'UPDATE `' . bqSQL($table) . '` SET ' . implode(', ', $sets)
+                    . ' WHERE `id` = ' . (int) $existingId
+                );
+            }
+
+            // Si no existe la fila pero tenemos orden prestashop y yujuOrderId, insertarla
+            if ($existingId <= 0 && $prestashopOrderId > 0 && $yujuOrderId !== '') {
+                $now = date('Y-m-d H:i:s');
+                $insCols = ['`prestashop_order_id`', '`yuju_order_id`', '`created_at`', '`updated_at`'];
+                $insVals = [(int) $prestashopOrderId, '"' . pSQL($yujuOrderId) . '"', '"' . pSQL($now) . '"', '"' . pSQL($now) . '"'];
+                if (isset($available['id_channel']) && $idChannel !== '') {
+                    $insCols[] = '`id_channel`';
+                    $insVals[] = '"' . pSQL($idChannel) . '"';
+                }
+                if (isset($available['channel_name']) && $channelName !== '') {
+                    $insCols[] = '`channel_name`';
+                    $insVals[] = '"' . pSQL($channelName) . '"';
+                }
+                return Db::getInstance()->execute(
+                    'INSERT INTO `' . bqSQL($table) . '` (' . implode(', ', $insCols) . ') VALUES (' . implode(', ', $insVals) . ')'
+                );
+            }
+
+            return false;
         } catch (Throwable $e) {
             return false;
         }

@@ -46,7 +46,7 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.2';
+        $this->version = '1.0.3';
         $this->author = 'Yuju';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
@@ -890,6 +890,8 @@ class Yuju extends Module
             'displayBackOfficeHeader',
             'displayAdminProductsExtra',
             'displayAdminOrderMainBottom',
+            'displayAdminOrderSideBottom',
+            'displayAdminOrder',
         ];
 
         foreach ($hooks as $hook) {
@@ -903,9 +905,53 @@ class Yuju extends Module
         return true;
     }
 
-    protected function registerOrderDetailHook()
+    public function ensureOrderDetailHooks()
     {
-        return $this->registerHook('displayAdminOrderMainBottom');
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+
+        $hooks = [
+            'displayAdminOrderMainBottom',
+            'displayAdminOrderSideBottom',
+            'displayAdminOrder',
+        ];
+
+        foreach ($hooks as $hook) {
+            try {
+                if (!$this->isRegisteredInHook($hook)) {
+                    $this->registerHook($hook);
+                }
+            } catch (Throwable $e) {
+                // Ignore failure
+            }
+        }
+    }
+
+    public function isRegisteredInHook($hook_name)
+    {
+        $id_hook = Hook::getIdByName($hook_name);
+        if (!$id_hook) {
+            return false;
+        }
+
+        $moduleId = (int) $this->id;
+        if ($moduleId <= 0 && class_exists('Module') && method_exists('Module', 'getModuleIdByName')) {
+            $moduleId = (int) Module::getModuleIdByName($this->name);
+        }
+        if ($moduleId <= 0) {
+            return false;
+        }
+
+        $shopId = isset($this->context->shop->id) ? (int) $this->context->shop->id : 1;
+        $sql = 'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'hook_module`
+                WHERE `id_hook` = ' . (int) $id_hook . '
+                  AND `id_module` = ' . (int) $moduleId . '
+                  AND `id_shop` = ' . (int) $shopId;
+
+        return (bool) Db::getInstance()->getValue($sql);
     }
 
     /**
@@ -985,100 +1031,351 @@ class Yuju extends Module
 
     // Hook implementations
 
-    public function hookDisplayAdminOrderMainBottom($params)
+    public function getAdminOrderIdFromRequest($params = [])
     {
-        $orderId = (int) ($params['id_order'] ?? 0);
-        if ($orderId <= 0 && isset($params['order']) && is_object($params['order'])) {
-            $orderId = (int) ($params['order']->id ?? 0);
+        if (isset($params['id_order']) && (int) $params['id_order'] > 0) {
+            return (int) $params['id_order'];
         }
+        if (isset($params['orderId']) && (int) $params['orderId'] > 0) {
+            return (int) $params['orderId'];
+        }
+        if (isset($params['order']) && is_object($params['order']) && isset($params['order']->id) && (int) $params['order']->id > 0) {
+            return (int) $params['order']->id;
+        }
+
+        $id = (int) (Tools::getValue('orderId') ?: Tools::getValue('id_order'));
+        if ($id > 0) {
+            return $id;
+        }
+
+        $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+        if ($uri !== '' && preg_match('#/(?:sell/)?orders/(\d+)/view#i', $uri, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return 0;
+    }
+
+    public function getOrderChannelMetadata($orderId)
+    {
+        $orderId = (int) $orderId;
         if ($orderId <= 0) {
-            return '';
+            return null;
         }
+
+        $yujuOrderId = '';
+        $idChannel = '';
+        $channelName = '';
+
+        $orderReference = '';
+        $isYujuOrder = false;
+        $customerEmail = '';
 
         try {
+            if (class_exists('Order')) {
+                $order = new Order($orderId);
+                if (Validate::isLoadedObject($order)) {
+                    $orderReference = trim((string) $order->reference);
+                    if (
+                        strtolower((string) $order->module) === 'yuju'
+                        || strtolower((string) $order->payment) === 'yuju'
+                    ) {
+                        $isYujuOrder = true;
+                    }
+                    if ($order->id_customer > 0 && class_exists('Customer')) {
+                        $cust = new Customer((int) $order->id_customer);
+                        if (Validate::isLoadedObject($cust)) {
+                            $customerEmail = strtolower(trim((string) $cust->email));
+                        }
+                    }
+                    if ($order->id_carrier > 0 && class_exists('Carrier')) {
+                        $carrier = new Carrier((int) $order->id_carrier);
+                        if (Validate::isLoadedObject($carrier) && stripos((string) $carrier->name, 'yuju') !== false) {
+                            $isYujuOrder = true;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            // Ignorar fallo al instanciar Order
+        }
+
+        // 2. Consultar ps_yuju_order_mapping
+        try {
             $table = _DB_PREFIX_ . 'yuju_order_mapping';
-            $channelNameColumns = Db::getInstance()->executeS(
-                'SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "channel_name"'
-            );
-            $idChannelColumns = Db::getInstance()->executeS(
-                'SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "id_channel"'
-            );
-            $channelNameSelect = !empty($channelNameColumns)
-                ? ', `channel_name`'
-                : ', NULL AS `channel_name`';
-            $idChannelSelect = !empty($idChannelColumns)
-                ? ', `id_channel`'
-                : ', NULL AS `id_channel`';
+            $columns = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . bqSQL($table) . '`');
+            $available = [];
+            if (is_array($columns)) {
+                foreach ($columns as $col) {
+                    $available[$col['Field']] = true;
+                }
+            }
+
+            $selects = ['`id`', '`prestashop_order_id`', '`yuju_order_id`'];
+            if (isset($available['id_channel'])) {
+                $selects[] = '`id_channel`';
+            }
+            if (isset($available['channel_name'])) {
+                $selects[] = '`channel_name`';
+            }
+
+            $where = ['`prestashop_order_id` = ' . (int) $orderId];
+            $where[] = '`yuju_order_id` = "' . pSQL((string) $orderId) . '"';
+            if ($orderReference !== '') {
+                $where[] = '`yuju_order_id` = "' . pSQL($orderReference) . '"';
+                if (isset($available['outbound_external_pk'])) {
+                    $where[] = '`outbound_external_pk` = "' . pSQL($orderReference) . '"';
+                }
+            }
 
             $row = Db::getInstance()->getRow(
-                'SELECT `yuju_order_id`' . $idChannelSelect . $channelNameSelect
+                'SELECT ' . implode(', ', $selects)
                 . ' FROM `' . bqSQL($table) . '`'
-                . ' WHERE `prestashop_order_id` = ' . (int) $orderId
+                . ' WHERE ' . implode(' OR ', $where)
+                . ' ORDER BY (`prestashop_order_id` = ' . (int) $orderId . ') DESC, `id` DESC'
             );
 
-            if (!$row) {
-                return '';
+            if ($row) {
+                $isYujuOrder = true;
+                $yujuOrderId = trim((string) ($row['yuju_order_id'] ?? ''));
+                $idChannel = trim((string) ($row['id_channel'] ?? ''));
+                $channelName = trim((string) ($row['channel_name'] ?? ''));
+
+                if ((int) ($row['prestashop_order_id'] ?? 0) !== (int) $orderId && $orderId > 0) {
+                    Db::getInstance()->execute(
+                        'UPDATE `' . bqSQL($table) . '`
+                         SET `prestashop_order_id` = ' . (int) $orderId . ',
+                             `updated_at` = "' . pSQL(date('Y-m-d H:i:s')) . '"
+                         WHERE `id` = ' . (int) $row['id']
+                    );
+                }
             }
-
-            require_once dirname(__FILE__) . '/classes/YujuChannelResolver.php';
-
-            $channelName = trim((string) ($row['channel_name'] ?? ''));
-            $channelOrderId = trim((string) ($row['yuju_order_id'] ?? ''));
-            $idChannel = trim((string) ($row['id_channel'] ?? ''));
-
-            // Completar metadatos legacy una sola vez cuando falta el canal o su nombre.
-            if ($channelOrderId !== '' && ($idChannel === '' || $channelName === '')) {
-                $resolved = YujuChannelResolver::resolveOrderMetadata($channelOrderId, $idChannel, $channelName);
-                $idChannel = $resolved['id_channel'] ?? $idChannel;
-                $channelName = $resolved['channel_name'] ?? $channelName;
-                YujuChannelResolver::persistOrderMetadata($channelOrderId, $idChannel, $channelName);
-            }
-
-            $channelName = $channelName !== '' ? $channelName : 'No disponible';
-            $channelOrderId = $channelOrderId !== '' ? $channelOrderId : 'No disponible';
-
-            // Insertar los datos dentro de la tarjeta nativa "Información básica".
-            // Así el cambio se distribuye con el módulo, sin modificar archivos del core.
-            $rowsHtml = '<div class="row mb-1 yuju-order-channel-info">'
-                . '<div class="col-xxl-4 text-xxl-right font-weight-bold">Nombre del canal</div>'
-                . '<div class="col-xxl-8">' . Tools::safeOutput($channelName) . '</div>'
-                . '</div>'
-                . '<div class="row mb-1 yuju-order-channel-info">'
-                . '<div class="col-xxl-4 text-xxl-right font-weight-bold">ID de la orden del canal</div>'
-                . '<div class="col-xxl-8"><code>' . Tools::safeOutput($channelOrderId) . '</code></div>'
-                . '</div>';
-
-            $rowsJson = json_encode(
-                $rowsHtml,
-                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
-            );
-
-            return '<script>
-(function () {
-    var rowsHtml = ' . $rowsJson . ';
-    var inserted = false;
-    function insertYujuOrderInfo() {
-        if (inserted) return true;
-        var card = document.querySelector("#orderBasicInfo .card-body");
-        if (!card) return false;
-        if (!card.querySelector(".yuju-order-channel-info")) {
-            card.insertAdjacentHTML("beforeend", rowsHtml);
-        }
-        inserted = true;
-        return true;
-    }
-    if (insertYujuOrderInfo()) return;
-    var observer = new MutationObserver(function () {
-        if (insertYujuOrderInfo()) observer.disconnect();
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    window.setTimeout(function () { observer.disconnect(); }, 10000);
-})();
-</script>';
         } catch (Throwable $e) {
-            error_log('[Yuju] Error mostrando metadatos de orden: ' . $e->getMessage());
+            // Ignorar fallo de consulta
+        }
+
+        // 3. Si no se encontró en mapping o faltan datos, buscar en ps_yuju_webhook_logs
+        if ($yujuOrderId === '' || $channelName === '') {
+            try {
+                $searchKeys = array_values(array_filter([
+                    (string) $orderId,
+                    $orderReference,
+                    $yujuOrderId
+                ]));
+                if (!empty($searchKeys)) {
+                    $whereLog = [];
+                    foreach ($searchKeys as $sk) {
+                        if ($sk !== '') {
+                            $whereLog[] = '`entity_id` = "' . pSQL($sk) . '"';
+                            $whereLog[] = '`payload` LIKE "%' . pSQL($sk) . '%"';
+                        }
+                    }
+                    if (!empty($whereLog)) {
+                        $logRow = Db::getInstance()->getRow(
+                            'SELECT `payload` FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs`
+                             WHERE ' . implode(' OR ', $whereLog) . '
+                             ORDER BY `id` DESC'
+                        );
+                        if ($logRow && !empty($logRow['payload'])) {
+                            $isYujuOrder = true;
+                            $payload = json_decode($logRow['payload'], true);
+                            if (is_array($payload)) {
+                                $pData = $payload['data'] ?? $payload;
+                                if (isset($pData['order_details']) && is_array($pData['order_details'])) {
+                                    $pData = array_merge($pData['order_details'], $pData);
+                                }
+                                if (isset($pData['orders'][0]) && is_array($pData['orders'][0])) {
+                                    $pData = array_merge($pData['orders'][0], $pData);
+                                }
+                                if ($yujuOrderId === '') {
+                                    $yujuOrderId = trim((string) ($pData['id_order'] ?? ($pData['id'] ?? ($pData['reference'] ?? ''))));
+                                }
+                                if ($idChannel === '') {
+                                    $idChannel = trim((string) ($pData['id_channel'] ?? ($pData['channel_id'] ?? ($pData['channel']['id'] ?? ''))));
+                                }
+                                if ($channelName === '') {
+                                    $channelName = trim((string) ($pData['channel_name'] ?? ($pData['channel']['name'] ?? ($pData['channel']['generic_name'] ?? ($pData['marketplace'] ?? '')))));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignorar fallo de búsqueda en logs
+            }
+        }
+
+        // Si definitivamente no es una orden Yuju, retornar null
+        if (!$isYujuOrder && $yujuOrderId === '') {
+            return null;
+        }
+
+        if ($yujuOrderId === '' && $orderReference !== '') {
+            $yujuOrderId = $orderReference;
+        }
+
+        // 4. Resolver mediante YujuChannelResolver si falta id_channel o channel_name
+        require_once dirname(__FILE__) . '/classes/YujuChannelResolver.php';
+        if ($yujuOrderId !== '' && ($idChannel === '' || $channelName === '')) {
+            $resolved = YujuChannelResolver::resolveOrderMetadata($yujuOrderId, $idChannel, $channelName);
+            $idChannel = $resolved['id_channel'] ?? $idChannel;
+            $channelName = $resolved['channel_name'] ?? $channelName;
+            YujuChannelResolver::persistOrderMetadata($yujuOrderId, $idChannel, $channelName, $orderId);
+        }
+
+        // 5. Deducción desde el email del cliente ({ref}@{marketplace}.com)
+        if ($channelName === '' && $customerEmail !== '') {
+            if (preg_match('/@([a-z0-9_-]+)\.[a-z.]+$/i', $customerEmail, $em)) {
+                $emailSlug = strtolower($em[1]);
+                $knownMarketplaces = [
+                    'mercadolibre' => 'Mercado Libre',
+                    'amazon' => 'Amazon',
+                    'liverpool' => 'Liverpool',
+                    'walmart' => 'Walmart',
+                    'claroshop' => 'Claro Shop',
+                    'sears' => 'Sears',
+                    'coppel' => 'Coppel',
+                    'elektra' => 'Elektra',
+                    'shopee' => 'Shopee',
+                    'shopify' => 'Shopify',
+                    'tiktok' => 'TikTok Shop',
+                ];
+                if (isset($knownMarketplaces[$emailSlug])) {
+                    $channelName = $knownMarketplaces[$emailSlug];
+                } elseif (!in_array($emailSlug, ['gmail', 'hotmail', 'yahoo', 'outlook', 'live', 'icloud', 'yuju'])) {
+                    $channelName = ucfirst($emailSlug);
+                }
+            }
+        }
+
+        // 6. Deducción desde YUJU_CHANNEL_MARKETPLACE_MAP si tenemos idChannel
+        if ($channelName === '' && $idChannel !== '') {
+            $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
+            if (is_string($map)) {
+                $map = json_decode($map, true);
+            }
+            if (is_array($map) && isset($map[$idChannel])) {
+                $slug = strtolower((string) $map[$idChannel]);
+                $knownMarketplaces = [
+                    'mercadolibre' => 'Mercado Libre',
+                    'amazon' => 'Amazon',
+                    'liverpool' => 'Liverpool',
+                    'walmart' => 'Walmart',
+                    'claroshop' => 'Claro Shop',
+                    'sears' => 'Sears',
+                    'coppel' => 'Coppel',
+                    'elektra' => 'Elektra',
+                    'shopee' => 'Shopee',
+                    'shopify' => 'Shopify',
+                    'tiktok' => 'TikTok Shop',
+                ];
+                $channelName = $knownMarketplaces[$slug] ?? ucfirst($slug);
+            }
+        }
+
+        if ($channelName === '') {
+            $channelName = $idChannel !== '' ? ('Canal #' . $idChannel) : 'No disponible';
+        }
+        if ($yujuOrderId === '') {
+            $yujuOrderId = $orderReference !== '' ? $orderReference : 'No disponible';
+        }
+
+        return [
+            'channel_name' => $channelName,
+            'yuju_order_id' => $yujuOrderId,
+            'id_channel' => $idChannel,
+        ];
+    }
+
+    public function renderOrderChannelInfoScript($orderId)
+    {
+        $meta = $this->getOrderChannelMetadata($orderId);
+        if (!$meta) {
             return '';
         }
+
+        $channelName = $meta['channel_name'];
+        $yujuOrderId = $meta['yuju_order_id'];
+
+        $rowsHtml = '<div class="row mb-1 yuju-order-channel-info">'
+            . '<div class="col-xxl-4 text-xxl-right font-weight-bold">Nombre del canal</div>'
+            . '<div class="col-xxl-8">' . Tools::safeOutput($channelName) . '</div>'
+            . '</div>'
+            . '<div class="row mb-1 yuju-order-channel-info">'
+            . '<div class="col-xxl-4 text-xxl-right font-weight-bold">ID de la orden de Yuju</div>'
+            . '<div class="col-xxl-8"><code>' . Tools::safeOutput($yujuOrderId) . '</code></div>'
+            . '</div>';
+
+        $rowsJson = json_encode(
+            $rowsHtml,
+            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+        );
+
+        return '<script>
+(function () {
+    var rowsHtml = ' . $rowsJson . ';
+    function insertYujuOrderInfo() {
+        var card = document.querySelector("#orderBasicInfo .card-body");
+        if (!card) {
+            var orderIdEl = document.getElementById("orderId");
+            if (orderIdEl) {
+                card = orderIdEl.closest(".card-body");
+            }
+        }
+        if (!card) {
+            var basicCard = document.querySelector("#orderBasicInfo");
+            if (basicCard) {
+                card = basicCard.querySelector(".card-body") || basicCard;
+            }
+        }
+        if (!card) return false;
+        if (card.querySelector(".yuju-order-channel-info")) return true;
+        card.insertAdjacentHTML("beforeend", rowsHtml);
+        return true;
+    }
+    if (!insertYujuOrderInfo()) {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", insertYujuOrderInfo);
+        }
+        var attempts = 0;
+        var interval = setInterval(function () {
+            attempts++;
+            if (insertYujuOrderInfo() || attempts > 50) {
+                clearInterval(interval);
+            }
+        }, 150);
+        var observer = new MutationObserver(function () {
+            if (insertYujuOrderInfo()) {
+                observer.disconnect();
+                clearInterval(interval);
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        setTimeout(function () {
+            observer.disconnect();
+            clearInterval(interval);
+        }, 10000);
+    }
+})();
+</script>';
+    }
+
+    public function hookDisplayAdminOrderMainBottom($params)
+    {
+        $orderId = $this->getAdminOrderIdFromRequest($params);
+        return $orderId > 0 ? $this->renderOrderChannelInfoScript($orderId) : '';
+    }
+
+    public function hookDisplayAdminOrderSideBottom($params)
+    {
+        $orderId = $this->getAdminOrderIdFromRequest($params);
+        return $orderId > 0 ? $this->renderOrderChannelInfoScript($orderId) : '';
+    }
+
+    public function hookDisplayAdminOrder($params)
+    {
+        $orderId = $this->getAdminOrderIdFromRequest($params);
+        return $orderId > 0 ? $this->renderOrderChannelInfoScript($orderId) : '';
     }
 
     /**
@@ -1256,21 +1553,10 @@ class Yuju extends Module
     /**
      * Back office header hook.
      */
-    public function hookDisplayBackOfficeHeader()
+    public function hookDisplayBackOfficeHeader($params = [])
     {
-        // Compatibilidad con instalaciones existentes: registrar el hook visual sin
-        // activar los hooks de sincronización de productos o inventario.
-        try {
-            $orderDetailHookId = (int) Hook::getIdByName('displayAdminOrderMainBottom');
-            $registeredModules = $orderDetailHookId > 0
-                ? Hook::getModulesFromHook($orderDetailHookId, (int) $this->id)
-                : [];
-            if (!$orderDetailHookId || !$registeredModules) {
-                $this->registerHook('displayAdminOrderMainBottom');
-            }
-        } catch (Throwable $e) {
-            error_log('[Yuju] No se pudo registrar el hook del detalle de órdenes: ' . $e->getMessage());
-        }
+        // Compatibilidad con instalaciones existentes: registrar hooks visuales
+        $this->ensureOrderDetailHooks();
 
         $controller = Tools::getValue('controller');
         // Tablas y pestañas se preparan durante instalación/actualización.
@@ -1283,9 +1569,19 @@ class Yuju extends Module
         }
 
         // Cargar CSS/JS en TODOS los controladores del módulo Yuju
-        if (strpos($controller, 'AdminYuju') === 0) {
+        if (strpos((string) $controller, 'AdminYuju') === 0) {
             $this->registerYujuAdminAssets(true);
         }
+
+        $output = '';
+
+        // Si estamos en la página de visualización de una orden, inyectar directamente el script
+        $orderId = $this->getAdminOrderIdFromRequest($params);
+        if ($orderId > 0) {
+            $output .= $this->renderOrderChannelInfoScript($orderId);
+        }
+
+        return $output;
     }
 
     /**

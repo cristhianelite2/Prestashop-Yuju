@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14 — Visualización de canal e ID de orden Yuju en Información básica (v1.0.3)
+- Visualización de "Nombre del canal" e "ID de la orden de Yuju" dentro de `#orderBasicInfo` en la vista de pedidos del back office (`/sell/orders/{id}/view`).
+- Mecanismo redundante de inyección: gancho global `displayBackOfficeHeader` más `displayAdminOrderMainBottom`, `displayAdminOrderSideBottom` y `displayAdminOrder`, con registro automático de hooks en tiendas actualizadas vía panel.
+- Búsqueda resiliente de metadatos: localización por ID o referencia PrestaShop, auto-reparación de `prestashop_order_id` en `yuju_order_mapping`, respaldo en `yuju_webhook_logs`, resolución vía API Yuju y mapeo de nombres amigables (Mercado Libre, Amazon, Liverpool, etc.).
+- Reducción de throttles de consulta a 2 minutos en lugar de 24 horas para evitar bloqueos prolongados durante revisiones.
+- Versión bump a `1.0.3` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-13 — Renombrado del módulo: prestashopyuju → yuju
 - Identidad de módulo cambiada a `yuju` (carpeta + clase `Yuju` + `$this->name = 'yuju'`): el ZIP instalable ahora es `yuju/yuju.php` y PrestaShop lo instala como módulo `yuju`.
 - Archivo principal `prestashopyuju.php` → `yuju.php`; dominios de traducción `Modules.Prestashopyuju.*` → `Modules.Yuju.*` (XLF renombrados a `ModulesYujuAdmin` / `ModulesYujuShop`).
