@@ -102,7 +102,7 @@ class YujuOrderFieldMapping
                         ? max(0, (int) $raw) : 0;
                 }
             }
-            foreach (['price', 'unit_price', 'total', 'total_price', 'amount'] as $priceKey) {
+            foreach (['price', 'unit_price', 'unit_price_tax_excl', 'total', 'total_price', 'total_price_tax_excl', 'total_price_tax_incl', 'amount'] as $priceKey) {
                 if (array_key_exists($priceKey, $item)) {
                     $raw = $item[$priceKey];
                     $data['items'][$index][$priceKey] = is_numeric($raw) && is_finite((float) $raw)
