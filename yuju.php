@@ -991,20 +991,76 @@ class Yuju extends Module
         if ($orderId <= 0 && isset($params['order']) && is_object($params['order'])) {
             $orderId = (int) ($params['order']->id ?? 0);
         }
-        if ($orderId <= 0) { return ''; }
+        if ($orderId <= 0) {
+            return '';
+        }
+
         try {
             $table = _DB_PREFIX_ . 'yuju_order_mapping';
-            $cols = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "channel_name"');
-            $nameSelect = !empty($cols) ? ', `channel_name`' : ', NULL AS `channel_name`';
-            $row = Db::getInstance()->getRow('SELECT `yuju_order_id`, `id_channel`' . $nameSelect . ' FROM `' . bqSQL($table) . '` WHERE `prestashop_order_id` = ' . $orderId);
-            if (!$row) { return ''; }
+            $columns = Db::getInstance()->executeS(
+                'SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "channel_name"'
+            );
+            $channelNameSelect = !empty($columns)
+                ? ', `channel_name`'
+                : ', NULL AS `channel_name`';
+
+            $row = Db::getInstance()->getRow(
+                'SELECT `yuju_order_id`, `id_channel`' . $channelNameSelect
+                . ' FROM `' . bqSQL($table) . '`'
+                . ' WHERE `prestashop_order_id` = ' . (int) $orderId
+            );
+
+            if (!$row) {
+                return '';
+            }
+
             $channelName = trim((string) ($row['channel_name'] ?? ''));
             $channelOrderId = trim((string) ($row['yuju_order_id'] ?? ''));
-            return '<section class="card mt-2"><div class="card-header"><h3 class="card-header-title">Origen del pedido</h3></div><div class="card-body"><dl class="row mb-0">'
-                . '<dt class="col-sm-4">Nombre del canal</dt><dd class="col-sm-8">' . Tools::safeOutput($channelName !== '' ? $channelName : 'No disponible') . '</dd>'
-                . '<dt class="col-sm-4">ID de la orden del canal</dt><dd class="col-sm-8"><code>' . Tools::safeOutput($channelOrderId !== '' ? $channelOrderId : 'No disponible') . '</code></dd>'
-                . '</dl></div></section>';
-        } catch (Throwable $e) { error_log('[Yuju] Error mostrando metadatos de orden: ' . $e->getMessage()); return ''; }
+            $channelName = $channelName !== '' ? $channelName : 'No disponible';
+            $channelOrderId = $channelOrderId !== '' ? $channelOrderId : 'No disponible';
+
+            // Insertar los datos dentro de la tarjeta nativa "Información básica".
+            // Así el cambio se distribuye con el módulo, sin modificar archivos del core.
+            $rowsHtml = '<div class="row mb-1 yuju-order-channel-info">'
+                . '<div class="col-xxl-4 text-xxl-right font-weight-bold">Nombre del canal</div>'
+                . '<div class="col-xxl-8">' . Tools::safeOutput($channelName) . '</div>'
+                . '</div>'
+                . '<div class="row mb-1 yuju-order-channel-info">'
+                . '<div class="col-xxl-4 text-xxl-right font-weight-bold">ID de la orden del canal</div>'
+                . '<div class="col-xxl-8"><code>' . Tools::safeOutput($channelOrderId) . '</code></div>'
+                . '</div>';
+
+            $rowsJson = json_encode(
+                $rowsHtml,
+                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+            );
+
+            return '<script>
+(function () {
+    var rowsHtml = ' . $rowsJson . ';
+    var inserted = false;
+    function insertYujuOrderInfo() {
+        if (inserted) return true;
+        var card = document.querySelector("#orderBasicInfo .card-body");
+        if (!card) return false;
+        if (!card.querySelector(".yuju-order-channel-info")) {
+            card.insertAdjacentHTML("beforeend", rowsHtml);
+        }
+        inserted = true;
+        return true;
+    }
+    if (insertYujuOrderInfo()) return;
+    var observer = new MutationObserver(function () {
+        if (insertYujuOrderInfo()) observer.disconnect();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(function () { observer.disconnect(); }, 10000);
+})();
+</script>';
+        } catch (Throwable $e) {
+            error_log('[Yuju] Error mostrando metadatos de orden: ' . $e->getMessage());
+            return '';
+        }
     }
 
     /**
