@@ -1954,9 +1954,14 @@ class YujuOrderManager
     protected function addOrderDetails($order, $items)
     {
         foreach ($items as $item) {
-            $product_id = $this->findProductByYujuId($item['product_id']);
+            $product_id = $this->findProductByYujuId($item['product_id'] ?? null);
+            // Si falta el ID de Yuju o no tiene mapeo, intentar por SKU/referencia de PrestaShop.
+            if (!$product_id && !empty($item['sku'])) {
+                $product_id = $this->findProductBySKU($item['sku']);
+            }
 
             if (!$product_id) {
+                $this->logger->log('Order item skipped: no PrestaShop product matched by Yuju ID or SKU (' . (string) ($item['sku'] ?? 'not found') . ')', 'warning');
                 continue;
             }
 
