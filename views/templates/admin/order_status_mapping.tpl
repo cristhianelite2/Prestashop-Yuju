@@ -365,7 +365,7 @@
         $('#field-mapping-default').val(b.attr('data-default'));
         $('#save-field-mapping').html('<i class="icon-save"></i> Actualizar');
         $('#cancel-field-mapping-edit').show();
-        $('#field-mapping-panel').get(0).scrollIntoView({behavior:'smooth', block:'start'});
+        $('#order-field-mapping-panel').get(0).scrollIntoView({behavior:'smooth', block:'start'});
     });
     $('#field-mapping-form').on('submit', function(e) {
         e.preventDefault();
