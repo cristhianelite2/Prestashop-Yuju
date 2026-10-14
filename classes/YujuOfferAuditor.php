@@ -2032,11 +2032,15 @@ class YujuOfferAuditor
             'SELECT prestashop_field, transformation_rule
              FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`
              WHERE yuju_field = \'price\' AND is_active = 1
-             ORDER BY id_mapping DESC'
+             ORDER BY prestashop_field DESC, id_mapping DESC
+             LIMIT 1'
         );
 
-        // Compatibilidad con instalaciones antiguas sin mapeo activo de precio:
-        // el fallback canónico del módulo es el campo base "price".
+        // YujuProductManager procesa los mapeos activos ordenados por prestashop_field
+        // ascendente; si hay duplicados para el destino "price", el último sobrescribe
+        // a los anteriores. Elegimos aquí el mismo mapeo efectivo para evitar que la
+        // auditoría envíe un precio distinto al que produciría la sincronización normal.
+        // Si no existe mapeo activo, conservar compatibilidad con el campo base "price".
         $source = !empty($mapping['prestashop_field'])
             ? trim((string) $mapping['prestashop_field'])
             : 'price';
