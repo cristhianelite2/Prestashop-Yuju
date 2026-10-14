@@ -5,7 +5,7 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
-<div class="panel" id="order-field-mapping-panel">
+<div class="panel" id="order-field-mapping-panel" data-ajax-url="{$ajax_url|escape:'htmlall':'UTF-8'}" data-admin-token="{$token|escape:'htmlall':'UTF-8'}">
     <div class="panel-heading"><i class="icon-random"></i> Mapeo general de campos de órdenes</div>
     <div class="panel-body">
         <p class="help-block">
@@ -234,10 +234,11 @@
     </div>
 </div>
 
-<script type="text/javascript">
+{literal}<script type="text/javascript">
 (function() {
-    var ajaxUrl = '{$ajax_url|escape:'javascript':'UTF-8'}';
-    var adminToken = '{$token|escape:'javascript':'UTF-8'}';
+    var mappingPanel = document.getElementById('order-field-mapping-panel');
+    var ajaxUrl = mappingPanel ? mappingPanel.getAttribute('data-ajax-url') : '';
+    var adminToken = mappingPanel ? mappingPanel.getAttribute('data-admin-token') : '';
 
     function showAlert(msg, ok) {
         var $a = $('#status-mapping-alert');
@@ -407,5 +408,5 @@
     });
 
 })();
-</script>
+</script>{/literal}
 {/block}
