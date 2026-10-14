@@ -1184,6 +1184,20 @@ class Yuju extends Module
      */
     public function hookDisplayBackOfficeHeader()
     {
+        // Compatibilidad con instalaciones existentes: registrar el hook visual sin
+        // activar los hooks de sincronización de productos o inventario.
+        try {
+            $orderDetailHookId = (int) Hook::getIdByName('displayAdminOrderMainBottom');
+            $registeredModules = $orderDetailHookId > 0
+                ? Hook::getModulesFromHook($orderDetailHookId, (int) $this->id)
+                : [];
+            if (!$orderDetailHookId || !$registeredModules) {
+                $this->registerHook('displayAdminOrderMainBottom');
+            }
+        } catch (Throwable $e) {
+            error_log('[Yuju] No se pudo registrar el hook del detalle de órdenes: ' . $e->getMessage());
+        }
+
         $controller = Tools::getValue('controller');
         // Tablas y pestañas se preparan durante instalación/actualización.
         // Se conserva el intento diferido de crear el transportista.
