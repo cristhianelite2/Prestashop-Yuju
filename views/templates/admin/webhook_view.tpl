@@ -17,6 +17,24 @@
     </div>
 
     <div class="panel-body">
+        <div id="yuju-address-json-modal" class="yuju-json-modal" aria-hidden="true">
+            <div class="yuju-json-modal__backdrop" onclick="closeAddressPayload()"></div>
+            <div class="yuju-json-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="yuju-address-json-title">
+                <div class="yuju-json-modal__header">
+                    <strong id="yuju-address-json-title"><i class="icon-code"></i> JSON enviado al objeto Address</strong>
+                    <button type="button" class="close" aria-label="Cerrar" onclick="closeAddressPayload()">&times;</button>
+                </div>
+                <div class="yuju-json-modal__body">
+                    <p class="text-muted">Valores asignados a las propiedades de PrestaShop justo antes de intentar guardar la dirección.</p>
+                    <pre id="yuju-address-json-content" class="yuju-code-block yuju-code-block--json"></pre>
+                </div>
+                <div class="yuju-json-modal__footer">
+                    <button type="button" class="btn btn-default" onclick="copyAddressPayload()"><i class="icon-copy"></i> Copiar JSON</button>
+                    <button type="button" class="btn btn-primary" onclick="closeAddressPayload()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-md-7">
                 <div class="yuju-card">
@@ -122,6 +140,12 @@
                                             {if $step.error}
                                                 <div class="text-danger small" style="margin-top:4px;">{$step.error|escape:'html':'UTF-8'}</div>
                                             {/if}
+                                            {if $step_key == 'address' && $step.address_payload}
+                                                <button type="button" class="btn btn-default btn-xs yuju-address-json-btn" style="margin-top:8px;" onclick="openAddressPayload('yuju-address-payload-json')">
+                                                    <i class="icon-code"></i> Ver JSON enviado
+                                                </button>
+                                                <pre id="yuju-address-payload-json" class="yuju-hidden-json">{$step.address_payload|escape:'html':'UTF-8'}</pre>
+                                            {/if}
                                         </div>
                                     </div>
                                 </div>
@@ -225,6 +249,45 @@ function retryWebhook(webhookId) {
             alert('Error de conexión al reintentar webhook');
         }
     });
+}
+
+function openAddressPayload(sourceId) {
+    var source = document.getElementById(sourceId);
+    var modal = document.getElementById('yuju-address-json-modal');
+    var target = document.getElementById('yuju-address-json-content');
+    if (!source || !modal || !target) {
+        return;
+    }
+    target.textContent = (source.textContent || source.innerText || '').trim();
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('yuju-json-modal-open');
+}
+
+function closeAddressPayload() {
+    var modal = document.getElementById('yuju-address-json-modal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('yuju-json-modal-open');
+}
+
+function copyAddressPayload() {
+    var target = document.getElementById('yuju-address-json-content');
+    if (target) {
+        var text = target.textContent || target.innerText || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('JSON copiado');
+            }).catch(function() {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    }
 }
 
 function exportWebhookLog(webhookId) {
@@ -503,4 +566,23 @@ function fallbackCopy(text) {
     background: #f0f2f5;
     color: #777;
 }
+
+.yuju-hidden-json { display: none; }
+.yuju-json-modal { display: none; position: fixed; z-index: 10050; inset: 0; }
+.yuju-json-modal.is-open { display: block; }
+.yuju-json-modal__backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, .65); }
+.yuju-json-modal__dialog {
+    position: relative; width: calc(100% - 30px); max-width: 850px;
+    max-height: calc(100vh - 50px); margin: 25px auto; display: flex;
+    flex-direction: column; background: #fff; border-radius: 8px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, .3);
+}
+.yuju-json-modal__header, .yuju-json-modal__footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid #e5e7eb;
+}
+.yuju-json-modal__footer { justify-content: flex-end; border-top: 1px solid #e5e7eb; border-bottom: 0; }
+.yuju-json-modal__body { padding: 16px; overflow: auto; }
+.yuju-json-modal__body .yuju-code-block { max-height: min(60vh, 560px); white-space: pre; }
+body.yuju-json-modal-open { overflow: hidden; }
 </style>
