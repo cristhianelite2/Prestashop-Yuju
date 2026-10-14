@@ -57,7 +57,7 @@
                         <h4 class="panel-title" style="font-size:13px;">
                             <a role="button" data-toggle="collapse" data-parent="#field-mapping-accordion" href="#field-map-collapse-{$smarty.foreach.fieldgroups.iteration}" aria-expanded="false" style="display:block;text-decoration:none;">
                                 <i class="icon-folder-close"></i> {$group_label|escape:'html':'UTF-8'}
-                                <span class="badge">{count($group_rows)}</span>
+                                <span class="badge">{$group_rows|@count}</span>
                                 <i class="icon-chevron-down pull-right"></i>
                             </a>
                         </h4>
