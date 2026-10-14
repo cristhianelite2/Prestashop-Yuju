@@ -37,6 +37,7 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuOrderStatusMapping',
             'status_mappings' => $this->getStatusMappings(),
+            'field_mappings' => $this->getFieldMappings(),
             'prestashop_order_states' => $this->getPrestashopOrderStates(),
             'yuju_order_statuses' => YujuStatusMappings::getOfficialYujuOrderStatuses(),
             'yuju_documented_statuses' => YujuStatusMappings::getDocumentedYujuOrderStatuses(),
@@ -257,6 +258,114 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
             $response['message'] = $e->getMessage();
         }
 
+        die(json_encode($response));
+    }
+
+
+    /** Mapeos genéricos de campos de orden. */
+    protected function getFieldMappings()
+    {
+        try {
+            $rows = Db::getInstance()->executeS(
+                'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_order_field_mapping ORDER BY target_path ASC, id ASC'
+            );
+            return is_array($rows) ? $rows : [];
+        } catch (Exception $e) {
+            $this->logger->log('No se pudieron leer los mapeos de campos: ' . $e->getMessage(), 'warning');
+            return [];
+        }
+    }
+
+    public function ajaxProcessSaveFieldMapping()
+    {
+        header('Content-Type: application/json');
+        $response = ['success' => false, 'message' => ''];
+        try {
+            $id = (int) Tools::getValue('id_field_mapping');
+            $target = trim((string) Tools::getValue('target_path'));
+            $template = trim((string) Tools::getValue('template'));
+            $type = strtolower(trim((string) Tools::getValue('field_type', 'string')));
+            $default = trim((string) Tools::getValue('default_value'));
+            $active = (int) Tools::getValue('is_active', 1) ? 1 : 0;
+
+            if (!preg_match('/^[a-zA-Z0-9_-]+(?:\\.[a-zA-Z0-9_-]+)*$/', $target) || strlen($target) > 190) {
+                throw new Exception('Ruta de destino no válida. Use rutas como customer.first_name o items.0.quantity.');
+            }
+            if ($template === '') {
+                throw new Exception('La plantilla no puede estar vacía. Use texto o comodines como %customer.last_name%.');
+            }
+            if (!in_array($type, ['string', 'integer', 'decimal', 'boolean'], true)) {
+                throw new Exception('Tipo de dato no válido.');
+            }
+            $data = [
+                'target_path' => pSQL($target),
+                'template' => pSQL($template, true),
+                'field_type' => pSQL($type),
+                'default_value' => $default === '' ? null : pSQL($default),
+                'is_active' => $active,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            if ($id > 0) {
+                $ok = Db::getInstance()->update('yuju_order_field_mapping', $data, 'id = ' . $id);
+            } else {
+                $data['created_at'] = date('Y-m-d H:i:s');
+                $ok = Db::getInstance()->insert('yuju_order_field_mapping', $data);
+            }
+            if (!$ok) {
+                throw new Exception('No se pudo guardar el mapeo de campos.');
+            }
+            $response['success'] = true;
+            $response['message'] = 'Mapeo de campo guardado.';
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+            $this->logger->log('Error saving order field mapping: ' . $e->getMessage(), 'error');
+        }
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessDeleteFieldMapping()
+    {
+        header('Content-Type: application/json');
+        $response = ['success' => false, 'message' => ''];
+        try {
+            $id = (int) Tools::getValue('id_field_mapping');
+            if ($id <= 0) {
+                throw new Exception('ID de mapeo de campo inválido.');
+            }
+            $ok = Db::getInstance()->delete('yuju_order_field_mapping', 'id = ' . $id);
+            if (!$ok) {
+                throw new Exception('No se pudo eliminar el mapeo de campo.');
+            }
+            $response['success'] = true;
+            $response['message'] = 'Mapeo de campo eliminado.';
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
+        die(json_encode($response));
+    }
+
+    public function ajaxProcessToggleFieldMapping()
+    {
+        header('Content-Type: application/json');
+        $response = ['success' => false, 'message' => ''];
+        try {
+            $id = (int) Tools::getValue('id_field_mapping');
+            $active = (int) Tools::getValue('is_active') ? 1 : 0;
+            if ($id <= 0) {
+                throw new Exception('ID de mapeo de campo inválido.');
+            }
+            $ok = Db::getInstance()->update('yuju_order_field_mapping', [
+                'is_active' => $active,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ], 'id = ' . $id);
+            if (!$ok) {
+                throw new Exception('No se pudo cambiar el estado del mapeo.');
+            }
+            $response['success'] = true;
+            $response['message'] = $active ? 'Mapeo activado.' : 'Mapeo desactivado.';
+        } catch (Exception $e) {
+            $response['message'] = $e->getMessage();
+        }
         die(json_encode($response));
     }
 
