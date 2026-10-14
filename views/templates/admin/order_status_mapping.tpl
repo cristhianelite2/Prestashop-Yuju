@@ -16,6 +16,7 @@
         </p>
         <form id="field-mapping-form" class="well">
             <input type="hidden" id="field-mapping-id" value="0">
+            <input type="hidden" id="field-mapping-active" value="1">
             <div class="row">
                 <div class="col-lg-3 col-md-4 form-group">
                     <label for="field-mapping-target">Campo destino</label>
@@ -348,6 +349,7 @@
     }
     function resetFieldForm() {
         $('#field-mapping-id').val('0');
+        $('#field-mapping-active').val('1');
         $('#field-mapping-target').val('');
         $('#field-mapping-template').val('');
         $('#field-mapping-type').val('string');
@@ -363,6 +365,7 @@
         $('#field-mapping-template').val(b.attr('data-template'));
         $('#field-mapping-type').val(b.attr('data-type'));
         $('#field-mapping-default').val(b.attr('data-default'));
+        $('#field-mapping-active').val(b.closest('tr').find('.toggle-field-mapping').is(':checked') ? '1' : '0');
         $('#save-field-mapping').html('<i class="icon-save"></i> Actualizar');
         $('#cancel-field-mapping-edit').show();
         $('#order-field-mapping-panel').get(0).scrollIntoView({behavior:'smooth', block:'start'});
@@ -378,7 +381,7 @@
                 template: $('#field-mapping-template').val(),
                 field_type: $('#field-mapping-type').val(),
                 default_value: $('#field-mapping-default').val(),
-                is_active: 1
+                is_active: $('#field-mapping-active').val()
             }
         }).done(function(res) {
             if (res && res.success) { window.location.reload(); }
