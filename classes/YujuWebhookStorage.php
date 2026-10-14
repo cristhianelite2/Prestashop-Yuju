@@ -51,6 +51,14 @@ class YujuWebhookStorage
     public function saveWebhook($headers, $payload = null)
     {
         try {
+            // Este almacenamiento también puede invocarse desde otros puntos del módulo.
+            // Normalizar aquí evita depender de cómo el servidor PHP entregue los headers.
+            $normalizedHeaders = [];
+            foreach ((array) $headers as $name => $value) {
+                $normalizedHeaders[strtolower((string) $name)] = $value;
+            }
+            $headers = $normalizedHeaders;
+
             $webhooks = $this->getAllWebhooks();
             
             // Extraer información clave del webhook
