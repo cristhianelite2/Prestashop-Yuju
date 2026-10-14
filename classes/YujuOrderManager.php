@@ -1724,6 +1724,9 @@ class YujuOrderManager
      */
     protected function getOrCreateAddress($address_data, $customer_id)
     {
+        // Evitar que un fallo previo deje un payload antiguo en el siguiente intento.
+        $this->lastAddressPayload = [];
+
         // LOG: Ver qué datos recibe este método
         $this->logger->log('getOrCreateAddress called with data: ' . json_encode($address_data) . ' | customer_id: ' . $customer_id, 'debug');
         
