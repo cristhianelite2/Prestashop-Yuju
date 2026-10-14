@@ -1290,12 +1290,19 @@ class Yuju extends Module
             return null;
         }
 
-        // 4. Resolver mediante YujuChannelResolver si falta id_channel o channel_name
+        // 4. Resolver el nombre desde la caché de cuenta usando id_channel.
         require_once dirname(__FILE__) . '/classes/YujuChannelResolver.php';
+        if ($idChannel !== '') {
+            // Reemplaza nombres antiguos guardados como slug en minúsculas.
+            $cachedChannelName = YujuChannelResolver::findNameInCache($idChannel);
+            if ($cachedChannelName !== '') { $channelName = $cachedChannelName; }
+        }
         if ($yujuOrderId !== '' && ($idChannel === '' || $channelName === '')) {
             $resolved = YujuChannelResolver::resolveOrderMetadata($yujuOrderId, $idChannel, $channelName);
             $idChannel = $resolved['id_channel'] ?? $idChannel;
             $channelName = $resolved['channel_name'] ?? $channelName;
+        }
+        if ($yujuOrderId !== '' && ($idChannel !== '' || $channelName !== '')) {
             YujuChannelResolver::persistOrderMetadata($yujuOrderId, $idChannel, $channelName, $orderId);
         }
 
@@ -1360,7 +1367,7 @@ class Yuju extends Module
 
         // 8. Valor por defecto razonable
         if ($channelName === '') {
-            $channelName = 'Mercado Libre';
+            $channelName = 'No disponible';
         }
 
         if ($yujuOrderId === '') {
@@ -1377,7 +1384,7 @@ class Yuju extends Module
     public function renderOrderChannelInfoScript($orderId)
     {
         $meta = $this->getOrderChannelMetadata($orderId);
-        $channelName = ($meta && !empty($meta['channel_name'])) ? $meta['channel_name'] : 'Mercado Libre';
+        $channelName = ($meta && !empty($meta['channel_name'])) ? $meta['channel_name'] : 'No disponible';
         $yujuOrderId = ($meta && !empty($meta['yuju_order_id'])) ? $meta['yuju_order_id'] : (string) $orderId;
         $idChannel = ($meta && !empty($meta['id_channel'])) ? $meta['id_channel'] : '';
 
