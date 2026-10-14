@@ -216,6 +216,20 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_mapping` (
     UNIQUE KEY `unique_yuju_order` (`yuju_order_id`)
 ) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_field_mapping` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `target_path` varchar(190) NOT NULL,
+    `template` text NOT NULL,
+    `field_type` enum('string','integer','decimal','boolean') NOT NULL DEFAULT 'string',
+    `default_value` varchar(255) DEFAULT NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_at` datetime NOT NULL,
+    `updated_at` datetime NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_target_path` (`target_path`),
+    KEY `idx_active` (`is_active`)
+) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_order_status_mapping` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `prestashop_status_id` int(11) NOT NULL,
