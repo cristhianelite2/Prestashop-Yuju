@@ -45,7 +45,7 @@ class YujuOrderFieldMapping
                     $value = self::pathValue($adapted, $path, $found);
                 }
                 if (!$found || is_array($value) || is_object($value) || $value === null) {
-                    return '';
+                    return 'not found';
                 }
                 return is_bool($value) ? ($value ? '1' : '0') : (string) $value;
             }, $template);
