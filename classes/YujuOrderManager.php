@@ -24,6 +24,7 @@ require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuOrderOutbound.php';
 require_once dirname(__FILE__) . '/YujuOrderFieldMapping.php';
+require_once dirname(__FILE__) . '/YujuChannelResolver.php';
 require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOrderManager
@@ -1105,6 +1106,13 @@ class YujuOrderManager
             }
         }
 
+        // Persistir id y nombre del canal recibido o resolver el nombre desde /account.
+        YujuChannelResolver::persistOrderMetadata(
+            $yuju_order_id,
+            $adapted_data['id_channel'] ?? '',
+            $adapted_data['channel_name'] ?? ''
+        );
+
         // Add order history - ESTO ES CRÍTICO para que la orden aparezca en el backoffice
         // El OrderHistory también crea los OrderDetail automáticamente desde el carrito
         try {
@@ -1202,6 +1210,13 @@ class YujuOrderManager
      */
     protected function syncExistingOrderFromYuju($prestashop_order_id, array $adapted_data, array $details = [], $from_duplicate_webhook = false)
     {
+
+        // Los webhooks updated-order pueden ser la primera fuente que complete el canal.
+        YujuChannelResolver::persistOrderMetadata(
+            $adapted_data['id'] ?? '',
+            $adapted_data['id_channel'] ?? '',
+            $adapted_data['channel_name'] ?? ''
+        );
         $order = new Order((int) $prestashop_order_id);
         if (!Validate::isLoadedObject($order)) {
             return [
