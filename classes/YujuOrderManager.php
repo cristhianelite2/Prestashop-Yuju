@@ -35,6 +35,9 @@ class YujuOrderManager
     /** @var string Último error al crear el transportista Yuju. */
     private $lastCarrierError = '';
 
+    /** @var array Últimos valores asignados al objeto Address antes de add(). */
+    private $lastAddressPayload = [];
+
     /** @var array<string,int> Contador de locks anidados por yuju_order_id (GET_LOCK no es reentrante) */
     private $orderLocksHeld = [];
 
@@ -892,6 +895,9 @@ class YujuOrderManager
                 'Dirección'
             );
         } catch (Exception $e) {
+            if (!empty($this->lastAddressPayload)) {
+                $details['shipping_address_payload'] = $this->lastAddressPayload;
+            }
             $details['shipping_address_error'] = $e->getMessage();
             $details['billing_address_error'] = $e->getMessage();
             $this->logger->log('Failed to create address: ' . $e->getMessage(), 'error');
@@ -1814,6 +1820,24 @@ class YujuOrderManager
         $address->phone = $phone;
         $address->dni = isset($address_data['dni']) ? substr($address_data['dni'], 0, 16) : '00000000';
         $address->alias = 'Yuju Address';
+
+        // Guardar exactamente los campos que se asignan al objeto Address.
+        // Se adjunta al resultado fallido para poder inspeccionarlos en el panel.
+        $this->lastAddressPayload = [
+            'id_customer' => (int) $address->id_customer,
+            'firstname' => $address->firstname,
+            'lastname' => $address->lastname,
+            'company' => $address->company,
+            'address1' => $address->address1,
+            'address2' => $address->address2,
+            'postcode' => $address->postcode,
+            'city' => $address->city,
+            'id_country' => (int) $address->id_country,
+            'id_state' => (int) $address->id_state,
+            'phone' => $address->phone,
+            'dni' => $address->dni,
+            'alias' => $address->alias,
+        ];
 
         if (!$address->add()) {
             // Obtener errores de validación de PrestaShop
