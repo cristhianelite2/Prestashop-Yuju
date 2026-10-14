@@ -31,7 +31,7 @@ class YujuOrderFieldMapping
     public static function apply(array $adapted, array $source)
     {
         foreach (self::getMappings() as $mapping) {
-            $target = trim((string) ($mapping['target_path'] ?? ''));
+            $target = self::canonicalTarget(trim((string) ($mapping['target_path'] ?? '')));
             if (!self::isValidPath($target)) {
                 continue;
             }
@@ -124,11 +124,65 @@ class YujuOrderFieldMapping
                 }
             }
         }
-        $data['currency'] = self::validText($data['currency'] ?? '', 'MXN');
-        if (isset($data['total']) && !is_numeric($data['total'])) {
-            $data['total'] = 0;
+        $data['currency'] = strtoupper(self::validText($data['currency'] ?? '', 'MXN'));
+        $data['id'] = self::validText($data['id'] ?? '', 'yuju_' . substr(hash('sha256', uniqid('', true)), 0, 16));
+        $data['reference'] = self::validText($data['reference'] ?? '', (string) $data['id']);
+        foreach (['total_amount', 'total_amount_tax_excl', 'products_total', 'shipping_cost', 'total'] as $numericKey) {
+            if (array_key_exists($numericKey, $data)) {
+                $raw = $data[$numericKey];
+                $data[$numericKey] = is_numeric($raw) && is_finite((float) $raw) ? (float) $raw : 0.0;
+            }
+        }
+        foreach (['status', 'payment_method', 'shipping_method'] as $textKey) {
+            if (array_key_exists($textKey, $data)) {
+                $data[$textKey] = self::validText($data[$textKey], 'not found');
+            }
+        }
+        if (isset($data['created_at']) && strtotime((string) $data['created_at']) === false) {
+            $data['created_at'] = date('Y-m-d H:i:s');
         }
         return $data;
+    }
+
+    private static function canonicalTarget($target)
+    {
+        $aliases = [
+            'cart.currency' => 'currency',
+            'cart.items' => 'items',
+            'cart.shipping_cost' => 'shipping_cost',
+            'cart.products_total' => 'products_total',
+            'order.id' => 'id',
+            'order.reference' => 'reference',
+            'order.status' => 'status',
+            'order.currency' => 'currency',
+            'order.total' => 'total_amount',
+            'order.total_amount' => 'total_amount',
+            'order.total_amount_tax_excl' => 'total_amount_tax_excl',
+            'order.products_total' => 'products_total',
+            'order.shipping_cost' => 'shipping_cost',
+            'order.payment_method' => 'payment_method',
+            'order.shipping_method' => 'shipping_method',
+            'order.created_at' => 'created_at',
+            'address.shipping.first_name' => 'shipping_address.first_name',
+            'address.shipping.last_name' => 'shipping_address.last_name',
+            'address.shipping.address_line_1' => 'shipping_address.address_line_1',
+            'address.shipping.address_line_2' => 'shipping_address.address_line_2',
+            'address.shipping.city' => 'shipping_address.city',
+            'address.shipping.postal_code' => 'shipping_address.postal_code',
+            'address.shipping.phone' => 'shipping_address.phone',
+            'address.shipping.country_code' => 'shipping_address.country_code',
+            'address.shipping.state_code' => 'shipping_address.state_code',
+            'address.billing.first_name' => 'billing_address.first_name',
+            'address.billing.last_name' => 'billing_address.last_name',
+            'address.billing.address_line_1' => 'billing_address.address_line_1',
+            'address.billing.address_line_2' => 'billing_address.address_line_2',
+            'address.billing.city' => 'billing_address.city',
+            'address.billing.postal_code' => 'billing_address.postal_code',
+            'address.billing.phone' => 'billing_address.phone',
+            'address.billing.country_code' => 'billing_address.country_code',
+            'address.billing.state_code' => 'billing_address.state_code',
+        ];
+        return isset($aliases[$target]) ? $aliases[$target] : $target;
     }
 
     private static function isInvalidName($value)
