@@ -146,6 +146,31 @@ class YujuOrderFieldMapping
 
     private static function canonicalTarget($target)
     {
+        // Los prefijos identifican el bloque funcional en la UI; se traducen a
+        // las claves consumidas realmente por el pipeline de creación de pedidos.
+        if (strpos($target, 'cart.items.') === 0) {
+            return 'items.' . substr($target, strlen('cart.items.'));
+        }
+        if (strpos($target, 'order.customer.') === 0) {
+            return substr($target, strlen('order.'));
+        }
+        if (strpos($target, 'order.shipping_address.') === 0 || strpos($target, 'order.billing_address.') === 0) {
+            return substr($target, strlen('order.'));
+        }
+        if (strpos($target, 'cart.') === 0) {
+            $candidate = substr($target, strlen('cart.'));
+            if (in_array($candidate, ['currency', 'items', 'shipping_cost', 'products_total'], true)) {
+                return $candidate;
+            }
+        }
+        if (strpos($target, 'order.') === 0) {
+            $candidate = substr($target, strlen('order.'));
+            if (in_array($candidate, ['id', 'reference', 'status', 'currency', 'total', 'total_amount',
+                'total_amount_tax_excl', 'products_total', 'shipping_cost', 'payment_method',
+                'shipping_method', 'created_at'], true)) {
+                $target = $candidate;
+            }
+        }
         $aliases = [
             'cart.currency' => 'currency',
             'cart.items' => 'items',
