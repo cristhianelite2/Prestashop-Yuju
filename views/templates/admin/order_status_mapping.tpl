@@ -5,6 +5,82 @@
 {extends file="./layout.tpl"}
 
 {block name="content"}
+<div class="panel" id="order-field-mapping-panel">
+    <div class="panel-heading"><i class="icon-random"></i> Mapeo general de campos de órdenes</div>
+    <div class="panel-body">
+        <p class="help-block">
+            Personaliza cualquier ruta del pedido antes de crear cliente, dirección, carrito y orden. Escribe una ruta destino como
+            <code>customer.first_name</code>, <code>shipping_address.address_line_1</code>, <code>items.0.quantity</code> o <code>currency</code>.
+            En la plantilla puedes combinar texto fijo con comodines, por ejemplo <code>Nombre: %customer.last_name%</code>.
+            Los comodines se buscan en el payload original de Yuju y, si no existen allí, en los datos adaptados. Tipos numéricos inválidos se convierten al valor predeterminado (0 por defecto); texto vacío usa <code>not found</code> por defecto.
+        </p>
+        <form id="field-mapping-form" class="well">
+            <input type="hidden" id="field-mapping-id" value="0">
+            <div class="row">
+                <div class="col-lg-3 col-md-4 form-group">
+                    <label for="field-mapping-target">Campo destino</label>
+                    <input class="form-control" id="field-mapping-target" placeholder="customer.first_name" required>
+                </div>
+                <div class="col-lg-4 col-md-5 form-group">
+                    <label for="field-mapping-template">Plantilla / valor</label>
+                    <input class="form-control" id="field-mapping-template" placeholder="Nombre: %customer.last_name%" required>
+                </div>
+                <div class="col-lg-2 col-md-3 form-group">
+                    <label for="field-mapping-type">Tipo</label>
+                    <select class="form-control" id="field-mapping-type">
+                        <option value="string">Texto</option>
+                        <option value="integer">Entero</option>
+                        <option value="decimal">Decimal</option>
+                        <option value="boolean">Booleano (0/1)</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3 form-group">
+                    <label for="field-mapping-default">Valor por defecto</label>
+                    <input class="form-control" id="field-mapping-default" placeholder="not found / 0">
+                </div>
+                <div class="col-lg-1 col-md-2 form-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary btn-block" type="submit" id="save-field-mapping"><i class="icon-save"></i></button>
+                </div>
+            </div>
+            <p class="help-block small">Para combinar valores: <code>Nombre: %customer.last_name%</code>. Ejemplos de rutas de origen: <code>customer.first_name</code>, <code>shipping_address.city</code>, <code>items.0.price</code>, <code>id</code>. Los campos destino usan puntos para separar niveles.</p>
+            <button type="button" class="btn btn-default btn-sm" id="cancel-field-mapping-edit" style="display:none;">Cancelar edición</button>
+            <div id="field-mapping-alert" class="alert" style="display:none;margin-top:10px;"></div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-striped" id="field-mappings-table">
+                <thead><tr><th>Destino</th><th>Plantilla</th><th>Tipo</th><th>Valor por defecto</th><th>Activo</th><th>Acciones</th></tr></thead>
+                <tbody>
+                    {if $field_mappings && count($field_mappings) > 0}
+                        {foreach from=$field_mappings item=fm}
+                            <tr>
+                                <td><code>{$fm.target_path|escape:'html':'UTF-8'}</code></td>
+                                <td><code>{$fm.template|escape:'html':'UTF-8'}</code></td>
+                                <td>{$fm.field_type|escape:'html':'UTF-8'}</td>
+                                <td>{$fm.default_value|escape:'html':'UTF-8'}</td>
+                                <td>
+                                    <input type="checkbox" class="toggle-field-mapping" data-id="{$fm.id|intval}" {if $fm.is_active}checked="checked"{/if}>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-default btn-xs edit-field-mapping"
+                                        data-id="{$fm.id|intval}"
+                                        data-target="{$fm.target_path|escape:'html':'UTF-8'}"
+                                        data-template="{$fm.template|escape:'html':'UTF-8'}"
+                                        data-type="{$fm.field_type|escape:'html':'UTF-8'}"
+                                        data-default="{$fm.default_value|escape:'html':'UTF-8'}"><i class="icon-edit"></i> Editar</button>
+                                    <button type="button" class="btn btn-danger btn-xs delete-field-mapping" data-id="{$fm.id|intval}"><i class="icon-trash"></i></button>
+                                </td>
+                            </tr>
+                        {/foreach}
+                    {else}
+                        <tr class="field-mappings-empty"><td colspan="6" class="text-center text-muted">Aún no hay reglas generales configuradas.</td></tr>
+                    {/if}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-exchange"></i>
@@ -265,6 +341,68 @@
             }
         });
     });
+
+    function showFieldAlert(msg, ok) {
+        $('#field-mapping-alert').removeClass('alert-success alert-danger')
+            .addClass(ok ? 'alert-success' : 'alert-danger').text(msg).show();
+    }
+    function resetFieldForm() {
+        $('#field-mapping-id').val('0');
+        $('#field-mapping-target').val('');
+        $('#field-mapping-template').val('');
+        $('#field-mapping-type').val('string');
+        $('#field-mapping-default').val('');
+        $('#save-field-mapping').html('<i class="icon-save"></i>');
+        $('#cancel-field-mapping-edit').hide();
+    }
+    $('#cancel-field-mapping-edit').on('click', resetFieldForm);
+    $(document).on('click', '.edit-field-mapping', function() {
+        var b = $(this);
+        $('#field-mapping-id').val(b.data('id'));
+        $('#field-mapping-target').val(b.attr('data-target'));
+        $('#field-mapping-template').val(b.attr('data-template'));
+        $('#field-mapping-type').val(b.attr('data-type'));
+        $('#field-mapping-default').val(b.attr('data-default'));
+        $('#save-field-mapping').html('<i class="icon-save"></i> Actualizar');
+        $('#cancel-field-mapping-edit').show();
+        $('#field-mapping-panel').get(0).scrollIntoView({behavior:'smooth', block:'start'});
+    });
+    $('#field-mapping-form').on('submit', function(e) {
+        e.preventDefault();
+        $.ajax({
+            url: ajaxUrl, method: 'POST', dataType: 'json',
+            data: {
+                ajax: true, action: 'saveFieldMapping', token: adminToken,
+                id_field_mapping: $('#field-mapping-id').val(),
+                target_path: $('#field-mapping-target').val(),
+                template: $('#field-mapping-template').val(),
+                field_type: $('#field-mapping-type').val(),
+                default_value: $('#field-mapping-default').val(),
+                is_active: 1
+            }
+        }).done(function(res) {
+            if (res && res.success) { window.location.reload(); }
+            else { showFieldAlert((res && res.message) || 'No se pudo guardar el mapeo.', false); }
+        }).fail(function() { showFieldAlert('Error de comunicación al guardar el mapeo.', false); });
+    });
+    $(document).on('change', '.toggle-field-mapping', function() {
+        $.ajax({
+            url: ajaxUrl, method: 'POST', dataType: 'json',
+            data: {ajax:true, action:'toggleFieldMapping', token:adminToken,
+                id_field_mapping:$(this).data('id'), is_active:$(this).is(':checked') ? 1 : 0}
+        }).fail(function() { alert('No se pudo cambiar el estado del mapeo.'); });
+    });
+    $(document).on('click', '.delete-field-mapping', function() {
+        if (!confirm('¿Eliminar esta regla de mapeo de campos?')) return;
+        $.ajax({
+            url: ajaxUrl, method: 'POST', dataType: 'json',
+            data: {ajax:true, action:'deleteFieldMapping', token:adminToken, id_field_mapping:$(this).data('id')}
+        }).done(function(res) {
+            if (res && res.success) window.location.reload();
+            else alert((res && res.message) || 'No se pudo eliminar el mapeo.');
+        }).fail(function() { alert('Error de comunicación al eliminar el mapeo.'); });
+    });
+
 })();
 </script>
 {/block}
