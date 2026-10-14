@@ -821,7 +821,12 @@ class YujuOrderManager
         // Get or create customer
         $customer = null;
         try {
-            $customer = $this->getOrCreateCustomer($adapted_data['customer']);
+            $customer = $this->getOrCreateCustomer(
+                $adapted_data['customer'],
+                isset($adapted_data['shipping_address']) && is_array($adapted_data['shipping_address'])
+                    ? $adapted_data['shipping_address']
+                    : []
+            );
             if (!$customer || !$customer->id) {
                 throw new Exception('Customer object is null or has no ID');
             }
@@ -1593,7 +1598,7 @@ class YujuOrderManager
     /**
      * Get or create customer from order data.
      */
-    protected function getOrCreateCustomer($customer_data)
+    protected function getOrCreateCustomer($customer_data, array $shipping_address_data = [])
     {
         // LOG: Ver qué datos recibe este método
         $this->logger->log('getOrCreateCustomer called with data: ' . json_encode($customer_data), 'debug');
@@ -1624,22 +1629,40 @@ class YujuOrderManager
             throw new Exception('Invalid email format: ' . $email);
         }
         
-        // Validar y sanitizar nombres (PrestaShop requiere nombres válidos)
-        $firstname = trim($customer_data['first_name']);
-        $lastname = trim($customer_data['last_name']);
-        
-        if (empty($firstname)) {
-            $firstname = 'Cliente';
+        // En algunos marketplaces (p. ej. TikTok Shop), customer.first_name es un ID numérico,
+        // no un nombre real. Preferir el nombre de envío cuando el dato del cliente no sea válido.
+        $firstname = trim((string) ($customer_data['first_name'] ?? ''));
+        $lastname = trim((string) ($customer_data['last_name'] ?? ''));
+
+        $isUsableName = function ($value) {
+            $value = trim((string) $value);
+            return $value !== ''
+                && !preg_match('/^\d+$/', $value)
+                && preg_match('/[\p{L}]/u', $value);
+        };
+
+        if (!$isUsableName($firstname)) {
+            $firstname = trim((string) ($shipping_address_data['first_name'] ?? ''));
         }
-        if (empty($lastname)) {
-            $lastname = 'Yuju';
+        if (!$isUsableName($lastname)) {
+            $lastname = trim((string) ($shipping_address_data['last_name'] ?? ''));
         }
-        
-        // Remover caracteres especiales que PrestaShop no acepta
+
+        // TikTok puede ocultar parcialmente el nombre del destinatario. Limpiar los
+        // caracteres no admitidos por PrestaShop y aplicar un fallback válido.
         $firstname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $firstname);
         $lastname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $lastname);
-        
-        // Limitar longitud (PrestaShop tiene límites)
+        $firstname = trim(preg_replace('/\s+/', ' ', (string) $firstname));
+        $lastname = trim(preg_replace('/\s+/', ' ', (string) $lastname));
+
+        if (!$isUsableName($firstname)) {
+            $firstname = 'Cliente';
+        }
+        if (!$isUsableName($lastname)) {
+            $lastname = 'Yuju';
+        }
+
+        // PrestaShop limita ambos campos a 32 caracteres.
         $firstname = substr($firstname, 0, 32);
         $lastname = substr($lastname, 0, 32);
         
