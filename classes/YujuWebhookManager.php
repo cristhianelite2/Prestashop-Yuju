@@ -48,6 +48,14 @@ class YujuWebhookManager
      */
     public function processWebhook($payload, $headers, $onAccepted = null)
     {
+        // Canonizar nombres para que todas las rutinas internas lean las cabeceras
+        // igual, independientemente de la capitalización usada por el emisor.
+        $normalizedHeaders = [];
+        foreach ((array) $headers as $name => $value) {
+            $normalizedHeaders[strtolower((string) $name)] = $value;
+        }
+        $headers = $normalizedHeaders;
+
         $this->logger->log('Processing webhook with payload length: ' . strlen($payload), 'info');
 
         /** @var int|false|null $webhook_id */
