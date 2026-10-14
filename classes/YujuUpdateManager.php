@@ -177,6 +177,19 @@ class YujuUpdateManager
 
             $filesCopied = $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
+            // Asegurar que los hooks de vistas de órdenes y assets estén registrados tras actualizar
+            try {
+                if (file_exists($this->moduleDir . 'yuju.php')) {
+                    require_once $this->moduleDir . 'yuju.php';
+                    if (class_exists('Yuju')) {
+                        $moduleInstance = new Yuju();
+                        $moduleInstance->ensureOrderDetailHooks();
+                    }
+                }
+            } catch (Throwable $e) {
+                // Continuar sin interrumpir el proceso de actualización
+            }
+
             if (class_exists('Module') && method_exists('Module', 'upgradeModuleVersion')) {
                 Module::upgradeModuleVersion($this->moduleName, $remoteVersionFromZip);
             }

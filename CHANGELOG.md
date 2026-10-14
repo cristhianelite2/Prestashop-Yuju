@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-14 — Solución definitiva a visualización de canal e ID de orden Yuju (v1.0.4)
+- Creación de script independiente `views/js/admin_order_view.js` con detección multinivel: extracción directa del DOM (detecta entrega "Yuju", referencia de pedido, ID de pedido y deduce canal desde correo o valores del servidor), compatibilidad total con Symfony/Twig en PrestaShop 8 y 9.
+- Implementación de `hookActionAdminControllerSetMedia` para inyección de assets en controladores Symfony de pedidos, asegurando la entrega del JavaScript en todas las variantes de rutas administrativas.
+- Registro redundante en ganchos de órdenes: `actionAdminControllerSetMedia`, `displayBackOfficeHeader`, `displayAdminOrderMainBottom`, `displayAdminOrderSideBottom`, `displayAdminOrderSide`, `displayAdminOrder`, `displayAdminOrderTabOrder` y `displayAdminOrderTabContentOrder`.
+- Auto-registro de ganchos en `YujuUpdateManager::performUpdate()` inmediatamente tras la extracción del ZIP y en `__construct()` de `yuju.php` para tiendas ya actualizadas.
+- Consulta SQL directa y robusta a `ps_orders`, `ps_customer`, `ps_carrier` y `ps_order_carrier`, evitando fallos silenciosos por falta de contexto ORM en Symfony.
+- Eliminación de bloqueos tempranos en `getOrderChannelMetadata()`: garantiza que órdenes con transportista Yuju o referencia válida siempre devuelvan metadatos y nunca `null`.
+- Bump de versión a `1.0.4` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-14 — Visualización de canal e ID de orden Yuju en Información básica (v1.0.3)
 - Visualización de "Nombre del canal" e "ID de la orden de Yuju" dentro de `#orderBasicInfo` en la vista de pedidos del back office (`/sell/orders/{id}/view`).
 - Mecanismo redundante de inyección: gancho global `displayBackOfficeHeader` más `displayAdminOrderMainBottom`, `displayAdminOrderSideBottom` y `displayAdminOrder`, con registro automático de hooks en tiendas actualizadas vía panel.
