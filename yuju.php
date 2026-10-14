@@ -1465,11 +1465,50 @@ window.yujuOrderMetadata = ' . $metaJson . ';
 
         $queryBuilder = $params['search_query_builder'];
         $mappingTable = '`' . _DB_PREFIX_ . 'yuju_order_mapping`';
-        $queryBuilder->addSelect(
-            "CASE WHEN yuju_order_mapping.prestashop_order_id IS NOT NULL "
-            . "THEN COALESCE(NULLIF(yuju_order_mapping.channel_name, ''), 'Yuju') "
-            . "ELSE 'Prestashop' END AS yuju_marketplace"
-        );
+
+        // El nombre visible del marketplace proviene del catálogo de canales
+        // de YUJU_ACCOUNT_INFO_CACHE, igual que en la ficha individual del pedido.
+        require_once dirname(__FILE__) . '/classes/YujuChannelResolver.php';
+        $account = YujuChannelResolver::getCachedAccount();
+        if (isset($account['data']) && is_array($account['data'])) {
+            $account = $account['data'];
+        }
+        $channels = isset($account['channels']) && is_array($account['channels']) ? $account['channels'] : [];
+        $channelCases = [];
+        foreach ($channels as $key => $channel) {
+            if (!is_array($channel)) {
+                continue;
+            }
+            $channelId = trim((string) ($channel['id_channel'] ?? $channel['channel_id'] ?? $channel['id'] ?? $key));
+            if ($channelId === '') {
+                continue;
+            }
+            $channelName = trim((string) ($channel['name'] ?? $channel['channel_name'] ?? $channel['display_name'] ?? ''));
+            $genericName = trim((string) ($channel['generic_name'] ?? $channel['marketplace'] ?? ''));
+            $displayName = $channelName !== '' ? $channelName : $genericName;
+            if ($displayName === '') {
+                continue;
+            }
+            // Mantener nombres legibles si el caché contiene slugs conocidos.
+            $normalized = strtolower(str_replace(['_', '-'], ' ', $displayName));
+            $friendly = [
+                'tiktok' => 'TikTok Shop', 'tiktok shop' => 'TikTok Shop',
+                'mercadolibre' => 'Mercado Libre', 'mercado libre' => 'Mercado Libre',
+                'amazon' => 'Amazon', 'shopify' => 'Shopify', 'walmart' => 'Walmart',
+                'liverpool' => 'Liverpool', 'shopee' => 'Shopee', 'coppel' => 'Coppel',
+            ];
+            if (isset($friendly[$normalized])) {
+                $displayName = $friendly[$normalized];
+            }
+            $channelCases[] = "WHEN yuju_order_mapping.id_channel = '" . pSQL($channelId) . "' THEN '" . pSQL($displayName) . "'";
+        }
+
+        $marketplaceCase = "CASE WHEN yuju_order_mapping.prestashop_order_id IS NULL THEN 'Prestashop' ";
+        if (!empty($channelCases)) {
+            $marketplaceCase .= implode(' ', $channelCases) . ' ';
+        }
+        $marketplaceCase .= "ELSE COALESCE(NULLIF(yuju_order_mapping.channel_name, ''), 'No disponible') END AS yuju_marketplace";
+        $queryBuilder->addSelect($marketplaceCase);
         $queryBuilder->leftJoin(
             'o',
             $mappingTable,
