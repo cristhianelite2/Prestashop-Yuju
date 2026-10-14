@@ -72,16 +72,16 @@ class YujuOrderFieldMapping
         }
         $rawCustomerFirst = $data['customer']['first_name'] ?? '';
         $rawCustomerLast = $data['customer']['last_name'] ?? '';
-        $data['customer']['first_name'] = self::validText($rawCustomerFirst, 'Cliente');
-        $data['customer']['last_name'] = self::validText($rawCustomerLast, 'Yuju');
+        $data['customer']['first_name'] = self::validName($rawCustomerFirst, 'Cliente');
+        $data['customer']['last_name'] = self::validName($rawCustomerLast, 'Yuju');
         $data['customer']['email'] = self::validEmail($data['customer']['email'] ?? '');
         $addressSections = ['shipping_address'];
         if (isset($data['billing_address']) && is_array($data['billing_address']) && !empty($data['billing_address'])) {
             $addressSections[] = 'billing_address';
         }
         foreach ($addressSections as $section) {
-            $data[$section]['first_name'] = self::validText($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
-            $data[$section]['last_name'] = self::validText($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
+            $data[$section]['first_name'] = self::validName($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
+            $data[$section]['last_name'] = self::validName($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
             $data[$section]['address_line_1'] = self::validText($data[$section]['address_line_1'] ?? '', 'Dirección no especificada');
             $data[$section]['city'] = self::validText($data[$section]['city'] ?? '', 'Ciudad no especificada');
             $data[$section]['postal_code'] = self::validText($data[$section]['postal_code'] ?? '', '00000');
@@ -91,10 +91,10 @@ class YujuOrderFieldMapping
         }
         // Cuando el marketplace pone un ID numérico en first_name, preferir el nombre de envío.
         if (self::isInvalidName($rawCustomerFirst)) {
-            $data['customer']['first_name'] = self::validText($data['shipping_address']['first_name'] ?? '', 'Cliente');
+            $data['customer']['first_name'] = self::validName($data['shipping_address']['first_name'] ?? '', 'Cliente');
         }
         if (self::isInvalidName($rawCustomerLast)) {
-            $data['customer']['last_name'] = self::validText($data['shipping_address']['last_name'] ?? '', 'Yuju');
+            $data['customer']['last_name'] = self::validName($data['shipping_address']['last_name'] ?? '', 'Yuju');
         }
         if (!isset($data['items']) || !is_array($data['items'])) {
             $data['items'] = [];
@@ -219,13 +219,21 @@ class YujuOrderFieldMapping
         return $value === '' || strtolower($value) === 'not found' || (bool) preg_match('/^\\d+$/', $value);
     }
 
+    private static function validName($value, $fallback)
+    {
+        if (self::isInvalidName($value)) {
+            return $fallback;
+        }
+        return self::validText($value, $fallback);
+    }
+
     private static function validText($value, $fallback)
     {
         if (is_array($value) || is_object($value) || is_bool($value)) {
             $value = '';
         }
         $value = trim((string) $value);
-        if ($value === '' || strtolower($value) === 'not found' || preg_match('/^\d+$/', $value)) {
+        if ($value === '' || strtolower($value) === 'not found') {
             return $fallback;
         }
         return $value;
