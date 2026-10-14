@@ -224,7 +224,7 @@ class YujuOrderFieldMapping
         }
         $value = trim((string) $value);
         if (in_array($type, ['integer', 'int'], true)) {
-            return $value !== '' && is_numeric($value) ? (int) $value : (int) $fallback;
+            return $value !== '' && is_numeric($value) && is_finite((float) $value) ? (int) $value : (int) $fallback;
         }
         if (in_array($type, ['decimal', 'float', 'number'], true)) {
             return $value !== '' && is_numeric($value) && is_finite((float) $value) ? (float) $value : (float) $fallback;
