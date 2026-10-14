@@ -656,33 +656,74 @@ class AdminYujuWebhookController extends ModuleAdminController
 
     public function ajaxProcessRetryWebhook()
     {
+        $webhook_id = (int) Tools::getValue('webhook_id');
+
         try {
-            $webhook_id = (int) Tools::getValue('webhook_id');
+            if ($webhook_id <= 0) {
+                throw new Exception('ID de webhook no válido');
+            }
 
             $webhook_log = Db::getInstance()->getRow(
-                '
-            SELECT * FROM ' . _DB_PREFIX_ . 'yuju_webhook_logs
-            WHERE id = ' . (int) $webhook_id
+                'SELECT * FROM ' . _DB_PREFIX_ . 'yuju_webhook_logs
+                 WHERE id = ' . (int) $webhook_id
             );
 
             if (!$webhook_log) {
-                throw new Exception('Webhook log not found');
+                throw new Exception('No se encontró el registro del webhook');
             }
 
-            // Retry webhook processing
-            $headers = json_decode($webhook_log['headers'], true);
-            $result = $this->webhook_manager->processWebhook($webhook_log['payload'], $headers);
+            $headers = json_decode((string) ($webhook_log['headers'] ?? ''), true);
+            if (!is_array($headers)) {
+                $headers = [];
+            }
+
+            // El reintento genera un registro nuevo dentro de processWebhook().
+            // También actualizamos el registro original que el usuario está viendo.
+            $result = $this->webhook_manager->processWebhook(
+                (string) ($webhook_log['payload'] ?? ''),
+                $headers
+            );
+
+            $processed = is_array($result) && !empty($result['success']);
+            $message = (string) (
+                $result['message']
+                ?? $result['error']
+                ?? ($processed ? 'Webhook procesado correctamente' : 'El procesamiento del webhook falló')
+            );
+            $response = [
+                'retry_executed' => true,
+                'processing_success' => $processed,
+                'message' => $message,
+                'result' => $result,
+            ];
+
+            Db::getInstance()->update('yuju_webhook_logs', [
+                'status' => $processed ? 'processed' : 'failed',
+                'response' => pSQL(json_encode($response, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)),
+                'error_message' => $processed ? '' : pSQL($message),
+                'processed_at' => date('Y-m-d H:i:s'),
+            ], 'id = ' . (int) $webhook_id);
 
             exit(json_encode([
-            'success' => true,
-            'message' => 'Webhook retried successfully',
-            'result' => $result,
-            ]));
-        } catch (Exception $e) {
+                'success' => true,
+                'processing_success' => $processed,
+                'message' => $message,
+                'result' => $result,
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        } catch (Throwable $e) {
+            if ($webhook_id > 0) {
+                Db::getInstance()->update('yuju_webhook_logs', [
+                    'status' => 'failed',
+                    'error_message' => pSQL($e->getMessage()),
+                    'response' => pSQL(json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)),
+                    'processed_at' => date('Y-m-d H:i:s'),
+                ], 'id = ' . (int) $webhook_id);
+            }
+
             exit(json_encode([
-            'success' => false,
-            'error' => $e->getMessage(),
-            ]));
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
         }
     }
 
