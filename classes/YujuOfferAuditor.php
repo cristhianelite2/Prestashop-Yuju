@@ -2087,7 +2087,12 @@ class YujuOfferAuditor
                 $offer['stock'] = max(0, (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop));
             }
             if (!empty($run['audit_price'])) {
-                $psPrice = (float) Product::getPriceStatic($idProduct, true, $idProductAttribute ?: null, 6);
+                // Enviar exactamente el precio mapeado que la auditoría comparó y mostró en ps_price.
+                // Recalcularlo desde Product::getPriceStatic puede aplicar impuestos/reglas de precio
+                // diferentes y enviar un importe distinto al precio final auditado.
+                $psPrice = isset($row['ps_price']) && is_numeric($row['ps_price'])
+                    ? (float) $row['ps_price']
+                    : 0.0;
                 $yujuPrice = isset($row['yuju_price']) ? (float) $row['yuju_price'] : 0.0;
                 if ($psPrice <= 0.0) {
                     $results['skipped']++;
