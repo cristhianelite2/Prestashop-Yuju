@@ -997,15 +997,21 @@ class Yuju extends Module
 
         try {
             $table = _DB_PREFIX_ . 'yuju_order_mapping';
-            $columns = Db::getInstance()->executeS(
+            $channelNameColumns = Db::getInstance()->executeS(
                 'SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "channel_name"'
             );
-            $channelNameSelect = !empty($columns)
+            $idChannelColumns = Db::getInstance()->executeS(
+                'SHOW COLUMNS FROM `' . bqSQL($table) . '` LIKE "id_channel"'
+            );
+            $channelNameSelect = !empty($channelNameColumns)
                 ? ', `channel_name`'
                 : ', NULL AS `channel_name`';
+            $idChannelSelect = !empty($idChannelColumns)
+                ? ', `id_channel`'
+                : ', NULL AS `id_channel`';
 
             $row = Db::getInstance()->getRow(
-                'SELECT `yuju_order_id`, `id_channel`' . $channelNameSelect
+                'SELECT `yuju_order_id`' . $idChannelSelect . $channelNameSelect
                 . ' FROM `' . bqSQL($table) . '`'
                 . ' WHERE `prestashop_order_id` = ' . (int) $orderId
             );
