@@ -142,7 +142,7 @@
                                             {/if}
                                             {if $step_key == 'address' && $step.address_payload}
                                                 <button type="button" class="btn btn-default btn-xs yuju-address-json-btn" style="margin-top:8px;" onclick="openAddressPayload('yuju-address-payload-json')">
-                                                    <i class="icon-code"></i> Ver JSON enviado
+                                                    <i class="icon-code"></i>
                                                 </button>
                                                 <pre id="yuju-address-payload-json" class="yuju-hidden-json" hidden="hidden" style="display:none !important;">{$step.address_payload|escape:'html':'UTF-8'}</pre>
                                             {/if}
