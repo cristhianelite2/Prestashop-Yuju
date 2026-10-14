@@ -1435,8 +1435,11 @@ window.yujuOrderMetadata = ' . $metaJson . ';
 
         $definition = $params['definition'];
         $columns = $definition->getColumns();
-        if ($columns->has('yuju_marketplace')) {
-            return;
+        // ColumnCollection de PrestaShop no implementa has() en todas las versiones.
+        foreach ($columns as $existingColumn) {
+            if (method_exists($existingColumn, 'getId') && $existingColumn->getId() === 'yuju_marketplace') {
+                return;
+            }
         }
 
         $column = (new \PrestaShop\PrestaShop\Core\Grid\Column\Type\DataColumn('yuju_marketplace'))
