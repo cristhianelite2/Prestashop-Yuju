@@ -1024,7 +1024,13 @@ class YujuOrderManager
             $order->id_address_invoice = $invoice_address->id;
             $order->id_carrier = $this->getCarrierId('Yuju');
             $details['carrier_id'] = (int) $order->id_carrier;
-            $order->payment = isset($adapted_data['payment_method']) ? $adapted_data['payment_method'] : 'Yuju';
+            // PrestaShop exige que Order->payment no esté vacío.
+            // Yuju puede enviar payment_method vacío; en ese caso usamos el valor neutral "default".
+            $paymentMethod = trim((string) ($adapted_data['payment_method'] ?? ''));
+            if ($paymentMethod === '') {
+                $paymentMethod = 'default';
+            }
+            $order->payment = $paymentMethod;
             $order->module = 'yuju';
             $order->secure_key = $customer->secure_key; // Clave de seguridad del cliente
             $order->total_paid = (float) $adapted_data['total_amount'];
