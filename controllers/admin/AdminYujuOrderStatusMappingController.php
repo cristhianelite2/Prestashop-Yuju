@@ -317,6 +317,13 @@ class AdminYujuOrderStatusMappingController extends ModuleAdminController
             if (!in_array($type, ['string', 'integer', 'decimal', 'boolean'], true)) {
                 throw new Exception('Tipo de dato no válido.');
             }
+            $duplicate = Db::getInstance()->getValue(
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_order_field_mapping
+                 WHERE target_path = "' . pSQL($target) . '" AND id != ' . (int) $id
+            );
+            if ($duplicate) {
+                throw new Exception('Ya existe una regla para ese campo destino. Edite la regla existente.');
+            }
             $data = [
                 'target_path' => pSQL($target),
                 'template' => pSQL($template, true),
