@@ -227,45 +227,6 @@ class AdminYujuController extends ModuleAdminController
     }
 
     /**
-     * Completa YUJU_CHANNEL_MARKETPLACE_MAP con generic_name de cada id_channel.
-     *
-     * @param array $channels
-     */
-    protected function syncChannelMarketplaceMap(array $channels)
-    {
-        if (empty($channels)) {
-            return;
-        }
-
-        $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
-        if (is_string($map)) {
-            $decoded = json_decode($map, true);
-            $map = is_array($decoded) ? $decoded : [];
-        }
-        if (!is_array($map)) {
-            $map = [];
-        }
-
-        foreach ($channels as $ch) {
-            $id = isset($ch['id_channel']) ? (string) $ch['id_channel'] : '';
-            if ($id === '') {
-                continue;
-            }
-            $generic = isset($ch['generic_name']) ? (string) $ch['generic_name'] : '';
-            $slug = preg_replace('/[^a-z0-9]/', '', strtolower($generic));
-            if ($slug === '') {
-                continue;
-            }
-            // No pisar overrides manuales existentes
-            if (!isset($map[$id]) || $map[$id] === '' || strpos((string) $map[$id], 'channel') === 0) {
-                $map[$id] = $slug;
-            }
-        }
-
-        YujuConfig::set('YUJU_CHANNEL_MARKETPLACE_MAP', $map, 'json');
-    }
-
-    /**
      * Get dashboard statistics for the last week
      */
     private function getDashboardStats()
