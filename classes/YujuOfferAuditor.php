@@ -41,6 +41,9 @@ class YujuOfferAuditor
     /** Contador de llamadas de envío en la operación actual. */
     protected $bulkSubmitCalls = 0;
 
+    /** @var array|null Mapeo activo hacia el campo Yuju "price" (null = aún no consultado). */
+    protected $priceMappingCache = null;
+
     public function __construct()
     {
         $this->api = new YujuApiClient();
@@ -2028,12 +2031,16 @@ class YujuOfferAuditor
      */
     protected function getMappedYujuPrice($idProduct, $idProductAttribute = 0, $idLang = null)
     {
-        $mapping = Db::getInstance()->getRow(
-            'SELECT prestashop_field, transformation_rule
-             FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`
-             WHERE yuju_field = \'price\' AND is_active = 1
-             ORDER BY prestashop_field DESC, id_mapping DESC'
-        );
+        // Se consulta una sola vez por instancia: la auditoría llama a este método por cada SKU.
+        if ($this->priceMappingCache === null) {
+            $this->priceMappingCache = Db::getInstance()->getRow(
+                'SELECT prestashop_field, transformation_rule
+                 FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`
+                 WHERE yuju_field = \'price\' AND is_active = 1
+                 ORDER BY prestashop_field DESC, id_mapping DESC'
+            ) ?: [];
+        }
+        $mapping = $this->priceMappingCache;
 
         // YujuProductManager procesa los mapeos activos ordenados por prestashop_field
         // ascendente; si hay duplicados para el destino "price", el último sobrescribe
@@ -2044,9 +2051,13 @@ class YujuOfferAuditor
             ? trim((string) $mapping['prestashop_field'])
             : 'price';
 
-        $product = new Product((int) $idProduct, false, $idLang ? (int) $idLang : null);
-        if (!Validate::isLoadedObject($product)) {
-            return null;
+        // Los precios calculados (final/con IVA/sin IVA) no necesitan cargar el objeto Product.
+        $product = null;
+        if (!in_array($source, ['price_final', 'price_with_tax', 'price_without_tax'], true)) {
+            $product = new Product((int) $idProduct, false, $idLang ? (int) $idLang : null);
+            if (!Validate::isLoadedObject($product)) {
+                return null;
+            }
         }
 
         switch ($source) {
@@ -2929,7 +2940,9 @@ class YujuOfferAuditor
         }
 
         $psStock = isset($ctx['stocks'][$idProduct]) ? max(0, (int) $ctx['stocks'][$idProduct]) : 0;
-        $psPrice = isset($ctx['prices'][$idProduct]) ? (float) $ctx['prices'][$idProduct] : 0.0;
+        // Precio según el mapeo activo hacia Yuju "price" (mismo criterio que "Actualizar seleccionados").
+        $mappedPrice = $this->getMappedYujuPrice($idProduct, (int) ($ctx['attr_map'][$sku] ?? 0), $idLang);
+        $psPrice = $mappedPrice !== null ? (float) $mappedPrice : 0.0;
         $detail['ps_stock'] = $psStock;
         $detail['ps_price'] = $psPrice;
 
@@ -3090,6 +3103,7 @@ class YujuOfferAuditor
 
         $ctx = [
             'sku_map' => [],
+            'attr_map' => [],
             'yuju_map' => [],
             'ps_yuju_map' => [],
             'stocks' => [],
@@ -3116,13 +3130,17 @@ class YujuOfferAuditor
             }
 
             $rows = Db::getInstance()->executeS(
-                'SELECT id_product, reference FROM `' . _DB_PREFIX_ . 'product_attribute`
-                 WHERE reference IN (' . $in . ')'
+                'SELECT id_product, id_product_attribute, reference FROM `' . _DB_PREFIX_ . 'product_attribute`
+                 WHERE reference IN (' . $in . ') ORDER BY id_product_attribute ASC'
             );
             if (is_array($rows)) {
                 foreach ($rows as $r) {
                     if (!isset($ctx['sku_map'][$r['reference']])) {
                         $ctx['sku_map'][$r['reference']] = (int) $r['id_product'];
+                    }
+                    // Combinación del SKU, para calcular el precio mapeado igual que al enviar.
+                    if (!isset($ctx['attr_map'][$r['reference']])) {
+                        $ctx['attr_map'][$r['reference']] = (int) $r['id_product_attribute'];
                     }
                 }
             }
