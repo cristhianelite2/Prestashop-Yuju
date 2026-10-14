@@ -168,7 +168,7 @@ class YujuOrderFieldMapping
             if (in_array($candidate, ['id', 'reference', 'status', 'currency', 'total', 'total_amount',
                 'total_amount_tax_excl', 'products_total', 'shipping_cost', 'payment_method',
                 'shipping_method', 'created_at'], true)) {
-                $target = $candidate;
+                $target = $candidate === 'total' ? 'total_amount' : $candidate;
             }
         }
         $aliases = [
