@@ -1014,8 +1014,20 @@ class Yuju extends Module
                 return '';
             }
 
+            require_once dirname(__FILE__) . '/classes/YujuChannelResolver.php';
+
             $channelName = trim((string) ($row['channel_name'] ?? ''));
             $channelOrderId = trim((string) ($row['yuju_order_id'] ?? ''));
+            $idChannel = trim((string) ($row['id_channel'] ?? ''));
+
+            // Completar metadatos legacy una sola vez cuando falta el canal o su nombre.
+            if ($channelOrderId !== '' && ($idChannel === '' || $channelName === '')) {
+                $resolved = YujuChannelResolver::resolveOrderMetadata($channelOrderId, $idChannel, $channelName);
+                $idChannel = $resolved['id_channel'] ?? $idChannel;
+                $channelName = $resolved['channel_name'] ?? $channelName;
+                YujuChannelResolver::persistOrderMetadata($channelOrderId, $idChannel, $channelName);
+            }
+
             $channelName = $channelName !== '' ? $channelName : 'No disponible';
             $channelOrderId = $channelOrderId !== '' ? $channelOrderId : 'No disponible';
 
