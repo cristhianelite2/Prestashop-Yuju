@@ -144,7 +144,7 @@
                                                 <button type="button" class="btn btn-default btn-xs yuju-address-json-btn" style="margin-top:8px;" onclick="openAddressPayload('yuju-address-payload-json')">
                                                     <i class="icon-code"></i> Ver JSON enviado
                                                 </button>
-                                                <pre id="yuju-address-payload-json" class="yuju-hidden-json">{$step.address_payload|escape:'html':'UTF-8'}</pre>
+                                                <pre id="yuju-address-payload-json" class="yuju-hidden-json" hidden="hidden" style="display:none !important;">{$step.address_payload|escape:'html':'UTF-8'}</pre>
                                             {/if}
                                         </div>
                                     </div>
@@ -567,7 +567,8 @@ function fallbackCopy(text) {
     color: #777;
 }
 
-.yuju-hidden-json { display: none; }
+.yuju-hidden-json,
+pre.yuju-hidden-json[hidden] { display: none !important; }
 .yuju-json-modal { display: none; position: fixed; z-index: 10050; inset: 0; }
 .yuju-json-modal.is-open { display: block; }
 .yuju-json-modal__backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, .65); }
