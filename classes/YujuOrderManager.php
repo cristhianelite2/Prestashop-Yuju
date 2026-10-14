@@ -228,6 +228,7 @@ class YujuOrderManager
     {
         $needed = [
             'id_channel' => 'varchar(64) DEFAULT NULL',
+            'channel_name' => 'varchar(255) DEFAULT NULL',
             'outbound_external_pk' => 'varchar(64) DEFAULT NULL',
             'outbound_status' => 'varchar(32) DEFAULT NULL',
             'outbound_updated_at' => 'datetime DEFAULT NULL',
@@ -496,7 +497,8 @@ class YujuOrderManager
                 'shipping_address' => $yuju_data['shipping_address'] ?? $order_details['shipping_address'] ?? [],
                 'billing_address' => $yuju_data['billing_address'] ?? $order_details['billing_address'] ?? null,
                 'items' => $yuju_data['items'] ?? $order_details['items'] ?? [],
-                'id_channel' => $yuju_data['id_channel'] ?? $order_details['id_channel'] ?? null,
+                'id_channel' => $yuju_data['id_channel'] ?? $order_details['id_channel'] ?? $yuju_data['channel_id'] ?? null,
+                'channel_name' => $yuju_data['channel_name'] ?? $order_details['channel_name'] ?? ($yuju_data['channel']['name'] ?? ($order_details['channel']['name'] ?? null)),
                 'progress' => $yuju_data['progress'] ?? $order_details['progress'] ?? null,
             ]);
         }
@@ -585,6 +587,7 @@ class YujuOrderManager
             'id' => $yuju_data['id_order'] ?? $reference ?: uniqid('yuju_'),
             'reference' => $reference,
             'id_channel' => $id_channel,
+            'channel_name' => $yuju_data['channel_name'] ?? ($yuju_data['channel']['name'] ?? null),
             'marketplace_slug' => $this->resolveMarketplaceSlug($id_channel),
             'status' => $yuju_data['status'] ?? 'open',
             'progress' => $yuju_data['progress'] ?? null,
@@ -766,7 +769,8 @@ class YujuOrderManager
     protected function createOrderFromYujuLocked(array $adapted_data, array $order_data, $force, array $details)
     {
         $yuju_order_id = (string) $adapted_data['id'];
-        $id_channel = $adapted_data['id_channel'] ?? ($order_data['id_channel'] ?? null);
+        $id_channel = $adapted_data['id_channel'] ?? ($order_data['id_channel'] ?? $order_data['channel_id'] ?? null);
+        $channel_name = trim((string) ($adapted_data['channel_name'] ?? ($order_data['channel_name'] ?? ($order_data['channel']['name'] ?? ''))));
         $yuju_reference = (string) ($adapted_data['reference'] ?? $yuju_order_id);
         $outbound = new YujuOrderOutbound($this->api_client, $this->logger);
 
@@ -820,6 +824,14 @@ class YujuOrderManager
             $details['mapping_status'] = 'CLAIMED';
         }
 
+        // Guardar solo metadatos reales recibidos por el webhook/API de Yuju.
+        $this->ensureOrderMappingSchema();
+        $sets = [];
+        if ($id_channel !== null && trim((string) $id_channel) !== '') { $sets[] = '`id_channel` = "' . pSQL((string) $id_channel) . '"'; }
+        if ($channel_name !== '') { $sets[] = '`channel_name` = "' . pSQL($channel_name) . '"'; }
+        if ($sets) {
+            Db::getInstance()->execute('UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping` SET ' . implode(', ', $sets) . ' WHERE `yuju_order_id` = "' . pSQL($yuju_order_id) . '"');
+        }
         $outbound->start($id_channel, $yuju_order_id, $yuju_reference, []);
 
         // LOG: Ver datos adaptados antes de crear cliente
