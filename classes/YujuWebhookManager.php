@@ -122,6 +122,7 @@ class YujuWebhookManager
                             'skipped_lock' => true,
                             'yuju_order_id' => $orderLockId,
                             'topic' => $topic,
+                            'webhook_log_id' => (int) $webhook_id,
                         ];
                     }
                     $orderLockAcquired = true;
@@ -151,6 +152,10 @@ class YujuWebhookManager
             // Update webhook log with result
             $this->updateWebhookLog($webhook_id, $result);
             
+            // Exponer el ID del registro generado por esta ejecución para que el panel
+            // pueda abrir directamente el detalle con los pasos y errores de este intento.
+            $result['webhook_log_id'] = is_numeric($webhook_id) ? (int) $webhook_id : null;
+
             // Incluir los datos enriquecidos en el resultado para guardarlos en storage
             $result['enriched_data'] = $webhook_data;
 
