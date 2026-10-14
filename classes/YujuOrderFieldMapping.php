@@ -70,8 +70,10 @@ class YujuOrderFieldMapping
                 $data[$section] = [];
             }
         }
-        $data['customer']['first_name'] = self::validText($data['customer']['first_name'] ?? '', 'Cliente');
-        $data['customer']['last_name'] = self::validText($data['customer']['last_name'] ?? '', 'Yuju');
+        $rawCustomerFirst = $data['customer']['first_name'] ?? '';
+        $rawCustomerLast = $data['customer']['last_name'] ?? '';
+        $data['customer']['first_name'] = self::validText($rawCustomerFirst, 'Cliente');
+        $data['customer']['last_name'] = self::validText($rawCustomerLast, 'Yuju');
         $data['customer']['email'] = self::validEmail($data['customer']['email'] ?? '');
         $addressSections = ['shipping_address'];
         if (isset($data['billing_address']) && is_array($data['billing_address']) && !empty($data['billing_address'])) {
@@ -86,6 +88,13 @@ class YujuOrderFieldMapping
             $data[$section]['phone'] = self::validText($data[$section]['phone'] ?? '', '0000000000');
             $data[$section]['country_code'] = self::validText($data[$section]['country_code'] ?? '', 'MX');
             $data[$section]['state_code'] = self::validText($data[$section]['state_code'] ?? '', 'MEX');
+        }
+        // Cuando el marketplace pone un ID numérico en first_name, preferir el nombre de envío.
+        if (self::isInvalidName($rawCustomerFirst)) {
+            $data['customer']['first_name'] = self::validText($data['shipping_address']['first_name'] ?? '', 'Cliente');
+        }
+        if (self::isInvalidName($rawCustomerLast)) {
+            $data['customer']['last_name'] = self::validText($data['shipping_address']['last_name'] ?? '', 'Yuju');
         }
         if (!isset($data['items']) || !is_array($data['items'])) {
             $data['items'] = [];
@@ -120,6 +129,15 @@ class YujuOrderFieldMapping
             $data['total'] = 0;
         }
         return $data;
+    }
+
+    private static function isInvalidName($value)
+    {
+        if (is_array($value) || is_object($value) || is_bool($value)) {
+            return true;
+        }
+        $value = trim((string) $value);
+        return $value === '' || strtolower($value) === 'not found' || (bool) preg_match('/^\\d+$/', $value);
     }
 
     private static function validText($value, $fallback)
