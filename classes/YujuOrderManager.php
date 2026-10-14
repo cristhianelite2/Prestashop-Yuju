@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 require_once dirname(__FILE__) . '/YujuApiClient.php';
 require_once dirname(__FILE__) . '/YujuLogger.php';
 require_once dirname(__FILE__) . '/YujuOrderOutbound.php';
+require_once dirname(__FILE__) . '/YujuOrderFieldMapping.php';
 require_once dirname(__FILE__) . '/../config/config.php';
 
 class YujuOrderManager
@@ -719,6 +720,8 @@ class YujuOrderManager
         
         // Adaptar estructura de datos de Yuju al formato esperado
         $adapted_data = $this->adaptYujuOrderData($order_data);
+        // Aplicar reglas generales configurables y normalizar valores inválidos antes de crear entidades PS.
+        $adapted_data = YujuOrderFieldMapping::apply($adapted_data, is_array($order_data) ? $order_data : []);
         $yuju_order_id = (string) ($adapted_data['id'] ?? '');
 
         if ($yuju_order_id === '') {
