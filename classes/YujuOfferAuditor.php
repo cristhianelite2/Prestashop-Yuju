@@ -2021,6 +2021,70 @@ class YujuOfferAuditor
     }
 
     /**
+     * Calcula el precio de envío según el mapeo activo del campo destino "price".
+     * Mantiene la semántica de YujuProductManager para las fuentes de precio conocidas.
+     *
+     * @return float|null null si la fuente mapeada no puede resolverse de forma segura
+     */
+    protected function getMappedYujuPrice($idProduct, $idProductAttribute = 0, $idLang = null)
+    {
+        $mapping = Db::getInstance()->getRow(
+            'SELECT prestashop_field, transformation_rule
+             FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`
+             WHERE yuju_field = \'price\' AND is_active = 1
+             ORDER BY id_mapping DESC'
+        );
+
+        // Compatibilidad con instalaciones antiguas sin mapeo activo de precio:
+        // el fallback canónico del módulo es el campo base "price".
+        $source = !empty($mapping['prestashop_field'])
+            ? trim((string) $mapping['prestashop_field'])
+            : 'price';
+
+        $product = new Product((int) $idProduct, false, $idLang ? (int) $idLang : null);
+        if (!Validate::isLoadedObject($product)) {
+            return null;
+        }
+
+        switch ($source) {
+            case 'price':
+                $value = (float) $product->price;
+                break;
+            case 'price_final':
+                $value = (float) Product::getPriceStatic((int) $idProduct, true, $idProductAttribute ?: null, 2, null, false, true);
+                break;
+            case 'price_with_tax':
+                $value = (float) Product::getPriceStatic((int) $idProduct, true, $idProductAttribute ?: null, 2, null, false, false);
+                break;
+            case 'price_without_tax':
+                $value = (float) Product::getPriceStatic((int) $idProduct, false, $idProductAttribute ?: null, 2, null, false, false);
+                break;
+            case 'wholesale_price':
+                $value = (float) $product->wholesale_price;
+                break;
+            default:
+                // Solo aceptar campos numéricos reales del objeto Product; no asumir
+                // que un campo arbitrario representa un precio.
+                if (isset($product->{$source}) && is_numeric($product->{$source})) {
+                    $value = (float) $product->{$source};
+                } else {
+                    return null;
+                }
+                break;
+        }
+
+        // Aplicar reglas compatibles con valores numéricos. No ejecutar código custom.
+        $rule = (string) ($mapping['transformation_rule'] ?? 'none');
+        if ($rule === 'currency_convert') {
+            // La conversión monetaria no está implementada en el módulo; conservar valor origen.
+        } elseif ($rule !== '' && !in_array($rule, ['none', 'uppercase', 'lowercase', 'capitalize', 'strip_html', 'date_format', 'custom'], true)) {
+            return null;
+        }
+
+        return round($value, 2);
+    }
+
+    /**
      * Envía stock/precio de todos los productos seleccionados en una sola tarea masiva.
      * Las imágenes, cuando están habilitadas, se actualizan aparte porque no forman parte
      * del endpoint de ofertas masivas. PrestaShop sigue siendo la fuente de verdad.
@@ -2087,12 +2151,10 @@ class YujuOfferAuditor
                 $offer['stock'] = max(0, (int) StockAvailable::getQuantityAvailableByProduct($idProduct, $idProductAttribute, $idShop));
             }
             if (!empty($run['audit_price'])) {
-                // Enviar exactamente el precio mapeado que la auditoría comparó y mostró en ps_price.
-                // Recalcularlo desde Product::getPriceStatic puede aplicar impuestos/reglas de precio
-                // diferentes y enviar un importe distinto al precio final auditado.
-                $psPrice = isset($row['ps_price']) && is_numeric($row['ps_price'])
-                    ? (float) $row['ps_price']
-                    : 0.0;
+                // Resolver de nuevo la fuente del precio usando el mapeo activo hacia Yuju "price".
+                // No asumir que el precio a enviar siempre es el precio final.
+                $mappedPrice = $this->getMappedYujuPrice($idProduct, $idProductAttribute, $idLang);
+                $psPrice = $mappedPrice !== null ? (float) $mappedPrice : 0.0;
                 $yujuPrice = isset($row['yuju_price']) ? (float) $row['yuju_price'] : 0.0;
                 if ($psPrice <= 0.0) {
                     $results['skipped']++;
