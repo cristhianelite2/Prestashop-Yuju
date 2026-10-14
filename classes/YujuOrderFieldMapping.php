@@ -82,12 +82,15 @@ class YujuOrderFieldMapping
         foreach ($addressSections as $section) {
             $data[$section]['first_name'] = self::validName($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
             $data[$section]['last_name'] = self::validName($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
+            $data[$section]['company'] = self::validText($data[$section]['company'] ?? '', 'not found');
             $data[$section]['address_line_1'] = self::validText($data[$section]['address_line_1'] ?? '', 'Dirección no especificada');
+            $data[$section]['address_line_2'] = self::validText($data[$section]['address_line_2'] ?? '', '');
             $data[$section]['city'] = self::validText($data[$section]['city'] ?? '', 'Ciudad no especificada');
             $data[$section]['postal_code'] = self::validText($data[$section]['postal_code'] ?? '', '00000');
             $data[$section]['phone'] = self::validText($data[$section]['phone'] ?? '', '0000000000');
             $data[$section]['country_code'] = self::validText($data[$section]['country_code'] ?? '', 'MX');
             $data[$section]['state_code'] = self::validText($data[$section]['state_code'] ?? '', 'MEX');
+            $data[$section]['dni'] = self::validText($data[$section]['dni'] ?? '', '00000000');
         }
         // Cuando el marketplace pone un ID numérico en first_name, preferir el nombre de envío.
         if (self::isInvalidName($rawCustomerFirst)) {
@@ -122,6 +125,16 @@ class YujuOrderFieldMapping
                 if (array_key_exists($textKey, $item)) {
                     $data['items'][$index][$textKey] = self::validText($item[$textKey], 'not found');
                 }
+            }
+            if (array_key_exists('product_id', $item)) {
+                $rawId = $item['product_id'];
+                $data['items'][$index]['product_id'] = (is_array($rawId) || is_object($rawId) || is_bool($rawId) || $rawId === null || trim((string) $rawId) === '')
+                    ? null : trim((string) $rawId);
+            }
+            if (array_key_exists('product_attribute_id', $item)) {
+                $rawAttribute = $item['product_attribute_id'];
+                $data['items'][$index]['product_attribute_id'] = is_numeric($rawAttribute) && is_finite((float) $rawAttribute)
+                    ? max(0, (int) $rawAttribute) : 0;
             }
         }
         $data['currency'] = strtoupper(self::validText($data['currency'] ?? '', 'MXN'));
