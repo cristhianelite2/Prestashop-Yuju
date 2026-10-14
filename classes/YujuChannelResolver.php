@@ -90,31 +90,38 @@ class YujuChannelResolver
     public static function findNameInCache($idChannel)
     {
         $idChannel = trim((string) $idChannel);
-        if ($idChannel === '') {
-            return '';
-        }
+        if ($idChannel === '') { return ''; }
+
         $account = self::getCachedAccount();
+        if (isset($account['data']) && is_array($account['data'])) { $account = $account['data']; }
         $channels = isset($account['channels']) && is_array($account['channels']) ? $account['channels'] : [];
-        foreach ($channels as $channel) {
-            if (!is_array($channel) || (string) ($channel['id_channel'] ?? '') !== $idChannel) {
-                continue;
-            }
-            $name = trim((string) ($channel['name'] ?? ''));
-            if ($name !== '') {
-                return $name;
-            }
-            $generic = trim((string) ($channel['generic_name'] ?? ''));
-            if ($generic !== '') {
-                return $generic;
-            }
+        foreach ($channels as $key => $channel) {
+            if (!is_array($channel)) { continue; }
+            $channelId = trim((string) ($channel['id_channel'] ?? $channel['channel_id'] ?? $channel['id'] ?? $key));
+            if ($channelId !== $idChannel) { continue; }
+            $nested = isset($channel['channel']) && is_array($channel['channel']) ? $channel['channel'] : [];
+            $name = trim((string) ($channel['name'] ?? $channel['channel_name'] ?? $channel['display_name'] ?? $nested['name'] ?? ''));
+            $generic = trim((string) ($channel['generic_name'] ?? $nested['generic_name'] ?? $channel['marketplace'] ?? ''));
+            $friendly = [
+                'mercadolibre' => 'Mercado Libre', 'mercadolibre mexico' => 'Mercado Libre',
+                'amazon' => 'Amazon', 'liverpool' => 'Liverpool', 'walmart' => 'Walmart',
+                'claroshop' => 'Claro Shop', 'sears' => 'Sears', 'coppel' => 'Coppel',
+                'elektra' => 'Elektra', 'shopee' => 'Shopee', 'shopify' => 'Shopify',
+                'tiktok' => 'TikTok Shop', 'tiktokshop' => 'TikTok Shop',
+            ];
+            $nameKey = strtolower(trim(preg_replace('/[_-]+/', ' ', $name)));
+            $genericKey = strtolower(trim(preg_replace('/[_-]+/', ' ', $generic)));
+            if ($name !== '' && isset($friendly[$nameKey])) { return $friendly[$nameKey]; }
+            if ($name !== '' && strtolower($name) !== $name) { return $name; }
+            if ($generic !== '' && isset($friendly[$genericKey])) { return $friendly[$genericKey]; }
+            if ($generic !== '' && strtolower($generic) !== $generic) { return $generic; }
+            if ($name !== '') { return $name; }
+            if ($generic !== '') { return $generic; }
         }
 
-        // Consultar mapa local o por defecto de marketplaces
+        // El mapa local es un fallback; la caché de cuenta tiene prioridad.
         $map = YujuConfig::get('YUJU_CHANNEL_MARKETPLACE_MAP', []);
-        if (is_string($map)) {
-            $decoded = json_decode($map, true);
-            $map = is_array($decoded) ? $decoded : [];
-        }
+        if (is_string($map)) { $decoded = json_decode($map, true); $map = is_array($decoded) ? $decoded : []; }
         if (!is_array($map) || empty($map)) {
             if (class_exists('YujuStatusMappings') && method_exists('YujuStatusMappings', 'getDefaultChannelMarketplaceMap')) {
                 $map = YujuStatusMappings::getDefaultChannelMarketplaceMap();
@@ -122,27 +129,10 @@ class YujuChannelResolver
         }
         if (is_array($map) && isset($map[$idChannel])) {
             $slug = strtolower(trim((string) $map[$idChannel]));
-            $friendly = [
-                'mercadolibre' => 'Mercado Libre',
-                'amazon' => 'Amazon',
-                'liverpool' => 'Liverpool',
-                'walmart' => 'Walmart',
-                'claroshop' => 'Claro Shop',
-                'sears' => 'Sears',
-                'coppel' => 'Coppel',
-                'elektra' => 'Elektra',
-                'shopee' => 'Shopee',
-                'shopify' => 'Shopify',
-                'tiktok' => 'TikTok Shop',
-            ];
-            if (isset($friendly[$slug])) {
-                return $friendly[$slug];
-            }
-            if ($slug !== '') {
-                return ucfirst($slug);
-            }
+            $friendly = ['mercadolibre' => 'Mercado Libre', 'amazon' => 'Amazon', 'liverpool' => 'Liverpool', 'walmart' => 'Walmart', 'claroshop' => 'Claro Shop', 'sears' => 'Sears', 'coppel' => 'Coppel', 'elektra' => 'Elektra', 'shopee' => 'Shopee', 'shopify' => 'Shopify', 'tiktok' => 'TikTok Shop'];
+            if (isset($friendly[$slug])) { return $friendly[$slug]; }
+            if ($slug !== '') { return ucfirst($slug); }
         }
-
         return '';
     }
 
