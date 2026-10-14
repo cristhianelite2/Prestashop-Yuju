@@ -195,6 +195,8 @@ class YujuOrderFieldMapping
             'address.shipping.city' => 'shipping_address.city',
             'address.shipping.postal_code' => 'shipping_address.postal_code',
             'address.shipping.phone' => 'shipping_address.phone',
+            'address.shipping.company' => 'shipping_address.company',
+            'address.shipping.dni' => 'shipping_address.dni',
             'address.shipping.country_code' => 'shipping_address.country_code',
             'address.shipping.state_code' => 'shipping_address.state_code',
             'address.billing.first_name' => 'billing_address.first_name',
@@ -204,8 +206,12 @@ class YujuOrderFieldMapping
             'address.billing.city' => 'billing_address.city',
             'address.billing.postal_code' => 'billing_address.postal_code',
             'address.billing.phone' => 'billing_address.phone',
+            'address.billing.company' => 'billing_address.company',
+            'address.billing.dni' => 'billing_address.dni',
             'address.billing.country_code' => 'billing_address.country_code',
             'address.billing.state_code' => 'billing_address.state_code',
+            'customer.phone' => 'shipping_address.phone',
+            'customer.doc_number' => 'shipping_address.dni',
         ];
         return isset($aliases[$target]) ? $aliases[$target] : $target;
     }
