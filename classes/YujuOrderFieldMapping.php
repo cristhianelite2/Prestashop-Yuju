@@ -236,7 +236,7 @@ class YujuOrderFieldMapping
             return true;
         }
         $value = trim((string) $value);
-        return $value === '' || strtolower($value) === 'not found' || (bool) preg_match('/^\\d+$/', $value);
+        return $value === '' || (bool) preg_match('/^\\d+$/', $value);
     }
 
     private static function validName($value, $fallback)
@@ -253,7 +253,7 @@ class YujuOrderFieldMapping
             $value = '';
         }
         $value = trim((string) $value);
-        if ($value === '' || strtolower($value) === 'not found') {
+        if ($value === '') {
             return $fallback;
         }
         return $value;
