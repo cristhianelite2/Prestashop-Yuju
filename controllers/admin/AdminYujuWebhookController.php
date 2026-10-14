@@ -425,6 +425,9 @@ class AdminYujuWebhookController extends ModuleAdminController
                 'id' => $details['shipping_address_id'] ?? null,
                 'status' => $details['address_status'] ?? null,
                 'error' => $details['shipping_address_error'] ?? null,
+                'address_payload' => !empty($details['shipping_address_payload'])
+                    ? json_encode($details['shipping_address_payload'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    : null,
                 'extra' => !empty($details['billing_address_id'])
                     ? 'Facturación ID ' . $details['billing_address_id']
                     : null,
