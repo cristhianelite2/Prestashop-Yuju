@@ -128,7 +128,7 @@ class YujuOrderFieldMapping
             $value = '';
         }
         $value = trim((string) $value);
-        if ($value === '' || strtolower($value) === 'not found' || preg_match('/^\d+$/', $value) && $fallback === 'Cliente') {
+        if ($value === '' || strtolower($value) === 'not found' || preg_match('/^\d+$/', $value)) {
             return $fallback;
         }
         return $value;
