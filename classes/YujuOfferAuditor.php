@@ -2032,8 +2032,7 @@ class YujuOfferAuditor
             'SELECT prestashop_field, transformation_rule
              FROM `' . _DB_PREFIX_ . 'yuju_product_mapping`
              WHERE yuju_field = \'price\' AND is_active = 1
-             ORDER BY prestashop_field DESC, id_mapping DESC
-             LIMIT 1'
+             ORDER BY prestashop_field DESC, id_mapping DESC'
         );
 
         // YujuProductManager procesa los mapeos activos ordenados por prestashop_field
