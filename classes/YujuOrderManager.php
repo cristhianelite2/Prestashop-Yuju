@@ -1804,12 +1804,27 @@ class YujuOrderManager
         }
         $postcode = substr($postcode, 0, 12);
         
-        // Validar teléfono
-        $phone = isset($address_data['phone']) ? trim($address_data['phone']) : '';
-        if (empty($phone)) {
-            $phone = '0000000000';
+        // PrestaShop debe recibir un teléfono normalizado: solo dígitos y exactamente
+        // 10 caracteres para México. Eliminar prefijo internacional +52 cuando venga
+        // junto con un número nacional de 10 dígitos.
+        $phoneValue = isset($address_data['phone']) && !is_array($address_data['phone']) && !is_object($address_data['phone'])
+            ? trim((string) $address_data['phone'])
+            : '';
+        $phone = preg_replace('/[^0-9]/', '', $phoneValue);
+        if (!is_string($phone)) {
+            $phone = '';
         }
-        $phone = substr($phone, 0, 32);
+
+        if (strlen($phone) === 12 && substr($phone, 0, 2) === '52') {
+            $phone = substr($phone, 2);
+        } elseif (strlen($phone) > 10) {
+            // Conservar los últimos 10 dígitos si llega con otro prefijo/formato.
+            $phone = substr($phone, -10);
+        }
+
+        // Si Yuju/marketplace oculta o no proporciona dígitos, completar con ceros
+        // para evitar caracteres inválidos y cumplir la longitud requerida.
+        $phone = str_pad(substr($phone, 0, 10), 10, '0', STR_PAD_LEFT);
         
         $address->firstname = $firstname;
         $address->lastname = $lastname;
