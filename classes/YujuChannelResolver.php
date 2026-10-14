@@ -136,6 +136,51 @@ class YujuChannelResolver
         return self::findNameInCache($idChannel);
     }
 
+    public static function resolveOrderMetadata($yujuOrderId, $idChannel = '', $channelName = '')
+    {
+        $yujuOrderId = trim((string) $yujuOrderId);
+        $idChannel = trim((string) $idChannel);
+        $channelName = trim((string) $channelName);
+
+        if ($yujuOrderId !== '' && ($idChannel === '' || $channelName === '')) {
+            $attemptKey = 'YUJU_ORDER_CHANNEL_TRY_' . strtoupper(substr(md5($yujuOrderId), 0, 12));
+            $lastAttempt = (string) YujuConfig::get($attemptKey, '');
+            $attemptedRecently = $lastAttempt !== '' && (time() - (int) strtotime($lastAttempt)) < 86400;
+
+            if (!$attemptedRecently) {
+                YujuConfig::set($attemptKey, date('Y-m-d H:i:s'), 'string');
+                try {
+                    require_once dirname(__FILE__) . '/YujuApiClient.php';
+                    $api = new YujuApiClient();
+                    $response = $api->getOrder($yujuOrderId, $idChannel !== '' ? $idChannel : null);
+                    if (is_array($response)) {
+                        $payload = $response['data'] ?? $response;
+                        if (isset($payload['order_details']) && is_array($payload['order_details'])) {
+                            $payload = array_merge($payload['order_details'], $payload);
+                        }
+                        if (isset($payload['orders'][0]) && is_array($payload['orders'][0])) {
+                            $payload = $payload['orders'][0];
+                        }
+                        if ($idChannel === '') {
+                            $idChannel = trim((string) ($payload['id_channel'] ?? $payload['channel_id'] ?? ''));
+                        }
+                        if ($channelName === '') {
+                            $channelName = trim((string) ($payload['channel_name'] ?? ($payload['channel']['name'] ?? '')));
+                        }
+                    }
+                } catch (Throwable $e) {
+                    // El detalle de pedido puede no estar disponible sin id_channel.
+                }
+            }
+        }
+
+        if ($channelName === '' && $idChannel !== '') {
+            $channelName = self::resolveName($idChannel);
+        }
+
+        return ['id_channel' => $idChannel, 'channel_name' => $channelName];
+    }
+
     public static function persistOrderMetadata($yujuOrderId, $idChannel, $channelName = '')
     {
         $yujuOrderId = trim((string) $yujuOrderId);
