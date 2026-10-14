@@ -209,10 +209,16 @@ function retryWebhook(webhookId) {
         },
         success: function(response) {
             if (response && response.success) {
-                alert('Webhook reintentado exitosamente');
+                if (response.processing_success) {
+                    alert('El webhook se reintentó y el procesamiento terminó correctamente.');
+                } else {
+                    alert('El reintento se ejecutó, pero la creación/procesamiento volvió a fallar: '
+                        + ((response && response.message) ? response.message : 'Revisa el detalle del webhook.'));
+                }
                 location.reload();
             } else {
-                alert((response && response.error) ? response.error : 'Error al reintentar webhook');
+                alert((response && response.error) ? response.error : 'No se pudo ejecutar el reintento');
+                location.reload();
             }
         },
         error: function() {
