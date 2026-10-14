@@ -368,7 +368,7 @@
         $('#field-mapping-active').val(b.closest('tr').find('.toggle-field-mapping').is(':checked') ? '1' : '0');
         $('#save-field-mapping').html('<i class="icon-save"></i> Actualizar');
         $('#cancel-field-mapping-edit').show();
-        $('#order-field-mapping-panel').get(0).scrollIntoView({behavior:'smooth', block:'start'});
+        $('#order-field-mapping-panel').get(0).scrollIntoView(true);
     });
     $('#field-mapping-form').on('submit', function(e) {
         e.preventDefault();
