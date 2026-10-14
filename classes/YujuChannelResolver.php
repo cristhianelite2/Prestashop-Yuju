@@ -142,7 +142,7 @@ class YujuChannelResolver
         $idChannel = trim((string) $idChannel);
         $channelName = trim((string) $channelName);
 
-        if ($yujuOrderId !== '' && ($idChannel === '' || $channelName === '')) {
+        if ($yujuOrderId !== '' && $idChannel === '') {
             $attemptKey = 'YUJU_ORDER_CHANNEL_TRY_' . strtoupper(substr(md5($yujuOrderId), 0, 12));
             $lastAttempt = (string) YujuConfig::get($attemptKey, '');
             $attemptedRecently = $lastAttempt !== '' && (time() - (int) strtotime($lastAttempt)) < 86400;
