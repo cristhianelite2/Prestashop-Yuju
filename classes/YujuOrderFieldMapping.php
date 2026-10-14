@@ -65,7 +65,7 @@ class YujuOrderFieldMapping
     public static function normalizeKnownData(array $data)
     {
         // Asegura contenedores previsibles sin descartar campos adicionales del marketplace.
-        foreach (['customer', 'shipping_address', 'billing_address'] as $section) {
+        foreach (['customer', 'shipping_address'] as $section) {
             if (!isset($data[$section]) || !is_array($data[$section])) {
                 $data[$section] = [];
             }
@@ -73,7 +73,11 @@ class YujuOrderFieldMapping
         $data['customer']['first_name'] = self::validText($data['customer']['first_name'] ?? '', 'Cliente');
         $data['customer']['last_name'] = self::validText($data['customer']['last_name'] ?? '', 'Yuju');
         $data['customer']['email'] = self::validEmail($data['customer']['email'] ?? '');
-        foreach (['shipping_address', 'billing_address'] as $section) {
+        $addressSections = ['shipping_address'];
+        if (isset($data['billing_address']) && is_array($data['billing_address']) && !empty($data['billing_address'])) {
+            $addressSections[] = 'billing_address';
+        }
+        foreach ($addressSections as $section) {
             $data[$section]['first_name'] = self::validText($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
             $data[$section]['last_name'] = self::validText($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
             $data[$section]['address_line_1'] = self::validText($data[$section]['address_line_1'] ?? '', 'Dirección no especificada');
