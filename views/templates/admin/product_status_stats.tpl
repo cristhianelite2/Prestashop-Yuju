@@ -487,8 +487,8 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                                 <i class="icon-list"></i> En Cola
                                             </span>
                                         {elseif $product.yuju_status == 'creating_in_yuju'}
-                                            <span class="label label-info" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Enviado a Yuju; en espera de respuesta (webhook){/if}">
-                                                <i class="icon-time"></i> En espera de respuesta
+                                            <span class="label label-info yuju-status-icon" title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Enviado a Yuju. Creando… Esperando confirmación por webhook (product-created).{/if}" aria-label="En espera de respuesta">
+                                                <i class="icon-time" aria-hidden="true"></i><span class="sr-only">En espera de respuesta</span>
                                             </span>
                                             <button type="button"
                                                     class="btn btn-xs btn-default yuju-product-action-icon yuju-find-created-webhook"
