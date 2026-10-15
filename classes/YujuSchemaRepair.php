@@ -185,6 +185,96 @@ class YujuSchemaRepair
      * @param string $fullName
      * @return bool
      */
+    /** Subir este entero al agregar/cambiar índices para que se reapliquen una sola vez por tienda. */
+    const PERFORMANCE_INDEXES_VERSION = 1;
+
+    /**
+     * Índices que aceleran el listado de AdminYujuProductStatus.
+     * [tabla sin prefijo => [nombre_indice => [columnas]]].
+     *
+     * @return array
+     */
+    public static function getPerformanceIndexes()
+    {
+        return [
+            'yuju_product_status' => [
+                'idx_last_sync_at' => ['last_sync_at'],
+                'idx_status_last_sync' => ['sync_status', 'last_sync_at'],
+            ],
+            'yuju_sync_queue' => [
+                'idx_queue_product_status_id' => ['prestashop_product_id', 'status', 'id'],
+            ],
+            // La PK de category_product comienza por id_category; el EXISTS entra por id_product.
+            'category_product' => [
+                'idx_yuju_product_category' => ['id_product', 'id_category'],
+            ],
+        ];
+    }
+
+    /**
+     * Crea índices faltantes una sola vez (bandera de versión en Configuration).
+     * Si un ALTER falla o una tabla aún no existe, no marca la versión como aplicada.
+     *
+     * @return bool
+     */
+    public static function ensurePerformanceIndexes()
+    {
+        if ((int) Configuration::get('YUJU_PERF_INDEXES_OK') >= self::PERFORMANCE_INDEXES_VERSION) {
+            return true;
+        }
+
+        $allOk = true;
+        foreach (self::getPerformanceIndexes() as $shortName => $indexes) {
+            $table = _DB_PREFIX_ . $shortName;
+            try {
+                if (empty(Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"'))) {
+                    $allOk = false;
+                    continue;
+                }
+
+                // Columnas de índices existentes en orden, para no duplicar índices equivalentes.
+                $existing = [];
+                foreach ((array) Db::getInstance()->executeS('SHOW INDEX FROM `' . bqSQL($table) . '`') as $row) {
+                    $existing[$row['Key_name']][(int) $row['Seq_in_index']] = strtolower($row['Column_name']);
+                }
+
+                foreach ($indexes as $name => $columns) {
+                    $wanted = array_map('strtolower', $columns);
+                    $covered = false;
+                    foreach ($existing as $cols) {
+                        ksort($cols);
+                        if (array_slice(array_values($cols), 0, count($wanted)) === $wanted) {
+                            $covered = true;
+                            break;
+                        }
+                    }
+                    if ($covered) {
+                        continue;
+                    }
+
+                    $quoted = '`' . implode('`, `', array_map('bqSQL', $columns)) . '`';
+                    if (!Db::getInstance()->execute(
+                        'ALTER TABLE `' . bqSQL($table) . '` ADD INDEX `' . bqSQL($name) . '` (' . $quoted . ')'
+                    )) {
+                        $allOk = false;
+                        continue;
+                    }
+
+                    // Evitar volver a evaluar índices recién creados en esta misma ejecución.
+                    $existing[$name] = array_combine(range(1, count($columns)), $wanted);
+                }
+            } catch (Exception $e) {
+                $allOk = false;
+            }
+        }
+
+        if ($allOk) {
+            Configuration::updateValue('YUJU_PERF_INDEXES_OK', self::PERFORMANCE_INDEXES_VERSION);
+        }
+
+        return $allOk;
+    }
+
     protected function tableExists($fullName)
     {
         try {
