@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-15 — Filtros masivos por listado (textarea) y carga de archivos Excel/CSV con plantillas demo (v1.0.7)
+- Nuevo filtro por listado de texto (textarea): permite pegar múltiples SKUs o nombres de productos (uno por línea) con contador dinámico en tiempo real y coincidencia precisa por referencia o nombre.
+- Nuevo filtro por archivo Excel o CSV: subida directa y parseo de archivos `.xlsx`, `.xls`, `.csv` o `.txt` nativamente sin dependencias externas mediante `YujuExcelHelper` (ZipArchive + SimpleXML).
+- Detección inteligente de columnas: identifica automáticamente cabeceras como `sku`, `ref`, `referencia`, `nombre`, `name`, `producto`, etc., o extrae las primeras columnas disponibles.
+- Plantillas demo descargables: botones de descarga directa para plantillas de ejemplo en Excel (`.xlsx` nativo formateado) y CSV (`.csv` con BOM UTF-8) directamente desde el panel de filtros.
+- Persistencia y optimización de consultas: almacenamiento temporal en caché de listas de filtros masivos (`_PS_CACHE_DIR_ . 'yuju_bulk_filter_<id>.json'`) que viajan de forma compacta en la URL (`bulk_filter_id`), garantizando soporte perfecto con paginación, selector de elementos por página y acciones masivas (sincronizar y validar lotes filtrados).
+- Integración completa en el flujo del controlador: compatibilidad con `hasActiveProductStatusFilters`, `getFilteredProductIds`, `sendAllFiltered` y chips activos en la interfaz con botón para remover el filtro en un clic.
+- Bump de versión a `1.0.7` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-15 — Corrección de imágenes de producto y estado de sincronización en modal Yuju (v1.0.6)
 - Corrección de URL de imagen en tiendas alojadas en subdirectorios (`/shop/`): resolución precisa de `__PS_BASE_URI__` y deducción automática de ruta base en JavaScript para evitar rutas rotas `/img/p/...` en lugar de `/shop/img/p/...`.
 - Escalera de recuperación de imágenes (fallback ladder): si la imagen original no se encuentra, se intentan automáticamente las variantes estándar de PrestaShop (`-large_default.jpg`, `-home_default.jpg`, etc.) antes de ocultarla.

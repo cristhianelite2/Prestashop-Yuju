@@ -460,6 +460,66 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                             </div>
                         </div>
                     </div>
+
+                    <!-- Filtros masivos: Textarea y Carga Excel/CSV -->
+                    <div class="yuju-ps-bulk-filter-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e1e6eb;">
+                        <div class="row">
+                            <div class="col-md-7 col-sm-12">
+                                <div class="form-group" style="margin-bottom: 5px;">
+                                    <label class="yuju-ps-mini-label" for="bulk-filter-textarea" style="font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                                        <span>
+                                            <i class="icon-list-ul"></i> Filtrar por listado de SKUs o Nombres (uno por línea)
+                                        </span>
+                                        <span id="bulk-filter-counter-badge" class="badge {if isset($bulk_filter_count) && $bulk_filter_count > 0}badge-info{else}badge-secondary{/if}" style="font-weight: normal; font-size: 11px;">
+                                            {if isset($bulk_filter_count) && $bulk_filter_count > 0}{$bulk_filter_count} {if $bulk_filter_count == 1}elemento{else}elementos{/if}{else}0 elementos{/if}
+                                        </span>
+                                    </label>
+                                    <textarea id="bulk-filter-textarea" class="form-control" rows="3"
+                                              style="font-family: monospace; font-size: 12px; resize: vertical;"
+                                              placeholder="Pega aquí los SKUs o nombres de productos, uno por línea. Ejemplo:&#10;CH080-860&#10;CH080-861&#10;Cable Para Audio...">{$bulk_filter_items_text|default:''|escape:'html':'UTF-8'}</textarea>
+                                    <input type="hidden" id="bulk-filter-id" value="{$bulk_filter_id|default:''|escape:'html':'UTF-8'}">
+                                    <div style="margin-top: 5px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                                        <small class="text-muted" style="font-size: 11px;">
+                                            <i class="icon-info-circle"></i> Un SKU o nombre por línea. Se filtra por coincidencia de referencia o nombre.
+                                        </small>
+                                        <button type="button" id="bulk-filter-clear-btn" class="btn btn-default btn-xs" style="padding: 2px 8px;">
+                                            <i class="icon-eraser"></i> Limpiar listado
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-5 col-sm-12">
+                                <div class="form-group" style="margin-bottom: 5px;">
+                                    <label class="yuju-ps-mini-label" style="font-weight: 600;">
+                                        <i class="icon-file-excel-o"></i> Filtrar subiendo archivo Excel o CSV
+                                    </label>
+                                    <div class="input-group" style="margin-bottom: 8px;">
+                                        <input type="file" id="bulk-filter-file-input" accept=".xlsx,.xls,.csv,.txt" style="display: none;">
+                                        <input type="text" id="bulk-filter-file-name" class="form-control input-sm" placeholder="Seleccionar archivo .xlsx, .csv..." readonly style="cursor: pointer;">
+                                        <span class="input-group-btn">
+                                            <button type="button" id="bulk-filter-browse-btn" class="btn btn-default btn-sm">
+                                                <i class="icon-folder-open"></i> Explorar
+                                            </button>
+                                            <button type="button" id="bulk-filter-upload-btn" class="btn btn-success btn-sm" disabled>
+                                                <i class="icon-upload"></i> Cargar y Filtrar
+                                            </button>
+                                        </span>
+                                    </div>
+                                    <div class="yuju-ps-demo-template-links" style="font-size: 11px; padding: 6px 10px; background: #fbfbfb; border: 1px dashed #d0d7de; border-radius: 4px;">
+                                        <strong style="color: #4b525d;"><i class="icon-download"></i> Plantillas demo:</strong>
+                                        <a href="{$download_demo_xlsx_url|default:'#'}" class="btn btn-link btn-xs" style="padding: 0 4px; font-weight: bold; text-decoration: underline;" download>
+                                            <i class="icon-file-excel-o text-success"></i> Plantilla Excel (.xlsx)
+                                        </a>
+                                        <span class="text-muted">|</span>
+                                        <a href="{$download_demo_csv_url|default:'#'}" class="btn btn-link btn-xs" style="padding: 0 4px; font-weight: bold; text-decoration: underline;" download>
+                                            <i class="icon-file-text-o text-primary"></i> Plantilla CSV (.csv)
+                                        </a>
+                                    </div>
+                                    <div id="bulk-filter-upload-feedback" style="display: none; margin-top: 6px; font-size: 11px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1036,6 +1096,17 @@ $(document).ready(function() {
             }
         });
         
+        if (params.get('bulk_filter_id')) {
+            hasFilters = true;
+            var bulkCount = $('#bulk-filter-counter-badge').text().trim() || 'Listado';
+            filtersHtml += '<span class="label label-default yuju-ps-filter-chip">' +
+                '<strong>Listado masivo:</strong> ' + bulkCount + ' ' +
+                '<a href="#" onclick="removeFilter(\'bulk_filter_id\'); return false;" class="yuju-ps-filter-chip-remove" title="Quitar">' +
+                '<i class="icon-remove"></i>' +
+                '</a>' +
+                '</span>';
+        }
+
         if (hasFilters) {
             filtersHtml = '<span class="yuju-ps-active-filters-label">Activos:</span> ' + filtersHtml;
         }
@@ -1048,6 +1119,12 @@ $(document).ready(function() {
         var params = new URLSearchParams(window.location.search);
         params.delete(filterName);
         
+        if (filterName === 'bulk_filter_id') {
+            params.delete('bulk_search');
+            $('#bulk-filter-textarea').val('');
+            $('#bulk-filter-id').val('');
+        }
+
         // Si se elimina per_page, restaurar al valor por defecto
         if (filterName === 'per_page') {
             params.set('per_page', '25');
@@ -1059,31 +1136,181 @@ $(document).ready(function() {
         window.location.href = window.location.pathname + '?' + params.toString();
     };
     
+    // Funciones y eventos del filtro masivo (textarea y excel)
+    function updateBulkCounter() {
+        var raw = $('#bulk-filter-textarea').val() || '';
+        var lines = raw.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+        var count = lines.length;
+        var badge = $('#bulk-filter-counter-badge');
+        badge.text(count + (count === 1 ? ' elemento' : ' elementos'));
+        if (count > 0) {
+            badge.removeClass('badge-secondary').addClass('badge-info');
+        } else {
+            badge.removeClass('badge-info').addClass('badge-secondary');
+        }
+    }
+
+    $('#bulk-filter-textarea').on('input', function() {
+        $(this).data('dirty', true);
+        updateBulkCounter();
+    });
+
+    $('#bulk-filter-clear-btn').click(function() {
+        $('#bulk-filter-textarea').val('').data('dirty', true);
+        $('#bulk-filter-id').val('');
+        updateBulkCounter();
+        $('#bulk-filter-file-input').val('');
+        $('#bulk-filter-file-name').val('');
+        $('#bulk-filter-upload-btn').prop('disabled', true);
+        $('#bulk-filter-upload-feedback').hide();
+    });
+
+    $('#bulk-filter-browse-btn, #bulk-filter-file-name').click(function() {
+        $('#bulk-filter-file-input').click();
+    });
+
+    $('#bulk-filter-file-input').on('change', function() {
+        var files = this.files;
+        if (files && files.length > 0) {
+            var file = files[0];
+            $('#bulk-filter-file-name').val(file.name);
+            $('#bulk-filter-upload-btn').prop('disabled', false);
+            $('#bulk-filter-upload-feedback').hide();
+        } else {
+            $('#bulk-filter-file-name').val('');
+            $('#bulk-filter-upload-btn').prop('disabled', true);
+        }
+    });
+
+    $('#bulk-filter-upload-btn').click(function() {
+        var fileInput = document.getElementById('bulk-filter-file-input');
+        if (!fileInput || !fileInput.files || !fileInput.files.length) {
+            alert('Por favor selecciona un archivo Excel o CSV primero.');
+            return;
+        }
+
+        var file = fileInput.files[0];
+        var formData = new FormData();
+        formData.append('ajax', '1');
+        formData.append('action', 'parseExcelFilter');
+        formData.append('token', YUJU_PS_TOKEN);
+        formData.append('excel_file', file);
+
+        var $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Subiendo…');
+        $('#bulk-filter-upload-feedback').show().html('<span class="text-info"><i class="icon-spinner icon-spin"></i> Leyendo archivo…</span>');
+
+        $.ajax({
+            url: YUJU_PS_AJAX_URL,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function(res) {
+                $btn.prop('disabled', false).html('<i class="icon-upload"></i> Cargar y Filtrar');
+                if (res && res.success && res.items && res.items.length > 0) {
+                    $('#bulk-filter-textarea').val(res.items.join('\n'));
+                    $('#bulk-filter-id').val(res.filter_id || '');
+                    $('#bulk-filter-textarea').data('dirty', false);
+                    updateBulkCounter();
+                    $('#bulk-filter-upload-feedback').show().html('<span class="text-success"><i class="icon-check"></i> ' + (res.message || 'Archivo procesado con éxito.') + ' Aplicando filtro…</span>');
+
+                    setTimeout(function() {
+                        $('#apply-filters-btn').click();
+                    }, 400);
+                } else {
+                    var msg = (res && res.message) ? res.message : 'No se encontraron datos en el archivo.';
+                    $('#bulk-filter-upload-feedback').show().html('<span class="text-danger"><i class="icon-warning-sign"></i> ' + msg + '</span>');
+                }
+            },
+            error: function(xhr, status, error) {
+                $btn.prop('disabled', false).html('<i class="icon-upload"></i> Cargar y Filtrar');
+                $('#bulk-filter-upload-feedback').show().html('<span class="text-danger"><i class="icon-warning-sign"></i> Error al subir el archivo (' + error + ').</span>');
+            }
+        });
+    });
+
+    function saveBulkFilterAndApply(callback) {
+        var text = ($('#bulk-filter-textarea').val() || '').trim();
+        var currentId = ($('#bulk-filter-id').val() || '').trim();
+        var isDirty = $('#bulk-filter-textarea').data('dirty') === true;
+
+        if (!text) {
+            callback('');
+            return;
+        }
+
+        if (currentId && !isDirty) {
+            callback(currentId);
+            return;
+        }
+
+        $('#apply-filters-btn').prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Guardando…');
+        $.ajax({
+            url: YUJU_PS_AJAX_URL,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'saveBulkFilterList',
+                token: YUJU_PS_TOKEN,
+                text: text
+            },
+            success: function(response) {
+                $('#apply-filters-btn').prop('disabled', false).html('<i class="icon-filter"></i> Aplicar');
+                if (response && response.success && response.filter_id) {
+                    $('#bulk-filter-id').val(response.filter_id);
+                    $('#bulk-filter-textarea').data('dirty', false);
+                    callback(response.filter_id);
+                } else {
+                    callback('');
+                }
+            },
+            error: function() {
+                $('#apply-filters-btn').prop('disabled', false).html('<i class="icon-filter"></i> Aplicar');
+                callback('');
+            }
+        });
+    }
+
     // Mostrar filtros activos al cargar la página
     displayActiveFilters();
-    
+
     // Aplicar filtros - recarga la página con parámetros
     $('#apply-filters-btn').click(function() {
-        var params = new URLSearchParams(window.location.search);
-        
-        params.set('store', $('#prestashop-store-filter').val() || '');
-        params.set('ps_category', $('#ps-category-filter').val() || '');
-        params.set('yuju_category', $('#yuju-category-filter').val() || '');
-        params.set('status', $('#sync-status-filter').val() || '');
-        params.set('date_from', $('#date-from-filter').val() || '');
-        params.set('date_to', $('#date-to-filter').val() || '');
-        params.set('search', $('#product-search').val() || '');
-        params.set('yuju_id', $('#yuju-id-filter').val() || '');
-        params.set('per_page', $('#per-page-filter').val() || '25');
-        params.set('show_all', $('#show-all-products').is(':checked') ? '1' : '');
-        params.set('page', '1'); // Reset to first page
-        
-        // Mantener token y controller
-        window.location.href = window.location.pathname + '?' + params.toString();
+        saveBulkFilterAndApply(function(bulkFilterId) {
+            var params = new URLSearchParams(window.location.search);
+
+            params.set('store', $('#prestashop-store-filter').val() || '');
+            params.set('ps_category', $('#ps-category-filter').val() || '');
+            params.set('yuju_category', $('#yuju-category-filter').val() || '');
+            params.set('status', $('#sync-status-filter').val() || '');
+            params.set('date_from', $('#date-from-filter').val() || '');
+            params.set('date_to', $('#date-to-filter').val() || '');
+            params.set('search', $('#product-search').val() || '');
+            params.set('yuju_id', $('#yuju-id-filter').val() || '');
+            params.set('per_page', $('#per-page-filter').val() || '25');
+            params.set('show_all', $('#show-all-products').is(':checked') ? '1' : '');
+
+            if (bulkFilterId) {
+                params.set('bulk_filter_id', bulkFilterId);
+            } else {
+                params.delete('bulk_filter_id');
+                params.delete('bulk_search');
+            }
+
+            params.set('page', '1'); // Reset to first page
+
+            // Mantener token y controller
+            window.location.href = window.location.pathname + '?' + params.toString();
+        });
     });
     
     // Limpiar filtros
     $('#reset-filters-btn').click(function() {
+        $('#bulk-filter-textarea').val('');
+        $('#bulk-filter-id').val('');
         var params = new URLSearchParams(window.location.search);
         
         // Solo mantener controller y token
@@ -1294,6 +1521,8 @@ $(document).ready(function() {
             'filters[date_from]': $('#date-from-filter').val() || '',
             'filters[date_to]': $('#date-to-filter').val() || '',
             'filters[show_all]': $('#show-all-products').is(':checked') ? '1' : '',
+            'filters[bulk_filter_id]': $('#bulk-filter-id').val() || '',
+            'filters[bulk_search]': ($('#bulk-filter-id').val() ? '' : ($('#bulk-filter-textarea').val() || '')),
             'filters[per_page]': $('#per-page-filter').val() || '25'
         };
 
@@ -1989,6 +2218,8 @@ $(document).ready(function() {
             'filters[date_from]': $('#date-from-filter').val() || '',
             'filters[date_to]': $('#date-to-filter').val() || '',
             'filters[show_all]': $('#show-all-products').is(':checked') ? '1' : '',
+            'filters[bulk_filter_id]': $('#bulk-filter-id').val() || '',
+            'filters[bulk_search]': ($('#bulk-filter-id').val() ? '' : ($('#bulk-filter-textarea').val() || '')),
             'filters[per_page]': $('#per-page-filter').val() || '25'
         };
 

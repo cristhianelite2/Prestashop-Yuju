@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSchemaRepair.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuExcelHelper.php';
 
 class AdminYujuProductStatusController extends ModuleAdminController
 {
@@ -225,6 +226,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Generate AJAX URL for the controller
         $ajax_url = $this->context->link->getAdminLink('AdminYujuProductStatus', true);
 
+        // Bulk filter data from YujuExcelHelper
+        $bulk_filter_id = (string) Tools::getValue('bulk_filter_id', '');
+        $bulk_filter_items = [];
+        if ($bulk_filter_id !== '') {
+            $bulk_filter_items = YujuExcelHelper::getFilterList($bulk_filter_id);
+        }
+        $bulk_filter_items_text = implode("\n", $bulk_filter_items);
+        $bulk_filter_count = count($bulk_filter_items);
+
         $this->context->smarty->assign([
         'sync_running' => $this->sync_manager->isSyncRunning(),
         'prestashop_stores' => $prestashop_stores,
@@ -233,6 +243,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'products' => $products_data['products'],
         'pagination' => $products_data['pagination'],
         'product_status_has_active_filters' => $this->hasActiveProductStatusFilters(),
+        'bulk_filter_id' => $bulk_filter_id,
+        'bulk_filter_items_text' => $bulk_filter_items_text,
+        'bulk_filter_count' => $bulk_filter_count,
+        'download_demo_xlsx_url' => $ajax_url . '&action=downloadExcelTemplate',
+        'download_demo_csv_url' => $ajax_url . '&action=downloadCsvTemplate',
         'ajax_url' => $ajax_url,
         'yuju_logs_admin_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
         'current_index' => self::$currentIndex,
@@ -280,6 +295,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             return true;
         }
         if (trim($g('yuju_id')) !== '') {
+            return true;
+        }
+        if ($g('bulk_filter_id') !== '' || trim($g('bulk_search')) !== '') {
             return true;
         }
         if ($g('show_all') === '1') {
@@ -645,6 +663,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $_GET['date_from'] = isset($filters['date_from']) ? (string) $filters['date_from'] : '';
         $_GET['date_to'] = isset($filters['date_to']) ? (string) $filters['date_to'] : '';
         $_GET['show_all'] = isset($filters['show_all']) ? (string) $filters['show_all'] : '';
+        $_GET['bulk_filter_id'] = isset($filters['bulk_filter_id']) ? (string) $filters['bulk_filter_id'] : '';
+        $_GET['bulk_search'] = isset($filters['bulk_search']) ? (string) $filters['bulk_search'] : '';
         if (isset($filters['per_page']) && $filters['per_page'] !== '') {
             $_GET['per_page'] = (string) $filters['per_page'];
         }
@@ -883,6 +903,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $search = pSQL(Tools::getValue('search', ''));
         $yuju_id_search = trim((string) Tools::getValue('yuju_id', ''));
         $show_all = Tools::getValue('show_all', ''); // Nuevo filtro para mostrar todos los productos
+        $bulk_filter_id = trim((string) Tools::getValue('bulk_filter_id', ''));
+        $bulk_search = trim((string) Tools::getValue('bulk_search', ''));
         
         // Build WHERE clause
         $where = '1=1';
@@ -959,6 +981,34 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $where .= ' AND yps.yuju_product_id IS NOT NULL AND TRIM(yps.yuju_product_id) != ""'
                 . ' AND yps.yuju_product_id LIKE "%' . $yid . '%"';
         }
+
+        $bulk_items = [];
+        if ($bulk_filter_id !== '') {
+            $bulk_items = YujuExcelHelper::getFilterList($bulk_filter_id);
+        }
+        if (empty($bulk_items) && $bulk_search !== '') {
+            $bulk_items = YujuExcelHelper::parseTextareaLines($bulk_search);
+        }
+
+        if (!empty($bulk_items)) {
+            $safe_items = array_map('pSQL', $bulk_items);
+            $in_list = "'" . implode("','", $safe_items) . "'";
+            $bulk_clauses = [
+                'p.reference IN (' . $in_list . ')',
+                'pl.name IN (' . $in_list . ')',
+            ];
+            // Para listas de hasta 100 elementos, buscar también coincidencias parciales en el nombre
+            if (count($bulk_items) <= 100) {
+                $like_clauses = [];
+                foreach ($bulk_items as $item) {
+                    $like_clauses[] = 'pl.name LIKE "%' . pSQL($item) . '%"';
+                }
+                if (!empty($like_clauses)) {
+                    $bulk_clauses[] = '(' . implode(' OR ', $like_clauses) . ')';
+                }
+            }
+            $where .= ' AND (' . implode(' OR ', $bulk_clauses) . ')';
+        }
         
         // Filter products without reference and/or name
         $where .= ' AND p.reference IS NOT NULL AND p.reference != "" AND pl.name IS NOT NULL AND pl.name != ""';
@@ -997,7 +1047,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // El total solo depende del catálogo y del mapeo de categorías cuando ningún filtro usa
         // yuju_product_status ni búsqueda de texto: se reutiliza unos minutos para no recorrer
         // todo el catálogo en cada apertura. Con filtros de estado/fecha/texto siempre se calcula.
-        $count_cacheable = !$needs_yps_filter && $search === '';
+        $count_cacheable = !$needs_yps_filter && $search === '' && empty($bulk_items);
         $total_products = $this->getCachedProductCount($count_sql, $count_cacheable ? 120 : 0);
         $t_count = microtime(true) - $t_start;
         
@@ -1085,11 +1135,26 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     public function postProcess()
     {
+        $action = Tools::getValue('action');
+        if ($action === 'downloadExcelTemplate') {
+            $this->processDownloadExcelTemplate();
+            return;
+        } elseif ($action === 'downloadCsvTemplate') {
+            $this->processDownloadCsvTemplate();
+            return;
+        }
+
         // Handle AJAX requests
         if (Tools::isSubmit('ajax') && Tools::getValue('ajax')) {
             $action = Tools::getValue('action');
             
             switch ($action) {
+                case 'parseExcelFilter':
+                    $this->ajaxProcessParseExcelFilter();
+                    break;
+                case 'saveBulkFilterList':
+                    $this->ajaxProcessSaveBulkFilterList();
+                    break;
                 case 'getProducts':
                     $this->ajaxProcessGetProducts();
                     break;
@@ -1175,6 +1240,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $_GET['status'] = isset($filters['status']) ? $filters['status'] : '';
         $_GET['search'] = isset($filters['search']) ? $filters['search'] : '';
         $_GET['yuju_id'] = isset($filters['yuju_id']) ? (string) $filters['yuju_id'] : '';
+        $_GET['bulk_filter_id'] = isset($filters['bulk_filter_id']) ? (string) $filters['bulk_filter_id'] : '';
+        $_GET['bulk_search'] = isset($filters['bulk_search']) ? (string) $filters['bulk_search'] : '';
         
         $result = $this->getProductsWithFilters($page, $per_page);
         
@@ -1647,6 +1714,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
         $_GET['date_from'] = isset($filters['date_from']) ? (string) $filters['date_from'] : '';
         $_GET['date_to'] = isset($filters['date_to']) ? (string) $filters['date_to'] : '';
         $_GET['show_all'] = isset($filters['show_all']) ? (string) $filters['show_all'] : '';
+        $_GET['bulk_filter_id'] = isset($filters['bulk_filter_id']) ? (string) $filters['bulk_filter_id'] : '';
+        $_GET['bulk_search'] = isset($filters['bulk_search']) ? (string) $filters['bulk_search'] : '';
         if (isset($filters['per_page']) && $filters['per_page'] !== '') {
             $_GET['per_page'] = (string) $filters['per_page'];
         }
@@ -2752,6 +2821,125 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
     }
 
+    /**
+     * AJAX: Procesa un archivo subido (Excel o CSV) y extrae SKUs/nombres para el filtro masivo.
+     */
+    protected function ajaxProcessParseExcelFilter()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!isset($_FILES['excel_file']) || !is_uploaded_file($_FILES['excel_file']['tmp_name'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No se recibió ningún archivo o hubo un error al subirlo.',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $file = $_FILES['excel_file'];
+        $parseResult = YujuExcelHelper::parseFile($file['tmp_name'], $file['name']);
+
+        if (!$parseResult['success'] || empty($parseResult['items'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => isset($parseResult['message']) ? $parseResult['message'] : 'No se encontraron SKUs ni nombres válidos en el archivo.',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $filterId = YujuExcelHelper::saveFilterList($parseResult['items']);
+
+        echo json_encode([
+            'success' => true,
+            'filter_id' => $filterId,
+            'count' => $parseResult['count'],
+            'items' => $parseResult['items'],
+            'preview' => $parseResult['preview'],
+            'message' => 'Se cargaron ' . $parseResult['count'] . ' elementos correctamente.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * AJAX: Guarda una lista de texto (del textarea) en caché y retorna su filter_id.
+     */
+    protected function ajaxProcessSaveBulkFilterList()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $text = (string) Tools::getValue('text', '');
+        $items = YujuExcelHelper::parseTextareaLines($text);
+
+        if (empty($items)) {
+            echo json_encode([
+                'success' => false,
+                'filter_id' => '',
+                'count' => 0,
+                'message' => 'La lista está vacía.',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $filterId = YujuExcelHelper::saveFilterList($items);
+
+        echo json_encode([
+            'success' => true,
+            'filter_id' => $filterId,
+            'count' => count($items),
+            'items' => $items,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * Descarga la plantilla demo en formato Excel (.xlsx).
+     */
+    protected function processDownloadExcelTemplate()
+    {
+        $content = YujuExcelHelper::generateDemoXlsx();
+        if ($content === false) {
+            $this->processDownloadCsvTemplate();
+            return;
+        }
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="plantilla_filtro_yuju.xlsx"');
+        header('Content-Transfer-Encoding: binary');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+        header('Content-Length: ' . strlen($content));
+        echo $content;
+        exit;
+    }
+
+    /**
+     * Descarga la plantilla demo en formato CSV (.csv).
+     */
+    protected function processDownloadCsvTemplate()
+    {
+        $content = YujuExcelHelper::generateDemoCsv();
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Description: File Transfer');
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="plantilla_filtro_yuju.csv"');
+        header('Content-Transfer-Encoding: binary');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+        header('Content-Length: ' . strlen($content));
+        echo $content;
+        exit;
+    }
 
     /** Carga los estilos y scripts propios del módulo en el back office. */
     public function setMedia($isNewTheme = false)
