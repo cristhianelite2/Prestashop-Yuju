@@ -47,6 +47,7 @@ class AdminYujuLogsController extends ModuleAdminController
         $logs = $this->getLogs();
         $queue_stats = $this->getQueueStats();
         $sync_history = $this->getRecentSyncHistory(100);
+        $recent_queue_items = $this->getRecentQueueItems(100);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
         $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
 
@@ -55,6 +56,7 @@ class AdminYujuLogsController extends ModuleAdminController
             'logs' => $logs,
             'queue_stats' => $queue_stats,
             'sync_history' => $sync_history,
+            'recent_queue_items' => $recent_queue_items,
             'module_dir' => $this->module->getPathUri(),
             'db_prefix' => _DB_PREFIX_,
             'cleanup_ajax_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
@@ -362,6 +364,40 @@ class AdminYujuLogsController extends ModuleAdminController
             ) ?: [];
         } catch (Exception $e) {
             error_log('[Yuju Logs] No se pudo leer historial de sincronización: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+
+    /**
+     * Últimos trabajos de cola, incluidos los recién enviados que aún no han llegado a Yuju.
+     *
+     * @param int $limit
+     *
+     * @return array
+     */
+    protected function getRecentQueueItems($limit = 100)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_sync_queue';
+            $table_check = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"');
+            if (empty($table_check)) {
+                return [];
+            }
+
+            $limit = max(1, min(500, (int) $limit));
+
+            return Db::getInstance()->executeS(
+                '
+                SELECT id, prestashop_product_id, prestashop_product_attribute_id,
+                       action, status, attempts, error_message, created_at,
+                       last_attempt_at, processed_at
+                FROM `' . bqSQL($table) . '`
+                ORDER BY created_at DESC, id DESC
+                LIMIT ' . $limit
+            ) ?: [];
+        } catch (Exception $e) {
+            error_log('[Yuju Logs] No se pudo leer la cola de sincronización: ' . $e->getMessage());
             return [];
         }
     }
