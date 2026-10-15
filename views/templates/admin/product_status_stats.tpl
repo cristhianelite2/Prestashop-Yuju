@@ -1847,7 +1847,10 @@ $(document).ready(function() {
         setChip('Preparando…', 'run');
         $modal.modal('show');
 
-        var chunkSize = productIds.length > 80 ? 10 : (productIds.length > 40 ? 5 : 1);
+        // Agrupar hasta 5 productos por petición para reducir solicitudes POST consecutivas,
+        // que pueden activar reglas de frecuencia del WAF/ModSecurity en lotes pequeños.
+        // El controlador limita cada bloque a 25 productos.
+        var chunkSize = productIds.length > 80 ? 10 : (productIds.length > 40 ? 5 : Math.min(5, productIds.length));
 
         function appendValidateLog(kind, line, options) {
             options = options || {};
