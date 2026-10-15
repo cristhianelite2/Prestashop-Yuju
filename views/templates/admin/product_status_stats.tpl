@@ -2122,7 +2122,8 @@ $(document).ready(function() {
             ajax: true,
             action: 'sendProducts',
             token: YUJU_PS_TOKEN,
-            product_ids: productIds,
+            // Enviar los IDs solo como JSON escalar. Repetir product_ids[] en el POST
+            // puede activar reglas WAF/ModSecurity cuando se selecciona más de un producto.
             product_ids_json: JSON.stringify(productIds.map(function(id) { return parseInt(id, 10) || 0; }).filter(function(id) { return id > 0; })),
             bulk_action: bulkAction
         };
