@@ -151,6 +151,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     public function initContent()
     {
+        YujuSchemaRepair::ensurePerformanceIndexes();
+
         // Variables usadas en product_status_stats.tpl (evita avisos si el alcance Smarty no coincide con renderList)
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuProductStatus',
@@ -322,6 +324,25 @@ class AdminYujuProductStatusController extends ModuleAdminController
         return Db::getInstance()->executeS($sql);
     }
     
+    /**
+     * IDs de categorías PrestaShop mapeadas a Yuju (lista corta, una consulta por petición).
+     *
+     * @return int[]
+     */
+    protected function getMappedPrestashopCategoryIds()
+    {
+        static $ids = null;
+        if ($ids === null) {
+            $rows = Db::getInstance()->executeS(
+                'SELECT DISTINCT prestashop_category_id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                 WHERE prestashop_category_id IS NOT NULL AND prestashop_category_id > 0'
+            ) ?: [];
+            $ids = array_values(array_unique(array_map('intval', array_column($rows, 'prestashop_category_id'))));
+        }
+
+        return $ids;
+    }
+
     protected function getYujuCategories()
     {
         $sql = 'SELECT DISTINCT
@@ -828,12 +849,16 @@ class AdminYujuProductStatusController extends ModuleAdminController
         
         // FILTRO POR DEFECTO: Solo productos de categorías mapeadas (a menos que show_all esté activado)
         if ($show_all !== '1') {
-            $where .= ' AND EXISTS (
-                SELECT 1 FROM ' . _DB_PREFIX_ . 'category_product cp_mapped
-                INNER JOIN ' . _DB_PREFIX_ . 'yuju_category_mapping ycm_check
-                    ON cp_mapped.id_category = ycm_check.prestashop_category_id
-                WHERE cp_mapped.id_product = p.id_product
-            )';
+            $mapped_ids = $this->getMappedPrestashopCategoryIds();
+            if ($mapped_ids === []) {
+                $where .= ' AND 1 = 0';
+            } else {
+                $where .= ' AND EXISTS (
+                    SELECT 1 FROM ' . _DB_PREFIX_ . 'category_product cp_mapped
+                    WHERE cp_mapped.id_product = p.id_product
+                        AND cp_mapped.id_category IN (' . implode(',', $mapped_ids) . ')
+                )';
+            }
         }
         
         // Filtro por categoría de PrestaShop
@@ -942,34 +967,52 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Última acción pendiente/procesando en cola para este producto
         $queue_action_sub = '(SELECT q.`action` FROM `' . _DB_PREFIX_ . 'yuju_sync_queue` q WHERE q.`prestashop_product_id` = p.`id_product` AND q.`status` IN ("pending","processing") ORDER BY q.`id` DESC LIMIT 1)';
 
-        // Get products - Usar SOLO la categoría por defecto del producto
-        $products_sql = 'SELECT 
-                            p.id_product,
-                            p.reference,
-                            pl.name,
-                            cl.name as category_name,
-                            ' . $cover_img_sub . ' AS id_image,
-                            ' . $queue_action_sub . ' AS queue_action,
-                            yps.sync_status as yuju_status,
-                            yps.yuju_product_id,
-                            yps.last_sync_at,
-                            yps.last_error
-                         FROM ' . _DB_PREFIX_ . 'product p
-                         LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl 
-                             ON p.id_product = pl.id_product 
-                             AND pl.id_lang = ' . (int)$this->context->language->id . '
-                             ' . $pl_shop . '
-                         LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl 
-                             ON p.id_category_default = cl.id_category 
-                             AND cl.id_lang = ' . (int)$this->context->language->id . '
-                             ' . $cl_shop . '
-                         ' . $yps_join . '
-                         WHERE ' . $where . '
-                         ORDER BY p.id_product DESC
-                         LIMIT ' . (int)$offset . ', ' . (int)$per_page;
-        
-        $products = Db::getInstance()->executeS($products_sql);
-        $products = $this->sanitizeProductsYujuDisplayForInfrastructureErrors($products ?: []);
+        $id_lang = (int) $this->context->language->id;
+
+        // Paso 1: solo IDs de la página, sin subconsultas de imagen/cola/categoría.
+        // El JOIN al último estado solo se incluye cuando los filtros lo necesitan.
+        $ids_sql = 'SELECT p.id_product
+                    FROM ' . _DB_PREFIX_ . 'product p
+                    LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                        ON p.id_product = pl.id_product
+                        AND pl.id_lang = ' . $id_lang . '
+                        ' . $pl_shop . '
+                    ' . $count_status_join . '
+                    WHERE ' . $where . '
+                    ORDER BY p.id_product DESC
+                    LIMIT ' . (int) $offset . ', ' . (int) $per_page;
+        $page_ids = array_map('intval', array_column(Db::getInstance()->executeS($ids_sql) ?: [], 'id_product'));
+
+        $products = [];
+        if ($page_ids !== []) {
+            // Paso 2: cargar el detalle solo para los IDs de la página (máximo 100 filas).
+            $products_sql = 'SELECT
+                                p.id_product,
+                                p.reference,
+                                pl.name,
+                                cl.name as category_name,
+                                ' . $cover_img_sub . ' AS id_image,
+                                ' . $queue_action_sub . ' AS queue_action,
+                                yps.sync_status as yuju_status,
+                                yps.yuju_product_id,
+                                yps.last_sync_at,
+                                yps.last_error
+                             FROM ' . _DB_PREFIX_ . 'product p
+                             LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
+                                 ON p.id_product = pl.id_product
+                                 AND pl.id_lang = ' . $id_lang . '
+                                 ' . $pl_shop . '
+                             LEFT JOIN ' . _DB_PREFIX_ . 'category_lang cl
+                                 ON p.id_category_default = cl.id_category
+                                 AND cl.id_lang = ' . $id_lang . '
+                                 ' . $cl_shop . '
+                             ' . $yps_join . '
+                             WHERE p.id_product IN (' . implode(',', $page_ids) . ')
+                             ORDER BY p.id_product DESC';
+
+            $products = Db::getInstance()->executeS($products_sql) ?: [];
+        }
+        $products = $this->sanitizeProductsYujuDisplayForInfrastructureErrors($products);
         $products = $this->normalizeSyncedStatusRequiresYujuProductId($products);
         // La detección global de SKU duplicados es costosa y no es necesaria para dibujar
         // el listado. Se conserva la validación de duplicados al crear/actualizar productos.
