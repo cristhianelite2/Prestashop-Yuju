@@ -811,10 +811,22 @@ class Yuju extends Module
                  ORDER BY active DESC, id_carrier DESC'
             );
             if ($existing > 0) {
-                Configuration::updateValue('YUJU_CARRIER_ID', $existing);
+                // Esta función corre en cada página del back office: no escribir si no cambió.
+                if ((int) Configuration::get('YUJU_CARRIER_ID') !== $existing) {
+                    Configuration::updateValue('YUJU_CARRIER_ID', $existing);
+                }
                 $done = true;
                 return true;
             }
+
+            // Sin transportista: reintentar a lo sumo cada hora, no en cada página del back office
+            // (crear transportistas + escribir logs en cada carga hacía lento todo el admin).
+            $lastTry = (int) Configuration::get('YUJU_CARRIER_LAST_TRY');
+            if ($lastTry > 0 && (time() - $lastTry) < 3600) {
+                $done = true;
+                return false;
+            }
+            Configuration::updateValue('YUJU_CARRIER_LAST_TRY', time());
 
             require_once dirname(__FILE__) . '/classes/YujuOrderManager.php';
             $manager = new YujuOrderManager();
