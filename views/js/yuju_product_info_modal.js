@@ -262,11 +262,11 @@
         if (!broken) {
             html += '<p class="help-block">Cuando llegue el webhook <code>product-created</code>, el estado pasará a <strong>Sincronizado / Creado</strong>.</p>';
             var pid = escapeHtml(String(pc.product_id || $('#modal-product-id').text() || ''));
-            html += '<button type="button" class="btn btn-sm btn-primary yuju-find-created-webhook" data-product-id="'
-                + pid + '"><i class="icon-search"></i> Buscar webhook</button> ';
+            html += '<button type="button" class="btn btn-sm btn-primary yuju-product-action-icon yuju-find-created-webhook" data-product-id="'
+                + pid + '" title="Buscar webhook product-created por SKU y vincular ID Yuju" aria-label="Buscar webhook product-created por SKU y vincular ID Yuju"><i class="icon-search" aria-hidden="true"></i></button> ';
             if (pc.wait && pc.wait.can_resend) {
-                html += '<button type="button" class="btn btn-sm btn-warning yuju-resend-pending-create" data-product-id="'
-                    + pid + '" title="Han pasado más de 1 hora sin webhook"><i class="icon-refresh"></i> Mandar de nuevo</button>';
+                html += '<button type="button" class="btn btn-sm btn-warning yuju-product-action-icon yuju-resend-pending-create" data-product-id="'
+                    + pid + '" title="Han pasado más de 1 hora sin webhook; reenviar creación" aria-label="Reenviar creación a Yuju"><i class="icon-refresh" aria-hidden="true"></i></button>';
             }
             html += '<div class="yuju-find-webhook-result" style="margin-top:10px;"></div>';
         }
