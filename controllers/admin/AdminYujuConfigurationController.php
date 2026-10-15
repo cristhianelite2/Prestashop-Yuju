@@ -416,18 +416,27 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 ]));
             }
             
-            // Extraer productos creados
-            $created_products = $result['data']['success'] ?? [];
-            $errors = $result['data']['errors'] ?? [];
-            
-            if (empty($created_products) && !empty($errors)) {
+            // Un HTTP 2xx por sí solo no confirma el alta: Yuju debe devolver
+            // al menos un producto en "success" y no reportar errores para el SKU de prueba.
+            $created_products = (isset($result['data']['success']) && is_array($result['data']['success']))
+                ? $result['data']['success']
+                : [];
+            $errors = (isset($result['data']['errors']) && is_array($result['data']['errors']))
+                ? $result['data']['errors']
+                : [];
+
+            if (empty($created_products) || !empty($errors)) {
                 $this->yujuAjaxDie(json_encode([
                     'success' => false,
-                    'message' => 'Yuju reportó errores al crear el producto',
-                    'errors' => $errors
+                    'message' => !empty($errors)
+                        ? 'Yuju reportó errores al crear el producto de prueba'
+                        : 'Yuju respondió HTTP exitoso, pero no confirmó el producto en la lista "success".',
+                    'http_code' => $result['http_code'],
+                    'errors' => $errors,
+                    'response' => $result['data'],
                 ]));
             }
-            
+
             $first_product = reset($created_products);
             
             $this->yujuAjaxDie(json_encode([
