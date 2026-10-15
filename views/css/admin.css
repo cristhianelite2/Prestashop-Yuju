@@ -3922,20 +3922,22 @@ textarea#yuju-cron-manager-output.form-control:focus,
     visibility: hidden;
 }
 #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex !important;
+    align-items: stretch;
+    justify-content: space-between;
     gap: 5px !important;
     width: 100%;
 }
 #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group > .yuju-ps-filter-btn {
     display: inline-flex;
+    flex: 0 1 auto;
     align-items: center;
     justify-content: center;
     gap: 4px;
-    min-width: 0;
+    min-width: max-content;
     min-height: 29px;
     margin: 0 !important;
-    padding: 4px 5px;
+    padding: 4px 6px;
     border-radius: 4px;
     font-size: 11px;
     line-height: 1.15;
