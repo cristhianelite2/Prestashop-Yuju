@@ -1966,7 +1966,7 @@ $(document).ready(function() {
                     } else if (textStatus) {
                         detail += ' (' + textStatus + ')';
                     }
-                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\s+/g, ' ').trim() : '';
                     if (body) {
                         detail += ' Respuesta del servidor: ' + body.substring(0, 450);
                     } else if (errorThrown) {
@@ -2056,7 +2056,7 @@ $(document).ready(function() {
                     } else if (textStatus) {
                         detail += ' (' + textStatus + ')';
                     }
-                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\s+/g, ' ').trim() : '';
                     if (body) {
                         detail += ' Respuesta del servidor: ' + body.substring(0, 450);
                     } else if (errorThrown) {
