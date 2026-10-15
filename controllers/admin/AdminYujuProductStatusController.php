@@ -343,6 +343,49 @@ class AdminYujuProductStatusController extends ModuleAdminController
         return $ids;
     }
 
+    /**
+     * COUNT(*) con caché de archivo de corta duración ($ttl = 0 desactiva la caché).
+     *
+     * @param string $sql
+     * @param int    $ttl segundos
+     *
+     * @return int
+     */
+    protected function getCachedProductCount($sql, $ttl)
+    {
+        $file = _PS_CACHE_DIR_ . 'yuju_ps_count_' . md5($sql) . '.json';
+        if ($ttl > 0 && is_readable($file) && (time() - (int) filemtime($file)) < $ttl) {
+            $cached = json_decode((string) file_get_contents($file), true);
+            if (is_int($cached)) {
+                return $cached;
+            }
+        }
+
+        $total = (int) Db::getInstance()->getValue($sql);
+        if ($ttl > 0) {
+            @file_put_contents($file, json_encode($total), LOCK_EX);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Registra en el log de errores de PHP cuánto tardó cada fase del listado cuando supera 0.75 s.
+     */
+    protected function logSlowProductListing($tCount, $tIds, $tDetail, $total)
+    {
+        if (($tCount + $tIds + $tDetail) < 0.75) {
+            return;
+        }
+        error_log(sprintf(
+            '[Yuju ProductStatus] lento: count=%.3fs ids=%.3fs detalle=%.3fs total_productos=%d',
+            $tCount,
+            $tIds,
+            $tDetail,
+            (int) $total
+        ));
+    }
+
     protected function getYujuCategories()
     {
         $sql = 'SELECT DISTINCT
@@ -949,8 +992,13 @@ class AdminYujuProductStatusController extends ModuleAdminController
                       ' . $count_status_join . '
                       WHERE ' . $where;
         
-        $total_result = Db::getInstance()->getRow($count_sql);
-        $total_products = (int)$total_result['total'];
+        $t_start = microtime(true);
+        // El total solo depende del catálogo y del mapeo de categorías cuando ningún filtro usa
+        // yuju_product_status ni búsqueda de texto: se reutiliza unos minutos para no recorrer
+        // todo el catálogo en cada apertura. Con filtros de estado/fecha/texto siempre se calcula.
+        $count_cacheable = !$needs_yps_filter && $search === '';
+        $total_products = $this->getCachedProductCount($count_sql, $count_cacheable ? 120 : 0);
+        $t_count = microtime(true) - $t_start;
         
         // Evitar división entre cero y límites arbitrarios enviados por URL.
         $per_page = max(1, min(100, (int) $per_page));
@@ -981,7 +1029,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     WHERE ' . $where . '
                     ORDER BY p.id_product DESC
                     LIMIT ' . (int) $offset . ', ' . (int) $per_page;
+        $t_ids_start = microtime(true);
         $page_ids = array_map('intval', array_column(Db::getInstance()->executeS($ids_sql) ?: [], 'id_product'));
+        $t_ids = microtime(true) - $t_ids_start;
+        $t_detail_start = microtime(true);
 
         $products = [];
         if ($page_ids !== []) {
@@ -1012,6 +1063,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
             $products = Db::getInstance()->executeS($products_sql) ?: [];
         }
+        $this->logSlowProductListing($t_count, $t_ids, microtime(true) - $t_detail_start, $total_products);
         $products = $this->sanitizeProductsYujuDisplayForInfrastructureErrors($products);
         $products = $this->normalizeSyncedStatusRequiresYujuProductId($products);
         // La detección global de SKU duplicados es costosa y no es necesaria para dibujar
