@@ -92,11 +92,21 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     if (typeof idImage !== 'undefined' && idImage !== null) {
         imageIdNormalized = String(idImage).trim();
     }
-    if (imageIdNormalized && imageIdNormalized.toLowerCase() !== 'null') {
-        var imgUrl = '/img/p/' + imageIdNormalized.split('').join('/') + '/' + imageIdNormalized + '.jpg';
-        jQuery('#modal-product-image').attr('src', imgUrl).show();
+    if (imageIdNormalized && imageIdNormalized !== '0' && imageIdNormalized.toLowerCase() !== 'null') {
+        var imagePath = 'img/p/' + imageIdNormalized.split('').join('/') + '/' + imageIdNormalized + '.jpg';
+        var $productImage = jQuery('#modal-product-image');
+        var shopBaseUri = String(jQuery('#yuju-product-info-modal-cfg').attr('data-shop-base-uri') || '/').replace(/\/+$/, '') + '/';
+        $productImage.off('error.yujuProductImage').removeAttr('data-fallback-tried');
+        $productImage.one('error.yujuProductImage', function () {
+            if (!jQuery(this).attr('data-fallback-tried')) {
+                jQuery(this).attr('data-fallback-tried', '1').attr('src', '/' + imagePath);
+            } else {
+                jQuery(this).hide();
+            }
+        });
+        $productImage.attr('src', shopBaseUri + imagePath).show();
     } else {
-        jQuery('#modal-product-image').hide();
+        jQuery('#modal-product-image').hide().attr('src', '');
     }
     
     // Si se pide abrir el tab de historial directamente
