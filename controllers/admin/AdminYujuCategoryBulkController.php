@@ -18,6 +18,7 @@ if (!defined('_PS_VERSION_')) {
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncQueue.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSchemaRepair.php';
 require_once _PS_MODULE_DIR_ . 'yuju/config/config.php';
 
 class AdminYujuCategoryBulkController extends ModuleAdminController
@@ -27,6 +28,12 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
     /** @var array<int, array{reference:string,name:string}> */
     protected $bulkProductInfoCache = [];
+
+    /** @var array<int, true>|null */
+    protected $enabledMappedCategorySet = null;
+
+    /** @var array<int, int>|null */
+    protected $categoryParentMap = null;
 
     public function __construct()
     {
@@ -50,6 +57,8 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
     public function initContent()
     {
+        YujuSchemaRepair::ensurePerformanceIndexes();
+
         $idCategory = (int) Tools::getValue('id_category', 0);
         $overviewFilters = $this->getOverviewFiltersFromRequest();
 
@@ -641,7 +650,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         $segWhere = $this->getSegmentWhereSql($segment);
         $ypsJoin = $this->getYpsJoinSql();
 
-        $sql = 'SELECT DISTINCT p.id_product
+        $sql = 'SELECT p.id_product
             FROM ' . _DB_PREFIX_ . 'category_product cp
             INNER JOIN ' . _DB_PREFIX_ . 'product p ON p.id_product = cp.id_product AND p.active = 1
             LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl 
@@ -1282,16 +1291,15 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
      */
     protected function getYpsJoinSql()
     {
+        // Último estado por producto: MAX(id) resuelto con el índice (prestashop_product_id, id),
+        // en lugar de materializar un GROUP BY de toda yuju_product_status en cada consulta.
         return '
-            LEFT JOIN (
-                SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`updated_at`, y.`last_error`
-                FROM `' . _DB_PREFIX_ . 'yuju_product_status` y
-                INNER JOIN (
-                    SELECT `prestashop_product_id`, MAX(`id`) AS `max_id`
-                    FROM `' . _DB_PREFIX_ . 'yuju_product_status`
-                    GROUP BY `prestashop_product_id`
-                ) ylast ON y.`prestashop_product_id` = ylast.`prestashop_product_id` AND y.`id` = ylast.`max_id`
-            ) yps ON (yps.`prestashop_product_id` = p.`id_product`)
+            LEFT JOIN `' . _DB_PREFIX_ . 'yuju_product_status` yps
+                ON yps.`id` = (
+                    SELECT MAX(ys.`id`)
+                    FROM `' . _DB_PREFIX_ . 'yuju_product_status` ys
+                    WHERE ys.`prestashop_product_id` = p.`id_product`
+                )
         ';
     }
 
@@ -1918,25 +1926,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             return ['covered' => false, 'from_ancestor' => false, 'mapped_category_id' => 0];
         }
 
-        $rows = Db::getInstance()->executeS(
-            'SELECT prestashop_category_id, sync_enabled
-             FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-             WHERE sync_enabled = 1
-               AND prestashop_category_id IN (' . implode(',', array_map('intval', $lineage)) . ')
-             LIMIT ' . (int) count($lineage)
-        );
-        if (!is_array($rows) || $rows === []) {
-            return ['covered' => false, 'from_ancestor' => false, 'mapped_category_id' => 0];
-        }
-
-        $set = [];
-        foreach ($rows as $r) {
-            $cid = isset($r['prestashop_category_id']) ? (int) $r['prestashop_category_id'] : 0;
-            if ($cid > 0) {
-                $set[$cid] = true;
-            }
-        }
-
+        $set = $this->getEnabledMappedCategoryIdSet();
         foreach ($lineage as $idx => $cid) {
             if (!isset($set[$cid])) {
                 continue;
@@ -1953,6 +1943,47 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
     }
 
     /**
+     * Categorías con mapeo activo (sync_enabled = 1). Una consulta por petición.
+     *
+     * @return array<int, true>
+     */
+    protected function getEnabledMappedCategoryIdSet()
+    {
+        if ($this->enabledMappedCategorySet === null) {
+            $this->enabledMappedCategorySet = [];
+            $rows = Db::getInstance()->executeS(
+                'SELECT prestashop_category_id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE sync_enabled = 1'
+            );
+            foreach ((array) $rows as $r) {
+                $cid = (int) ($r['prestashop_category_id'] ?? 0);
+                if ($cid > 0) {
+                    $this->enabledMappedCategorySet[$cid] = true;
+                }
+            }
+        }
+
+        return $this->enabledMappedCategorySet;
+    }
+
+    /**
+     * Mapa id_category => id_parent. Una consulta por petición.
+     *
+     * @return array<int, int>
+     */
+    protected function getCategoryParentMap()
+    {
+        if ($this->categoryParentMap === null) {
+            $this->categoryParentMap = [];
+            $rows = Db::getInstance()->executeS('SELECT id_category, id_parent FROM ' . _DB_PREFIX_ . 'category');
+            foreach ((array) $rows as $r) {
+                $this->categoryParentMap[(int) $r['id_category']] = (int) $r['id_parent'];
+            }
+        }
+
+        return $this->categoryParentMap;
+    }
+
+    /**
      * IDs desde la categoría actual hacia su cadena de padres.
      *
      * @param int $idCategory
@@ -1961,6 +1992,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
      */
     protected function getCategoryLineageIds($idCategory)
     {
+        $parents = $this->getCategoryParentMap();
         $out = [];
         $seen = [];
         $current = (int) $idCategory;
@@ -1973,9 +2005,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             $seen[$current] = true;
             $out[] = $current;
 
-            $parent = (int) Db::getInstance()->getValue(
-                'SELECT id_parent FROM ' . _DB_PREFIX_ . 'category WHERE id_category = ' . (int) $current
-            );
+            $parent = isset($parents[$current]) ? $parents[$current] : 0;
             if ($parent <= 0 || $parent === $current) {
                 break;
             }
@@ -1986,11 +2016,6 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         return $out;
     }
 
-    /**
-     * @param string $segment
-     *
-     * @return array{products: array<int, array<string, mixed>>, pagination: array<string, int>}
-     */
     protected function fetchCategoryProductsPage($idCategory, $segment, $page, $perPage)
     {
         $idLang = (int) $this->context->language->id;
@@ -2005,7 +2030,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             ' . $ypsJoin . '
             WHERE cp.id_category = ' . (int) $idCategory . $segWhere;
 
-        $countSql = 'SELECT COUNT(DISTINCT p.id_product) AS total ' . $baseFrom;
+        $countSql = 'SELECT COUNT(*) AS total ' . $baseFrom;
         $total = (int) Db::getInstance()->getValue($countSql);
         $totalPages = $total > 0 ? (int) ceil($total / $perPage) : 1;
         $page = max(1, min($page, $totalPages));
@@ -2013,7 +2038,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         $coverImgSub = '(SELECT MIN(img.`id_image`) FROM `' . _DB_PREFIX_ . 'image` img WHERE img.`id_product` = p.`id_product` AND img.`cover` = 1)';
 
-        $listSql = 'SELECT DISTINCT p.id_product, p.reference, pl.name,
+        $listSql = 'SELECT p.id_product, p.reference, pl.name,
                 ' . $coverImgSub . ' AS id_image,
                 yps.sync_status AS yuju_status,
                 yps.yuju_product_id,
