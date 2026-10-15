@@ -898,29 +898,16 @@ class AdminYujuProductStatusController extends ModuleAdminController
         // Sin esos filtros, agrupar TODA yuju_product_status en cada apertura es innecesario y costoso.
         $needs_yps_filter = ($sync_status !== '' || $date_from !== '' || $date_to !== '' || $yuju_id_search !== '');
         $status_table = '`' . _DB_PREFIX_ . 'yuju_product_status`';
-        if ($needs_yps_filter) {
-            // Los filtros deben evaluarse contra el último estado registrado de cada producto.
-            $yps_join = '
-                LEFT JOIN (
-                    SELECT y.`id`, y.`prestashop_product_id`, y.`yuju_product_id`, y.`sync_status`, y.`last_sync_at`, y.`last_error`
-                    FROM ' . $status_table . ' y
-                    INNER JOIN (
-                        SELECT `prestashop_product_id`, MAX(`id`) AS `max_id`
-                        FROM ' . $status_table . '
-                        GROUP BY `prestashop_product_id`
-                    ) ylast ON y.`prestashop_product_id` = ylast.`prestashop_product_id` AND y.`id` = ylast.`max_id`
-                ) yps ON (yps.`prestashop_product_id` = p.`id_product`)';
-        } else {
-            // Para el listado normal, buscar el último registro por producto usando el índice
-            // (prestashop_product_id, id), en lugar de agrupar toda la tabla.
-            $yps_join = '
-                LEFT JOIN ' . $status_table . ' yps
-                    ON yps.`id` = (
-                        SELECT MAX(ys.`id`)
-                        FROM ' . $status_table . ' ys
-                        WHERE ys.`prestashop_product_id` = p.`id_product`
-                    )';
-        }
+        // Usar siempre una búsqueda correlacionada por producto. El índice
+        // (prestashop_product_id, id) resuelve MAX(id) sin agrupar toda la tabla,
+        // lo que evita una tabla temporal/filesort cuando se filtra por estado o fecha.
+        $yps_join = '
+            LEFT JOIN ' . $status_table . ' yps
+                ON yps.`id` = (
+                    SELECT MAX(ys.`id`)
+                    FROM ' . $status_table . ' ys
+                    WHERE ys.`prestashop_product_id` = p.`id_product`
+                )';
 
         // Multitienda: product_lang y category_lang tienen id_shop; sin filtrarlo, el JOIN duplica una fila por tienda
         $pl_shop = ' AND pl.`id_shop` = p.`id_shop_default` ';
@@ -928,7 +915,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         // El contador no debe leer yuju_product_status si ningún filtro depende de esa tabla.
         $count_status_join = $needs_yps_filter ? $yps_join : '';
-        $count_sql = 'SELECT COUNT(DISTINCT p.id_product) as total
+        $count_sql = 'SELECT COUNT(*) as total
                       FROM ' . _DB_PREFIX_ . 'product p
                       LEFT JOIN ' . _DB_PREFIX_ . 'product_lang pl
                           ON p.id_product = pl.id_product
