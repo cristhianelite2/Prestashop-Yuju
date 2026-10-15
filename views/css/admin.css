@@ -3891,3 +3891,18 @@ textarea#yuju-cron-manager-output.form-control:focus,
         white-space: normal;
     }
 }
+
+/* Acciones compactas para buscar/reintentar webhook de creación de producto */
+.yuju-product-action-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    width: 28px;
+    height: 26px;
+    padding: 0 !important;
+    line-height: 1;
+}
+.yuju-product-action-icon > i {
+    margin: 0 !important;
+}
