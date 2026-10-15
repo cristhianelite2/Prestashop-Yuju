@@ -533,6 +533,50 @@
 </div>
 {/if}
 
+{if isset($recent_queue_items) && count($recent_queue_items) > 0}
+<div class="panel">
+    <div class="panel-heading">
+        <i class="icon-tasks"></i>
+        Últimos 100 productos enviados / trabajos en cola
+    </div>
+    <div class="panel-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-condensed">
+                <thead>
+                    <tr>
+                        <th>Fecha de envío</th>
+                        <th>ID cola</th>
+                        <th>ID PS</th>
+                        <th>Combinación</th>
+                        <th>Acción</th>
+                        <th>Estado</th>
+                        <th>Intentos</th>
+                        <th>Último error</th>
+                        <th>Último intento</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {foreach from=$recent_queue_items item=row}
+                        <tr class="{if $row.status == 'failed'}danger{elseif $row.status == 'completed'}success{elseif $row.status == 'pending' || $row.status == 'processing'}warning{/if}">
+                            <td>{$row.created_at|escape:'html':'UTF-8'}</td>
+                            <td>{$row.id|intval}</td>
+                            <td>{$row.prestashop_product_id|intval}</td>
+                            <td>{$row.prestashop_product_attribute_id|intval}</td>
+                            <td>{$row.action|escape:'html':'UTF-8'}</td>
+                            <td>{$row.status|escape:'html':'UTF-8'}</td>
+                            <td>{$row.attempts|intval}</td>
+                            <td style="white-space: pre-wrap; word-break: break-word; max-width: 420px;">{$row.error_message|default:'—'|escape:'html':'UTF-8'}</td>
+                            <td>{$row.last_attempt_at|default:'—'|escape:'html':'UTF-8'}</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+        <p class="help-block">Aquí aparecen los productos encolados de inmediato, incluso antes de que el cron los envíe a Yuju. La cola no incluye envíos procesados directamente fuera de ella.</p>
+    </div>
+</div>
+{/if}
+
 {if isset($sync_history) && count($sync_history) > 0}
 <div class="panel">
     <div class="panel-heading">
