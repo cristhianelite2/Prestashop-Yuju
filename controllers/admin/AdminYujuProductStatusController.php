@@ -162,6 +162,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'yuju_product_info_ajax_url' => $this->context->link->getAdminLink('AdminYujuProductStatus', true),
             'yuju_product_info_token' => $this->token,
             'product_admin_url' => $this->context->link->getAdminLink('AdminProducts', true),
+            'shop_base_uri' => defined('__PS_BASE_URI__') ? __PS_BASE_URI__ : '/',
         ]);
         parent::initContent();
         
@@ -2605,6 +2606,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'history' => $history,
                 'statistics' => $stats,
                 'pending_create' => $pending_create,
+                'current_status' => $status_row ? [
+                    'yuju_product_id' => !empty($status_row['yuju_product_id']) ? (string) $status_row['yuju_product_id'] : null,
+                    'sync_status' => !empty($status_row['sync_status']) ? (string) $status_row['sync_status'] : null,
+                    'last_error' => !empty($status_row['last_error']) ? (string) $status_row['last_error'] : null,
+                ] : null,
                 'pagination' => [
                     'current_page' => $page,
                     'total_pages' => max(1, $total_pages),
@@ -2755,6 +2761,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         if ($this->module) {
             $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
             $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+            $this->addJS($this->module->getPathUri() . 'views/js/yuju_product_info_modal.js');
         }
     }
 }

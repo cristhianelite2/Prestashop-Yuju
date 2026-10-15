@@ -404,5 +404,6 @@ class AdminYujuController extends ModuleAdminController
 
         $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
         $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+        $this->addJS($this->module->getPathUri() . 'views/js/yuju_product_info_modal.js');
     }
 }

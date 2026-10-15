@@ -6,7 +6,7 @@
     data-ajax-url="{if isset($yuju_product_info_ajax_url)}{$yuju_product_info_ajax_url|escape:'html':'UTF-8'}{elseif isset($ajax_url)}{$ajax_url|escape:'html':'UTF-8'}{/if}"
     data-token="{if isset($yuju_product_info_token)}{$yuju_product_info_token|escape:'html':'UTF-8'}{elseif isset($token)}{$token|escape:'html':'UTF-8'}{/if}"
     data-product-admin-url="{if isset($product_admin_url)}{$product_admin_url|escape:'html':'UTF-8'}{elseif isset($link)}{$link->getAdminLink('AdminProducts', true)|escape:'html':'UTF-8'}{/if}"
-    data-shop-base-uri="{$smarty.const._PS_BASE_URI_|escape:'html':'UTF-8'}"
+    data-shop-base-uri="{if isset($shop_base_uri)}{$shop_base_uri|escape:'html':'UTF-8'}{elseif defined('__PS_BASE_URI__')}{$smarty.const.__PS_BASE_URI__|escape:'html':'UTF-8'}{elseif defined('_PS_BASE_URI_')}{$smarty.const._PS_BASE_URI_|escape:'html':'UTF-8'}{/if}"
 ></div>
 
 <!-- Modal de Información del Producto (canónico) -->

@@ -44,6 +44,122 @@
         return $c.data('productAdminUrl') || $c.attr('data-product-admin-url') || '';
     }
 
+    function shopBaseUri() {
+        var $c = cfgEl();
+        var raw = String($c.data('shopBaseUri') || $c.attr('data-shop-base-uri') || '').trim();
+        if (raw && raw !== '/') {
+            return '/' + raw.replace(/^\/+|\/+$/g, '') + '/';
+        }
+        if (typeof window.prestashop !== 'undefined' && window.prestashop.urls && window.prestashop.urls.base_url) {
+            try {
+                var parser = document.createElement('a');
+                parser.href = window.prestashop.urls.base_url;
+                if (parser.pathname && parser.pathname !== '/') {
+                    return '/' + parser.pathname.replace(/^\/+|\/+$/g, '') + '/';
+                }
+            } catch (e) {}
+        }
+        var candidateUrls = [
+            ajaxUrl(),
+            productAdminUrl(),
+            (typeof window !== 'undefined' && window.location) ? window.location.pathname : ''
+        ];
+        for (var i = 0; i < candidateUrls.length; i++) {
+            var u = candidateUrls[i];
+            if (!u) continue;
+            var pathOnly = u.replace(/^https?:\/\/[^\/]+/i, '');
+            var m = pathOnly.match(/^(.*\/)(?:[^\/]*admin[^\/]*|sell|catalog|orders|modules)\//i);
+            if (m && m[1]) {
+                var base = m[1].replace(/^\/+|\/+$/g, '');
+                if (base) {
+                    return '/' + base + '/';
+                }
+            }
+        }
+        return '/';
+    }
+
+    function renderSyncStatusBadge(syncStatus, yujuProductId) {
+        var st = String(syncStatus || '').toLowerCase().trim();
+        var yid = String(yujuProductId || '').trim();
+        if (yid === 'null' || yid === '—' || yid === '0') {
+            yid = '';
+        }
+
+        var activeSync = ['syncing', 'updating_in_yuju', 'creating_in_yuju', 'queued', 'pending'].indexOf(st) !== -1;
+
+        if (yid) {
+            if (activeSync) {
+                return '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+            }
+            var label = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
+            if (st === 'synced_with_warnings') {
+                label += ' <span class="label label-warning" style="margin-left:4px;">con advertencias</span>';
+            } else if (st === 'synced_with_errors' || st === 'error') {
+                label += ' <span class="label label-warning" style="margin-left:4px;">error en última sync</span>';
+            }
+            return label;
+        }
+
+        if (st === 'synced' || st === 'synced_with_warnings') {
+            var labelSynced = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
+            if (st === 'synced_with_warnings') {
+                labelSynced += ' <span class="label label-warning" style="margin-left:4px;">con advertencias</span>';
+            }
+            return labelSynced;
+        }
+
+        if (activeSync) {
+            return '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+        }
+
+        if (st === 'error' || st === 'synced_with_errors') {
+            return '<span class="label label-danger"><i class="icon-remove"></i> Error</span>';
+        }
+
+        if (st) {
+            return '<span class="label label-default">' + escapeHtml(st) + '</span>';
+        }
+
+        return '<span class="label label-default"><i class="icon-minus"></i> No enviado</span>';
+    }
+
+    function loadProductModalImage($img, idImage, baseUri) {
+        var imageIdNormalized = '';
+        if (typeof idImage !== 'undefined' && idImage !== null) {
+            imageIdNormalized = String(idImage).trim();
+        }
+        if (!imageIdNormalized || imageIdNormalized === '0' || imageIdNormalized.toLowerCase() === 'null') {
+            $img.hide().attr('src', '');
+            return;
+        }
+
+        var cleanBase = baseUri || '/';
+        var splitFolder = imageIdNormalized.split('').join('/') + '/' + imageIdNormalized;
+        var candidates = [
+            cleanBase + 'img/p/' + splitFolder + '.jpg',
+            cleanBase + 'img/p/' + splitFolder + '-large_default.jpg',
+            cleanBase + 'img/p/' + splitFolder + '-home_default.jpg'
+        ];
+        if (cleanBase !== '/') {
+            candidates.push('/img/p/' + splitFolder + '.jpg');
+            candidates.push('/img/p/' + splitFolder + '-large_default.jpg');
+        }
+
+        var currentIdx = 0;
+        $img.off('error.yujuProductImage');
+        $img.on('error.yujuProductImage', function () {
+            currentIdx++;
+            if (currentIdx < candidates.length) {
+                $img.attr('src', candidates[currentIdx]);
+            } else {
+                $img.off('error.yujuProductImage').hide();
+            }
+        });
+
+        $img.attr('src', candidates[0]).show();
+    }
+
     function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
             return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -513,6 +629,28 @@
                 }
 
                 try {
+                    if (response.current_status) {
+                        if (response.current_status.yuju_product_id) {
+                            var newYid = String(response.current_status.yuju_product_id).trim();
+                            if (newYid && newYid !== 'null') {
+                                $('#modal-yuju-product-id').text(newYid);
+                                $('#modal-yuju-in-yuju-badge').show();
+                                if (currentModalCtx) {
+                                    currentModalCtx.yuju_product_id = newYid;
+                                }
+                            }
+                        }
+                        if (typeof response.current_status.sync_status !== 'undefined' && response.current_status.sync_status !== null) {
+                            var newStatus = String(response.current_status.sync_status || '').toLowerCase().trim();
+                            if (currentModalCtx) {
+                                currentModalCtx.sync_status = newStatus;
+                            }
+                        }
+                        var effectiveYid = currentModalCtx && currentModalCtx.yuju_product_id ? currentModalCtx.yuju_product_id : '';
+                        var effectiveSt = currentModalCtx && currentModalCtx.sync_status ? currentModalCtx.sync_status : '';
+                        $('#modal-product-sync-status').html(renderSyncStatusBadge(effectiveSt, effectiveYid));
+                    }
+
                     if (response.history_info) {
                         $('#sync-history-info').text(response.history_info).show();
                     }
@@ -737,34 +875,7 @@
             $('#modal-yuju-in-yuju-badge').hide();
         }
 
-        // Un ID Yuju confirma que el producto ya existe allí. Solo los estados activos
-        // deben aparecer como "Sincronizando"; un estado vacío no debe quedar en "—".
-        var activeSync = ['syncing', 'updating_in_yuju', 'creating_in_yuju', 'queued', 'pending'].indexOf(syncStatus) !== -1;
-        var statusLabel = '—';
-        if (yujuProductId) {
-            if (activeSync) {
-                statusLabel = '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
-            } else {
-                statusLabel = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
-                if (syncStatus === 'synced_with_warnings') {
-                    statusLabel += ' <span class="label label-warning">con advertencias</span>';
-                } else if (syncStatus === 'synced_with_errors' || syncStatus === 'error') {
-                    statusLabel += ' <span class="label label-warning">error en última sync</span>';
-                }
-            }
-        } else if (syncStatus === 'synced' || syncStatus === 'synced_with_warnings') {
-            statusLabel = '<span class="label label-success">Sincronizado</span>';
-            if (syncStatus === 'synced_with_warnings') {
-                statusLabel += ' <span class="label label-warning">con advertencias</span>';
-            }
-        } else if (activeSync) {
-            statusLabel = '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
-        } else if (syncStatus === 'error' || syncStatus === 'synced_with_errors') {
-            statusLabel = '<span class="label label-danger">Error</span>';
-        } else if (syncStatus) {
-            statusLabel = '<span class="label label-default">' + escapeHtml(syncStatus) + '</span>';
-        }
-        $('#modal-product-sync-status').html(statusLabel);
+        $('#modal-product-sync-status').html(renderSyncStatusBadge(syncStatus, yujuProductId));
 
         if (lastError) {
             $('#modal-product-last-error-text').text(lastError);
@@ -784,23 +895,7 @@
             $('#modal-sync-process-banner').hide();
         }
 
-        if (idImage && idImage !== '0' && idImage.toLowerCase() !== 'null') {
-            var imagePath = 'img/p/' + idImage.split('').join('/') + '/' + idImage + '.jpg';
-            var $productImage = $('#modal-product-image');
-            var shopBaseUri = String(cfgEl().attr('data-shop-base-uri') || '/').replace(/\/+$/, '') + '/';
-            $productImage.off('error.yujuProductImage').removeAttr('data-fallback-tried');
-            $productImage.one('error.yujuProductImage', function () {
-                // Compatibilidad con instalaciones que publican las imágenes desde la raíz.
-                if (!$(this).attr('data-fallback-tried')) {
-                    $(this).attr('data-fallback-tried', '1').attr('src', '/' + imagePath);
-                } else {
-                    $(this).hide();
-                }
-            });
-            $productImage.attr('src', shopBaseUri + imagePath).show();
-        } else {
-            $('#modal-product-image').hide().attr('src', '');
-        }
+        loadProductModalImage($('#modal-product-image'), idImage, shopBaseUri());
 
         $('#sync-history-loading').hide();
         $('#sync-history-content').hide();

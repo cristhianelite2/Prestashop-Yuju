@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — Corrección de imágenes de producto y estado de sincronización en modal Yuju (v1.0.6)
+- Corrección de URL de imagen en tiendas alojadas en subdirectorios (`/shop/`): resolución precisa de `__PS_BASE_URI__` y deducción automática de ruta base en JavaScript para evitar rutas rotas `/img/p/...` en lugar de `/shop/img/p/...`.
+- Escalera de recuperación de imágenes (fallback ladder): si la imagen original no se encuentra, se intentan automáticamente las variantes estándar de PrestaShop (`-large_default.jpg`, `-home_default.jpg`, etc.) antes de ocultarla.
+- Consistencia estricta en el estado de sincronización del producto: si un producto cuenta con ID de Yuju, el estado muestra siempre «Sincronizando» (si hay proceso activo) o «Sincronizado» (con etiquetas de advertencia o error en última sync si aplica); nunca queda en «—». Si no tiene ID y no hay error, muestra «No enviado».
+- Actualización dinámica de cabecera del modal: el endpoint AJAX de historial retorna `current_status` (`yuju_product_id`, `sync_status`, `last_error`) para reflejar cambios en tiempo real sin recargar la página.
+- Carga garantizada de assets compartidos (`yuju_product_info_modal.js`) mediante `setMedia()` en `AdminYujuCategoryBulkController`, `AdminYujuProductStatusController` y la clase base `AdminYujuController`.
+- Bump de versión a `1.0.6` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-15 — Optimización drástica de rendimiento en Acciones por categoría (AdminYujuCategoryBulk) (v1.0.5)
 - Eliminación de subconsulta correlacionada N+1 en `getYpsJoinSql()`: reemplazada por tabla derivada pre-agrupada (`MAX(id)` por `prestashop_product_id`), reduciendo de decenas de miles de ejecuciones por petición a 1 sola resolución en memoria.
 - Auto-reparación e indexación en base de datos (`YujuSchemaRepair` v2): adición automática de índices faltantes en `ps_yuju_product_status` (`idx_status_product_latest`, `idx_status_product_sync`, `idx_yuju_product`), `ps_yuju_category_mapping` (`idx_ycm_ps_cat_sync`), `ps_yuju_sync_queue` (`idx_queue_status_created`) y `ps_category` (`idx_category_active_id`), evitando full table scans en catálogos grandes.

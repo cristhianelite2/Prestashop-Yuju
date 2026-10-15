@@ -18,6 +18,125 @@
 
 <script type="text/javascript">
 {literal}
+function resolveShopBaseUriFallback() {
+    var raw = '';
+    var $cfg = jQuery('#yuju-product-info-modal-cfg');
+    if ($cfg.length) {
+        raw = String($cfg.attr('data-shop-base-uri') || '').trim();
+    }
+    if (raw && raw !== '/') {
+        return '/' + raw.replace(/^\/+|\/+$/g, '') + '/';
+    }
+    if (typeof window.prestashop !== 'undefined' && window.prestashop.urls && window.prestashop.urls.base_url) {
+        try {
+            var parser = document.createElement('a');
+            parser.href = window.prestashop.urls.base_url;
+            if (parser.pathname && parser.pathname !== '/') {
+                return '/' + parser.pathname.replace(/^\/+|\/+$/g, '') + '/';
+            }
+        } catch (e) {}
+    }
+    var candidateUrls = [
+        $cfg.length ? ($cfg.attr('data-ajax-url') || '') : '',
+        $cfg.length ? ($cfg.attr('data-product-admin-url') || '') : '',
+        (typeof window !== 'undefined' && window.location) ? window.location.pathname : ''
+    ];
+    for (var i = 0; i < candidateUrls.length; i++) {
+        var u = candidateUrls[i];
+        if (!u) continue;
+        var pathOnly = u.replace(/^https?:\/\/[^\/]+/i, '');
+        var m = pathOnly.match(/^(.*\/)(?:[^\/]*admin[^\/]*|sell|catalog|orders|modules)\//i);
+        if (m && m[1]) {
+            var base = m[1].replace(/^\/+|\/+$/g, '');
+            if (base) {
+                return '/' + base + '/';
+            }
+        }
+    }
+    return '/';
+}
+
+function renderSyncStatusBadgeFallback(syncStatus, yujuProductId) {
+    var st = String(syncStatus || '').toLowerCase().trim();
+    var yid = String(yujuProductId || '').trim();
+    if (yid === 'null' || yid === '—' || yid === '0') {
+        yid = '';
+    }
+
+    var activeSync = ['syncing', 'updating_in_yuju', 'creating_in_yuju', 'queued', 'pending'].indexOf(st) !== -1;
+
+    if (yid) {
+        if (activeSync) {
+            return '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+        }
+        var label = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
+        if (st === 'synced_with_warnings') {
+            label += ' <span class="label label-warning" style="margin-left:4px;">con advertencias</span>';
+        } else if (st === 'synced_with_errors' || st === 'error') {
+            label += ' <span class="label label-warning" style="margin-left:4px;">error en última sync</span>';
+        }
+        return label;
+    }
+
+    if (st === 'synced' || st === 'synced_with_warnings') {
+        var labelSynced = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
+        if (st === 'synced_with_warnings') {
+            labelSynced += ' <span class="label label-warning" style="margin-left:4px;">con advertencias</span>';
+        }
+        return labelSynced;
+    }
+
+    if (activeSync) {
+        return '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+    }
+
+    if (st === 'error' || st === 'synced_with_errors') {
+        return '<span class="label label-danger"><i class="icon-remove"></i> Error</span>';
+    }
+
+    if (st) {
+        return '<span class="label label-default">' + jQuery('<div/>').text(st).html() + '</span>';
+    }
+
+    return '<span class="label label-default"><i class="icon-minus"></i> No enviado</span>';
+}
+
+function loadProductModalImageFallback($img, idImage, baseUri) {
+    var imageIdNormalized = '';
+    if (typeof idImage !== 'undefined' && idImage !== null) {
+        imageIdNormalized = String(idImage).trim();
+    }
+    if (!imageIdNormalized || imageIdNormalized === '0' || imageIdNormalized.toLowerCase() === 'null') {
+        $img.hide().attr('src', '');
+        return;
+    }
+
+    var cleanBase = baseUri || '/';
+    var splitFolder = imageIdNormalized.split('').join('/') + '/' + imageIdNormalized;
+    var candidates = [
+        cleanBase + 'img/p/' + splitFolder + '.jpg',
+        cleanBase + 'img/p/' + splitFolder + '-large_default.jpg',
+        cleanBase + 'img/p/' + splitFolder + '-home_default.jpg'
+    ];
+    if (cleanBase !== '/') {
+        candidates.push('/img/p/' + splitFolder + '.jpg');
+        candidates.push('/img/p/' + splitFolder + '-large_default.jpg');
+    }
+
+    var currentIdx = 0;
+    $img.off('error.yujuProductImage');
+    $img.on('error.yujuProductImage', function () {
+        currentIdx++;
+        if (currentIdx < candidates.length) {
+            $img.attr('src', candidates[currentIdx]);
+        } else {
+            $img.off('error.yujuProductImage').hide();
+        }
+    });
+
+    $img.attr('src', candidates[0]).show();
+}
+
 function showProductInfo(id, reference, name, category, idImage, openHistoryTab, yujuProductId, processHint, lastError, syncStatus) {
     if (window.YujuProductInfoModal && typeof window.YujuProductInfoModal.open === 'function') {
         window.YujuProductInfoModal.open({
@@ -37,15 +156,34 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     }
     console.log('showProductInfo llamada con:', id, reference, name, category, idImage, openHistoryTab, yujuProductId, processHint);
     jQuery('#modal-product-id').text(id);
-    jQuery('#modal-product-reference').text(reference);
-    jQuery('#modal-product-name').text(name);
-    jQuery('#modal-product-category').text(category);
+    jQuery('#modal-product-reference').text(reference || '—');
+    jQuery('#modal-product-name').text(name || '—');
+    jQuery('#modal-product-category').text(category || '—');
 
     var yid = (typeof yujuProductId !== 'undefined' && yujuProductId !== null && String(yujuProductId) !== '') ? String(yujuProductId).trim() : '';
-    if (yid === '' || yid.toLowerCase() === 'null') {
+    if (yid === '' || yid === '0' || yid.toLowerCase() === 'null') {
         yid = '';
     }
     jQuery('#modal-yuju-product-id').text(yid ? yid : '—');
+    if (yid) {
+        jQuery('#modal-yuju-in-yuju-badge').show();
+    } else {
+        jQuery('#modal-yuju-in-yuju-badge').hide();
+    }
+
+    jQuery('#modal-product-sync-status').html(renderSyncStatusBadgeFallback(syncStatus, yid));
+
+    var errText = (typeof lastError !== 'undefined' && lastError !== null) ? String(lastError).trim() : '';
+    if (errText) {
+        jQuery('#modal-product-last-error-text').text(errText);
+        jQuery('#modal-product-last-error')
+            .removeClass('alert-danger alert-warning')
+            .addClass(yid ? 'alert-warning' : 'alert-danger')
+            .show();
+    } else {
+        jQuery('#modal-product-last-error').hide();
+        jQuery('#modal-product-last-error-text').text('');
+    }
 
     var processText = (typeof processHint !== 'undefined' && processHint !== null) ? String(processHint).trim() : '';
     if (processText !== '') {
@@ -87,27 +225,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
     })(id, productAdminBase);
     jQuery('#modal-product-link').attr('href', productUrl);
     
-    // Mostrar imagen del producto (idImage puede venir como número o texto)
-    var imageIdNormalized = '';
-    if (typeof idImage !== 'undefined' && idImage !== null) {
-        imageIdNormalized = String(idImage).trim();
-    }
-    if (imageIdNormalized && imageIdNormalized !== '0' && imageIdNormalized.toLowerCase() !== 'null') {
-        var imagePath = 'img/p/' + imageIdNormalized.split('').join('/') + '/' + imageIdNormalized + '.jpg';
-        var $productImage = jQuery('#modal-product-image');
-        var shopBaseUri = String(jQuery('#yuju-product-info-modal-cfg').attr('data-shop-base-uri') || '/').replace(/\/+$/, '') + '/';
-        $productImage.off('error.yujuProductImage').removeAttr('data-fallback-tried');
-        $productImage.one('error.yujuProductImage', function () {
-            if (!jQuery(this).attr('data-fallback-tried')) {
-                jQuery(this).attr('data-fallback-tried', '1').attr('src', '/' + imagePath);
-            } else {
-                jQuery(this).hide();
-            }
-        });
-        $productImage.attr('src', shopBaseUri + imagePath).show();
-    } else {
-        jQuery('#modal-product-image').hide().attr('src', '');
-    }
+    loadProductModalImageFallback(jQuery('#modal-product-image'), idImage, resolveShopBaseUriFallback());
     
     // Si se pide abrir el tab de historial directamente
     if (openHistoryTab === true) {
@@ -439,7 +557,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                     <i class="icon-info-sign" 
                                        style="color: #2196f3; cursor: pointer; font-size: 16px;"
                                        title="Ver información del producto"
-                                       onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, false{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});"></i>
+                                       onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, false, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, {if isset($product.yuju_status)}{$product.yuju_status|@json_encode|escape:'html':'UTF-8'}{else}''{/if});"></i>
                                 </td>
                                 <td class="yuju-ps-click-toggle">
                                     {$product.reference|escape:'html':'UTF-8'}
@@ -458,25 +576,25 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                             </span>
                                         {elseif $product.yuju_status == 'synced'}
                                             <span class="label label-success" style="cursor: pointer;" title="Ver historial e ID en Yuju"
-                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});">
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'synced');">
                                                 <i class="icon-check"></i> Sincronizado
                                             </span>
                                         {elseif $product.yuju_status == 'synced_with_warnings'}
                                             <span class="label label-success" style="cursor: pointer;" title="Ver historial e ID en Yuju"
-                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});">
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'synced_with_warnings');">
                                                 <i class="icon-check"></i> Sincronizado
                                             </span><i class="icon-exclamation-triangle" 
                                                style="color: #f0ad4e; cursor: pointer; font-size: 14px; margin-left: 5px;" 
                                                title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Tiene advertencias{/if}"
-                                               onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});"></i>
+                                               onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'synced_with_warnings');"></i>
                                         {elseif $product.yuju_status == 'synced_with_errors'}
                                             <span class="label label-success" style="cursor: pointer;" title="Ver historial e ID en Yuju"
-                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});">
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'synced_with_errors');">
                                                 <i class="icon-check"></i> Sincronizado
                                             </span><i class="icon-exclamation-circle" 
                                                style="color: #d9534f; cursor: pointer; font-size: 14px; margin-left: 5px;" 
                                                title="{if isset($product.last_error)}{$product.last_error|escape:'html':'UTF-8'}{else}Error en última operación{/if}"
-                                               onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if});"></i>
+                                               onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, true, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, '', {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'synced_with_errors');"></i>
                                         {elseif $product.yuju_status == 'error'}
                                             {if $yuju_link_ok}
                                             <span class="label label-warning" style="cursor: pointer;"
@@ -493,7 +611,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                             {/if}
                                         {elseif $product.yuju_status == 'queued'}
                                             <span class="label label-info" style="cursor: pointer;" title="Ver detalle de proceso en cola"
-                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, false{if $yuju_link_ok}, {$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{/if}, {if isset($product.queue_action) && $product.queue_action == 'delete'}'eliminación'{elseif isset($product.queue_action) && $product.queue_action == 'update'}'actualización'{else}'creación'{/if});">
+                                                  onclick="showProductInfo({$product.id_product|intval}, {$product.reference|@json_encode|escape:'html':'UTF-8'}, {$product.name|@json_encode|escape:'html':'UTF-8'}, {$product.category_name|@json_encode|escape:'html':'UTF-8'}, {if isset($product.id_image)}{$product.id_image|intval}{else}null{/if}, false, {if $yuju_link_ok}{$product.yuju_product_id|@json_encode|escape:'html':'UTF-8'}{else}null{/if}, {if isset($product.queue_action) && $product.queue_action == 'delete'}'eliminación'{elseif isset($product.queue_action) && $product.queue_action == 'update'}'actualización'{else}'creación'{/if}, {if isset($product.last_error)}{$product.last_error|@json_encode|escape:'html':'UTF-8'}{else}''{/if}, 'queued');">
                                                 <i class="icon-list"></i> En Cola
                                             </span>
                                         {elseif $product.yuju_status == 'creating_in_yuju'}

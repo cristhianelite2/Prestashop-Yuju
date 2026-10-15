@@ -85,6 +85,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             'yuju_sync_history_table_missing' => !$this->isYujuProductSyncHistoryTablePresent(),
             'yuju_sync_history_table_name' => _DB_PREFIX_ . 'yuju_product_sync_history',
             'yuju_enable_bulk_resend_pending' => (int) YujuConfig::get('YUJU_ENABLE_BULK_RESEND_PENDING', 0) === 1,
+            'shop_base_uri' => defined('__PS_BASE_URI__') ? __PS_BASE_URI__ : '/',
         ]);
 
         if ($idCategory <= 0 && $overviewFilters['sku'] !== '') {
@@ -96,6 +97,17 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         parent::initContent();
         $this->setTemplate('category_bulk.tpl');
+    }
+
+    public function setMedia($isNewTheme = false)
+    {
+        parent::setMedia($isNewTheme);
+
+        if ($this->module) {
+            $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+            $this->addJS($this->module->getPathUri() . 'views/js/yuju_product_info_modal.js');
+        }
     }
 
     public function postProcess()
