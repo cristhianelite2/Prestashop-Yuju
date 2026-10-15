@@ -1428,9 +1428,10 @@
                 + '<i class="icon-list"></i> En Cola</span>';
         }
         if (st === 'creating_in_yuju') {
-            return '<span class="label label-info yuju-cat-status-open" style="cursor:pointer;" data-id="' + pid + '"'
-                + ' title="' + escapeHtml(err || 'Enviado a Yuju; en espera de respuesta (webhook). Clic para ver acciones.') + '">'
-                + '<i class="icon-time"></i> En espera de respuesta</span>';
+            return '<span class="label label-info yuju-status-icon yuju-cat-status-open" style="cursor:pointer;" data-id="' + pid + '"'
+                + ' title="' + escapeHtml(err || 'Enviado a Yuju. Creando… Esperando confirmación por webhook (product-created). Clic para ver acciones.') + '"'
+                + ' aria-label="En espera de respuesta">'
+                + '<i class="icon-time" aria-hidden="true"></i><span class="sr-only">En espera de respuesta</span></span>';
         }
         if (st === 'updating_in_yuju') {
             return '<span class="label label-warning" title="' + escapeHtml(err || 'Actualizando diferencias en Yuju') + '">'
