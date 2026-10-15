@@ -848,7 +848,17 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 continue;
             }
 
-            $validation = $this->product_manager->validateProductForYujuCreate($pid);
+            // Un fallo inesperado al validar un producto no debe romper la respuesta AJAX
+            // ni ocultar los resultados de los demás productos del lote.
+            try {
+                $validation = $this->product_manager->validateProductForYujuCreate($pid);
+            } catch (\\Throwable $e) {
+                error_log('[Yuju ProductStatus] Excepción validando producto ' . (int) $pid . ': ' . $e->getMessage());
+                $validation = [
+                    'success' => false,
+                    'errors' => ['No se pudo completar la validación de este producto: ' . $e->getMessage()],
+                ];
+            }
             if (!empty($validation['success'])) {
                 $results[] = [
                     'product_id' => $pid,
