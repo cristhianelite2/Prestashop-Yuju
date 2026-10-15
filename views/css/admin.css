@@ -3906,3 +3906,78 @@ textarea#yuju-cron-manager-output.form-control:focus,
 .yuju-product-action-icon > i {
     margin: 0 !important;
 }
+
+
+/* Estado de productos: filtros y acciones con distribución consistente */
+#content.bootstrap .yuju-admin-layout .yuju-ps-toolbar-row2-actions {
+    padding-top: 0 !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-toolbar-row2-actions .yuju-ps-filter-actions {
+    margin-bottom: 12px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-toolbar-row2-actions .yuju-ps-mini-label--invisible {
+    display: block;
+    height: 16px;
+    margin-bottom: 5px;
+    visibility: hidden;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    width: 100%;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group > .yuju-ps-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 36px;
+    margin: 0 !important;
+    padding: 7px 10px;
+    border-radius: 5px;
+    line-height: 1.25;
+    white-space: normal;
+    text-align: center;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group > .yuju-ps-filter-btn i {
+    flex: 0 0 auto;
+    margin: 0;
+}
+#content.bootstrap .yuju-admin-layout #btn-open-bulk-text-modal .badge {
+    flex: 0 0 auto;
+    margin-left: 2px !important;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filters-grid > [class*="col-"] {
+    margin-bottom: 8px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filters-grid .form-group {
+    margin-bottom: 8px;
+}
+#content.bootstrap .yuju-admin-layout .yuju-ps-filters-grid .form-control {
+    width: 100%;
+    min-width: 0;
+}
+@media (min-width: 1200px) {
+    #content.bootstrap .yuju-admin-layout .yuju-ps-toolbar-row2-actions {
+        padding-top: 0 !important;
+    }
+    #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 991px) {
+    #content.bootstrap .yuju-admin-layout .yuju-ps-toolbar-row2-actions {
+        clear: both;
+    }
+}
+@media (max-width: 480px) {
+    #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group {
+        grid-template-columns: 1fr;
+    }
+    #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group > .yuju-ps-filter-btn {
+        justify-content: flex-start;
+        text-align: left;
+    }
+}
