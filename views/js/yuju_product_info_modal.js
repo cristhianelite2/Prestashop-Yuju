@@ -737,23 +737,30 @@
             $('#modal-yuju-in-yuju-badge').hide();
         }
 
+        // Un ID Yuju confirma que el producto ya existe allí. Solo los estados activos
+        // deben aparecer como "Sincronizando"; un estado vacío no debe quedar en "—".
+        var activeSync = ['syncing', 'updating_in_yuju', 'creating_in_yuju', 'queued', 'pending'].indexOf(syncStatus) !== -1;
         var statusLabel = '—';
-        if (syncStatus === 'synced') {
+        if (yujuProductId) {
+            if (activeSync) {
+                statusLabel = '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+            } else {
+                statusLabel = '<span class="label label-success"><i class="icon-check"></i> Sincronizado</span>';
+                if (syncStatus === 'synced_with_warnings') {
+                    statusLabel += ' <span class="label label-warning">con advertencias</span>';
+                } else if (syncStatus === 'synced_with_errors' || syncStatus === 'error') {
+                    statusLabel += ' <span class="label label-warning">error en última sync</span>';
+                }
+            }
+        } else if (syncStatus === 'synced' || syncStatus === 'synced_with_warnings') {
             statusLabel = '<span class="label label-success">Sincronizado</span>';
-        } else if (syncStatus === 'synced_with_warnings') {
-            statusLabel = '<span class="label label-success">Sincronizado</span> <span class="label label-warning">con advertencias</span>';
-        } else if (syncStatus === 'synced_with_errors') {
-            statusLabel = '<span class="label label-success">En Yuju</span> <span class="label label-warning">error en última sync</span>';
-        } else if (syncStatus === 'error' && yujuProductId) {
-            statusLabel = '<span class="label label-warning">En Yuju · Error</span>';
-        } else if (syncStatus === 'error') {
+            if (syncStatus === 'synced_with_warnings') {
+                statusLabel += ' <span class="label label-warning">con advertencias</span>';
+            }
+        } else if (activeSync) {
+            statusLabel = '<span class="label label-info"><i class="icon-refresh icon-spin"></i> Sincronizando</span>';
+        } else if (syncStatus === 'error' || syncStatus === 'synced_with_errors') {
             statusLabel = '<span class="label label-danger">Error</span>';
-        } else if (syncStatus === 'creating_in_yuju') {
-            statusLabel = '<span class="label label-info">En espera de respuesta</span>';
-        } else if (syncStatus === 'updating_in_yuju') {
-            statusLabel = '<span class="label label-warning">Actualizando…</span>';
-        } else if (syncStatus === 'queued') {
-            statusLabel = '<span class="label label-info">En cola</span>';
         } else if (syncStatus) {
             statusLabel = '<span class="label label-default">' + escapeHtml(syncStatus) + '</span>';
         }
@@ -778,8 +785,19 @@
         }
 
         if (idImage && idImage !== '0' && idImage.toLowerCase() !== 'null') {
-            var imgUrl = '/img/p/' + idImage.split('').join('/') + '/' + idImage + '.jpg';
-            $('#modal-product-image').attr('src', imgUrl).show();
+            var imagePath = 'img/p/' + idImage.split('').join('/') + '/' + idImage + '.jpg';
+            var $productImage = $('#modal-product-image');
+            var shopBaseUri = String(cfgEl().attr('data-shop-base-uri') || '/').replace(/\/+$/, '') + '/';
+            $productImage.off('error.yujuProductImage').removeAttr('data-fallback-tried');
+            $productImage.one('error.yujuProductImage', function () {
+                // Compatibilidad con instalaciones que publican las imágenes desde la raíz.
+                if (!$(this).attr('data-fallback-tried')) {
+                    $(this).attr('data-fallback-tried', '1').attr('src', '/' + imagePath);
+                } else {
+                    $(this).hide();
+                }
+            });
+            $productImage.attr('src', shopBaseUri + imagePath).show();
         } else {
             $('#modal-product-image').hide().attr('src', '');
         }
