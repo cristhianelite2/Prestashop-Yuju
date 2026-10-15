@@ -3971,13 +3971,3 @@ textarea#yuju-cron-manager-output.form-control:focus,
         clear: both;
     }
 }
-@media (max-width: 480px) {
-    #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group {
-        gap: 3px !important;
-    }
-    #content.bootstrap .yuju-admin-layout .yuju-ps-filter-btn-group > .yuju-ps-filter-btn {
-        gap: 3px;
-        padding: 4px 2px;
-        font-size: 10px;
-    }
-}
