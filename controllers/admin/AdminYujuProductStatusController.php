@@ -852,7 +852,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             // ni ocultar los resultados de los demás productos del lote.
             try {
                 $validation = $this->product_manager->validateProductForYujuCreate($pid);
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('[Yuju ProductStatus] Excepción validando producto ' . (int) $pid . ': ' . $e->getMessage());
                 $validation = [
                     'success' => false,
