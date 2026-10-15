@@ -449,73 +449,19 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                         <div class="col-lg-4 col-md-4 col-sm-12 yuju-ps-toolbar-row2-actions">
                             <div class="form-group yuju-ps-filter-actions">
                                 <label class="yuju-ps-mini-label yuju-ps-mini-label--invisible">Acción</label>
-                                <div class="yuju-ps-filter-btn-group" role="group">
+                                <div class="yuju-ps-filter-btn-group" role="group" style="display: flex; gap: 4px; flex-wrap: wrap;">
                                     <button type="button" id="apply-filters-btn" class="btn btn-primary btn-sm yuju-ps-filter-btn">
                                         <i class="icon-filter"></i> Aplicar
                                     </button>
                                     <button type="button" id="reset-filters-btn" class="btn btn-default btn-sm yuju-ps-filter-btn">
                                         <i class="icon-refresh"></i> Limpiar
                                     </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Filtros masivos: Textarea y Carga Excel/CSV -->
-                    <div class="yuju-ps-bulk-filter-section" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e1e6eb;">
-                        <div class="row">
-                            <div class="col-md-7 col-sm-12">
-                                <div class="form-group" style="margin-bottom: 5px;">
-                                    <label class="yuju-ps-mini-label" for="bulk-filter-textarea" style="font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
-                                        <span>
-                                            <i class="icon-list-ul"></i> Filtrar por listado de SKUs o Nombres (uno por línea)
-                                        </span>
-                                        <span id="bulk-filter-counter-badge" class="badge {if isset($bulk_filter_count) && $bulk_filter_count > 0}badge-info{else}badge-secondary{/if}" style="font-weight: normal; font-size: 11px;">
-                                            {if isset($bulk_filter_count) && $bulk_filter_count > 0}{$bulk_filter_count} {if $bulk_filter_count == 1}elemento{else}elementos{/if}{else}0 elementos{/if}
-                                        </span>
-                                    </label>
-                                    <textarea id="bulk-filter-textarea" class="form-control" rows="3"
-                                              style="font-family: monospace; font-size: 12px; resize: vertical;"
-                                              placeholder="Pega aquí los SKUs o nombres de productos, uno por línea. Ejemplo:&#10;CH080-860&#10;CH080-861&#10;Cable Para Audio...">{$bulk_filter_items_text|default:''|escape:'html':'UTF-8'}</textarea>
-                                    <input type="hidden" id="bulk-filter-id" value="{$bulk_filter_id|default:''|escape:'html':'UTF-8'}">
-                                    <div style="margin-top: 5px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                                        <small class="text-muted" style="font-size: 11px;">
-                                            <i class="icon-info-circle"></i> Un SKU o nombre por línea. Se filtra por coincidencia de referencia o nombre.
-                                        </small>
-                                        <button type="button" id="bulk-filter-clear-btn" class="btn btn-default btn-xs" style="padding: 2px 8px;">
-                                            <i class="icon-eraser"></i> Limpiar listado
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-5 col-sm-12">
-                                <div class="form-group" style="margin-bottom: 5px;">
-                                    <label class="yuju-ps-mini-label" style="font-weight: 600;">
-                                        <i class="icon-file-excel-o"></i> Filtrar subiendo archivo Excel o CSV
-                                    </label>
-                                    <div class="input-group" style="margin-bottom: 8px;">
-                                        <input type="file" id="bulk-filter-file-input" accept=".xlsx,.xls,.csv,.txt" style="display: none;">
-                                        <input type="text" id="bulk-filter-file-name" class="form-control input-sm" placeholder="Seleccionar archivo .xlsx, .csv..." readonly style="cursor: pointer;">
-                                        <span class="input-group-btn">
-                                            <button type="button" id="bulk-filter-browse-btn" class="btn btn-default btn-sm">
-                                                <i class="icon-folder-open"></i> Explorar
-                                            </button>
-                                            <button type="button" id="bulk-filter-upload-btn" class="btn btn-success btn-sm" disabled>
-                                                <i class="icon-upload"></i> Cargar y Filtrar
-                                            </button>
-                                        </span>
-                                    </div>
-                                    <div class="yuju-ps-demo-template-links" style="font-size: 11px; padding: 6px 10px; background: #fbfbfb; border: 1px dashed #d0d7de; border-radius: 4px;">
-                                        <strong style="color: #4b525d;"><i class="icon-download"></i> Plantillas demo:</strong>
-                                        <a href="{$download_demo_xlsx_url|default:'#'}" class="btn btn-link btn-xs" style="padding: 0 4px; font-weight: bold; text-decoration: underline;" download>
-                                            <i class="icon-file-excel-o text-success"></i> Plantilla Excel (.xlsx)
-                                        </a>
-                                        <span class="text-muted">|</span>
-                                        <a href="{$download_demo_csv_url|default:'#'}" class="btn btn-link btn-xs" style="padding: 0 4px; font-weight: bold; text-decoration: underline;" download>
-                                            <i class="icon-file-text-o text-primary"></i> Plantilla CSV (.csv)
-                                        </a>
-                                    </div>
-                                    <div id="bulk-filter-upload-feedback" style="display: none; margin-top: 6px; font-size: 11px;"></div>
+                                    <button type="button" id="btn-open-bulk-text-modal" class="btn {if isset($bulk_filter_count) && $bulk_filter_count > 0}btn-info{else}btn-default{/if} btn-sm yuju-ps-filter-btn" title="Filtrar por lista de SKUs o nombres">
+                                        <i class="icon-list-ul"></i> Filtrar por lista{if isset($bulk_filter_count) && $bulk_filter_count > 0} <span class="badge" id="bulk-btn-counter-badge" style="background:#fff; color:#2eacce; margin-left:3px; font-size:10px;">{$bulk_filter_count}</span>{/if}
+                                    </button>
+                                    <button type="button" id="btn-open-bulk-excel-modal" class="btn btn-default btn-sm yuju-ps-filter-btn" title="Filtrar subiendo archivo Excel o CSV">
+                                        <i class="icon-file-excel-o text-success"></i> Subir Excel/CSV
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -800,6 +746,106 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
 </div>
 
 {include file='module:yuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
+
+<!-- Modal Filtro Masivo por Lista o Archivo Excel/CSV -->
+<div class="modal fade" id="yuju-bulk-filter-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-bulk-filter-modal-title">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="yuju-bulk-filter-modal-title">
+                    <i class="icon-filter"></i> Filtro masivo de productos
+                </h4>
+            </div>
+            <div class="modal-body" style="padding-top: 15px;">
+                <ul class="nav nav-tabs" id="yuju-bulk-filter-tabs" role="tablist" style="margin-bottom: 15px;">
+                    <li role="presentation" class="active" id="tab-li-bulk-text">
+                        <a href="#tab-bulk-text" aria-controls="tab-bulk-text" role="tab" data-toggle="tab">
+                            <i class="icon-list-ul"></i> Lista de SKUs o Nombres
+                            <span id="bulk-filter-tab-counter-badge" class="badge {if isset($bulk_filter_count) && $bulk_filter_count > 0}badge-info{else}badge-secondary{/if}" style="font-size: 11px; margin-left: 4px;">
+                                {if isset($bulk_filter_count) && $bulk_filter_count > 0}{$bulk_filter_count}{else}0{/if}
+                            </span>
+                        </a>
+                    </li>
+                    <li role="presentation" id="tab-li-bulk-excel">
+                        <a href="#tab-bulk-excel" aria-controls="tab-bulk-excel" role="tab" data-toggle="tab">
+                            <i class="icon-file-excel-o text-success"></i> Subir archivo Excel o CSV
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Tab 1: Textarea -->
+                    <div role="tabpanel" class="tab-pane active in" id="tab-bulk-text">
+                        <div class="form-group" style="margin-bottom: 5px;">
+                            <label for="bulk-filter-textarea" style="font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span>Pega o escribe los SKUs o nombres de productos (uno por línea):</span>
+                                <span id="bulk-filter-counter-badge" class="badge {if isset($bulk_filter_count) && $bulk_filter_count > 0}badge-info{else}badge-secondary{/if}" style="font-weight: normal; font-size: 11px;">
+                                    {if isset($bulk_filter_count) && $bulk_filter_count > 0}{$bulk_filter_count} {if $bulk_filter_count == 1}elemento{else}elementos{/if}{else}0 elementos{/if}
+                                </span>
+                            </label>
+                            <textarea id="bulk-filter-textarea" class="form-control" rows="8"
+                                      style="font-family: monospace; font-size: 12px; resize: vertical;"
+                                      placeholder="Pega aquí los SKUs o nombres de productos, uno por línea. Ejemplo:&#10;CH080-860&#10;CH080-861&#10;Cable Para Audio Plug 6.3...">{$bulk_filter_items_text|default:''|escape:'html':'UTF-8'}</textarea>
+                            <input type="hidden" id="bulk-filter-id" value="{$bulk_filter_id|default:''|escape:'html':'UTF-8'}">
+                            <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                                <small class="text-muted" style="font-size: 11px;">
+                                    <i class="icon-info-circle"></i> Un SKU o nombre por línea. Se filtra por coincidencia de referencia o nombre en el catálogo.
+                                </small>
+                                <button type="button" id="bulk-filter-clear-btn" class="btn btn-default btn-xs" style="padding: 2px 8px;">
+                                    <i class="icon-eraser"></i> Limpiar listado
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Excel / CSV -->
+                    <div role="tabpanel" class="tab-pane" id="tab-bulk-excel">
+                        <div class="alert alert-info" style="font-size: 12px; margin-bottom: 15px;">
+                            <i class="icon-info-sign"></i> Puedes subir un archivo <strong>Excel (.xlsx, .xls)</strong> o <strong>CSV</strong>. El sistema detectará automáticamente las columnas de SKU/referencia y nombre.
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label style="font-weight: 600; margin-bottom: 6px;">Seleccionar archivo del equipo:</label>
+                            <div class="input-group" style="margin-bottom: 8px;">
+                                <input type="file" id="bulk-filter-file-input" accept=".xlsx,.xls,.csv,.txt" style="display: none;">
+                                <input type="text" id="bulk-filter-file-name" class="form-control input-sm" placeholder="Seleccionar archivo .xlsx, .csv..." readonly style="cursor: pointer; background: #fff;">
+                                <span class="input-group-btn">
+                                    <button type="button" id="bulk-filter-browse-btn" class="btn btn-default btn-sm">
+                                        <i class="icon-folder-open"></i> Explorar
+                                    </button>
+                                    <button type="button" id="bulk-filter-upload-btn" class="btn btn-success btn-sm" disabled>
+                                        <i class="icon-upload"></i> Cargar y Filtrar
+                                    </button>
+                                </span>
+                            </div>
+                            <div id="bulk-filter-upload-feedback" style="display: none; margin-top: 6px; font-size: 11px;"></div>
+                        </div>
+
+                        <div style="margin-top: 15px; padding: 10px 12px; background: #fbfbfb; border: 1px dashed #d0d7de; border-radius: 4px;">
+                            <strong style="color: #4b525d; font-size: 12px;"><i class="icon-download"></i> Descargar plantillas de demostración:</strong>
+                            <div style="margin-top: 6px;">
+                                <a href="{$download_demo_xlsx_url|default:'#'}" class="btn btn-default btn-xs" style="margin-right: 8px;" download>
+                                    <i class="icon-file-excel-o text-success"></i> Plantilla Excel (.xlsx)
+                                </a>
+                                <a href="{$download_demo_csv_url|default:'#'}" class="btn btn-default btn-xs" download>
+                                    <i class="icon-file-text-o text-primary"></i> Plantilla CSV (.csv)
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                    <i class="icon-remove"></i> Cerrar
+                </button>
+                <button type="button" id="modal-bulk-filter-apply-btn" class="btn btn-primary">
+                    <i class="icon-filter"></i> Aplicar Filtro
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Confirmación eliminación masiva en Yuju -->
 <div class="modal fade" id="yuju-bulk-delete-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-bulk-delete-modal-title">
@@ -1148,7 +1194,40 @@ $(document).ready(function() {
         } else {
             badge.removeClass('badge-info').addClass('badge-secondary');
         }
+        $('#bulk-filter-tab-counter-badge').text(count);
+        if (count > 0) {
+            $('#bulk-filter-tab-counter-badge').removeClass('badge-secondary').addClass('badge-info');
+            if ($('#bulk-btn-counter-badge').length) {
+                $('#bulk-btn-counter-badge').text(count);
+            } else {
+                $('#btn-open-bulk-text-modal').append(' <span class="badge" id="bulk-btn-counter-badge" style="background:#fff; color:#2eacce; margin-left:3px; font-size:10px;">' + count + '</span>');
+            }
+            $('#btn-open-bulk-text-modal').removeClass('btn-default').addClass('btn-info');
+        } else {
+            $('#bulk-filter-tab-counter-badge').removeClass('badge-info').addClass('badge-secondary');
+            $('#bulk-btn-counter-badge').remove();
+            $('#btn-open-bulk-text-modal').removeClass('btn-info').addClass('btn-default');
+        }
     }
+
+    // Botones para abrir el modal en su pestaña correspondiente
+    $('#btn-open-bulk-text-modal').click(function(e) {
+        e.preventDefault();
+        $('#yuju-bulk-filter-tabs a[href="#tab-bulk-text"]').tab('show');
+        $('#yuju-bulk-filter-modal').modal('show');
+    });
+
+    $('#btn-open-bulk-excel-modal').click(function(e) {
+        e.preventDefault();
+        $('#yuju-bulk-filter-tabs a[href="#tab-bulk-excel"]').tab('show');
+        $('#yuju-bulk-filter-modal').modal('show');
+    });
+
+    $('#modal-bulk-filter-apply-btn').click(function(e) {
+        e.preventDefault();
+        $('#yuju-bulk-filter-modal').modal('hide');
+        $('#apply-filters-btn').click();
+    });
 
     $('#bulk-filter-textarea').on('input', function() {
         $(this).data('dirty', true);

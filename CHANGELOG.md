@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — Modales y botones compactos para filtros masivos de lista y Excel (v1.0.8)
+- Reemplazo de bloques expandidos en el panel de filtros por botones compactos en la barra de herramientas: `Filtrar por lista` y `Subir Excel/CSV`.
+- Nuevo modal unificado (`#yuju-bulk-filter-modal`) con pestañas para "Lista de SKUs o Nombres" (textarea amplio de 8 filas) y "Subir archivo Excel o CSV" (carga de archivo, demos descargables y feedback).
+- Los botones abren directamente el modal en la pestaña correspondiente sin recargar la página.
+- Contador dinámico reflejado tanto en el badge del modal como en el botón de la barra de filtros (`Filtrar por lista (N)`).
+- Botón "Aplicar Filtro" en el pie del modal con sincronización automática con el flujo de filtros principal.
+- Bump de versión a `1.0.8` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-15 — Filtros masivos por listado (textarea) y carga de archivos Excel/CSV con plantillas demo (v1.0.7)
 - Nuevo filtro por listado de texto (textarea): permite pegar múltiples SKUs o nombres de productos (uno por línea) con contador dinámico en tiempo real y coincidencia precisa por referencia o nombre.
 - Nuevo filtro por archivo Excel o CSV: subida directa y parseo de archivos `.xlsx`, `.xls`, `.csv` o `.txt` nativamente sin dependencias externas mediante `YujuExcelHelper` (ZipArchive + SimpleXML).
