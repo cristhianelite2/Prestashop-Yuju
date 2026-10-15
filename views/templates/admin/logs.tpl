@@ -533,42 +533,46 @@
 </div>
 {/if}
 
-{if isset($sync_history_errors) && count($sync_history_errors) > 0}
+{if isset($sync_history) && count($sync_history) > 0}
 <div class="panel">
     <div class="panel-heading">
-        <i class="icon-exclamation-triangle"></i>
-        Últimos errores de envío a Yuju (historial)
+        <i class="icon-history"></i>
+        Últimos 100 intentos de envío a Yuju (historial)
     </div>
     <div class="panel-body">
         <div class="table-responsive">
-            <table class="table table-striped table-bordered">
+            <table class="table table-striped table-bordered table-condensed">
                 <thead>
                     <tr>
                         <th>Fecha</th>
                         <th>ID PS</th>
                         <th>ID Yuju</th>
                         <th>Acción</th>
+                        <th>Estado</th>
                         <th>HTTP</th>
-                        <th>Mensaje</th>
+                        <th>Mensaje / error</th>
+                        <th>Origen</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {foreach from=$sync_history_errors item=row}
-                        <tr>
+                    {foreach from=$sync_history item=row}
+                        <tr class="{if $row.status == 'error'}danger{elseif $row.status == 'success' || $row.status == 'synced'}success{elseif $row.status == 'warning' || $row.status == 'synced_with_warnings'}warning{/if}">
                             <td>{$row.created_at|escape:'html':'UTF-8'}</td>
                             <td>{$row.prestashop_product_id|intval}</td>
                             <td>{$row.yuju_product_id|default:'—'|escape:'html':'UTF-8'}</td>
                             <td>{$row.action|escape:'html':'UTF-8'}</td>
+                            <td>{$row.status|default:'—'|escape:'html':'UTF-8'}</td>
                             <td>{$row.http_status_code|default:'—'|escape:'html':'UTF-8'}</td>
-                            <td style="white-space: pre-wrap; word-break: break-word; max-width: 420px;">{$row.error_message|escape:'html':'UTF-8'}</td>
+                            <td style="white-space: pre-wrap; word-break: break-word; max-width: 420px;">{$row.error_message|default:'—'|escape:'html':'UTF-8'}</td>
+                            <td>{$row.created_by|default:'—'|escape:'html':'UTF-8'}</td>
                         </tr>
                     {/foreach}
                 </tbody>
             </table>
         </div>
         <p class="help-block">
-            Estos registros provienen de la tabla <code>{$db_prefix|escape:'html':'UTF-8'}yuju_product_sync_history</code>.
-            Los envíos correctos no aparecen aquí.
+            Estos registros provienen de <code>{$db_prefix|escape:'html':'UTF-8'}yuju_product_sync_history</code> e incluyen intentos correctos y fallidos.
+            Si esta tabla no existe o está vacía, no se mostrarán filas.
         </p>
     </div>
 </div>
