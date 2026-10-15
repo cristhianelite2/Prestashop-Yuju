@@ -233,6 +233,10 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             $ok = Db::getInstance()->insert('yuju_category_mapping', $data);
         }
 
+        if ($ok) {
+            self::clearCategoryOverviewCache();
+        }
+
         echo json_encode([
             'success' => (bool) $ok,
             'message' => $ok
@@ -258,6 +262,20 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
      */
     protected function getYujuCategoryOptions()
     {
+        static $memoryCache = null;
+        if ($memoryCache !== null) {
+            return $memoryCache;
+        }
+
+        $cacheFile = _PS_CACHE_DIR_ . 'yuju_cat_options.json';
+        if (is_readable($cacheFile) && (time() - (int) filemtime($cacheFile)) < 3600) {
+            $cached = json_decode((string) file_get_contents($cacheFile), true);
+            if (is_array($cached) && !empty($cached)) {
+                $memoryCache = $cached;
+                return $memoryCache;
+            }
+        }
+
         $byId = [];
 
         // 1) Fuente oficial local del módulo (completa): config/yuju_allowed_values.json
@@ -326,6 +344,11 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
         usort($out, function ($a, $b) {
             return strcasecmp((string) $a['name'], (string) $b['name']);
         });
+
+        $memoryCache = $out;
+        if (!empty($out)) {
+            @file_put_contents($cacheFile, json_encode($out), LOCK_EX);
+        }
 
         return $out;
     }
@@ -831,6 +854,7 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
                 $payload['duplicate_sku_conflicts'] = $conflicts;
             }
         }
+        self::clearCategoryOverviewCache();
         echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     }
 
@@ -1291,15 +1315,19 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
      */
     protected function getYpsJoinSql()
     {
-        // Último estado por producto: MAX(id) resuelto con el índice (prestashop_product_id, id),
-        // en lugar de materializar un GROUP BY de toda yuju_product_status en cada consulta.
+        // Último estado por producto: derivado agrupado por prestashop_product_id
+        // resuelto con índice (prestashop_product_id, id), eliminando la subconsulta correlacionada por fila.
         return '
-            LEFT JOIN `' . _DB_PREFIX_ . 'yuju_product_status` yps
-                ON yps.`id` = (
-                    SELECT MAX(ys.`id`)
-                    FROM `' . _DB_PREFIX_ . 'yuju_product_status` ys
-                    WHERE ys.`prestashop_product_id` = p.`id_product`
-                )
+            LEFT JOIN (
+                SELECT ys.prestashop_product_id, ys.sync_status, ys.yuju_product_id, ys.last_sync_at, ys.updated_at, ys.last_error
+                FROM `' . _DB_PREFIX_ . 'yuju_product_status` ys
+                INNER JOIN (
+                    SELECT prestashop_product_id, MAX(id) AS max_id
+                    FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                    WHERE prestashop_product_id IS NOT NULL
+                    GROUP BY prestashop_product_id
+                ) ys_max ON ys.id = ys_max.max_id
+            ) yps ON yps.prestashop_product_id = p.id_product
         ';
     }
 
@@ -1601,6 +1629,19 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
 
         $idLang = (int) $this->context->language->id;
         $idShop = (int) $this->context->shop->id;
+
+        $forceRefresh = (bool) Tools::getValue('refresh', 0);
+        $cacheKey = md5($idLang . '_' . $idShop . '_' . serialize($filters));
+        $cacheFile = _PS_CACHE_DIR_ . 'yuju_cat_overview_' . $cacheKey . '.json';
+
+        if (!$forceRefresh && is_readable($cacheFile) && (time() - (int) filemtime($cacheFile)) < 60) {
+            $cached = json_decode((string) file_get_contents($cacheFile), true);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $tStart = microtime(true);
         $whereExtra = '';
         $havingParts = ['total > 0'];
 
@@ -1812,7 +1853,32 @@ class AdminYujuCategoryBulkController extends ModuleAdminController
             });
         }
 
-        return array_slice($rows, 0, 400);
+        $tTotal = microtime(true) - $tStart;
+        if ($tTotal > 0.5) {
+            error_log(sprintf('[Yuju CategoryBulk] Overview generado en %.3fs (filas: %d)', $tTotal, count($rows)));
+        }
+
+        $result = array_slice($rows, 0, 400);
+        @file_put_contents($cacheFile, json_encode($result), LOCK_EX);
+
+        return $result;
+    }
+
+    /**
+     * Limpia la caché temporal del overview de categorías tras acciones masivas o cambios de mapeo.
+     *
+     * @return void
+     */
+    public static function clearCategoryOverviewCache()
+    {
+        $files = glob(_PS_CACHE_DIR_ . 'yuju_cat_overview_*.json');
+        if (is_array($files)) {
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
     }
 
     /**

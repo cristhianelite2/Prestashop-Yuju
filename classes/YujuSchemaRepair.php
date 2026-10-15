@@ -186,10 +186,10 @@ class YujuSchemaRepair
      * @return bool
      */
     /** Subir este entero al agregar/cambiar índices para que se reapliquen una sola vez por tienda. */
-    const PERFORMANCE_INDEXES_VERSION = 1;
+    const PERFORMANCE_INDEXES_VERSION = 2;
 
     /**
-     * Índices que aceleran el listado de AdminYujuProductStatus.
+     * Índices que aceleran el listado de AdminYujuProductStatus y AdminYujuCategoryBulk.
      * [tabla sin prefijo => [nombre_indice => [columnas]]].
      *
      * @return array
@@ -200,13 +200,24 @@ class YujuSchemaRepair
             'yuju_product_status' => [
                 'idx_last_sync_at' => ['last_sync_at'],
                 'idx_status_last_sync' => ['sync_status', 'last_sync_at'],
+                'idx_status_product_latest' => ['prestashop_product_id', 'id'],
+                'idx_status_product_sync' => ['prestashop_product_id', 'sync_status', 'yuju_product_id'],
+                'idx_yuju_product' => ['yuju_product_id'],
             ],
             'yuju_sync_queue' => [
                 'idx_queue_product_status_id' => ['prestashop_product_id', 'status', 'id'],
+                'idx_queue_status_created' => ['status', 'created_at'],
+            ],
+            'yuju_category_mapping' => [
+                'idx_ycm_ps_cat_sync' => ['prestashop_category_id', 'sync_enabled'],
+                'idx_yuju_category' => ['yuju_category_id'],
             ],
             // La PK de category_product comienza por id_category; el EXISTS entra por id_product.
             'category_product' => [
                 'idx_yuju_product_category' => ['id_product', 'id_category'],
+            ],
+            'category' => [
+                'idx_category_active_id' => ['active', 'id_category'],
             ],
         ];
     }

@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_category_mapping` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_prestashop_category` (`prestashop_category_id`),
     KEY `idx_yuju_category` (`yuju_category_id`),
-    KEY `idx_sync_enabled` (`sync_enabled`)
+    KEY `idx_sync_enabled` (`sync_enabled`),
+    KEY `idx_ycm_ps_cat_sync` (`prestashop_category_id`, `sync_enabled`)
 ) ENGINE=ENGINE_TYPE DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_mapping` (
@@ -90,6 +91,7 @@ CREATE TABLE IF NOT EXISTS `PREFIX_yuju_product_status` (
     `updated_at` datetime NOT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_status_product_latest` (`prestashop_product_id`, `id`),
+    KEY `idx_status_product_sync` (`prestashop_product_id`, `sync_status`, `yuju_product_id`),
     KEY `idx_yuju_product` (`yuju_product_id`),
     KEY `idx_sync_status` (`sync_status`),
     KEY `idx_sync_enabled` (`sync_enabled`),

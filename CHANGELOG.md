@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — Optimización drástica de rendimiento en Acciones por categoría (AdminYujuCategoryBulk) (v1.0.5)
+- Eliminación de subconsulta correlacionada N+1 en `getYpsJoinSql()`: reemplazada por tabla derivada pre-agrupada (`MAX(id)` por `prestashop_product_id`), reduciendo de decenas de miles de ejecuciones por petición a 1 sola resolución en memoria.
+- Auto-reparación e indexación en base de datos (`YujuSchemaRepair` v2): adición automática de índices faltantes en `ps_yuju_product_status` (`idx_status_product_latest`, `idx_status_product_sync`, `idx_yuju_product`), `ps_yuju_category_mapping` (`idx_ycm_ps_cat_sync`), `ps_yuju_sync_queue` (`idx_queue_status_created`) y `ps_category` (`idx_category_active_id`), evitando full table scans en catálogos grandes.
+- Implementación de caché de corta duración (60s) en `getCategoryOverviewRows()` (`_PS_CACHE_DIR_ . 'yuju_cat_overview_*.json'`) con invalidación inteligente inmediata al guardar mapeos o enviar lotes de productos.
+- Optimización de `getYujuCategoryOptions()` con caché en memoria estática y en disco (1h), evitando lecturas repetidas de `yuju_allowed_values.json` y consultas redundantes.
+- Diagnóstico automático en log de PHP para cargas de overview que superen 0.5s.
+- Bump de versión a `1.0.5` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-14 — Solución definitiva a visualización de canal e ID de orden Yuju (v1.0.4)
 - Creación de script independiente `views/js/admin_order_view.js` con detección multinivel: extracción directa del DOM (detecta entrega "Yuju", referencia de pedido, ID de pedido y deduce canal desde correo o valores del servidor), compatibilidad total con Symfony/Twig en PrestaShop 8 y 9.
 - Implementación de `hookActionAdminControllerSetMedia` para inyección de assets en controladores Symfony de pedidos, asegurando la entrega del JavaScript en todas las variantes de rutas administrativas.
