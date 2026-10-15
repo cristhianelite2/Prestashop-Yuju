@@ -491,11 +491,12 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                                 <i class="icon-time"></i> En espera de respuesta
                                             </span>
                                             <button type="button"
-                                                    class="btn btn-xs btn-default yuju-find-created-webhook"
+                                                    class="btn btn-xs btn-default yuju-product-action-icon yuju-find-created-webhook"
                                                     style="margin-left:6px;vertical-align:middle;"
                                                     data-product-id="{$product.id_product|intval}"
-                                                    title="Buscar webhook product-created por SKU y vincular ID Yuju">
-                                                <i class="icon-search"></i> Buscar webhook
+                                                    title="Buscar webhook product-created por SKU y vincular ID Yuju"
+                                                    aria-label="Buscar webhook product-created por SKU y vincular ID Yuju">
+                                                <i class="icon-search" aria-hidden="true"></i>
                                             </button>
                                             {assign var=yuju_wait_ts value=0}
                                             {if isset($product.last_sync_at) && $product.last_sync_at}
@@ -503,11 +504,12 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
                                             {/if}
                                             {if $yuju_wait_ts && $smarty.now - $yuju_wait_ts >= 3600}
                                                 <button type="button"
-                                                        class="btn btn-xs btn-warning yuju-resend-pending-create"
+                                                        class="btn btn-xs btn-warning yuju-product-action-icon yuju-resend-pending-create"
                                                         style="margin-left:4px;vertical-align:middle;"
                                                         data-product-id="{$product.id_product|intval}"
-                                                        title="Más de 1 hora sin webhook; reenviar creación">
-                                                    <i class="icon-refresh"></i> Mandar de nuevo
+                                                        title="Más de 1 hora sin webhook; reenviar creación"
+                                                        aria-label="Reenviar creación a Yuju">
+                                                    <i class="icon-refresh" aria-hidden="true"></i>
                                                 </button>
                                             {/if}
                                         {elseif $product.yuju_status == 'updating_in_yuju'}
