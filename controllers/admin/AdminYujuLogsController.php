@@ -46,7 +46,7 @@ class AdminYujuLogsController extends ModuleAdminController
 
         $logs = $this->getLogs();
         $queue_stats = $this->getQueueStats();
-        $sync_history_errors = $this->getRecentSyncHistoryErrors(40);
+        $sync_history = $this->getRecentSyncHistory(100);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
         $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
 
@@ -54,7 +54,7 @@ class AdminYujuLogsController extends ModuleAdminController
             'bulk_offer_tasks' => $bulk_offer_tasks,
             'logs' => $logs,
             'queue_stats' => $queue_stats,
-            'sync_history_errors' => $sync_history_errors,
+            'sync_history' => $sync_history,
             'module_dir' => $this->module->getPathUri(),
             'db_prefix' => _DB_PREFIX_,
             'cleanup_ajax_url' => $this->context->link->getAdminLink('AdminYujuLogs', true),
@@ -334,13 +334,13 @@ class AdminYujuLogsController extends ModuleAdminController
     }
 
     /**
-     * Últimos errores registrados en BD (historial de envíos a Yuju).
+     * Últimos intentos de sincronización de productos (éxitos, advertencias y errores).
      *
      * @param int $limit
      *
      * @return array
      */
-    protected function getRecentSyncHistoryErrors($limit = 40)
+    protected function getRecentSyncHistory($limit = 100)
     {
         try {
             $table_check = Db::getInstance()->executeS(
@@ -350,21 +350,18 @@ class AdminYujuLogsController extends ModuleAdminController
                 return [];
             }
 
-            $limit = (int) $limit;
-            if ($limit < 1) {
-                $limit = 40;
-            }
+            $limit = max(1, min(500, (int) $limit));
 
             return Db::getInstance()->executeS(
                 '
-                SELECT prestashop_product_id, yuju_product_id, action, http_status_code,
-                       error_message, created_at, created_by
+                SELECT prestashop_product_id, yuju_product_id, action, status,
+                       http_status_code, error_message, created_at, created_by
                 FROM ' . _DB_PREFIX_ . 'yuju_product_sync_history
-                WHERE status = "error"
                 ORDER BY created_at DESC
                 LIMIT ' . $limit
-            );
+            ) ?: [];
         } catch (Exception $e) {
+            error_log('[Yuju Logs] No se pudo leer historial de sincronización: ' . $e->getMessage());
             return [];
         }
     }
