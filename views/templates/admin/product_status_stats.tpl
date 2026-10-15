@@ -1959,8 +1959,20 @@ $(document).ready(function() {
 
                     runProductChunk(0);
                 },
-                error: function() {
-                    validationFailed('Error de red durante la validación de duplicados.', {});
+                error: function(xhr, textStatus, errorThrown) {
+                    var detail = 'Error de red durante la validación de duplicados.';
+                    if (xhr && xhr.status) {
+                        detail += ' HTTP ' + xhr.status + (xhr.statusText ? ' ' + xhr.statusText : '');
+                    } else if (textStatus) {
+                        detail += ' (' + textStatus + ')';
+                    }
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
+                    if (body) {
+                        detail += ' Respuesta del servidor: ' + body.substring(0, 450);
+                    } else if (errorThrown) {
+                        detail += ' ' + String(errorThrown);
+                    }
+                    validationFailed(detail, {});
                     setPhaseState('dup', 'err');
                 }
             });
@@ -2037,8 +2049,20 @@ $(document).ready(function() {
                     }
                     runProductChunk(r.next_product_index || 0);
                 },
-                error: function() {
-                    validationFailed('Error de red durante la validación de productos.', {});
+                error: function(xhr, textStatus, errorThrown) {
+                    var detail = 'Error de red durante la validación de productos.';
+                    if (xhr && xhr.status) {
+                        detail += ' HTTP ' + xhr.status + (xhr.statusText ? ' ' + xhr.statusText : '');
+                    } else if (textStatus) {
+                        detail += ' (' + textStatus + ')';
+                    }
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
+                    if (body) {
+                        detail += ' Respuesta del servidor: ' + body.substring(0, 450);
+                    } else if (errorThrown) {
+                        detail += ' ' + String(errorThrown);
+                    }
+                    validationFailed(detail, {});
                     setPhaseState('rules', 'err');
                 }
             });
