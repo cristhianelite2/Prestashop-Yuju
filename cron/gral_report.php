@@ -33,13 +33,15 @@ require_once dirname(__FILE__) . '/../classes/YujuLogger.php';
 require_once dirname(__FILE__) . '/../classes/YujuOAuth.php';
 require_once dirname(__FILE__) . '/../classes/YujuProductGralReport.php';
 
-function yuju_gral_log($msg, $level = 'info', $is_web = false)
-{
-    $prefix = strtoupper($level);
-    if ($is_web) {
-        echo '<p>[' . htmlspecialchars($prefix) . '] ' . htmlspecialchars($msg) . '</p>';
-    } else {
-        echo "[{$prefix}] {$msg}\n";
+if (!function_exists('yuju_gral_log')) {
+    function yuju_gral_log($msg, $level = 'info', $is_web = false)
+    {
+        $prefix = strtoupper($level);
+        if ($is_web) {
+            echo '<p>[' . htmlspecialchars($prefix) . '] ' . htmlspecialchars($msg) . '</p>';
+        } else {
+            echo "[{$prefix}] {$msg}\n";
+        }
     }
 }
 
@@ -99,5 +101,7 @@ try {
     }
 } catch (Exception $e) {
     yuju_gral_log($e->getMessage(), 'error', $is_web);
-    exit(1);
+    if (!defined('YUJU_CRON_MAIN_RUNNING')) {
+        exit(1);
+    }
 }

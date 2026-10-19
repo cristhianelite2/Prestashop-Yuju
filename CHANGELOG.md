@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-19 — Corrección de descarga de reportes programados y prevención de duplicidad de acciones en cron (v1.0.9)
+- Control de concurrencia y prevención de ejecuciones solapadas: implementación de bloqueo de archivo atómico no bloqueante (`flock` en `cache/cron.lock`) en `cron.php` para evitar que ejecuciones concurrentes cada 5 minutos dupliquen tareas, consuman cupos o colisionen en base de datos.
+- Corrección de terminación prematura en sincronización de productos: sustitución de `exit(0)` por `return` en `sync_products.php` cuando el sistema está al día, permitiendo que la auditoría de ofertas (Tarea 2) y el reporte general (Tarea 3) se ejecuten con normalidad.
+- Descarga y renovación de reportes en auditoría programada: corrección en `audit_offers.php` para validar la vigencia del reporte (<12h en disco) y solicitar un reporte fresco cuando el anterior ha caducado, eliminando el bloqueo que reutilizaba indefinidamente reportes obsoletos de días anteriores.
+- Registro cruzado entre sincronización y auditoría: al descargar `products-offer-report` en `sync_products.php`, se actualizan los timestamps de reporte y la tabla `yuju_product_reports`, evitando que `audit_offers.php` duplique la solicitud hacia la API de Yuju en el mismo ciclo.
+- Corrección de evaluación de días para reporte general programado (`products-gral-report`): valor por defecto a todos los días (1 al 7) si la configuración se encuentra vacía en base de datos o en el panel administrativo, evitando que `isAllowedWeekdayToday()` devuelva `false` de forma silenciosa.
+- Descarte de tareas abandonadas (>2h): auto-expiración de tareas pendientes o en procesamiento con más de 2 horas en `YujuProductGralReport`, impidiendo que peticiones huérfanas bloqueen indefinidamente futuras solicitudes programadas.
+- Seguridad en manejo de excepciones de `gral_report.php`: protección de `yuju_gral_log()` contra redeclaración y sustitución de `exit(1)` por retorno seguro cuando se invoca desde el cron principal.
+- Bump de versión a `1.0.9` (`yuju.php`, `config.xml`, `config/config.php`).
+
 ## 2026-10-15 — Modales y botones compactos para filtros masivos de lista y Excel (v1.0.8)
 - Reemplazo de bloques expandidos en el panel de filtros por botones compactos en la barra de herramientas: `Filtrar por lista` y `Subir Excel/CSV`.
 - Nuevo modal unificado (`#yuju-bulk-filter-modal`) con pestañas para "Lista de SKUs o Nombres" (textarea amplio de 8 filas) y "Subir archivo Excel o CSV" (carga de archivo, demos descargables y feedback).

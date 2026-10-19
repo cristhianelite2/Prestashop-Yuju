@@ -840,6 +840,9 @@
                         <label class="control-label col-lg-3">Días de la semana</label>
                         <div class="col-lg-9">
                             {assign var=wd_sel value=$gral_weekdays_selected|default:[]}
+                            {if empty($wd_sel)}
+                                {assign var=wd_sel value=[1=>true, 2=>true, 3=>true, 4=>true, 5=>true, 6=>true, 7=>true]}
+                            {/if}
                             <label class="checkbox-inline" style="margin-right:12px;">
                                 <input type="checkbox" name="YUJU_GRAL_REPORT_WEEKDAYS[]" value="1" {if isset($wd_sel[1])}checked="checked"{/if}> Lunes
                             </label>

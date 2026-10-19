@@ -123,7 +123,7 @@ try {
         
         $execution_time = round(microtime(true) - $sync_start, 2);
         log_message("Tiempo de ejecución: {$execution_time}s", 'info', $is_web);
-        exit(0);
+        return;
     }
     
     // Si llegamos aquí, hay trabajo por hacer
@@ -520,6 +520,28 @@ try {
             
             log_message("✓ Descarga registrada en log de sincronización (ID: $log_id)", 'success', $is_web);
             
+            // Sincronizar estado con YujuProductOfferReport para evitar duplicidad de solicitudes
+            $now_offer = date('Y-m-d H:i:s');
+            YujuConfig::set('YUJU_OFFER_REPORT_LAST_REQUEST_AT', $now_offer, 'string');
+            YujuConfig::set('YUJU_OFFER_REPORT_LAST_COMPLETED_AT', $now_offer, 'string');
+            if (class_exists('YujuProductOfferReport') && YujuProductOfferReport::tableExists()) {
+                Db::getInstance()->insert('yuju_product_reports', [
+                    'id_task' => pSQL('sync_offer_' . date('Ymd_His')),
+                    'report_type' => 'offer',
+                    'trigger' => 'cron_sync',
+                    'status' => 'completed',
+                    'products_count' => count($yuju_products),
+                    'file_path' => pSQL(realpath($cache_file)),
+                    'file_size' => (int)$download_size,
+                    'download_url' => pSQL($download_url ?? ''),
+                    'requested_at' => pSQL($now_offer),
+                    'completed_at' => pSQL($now_offer),
+                    'utc_day' => pSQL(gmdate('Y-m-d')),
+                    'created_at' => pSQL($now_offer),
+                    'updated_at' => pSQL($now_offer),
+                ]);
+            }
+
             // Limpiar información de bloqueo si existe
             $block_info_file = $cache_dir . 'yuju_block_info.json';
             if (file_exists($block_info_file)) {

@@ -37,6 +37,38 @@ $logger = new YujuLogger();
 // Cargar clase de cola
 require_once $root_path . '/classes/YujuSyncQueue.php';
 
+if (!defined('YUJU_CRON_MAIN_RUNNING')) {
+    define('YUJU_CRON_MAIN_RUNNING', true);
+}
+
+// Control de concurrencia: evitar ejecuciones simultáneas del CRON (duplicidad de acciones)
+$cron_lock_dir = dirname(__FILE__) . '/../cache/';
+if (!is_dir($cron_lock_dir)) {
+    @mkdir($cron_lock_dir, 0755, true);
+}
+$cron_lock_file = $cron_lock_dir . 'cron.lock';
+$cron_lock_fp = @fopen($cron_lock_file, 'c+');
+if (!$cron_lock_fp || !@flock($cron_lock_fp, LOCK_EX | LOCK_NB)) {
+    $msg = 'Otra ejecución del CRON ya está en progreso. Omitiendo ejecución para evitar duplicidad de acciones.';
+    if (php_sapi_name() !== 'cli') {
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<div style="font-family:sans-serif;padding:15px;margin:20px;background:#fff3cd;color:#856404;border:1px solid #ffeeba;border-radius:4px;">' . htmlspecialchars($msg) . '</div>';
+    } else {
+        echo "[BLOQUEADO] " . $msg . "\n";
+    }
+    if ($cron_lock_fp) {
+        @fclose($cron_lock_fp);
+    }
+    exit(0);
+}
+
+register_shutdown_function(function() use ($cron_lock_fp) {
+    if (is_resource($cron_lock_fp)) {
+        @flock($cron_lock_fp, LOCK_UN);
+        @fclose($cron_lock_fp);
+    }
+});
+
 // Detectar si es llamada web
 $is_web = (php_sapi_name() !== 'cli');
 

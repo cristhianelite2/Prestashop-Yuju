@@ -127,55 +127,66 @@ try {
         $is_web
     );
 
-    // Preferir reporte completado reciente del tipo adecuado
-    $reportId = (int) Db::getInstance()->getValue(
-        'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
+    // Buscar reporte completado más reciente del tipo adecuado
+    $reportRow = Db::getInstance()->getRow(
+        'SELECT id, file_path, completed_at, TIMESTAMPDIFF(SECOND, completed_at, NOW()) as age_seconds
+         FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
          WHERE report_type = \'' . pSQL($reportType) . '\' AND status = \'completed\'
          ORDER BY id DESC LIMIT 1'
     );
 
-    if ($reportId <= 0 || $force) {
+    $reportId = (int) ($reportRow['id'] ?? 0);
+    $reportAge = isset($reportRow['age_seconds']) ? (int) $reportRow['age_seconds'] : PHP_INT_MAX;
+    $hasValidRecentReport = ($reportId > 0 && !empty($reportRow['file_path']) && file_exists($reportRow['file_path']) && $reportAge < 43200);
+
+    // Si no hay reporte válido reciente (< 12h) o se fuerza con --force, solicitar/descargar uno fresco
+    if (!$hasValidRecentReport || $force) {
         if ($auditImages) {
             $service = new YujuProductGralReport();
             $service->processPending(3);
             $req = $service->requestReport('scheduled', $force);
-            if (empty($req['success'])) {
-                if ($reportId > 0) {
-                    yuju_audit_log('No se pudo solicitar nuevo gral; usando histórico #' . $reportId . ' — ' . ($req['message'] ?? ''), 'warning', $is_web);
-                } else {
-                    throw new Exception($req['message'] ?? 'Sin products-gral-report disponible');
-                }
-            } else {
-                $reportId = (int) ($req['report_id'] ?? 0);
-                yuju_audit_log('Tarea gral id_task=' . ($req['id_task'] ?? '?') . ' report_id=' . $reportId, 'info', $is_web);
+            if (!empty($req['success']) && !empty($req['report_id'])) {
+                $newReportId = (int) $req['report_id'];
+                yuju_audit_log('Tarea gral id_task=' . ($req['id_task'] ?? '?') . ' report_id=' . $newReportId, 'info', $is_web);
                 $deadline = time() + 120;
                 while (time() < $deadline) {
-                    $poll = $service->pollAndDownload($reportId);
+                    $poll = $service->pollAndDownload($newReportId);
                     if (!empty($poll['finished']) && !empty($poll['success'])) {
                         break;
                     }
                     if (!empty($poll['finished']) && empty($poll['success'])) {
-                        throw new Exception($poll['message'] ?? 'Fallo al descargar gral-report');
+                        yuju_audit_log($poll['message'] ?? 'Fallo al descargar gral-report', 'warning', $is_web);
+                        break;
                     }
                     sleep(5);
                 }
-                $rep = $service->getReport($reportId);
-                if (!$rep || $rep['status'] !== 'completed') {
-                    throw new Exception('El products-gral-report no terminó a tiempo (report_id=' . $reportId . ').');
+                $rep = $service->getReport($newReportId);
+                if ($rep && $rep['status'] === 'completed') {
+                    $reportId = $newReportId;
+                } elseif ($reportId > 0 && !empty($reportRow['file_path']) && file_exists($reportRow['file_path'])) {
+                    yuju_audit_log('El products-gral-report aún no termina; reusando reporte anterior #' . $reportId, 'warning', $is_web);
+                } else {
+                    throw new Exception('El products-gral-report no terminó a tiempo (report_id=' . $newReportId . ').');
+                }
+            } else {
+                if ($reportId > 0 && !empty($reportRow['file_path']) && file_exists($reportRow['file_path'])) {
+                    yuju_audit_log('No se pudo solicitar nuevo gral; usando histórico #' . $reportId . ' — ' . ($req['message'] ?? ''), 'warning', $is_web);
+                } else {
+                    throw new Exception($req['message'] ?? 'Sin products-gral-report disponible');
                 }
             }
         } else {
             $offerService = new YujuProductOfferReport();
             $req = $offerService->requestAndDownload('scheduled', $force);
-            if (empty($req['success'])) {
-                if ($reportId > 0) {
+            if (!empty($req['success']) && !empty($req['report_id'])) {
+                $reportId = (int) $req['report_id'];
+                yuju_audit_log('Offer report_id=' . $reportId . (empty($req['reused']) ? ' (fresco)' : ' (reutilizado)'), 'info', $is_web);
+            } else {
+                if ($reportId > 0 && !empty($reportRow['file_path']) && file_exists($reportRow['file_path'])) {
                     yuju_audit_log('No se pudo solicitar offer; usando histórico #' . $reportId . ' — ' . ($req['message'] ?? ''), 'warning', $is_web);
                 } else {
                     throw new Exception($req['message'] ?? 'Sin products-offer-report disponible');
                 }
-            } else {
-                $reportId = (int) ($req['report_id'] ?? 0);
-                yuju_audit_log('Offer report_id=' . $reportId . (empty($req['reused']) ? '' : ' (reutilizado)'), 'info', $is_web);
             }
         }
     }

@@ -161,6 +161,10 @@ class YujuProductGralReport
         $days = array_values($days);
         sort($days);
 
+        if (empty($days)) {
+            return [1, 2, 3, 4, 5, 6, 7];
+        }
+
         return $days;
     }
 
@@ -226,7 +230,8 @@ class YujuProductGralReport
             $pending = (int) Db::getInstance()->getValue(
                 'SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
                  WHERE report_type = \'' . pSQL(self::REPORT_TYPE) . '\'
-                   AND status IN (\'pending\',\'processing\')'
+                   AND status IN (\'pending\',\'processing\')
+                   AND requested_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)'
             );
         } catch (Exception $e) {
             return false;
@@ -272,6 +277,7 @@ class YujuProductGralReport
             'SELECT * FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
              WHERE report_type = \'' . pSQL(self::REPORT_TYPE) . '\'
                AND status IN (\'pending\',\'processing\')
+               AND requested_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)
              ORDER BY id DESC'
         );
         if ($pending) {
@@ -411,6 +417,22 @@ class YujuProductGralReport
      */
     public function processPending($limit = 5)
     {
+        // Auto-marcar como failed tareas abandonadas con más de 2 horas en pending/processing
+        try {
+            Db::getInstance()->execute(
+                'UPDATE `' . _DB_PREFIX_ . 'yuju_product_reports`
+                 SET `status` = \'failed\',
+                     `error_message` = \'Tiempo de espera agotado (tarea abandonada > 2h)\',
+                     `completed_at` = NOW(),
+                     `updated_at` = NOW()
+                 WHERE report_type = \'' . pSQL(self::REPORT_TYPE) . '\'
+                   AND status IN (\'pending\',\'processing\')
+                   AND requested_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)'
+            );
+        } catch (Exception $e) {
+            // ignore
+        }
+
         $rows = Db::getInstance()->executeS(
             'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_product_reports`
              WHERE report_type = \'' . pSQL(self::REPORT_TYPE) . '\'

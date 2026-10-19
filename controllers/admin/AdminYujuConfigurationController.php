@@ -151,7 +151,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $gralWeekdaysRaw = (string) $config['YUJU_GRAL_REPORT_WEEKDAYS'];
         $gralWeekdaysSelected = [];
-        foreach (preg_split('/[\s,;]+/', $gralWeekdaysRaw, -1, PREG_SPLIT_NO_EMPTY) as $d) {
+        $parsedDays = preg_split('/[\s,;]+/', $gralWeekdaysRaw, -1, PREG_SPLIT_NO_EMPTY);
+        if (empty($parsedDays)) {
+            $parsedDays = [1, 2, 3, 4, 5, 6, 7];
+        }
+        foreach ($parsedDays as $d) {
             $di = (int) $d;
             if ($di >= 1 && $di <= 7) {
                 $gralWeekdaysSelected[$di] = true;
@@ -1365,6 +1369,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
         }
         $weekdays = array_values($weekdays);
         sort($weekdays);
+        if (empty($weekdays)) {
+            $weekdays = [1, 2, 3, 4, 5, 6, 7];
+        }
         $configs['YUJU_GRAL_REPORT_WEEKDAYS'] = implode(',', $weekdays);
 
         // Validaciones básicas

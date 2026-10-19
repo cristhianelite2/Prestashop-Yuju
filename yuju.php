@@ -46,7 +46,7 @@ class Yuju extends Module
     {
         $this->name = 'yuju';
         $this->tab = 'market_place';
-        $this->version = '1.0.8';
+        $this->version = '1.0.9';
         $this->author = 'Yuju';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = [
