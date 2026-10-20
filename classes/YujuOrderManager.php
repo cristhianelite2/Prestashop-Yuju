@@ -520,15 +520,34 @@ class YujuOrderManager
         $country_name = isset($shipping['country']) ? $shipping['country'] : '';
         $country_code = isset($country_map[$country_name]) ? $country_map[$country_name] : 'MX';
 
-        $customer_first_name = !empty($yuju_data['customer']['first_name']) ? trim($yuju_data['customer']['first_name']) : 'Cliente';
-        $customer_last_name = !empty($yuju_data['customer']['last_name']) ? trim($yuju_data['customer']['last_name']) : 'Yuju';
+        $shipping_first = trim((string) ($shipping['first_name'] ?? ''));
+        $shipping_last = trim((string) ($shipping['last_name'] ?? ''));
+        $customer_first = trim((string) ($yuju_data['customer']['first_name'] ?? ''));
+        $customer_last = trim((string) ($yuju_data['customer']['last_name'] ?? ''));
 
-        $address_first_name = $customer_first_name;
-        $address_last_name = $customer_last_name;
-        if (!empty($shipping['first_name']) && !empty($shipping['last_name'])) {
-            $address_first_name = trim($shipping['first_name']);
-            $address_last_name = trim($shipping['last_name']);
+        // Si el dato del cliente es un ID numérico o inválido (p. ej. TikTok Shop), preferir el nombre de envío
+        if (!YujuOrderFieldMapping::isUsableName($customer_first) && YujuOrderFieldMapping::isUsableName($shipping_first)) {
+            $customer_first = $shipping_first;
         }
+        if (!YujuOrderFieldMapping::isUsableName($customer_last) && YujuOrderFieldMapping::isUsableName($shipping_last)) {
+            $customer_last = $shipping_last;
+        }
+
+        // Si la dirección no trae nombre pero el cliente sí
+        if (!YujuOrderFieldMapping::isUsableName($shipping_first) && YujuOrderFieldMapping::isUsableName($customer_first)) {
+            $shipping_first = $customer_first;
+        }
+        if (!YujuOrderFieldMapping::isUsableName($shipping_last) && YujuOrderFieldMapping::isUsableName($customer_last)) {
+            $shipping_last = $customer_last;
+        }
+
+        YujuOrderFieldMapping::sanitizeAndComplementNames($customer_first, $customer_last, 'Cliente', 'Yuju');
+        YujuOrderFieldMapping::sanitizeAndComplementNames($shipping_first, $shipping_last, 'Cliente', 'Yuju');
+
+        $yuju_data['customer']['first_name'] = $customer_first;
+        $yuju_data['customer']['last_name'] = $customer_last;
+        $address_first_name = $shipping_first;
+        $address_last_name = $shipping_last;
 
         $reference = (string) ($yuju_data['reference'] ?? $yuju_data['id_order'] ?? '');
         $id_channel = $yuju_data['id_channel'] ?? null;
@@ -1317,6 +1336,7 @@ class YujuOrderManager
     protected function updateOrderFromYuju($order_data)
     {
         $adapted_data = $this->adaptYujuOrderData($order_data);
+        $adapted_data = YujuOrderFieldMapping::apply($adapted_data, is_array($order_data) ? $order_data : []);
         $yuju_order_id = (string) ($adapted_data['id'] ?? '');
 
         if ($yuju_order_id === '') {
@@ -1675,49 +1695,28 @@ class YujuOrderManager
         
         // En algunos marketplaces (p. ej. TikTok Shop), customer.first_name es un ID numérico,
         // no un nombre real. Preferir el nombre de envío cuando el dato del cliente no sea válido.
+        $defaultCustomerFirst = YujuOrderFieldMapping::getDefaultValue('customer.first_name', 'Cliente');
+        $defaultCustomerLast = YujuOrderFieldMapping::getDefaultValue('customer.last_name', 'Yuju');
+
         $firstname = trim((string) ($customer_data['first_name'] ?? ''));
         $lastname = trim((string) ($customer_data['last_name'] ?? ''));
 
-        $isUsableName = function ($value) {
-            $value = trim((string) $value);
-            return $value !== ''
-                && !preg_match('/^\d+$/', $value)
-                && preg_match('/[\p{L}]/u', $value);
-        };
-
-        if (!$isUsableName($firstname)) {
+        if (!YujuOrderFieldMapping::isUsableName($firstname)) {
             $firstname = trim((string) ($shipping_address_data['first_name'] ?? ''));
         }
-        if (!$isUsableName($lastname)) {
+        if (!YujuOrderFieldMapping::isUsableName($lastname)) {
             $lastname = trim((string) ($shipping_address_data['last_name'] ?? ''));
         }
 
-        // TikTok puede ocultar parcialmente el nombre del destinatario. Limpiar los
-        // caracteres no admitidos y validar con la misma regla que usa PrestaShop.
-        // No conservar dígitos: Validate::isName() los rechaza en firstname/lastname.
-        $firstname = preg_replace('/[^a-zA-Z\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $firstname);
-        $lastname = preg_replace('/[^a-zA-Z\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $lastname);
-        $firstname = trim(preg_replace('/\s+/', ' ', is_string($firstname) ? $firstname : ''));
-        $lastname = trim(preg_replace('/\s+/', ' ', is_string($lastname) ? $lastname : ''));
+        // Sanitizar y complementar nombres (remover números, máscaras *, dividir compuestos si falta apellido o aplicar defaults)
+        YujuOrderFieldMapping::sanitizeAndComplementNames($firstname, $lastname, $defaultCustomerFirst, $defaultCustomerLast);
 
-        // Tools::substr evita cortar un carácter UTF-8 por la mitad.
-        $firstname = Tools::substr($firstname, 0, 32);
-        $lastname = Tools::substr($lastname, 0, 32);
-
-        if (!$isUsableName($firstname) || !Validate::isName($firstname)) {
-            $firstname = 'Cliente';
-        }
-        if (!$isUsableName($lastname) || !Validate::isName($lastname)) {
-            $lastname = 'Yuju';
-        }
-
-        // Última barrera antes de asignar propiedades Customer: no permitir que un
-        // override de Validate o caracteres inesperados vuelvan a bloquear la orden.
+        // Barrera estricta PrestaShop Validate::isName
         if (!Validate::isName($firstname)) {
-            $firstname = 'Cliente';
+            $firstname = $defaultCustomerFirst !== '' && Validate::isName($defaultCustomerFirst) ? $defaultCustomerFirst : 'Cliente';
         }
         if (!Validate::isName($lastname)) {
-            $lastname = 'Yuju';
+            $lastname = $defaultCustomerLast !== '' && Validate::isName($defaultCustomerLast) ? $defaultCustomerLast : 'Yuju';
         }
         
         $customer->email = $email;
@@ -1767,14 +1766,32 @@ class YujuOrderManager
         if (!class_exists('Address')) {
             throw new Exception('PrestaShop Address class not loaded. Check PrestaShop initialization.');
         }
+
+        // Obtener defaults desde el mapeo de campos
+        $defaultFirst = YujuOrderFieldMapping::getDefaultValue('shipping_address.first_name', 'Cliente');
+        $defaultLast = YujuOrderFieldMapping::getDefaultValue('shipping_address.last_name', 'Yuju');
+
+        $firstname = trim((string) ($address_data['first_name'] ?? ''));
+        $lastname = trim((string) ($address_data['last_name'] ?? ''));
+
+        // Sanitizar y complementar nombres (eliminar dígitos, asteriscos, símbolos; dividir nombres compuestos si falta apellido o aplicar defaults)
+        YujuOrderFieldMapping::sanitizeAndComplementNames($firstname, $lastname, $defaultFirst, $defaultLast);
+
+        // Garantizar cumplimiento estricto con Validate::isName() de PrestaShop
+        if (!Validate::isName($firstname)) {
+            $firstname = $defaultFirst !== '' && Validate::isName($defaultFirst) ? $defaultFirst : 'Cliente';
+        }
+        if (!Validate::isName($lastname)) {
+            $lastname = $defaultLast !== '' && Validate::isName($defaultLast) ? $defaultLast : 'Yuju';
+        }
         
         // Buscar dirección existente del cliente con los mismos datos clave
         // Solo comparamos los campos principales para evitar duplicados por diferencias menores en address2
         $existing_addresses = Db::getInstance()->executeS('
             SELECT id_address FROM ' . _DB_PREFIX_ . 'address
             WHERE id_customer = ' . (int)$customer_id . '
-            AND firstname = "' . pSQL(trim($address_data['first_name'])) . '"
-            AND lastname = "' . pSQL(trim($address_data['last_name'])) . '"
+            AND firstname = "' . pSQL($firstname) . '"
+            AND lastname = "' . pSQL($lastname) . '"
             AND address1 = "' . pSQL(trim($address_data['address_line_1'])) . '"
             AND city = "' . pSQL(trim($address_data['city'])) . '"
             AND postcode = "' . pSQL(trim($address_data['postal_code'])) . '"
@@ -1796,25 +1813,6 @@ class YujuOrderManager
         // Crear nueva dirección si no existe
         $address = new Address();
         $address->id_customer = $customer_id;
-        
-        // Validar y sanitizar nombres
-        $firstname = trim($address_data['first_name']);
-        $lastname = trim($address_data['last_name']);
-        
-        if (empty($firstname)) {
-            $firstname = 'Cliente';
-        }
-        if (empty($lastname)) {
-            $lastname = 'Yuju';
-        }
-        
-        // Sanitizar nombres (remover caracteres especiales)
-        $firstname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $firstname);
-        $lastname = preg_replace('/[^a-zA-Z0-9\sáéíóúÁÉÍÓÚñÑ\-\']/u', '', $lastname);
-        
-        // Limitar longitud
-        $firstname = substr($firstname, 0, 32);
-        $lastname = substr($lastname, 0, 32);
         
         // Validar y sanitizar dirección
         $address1 = trim($address_data['address_line_1']);
@@ -1859,6 +1857,14 @@ class YujuOrderManager
         // para evitar caracteres inválidos y cumplir la longitud requerida.
         $phone = str_pad(substr($phone, 0, 10), 10, '0', STR_PAD_LEFT);
         
+        // Garantizar al 100% que Validate::isName es verdadero antes de asignar
+        if (!Validate::isName($firstname)) {
+            $firstname = $defaultFirst !== '' && Validate::isName($defaultFirst) ? $defaultFirst : 'Cliente';
+        }
+        if (!Validate::isName($lastname)) {
+            $lastname = $defaultLast !== '' && Validate::isName($defaultLast) ? $defaultLast : 'Yuju';
+        }
+
         $address->firstname = $firstname;
         $address->lastname = $lastname;
         $address->company = isset($address_data['company']) ? substr($address_data['company'], 0, 64) : '';

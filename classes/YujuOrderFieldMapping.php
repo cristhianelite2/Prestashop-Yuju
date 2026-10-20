@@ -8,20 +8,47 @@ if (!defined('_PS_VERSION_')) {
 
 class YujuOrderFieldMapping
 {
+    private static $cachedMappings = null;
+
+    public static function clearCache()
+    {
+        self::$cachedMappings = null;
+    }
+
     public static function getMappings()
     {
+        if (self::$cachedMappings !== null) {
+            return self::$cachedMappings;
+        }
         try {
             $rows = Db::getInstance()->executeS(
                 'SELECT id, target_path, template, field_type, default_value, is_active
                  FROM ' . _DB_PREFIX_ . 'yuju_order_field_mapping
                  WHERE is_active = 1 ORDER BY id ASC'
             );
-            return is_array($rows) ? $rows : [];
+            self::$cachedMappings = is_array($rows) ? $rows : [];
+            return self::$cachedMappings;
         } catch (Exception $e) {
             return [];
         } catch (Throwable $e) {
             return [];
         }
+    }
+
+    public static function getDefaultValue($targetPath, $fallback = '')
+    {
+        $canonical = self::canonicalTarget($targetPath);
+        $mappings = self::getMappings();
+        foreach ($mappings as $mapping) {
+            $mappedTarget = self::canonicalTarget(trim((string) ($mapping['target_path'] ?? '')));
+            if ($mappedTarget === $canonical) {
+                $val = trim((string) ($mapping['default_value'] ?? ''));
+                if ($val !== '') {
+                    return $val;
+                }
+            }
+        }
+        return $fallback;
     }
 
     /**
@@ -70,10 +97,37 @@ class YujuOrderFieldMapping
                 $data[$section] = [];
             }
         }
+
+        $defaultCustomerFirst = self::getDefaultValue('customer.first_name', 'Cliente');
+        $defaultCustomerLast = self::getDefaultValue('customer.last_name', 'Yuju');
+        $defaultShippingFirst = self::getDefaultValue('shipping_address.first_name', 'Cliente');
+        $defaultShippingLast = self::getDefaultValue('shipping_address.last_name', 'Yuju');
+
         $rawCustomerFirst = $data['customer']['first_name'] ?? '';
         $rawCustomerLast = $data['customer']['last_name'] ?? '';
-        $data['customer']['first_name'] = self::validName($rawCustomerFirst, 'Cliente');
-        $data['customer']['last_name'] = self::validName($rawCustomerLast, 'Yuju');
+        $rawShippingFirst = $data['shipping_address']['first_name'] ?? '';
+        $rawShippingLast = $data['shipping_address']['last_name'] ?? '';
+
+        // Si el cliente no tiene nombre usable pero el shipping sí, preferir shipping
+        if (!self::isUsableName($rawCustomerFirst) && self::isUsableName($rawShippingFirst)) {
+            $rawCustomerFirst = $rawShippingFirst;
+        }
+        if (!self::isUsableName($rawCustomerLast) && self::isUsableName($rawShippingLast)) {
+            $rawCustomerLast = $rawShippingLast;
+        }
+
+        // Si el shipping no tiene nombre usable pero el cliente sí, preferir cliente
+        if (!self::isUsableName($rawShippingFirst) && self::isUsableName($rawCustomerFirst)) {
+            $rawShippingFirst = $rawCustomerFirst;
+        }
+        if (!self::isUsableName($rawShippingLast) && self::isUsableName($rawCustomerLast)) {
+            $rawShippingLast = $rawCustomerLast;
+        }
+
+        $data['customer']['first_name'] = $rawCustomerFirst;
+        $data['customer']['last_name'] = $rawCustomerLast;
+        self::sanitizeAndComplementNames($data['customer']['first_name'], $data['customer']['last_name'], $defaultCustomerFirst, $defaultCustomerLast);
+
         $data['customer']['email'] = self::validEmail($data['customer']['email'] ?? '');
         if (array_key_exists('phone', $data['customer'])) {
             $data['customer']['phone'] = self::validPhone($data['customer']['phone']);
@@ -81,13 +135,24 @@ class YujuOrderFieldMapping
         if (array_key_exists('doc_number', $data['customer'])) {
             $data['customer']['doc_number'] = self::validIdentifier($data['customer']['doc_number'], 16, '00000000');
         }
+
+        $data['shipping_address']['first_name'] = $rawShippingFirst;
+        $data['shipping_address']['last_name'] = $rawShippingLast;
+        self::sanitizeAndComplementNames($data['shipping_address']['first_name'], $data['shipping_address']['last_name'], $defaultShippingFirst, $defaultShippingLast);
+
         $addressSections = ['shipping_address'];
         if (isset($data['billing_address']) && is_array($data['billing_address']) && !empty($data['billing_address'])) {
             $addressSections[] = 'billing_address';
+            $defaultBillingFirst = self::getDefaultValue('billing_address.first_name', $data['shipping_address']['first_name']);
+            $defaultBillingLast = self::getDefaultValue('billing_address.last_name', $data['shipping_address']['last_name']);
+            $rawBillingFirst = $data['billing_address']['first_name'] ?? $data['shipping_address']['first_name'];
+            $rawBillingLast = $data['billing_address']['last_name'] ?? $data['shipping_address']['last_name'];
+            $data['billing_address']['first_name'] = $rawBillingFirst;
+            $data['billing_address']['last_name'] = $rawBillingLast;
+            self::sanitizeAndComplementNames($data['billing_address']['first_name'], $data['billing_address']['last_name'], $defaultBillingFirst, $defaultBillingLast);
         }
+
         foreach ($addressSections as $section) {
-            $data[$section]['first_name'] = self::validName($data[$section]['first_name'] ?? ($data['customer']['first_name'] ?? ''), 'Cliente');
-            $data[$section]['last_name'] = self::validName($data[$section]['last_name'] ?? ($data['customer']['last_name'] ?? ''), 'Yuju');
             // Sanitizar siempre los valores, incluso cuando el origen sí contiene datos.
             // Límites alineados con las propiedades Address de PrestaShop.
             $data[$section]['company'] = self::sanitizeFieldText($data[$section]['company'] ?? '', 64, '');
@@ -99,13 +164,6 @@ class YujuOrderFieldMapping
             $data[$section]['country_code'] = self::sanitizeCode($data[$section]['country_code'] ?? '', 2, 'MX');
             $data[$section]['state_code'] = self::sanitizeCode($data[$section]['state_code'] ?? '', 32, 'MEX');
             $data[$section]['dni'] = self::validIdentifier($data[$section]['dni'] ?? '', 16, '00000000');
-        }
-        // Cuando el marketplace pone un ID numérico en first_name, preferir el nombre de envío.
-        if (self::isInvalidName($rawCustomerFirst)) {
-            $data['customer']['first_name'] = self::validName($data['shipping_address']['first_name'] ?? '', 'Cliente');
-        }
-        if (self::isInvalidName($rawCustomerLast)) {
-            $data['customer']['last_name'] = self::validName($data['shipping_address']['last_name'] ?? '', 'Yuju');
         }
         if (!isset($data['items']) || !is_array($data['items'])) {
             $data['items'] = [];
@@ -238,21 +296,133 @@ class YujuOrderFieldMapping
         return isset($aliases[$target]) ? $aliases[$target] : $target;
     }
 
-    private static function isInvalidName($value)
+    public static function isUsableName($value)
     {
-        if (is_array($value) || is_object($value) || is_bool($value)) {
-            return true;
+        if (is_array($value) || is_object($value) || is_bool($value) || $value === null) {
+            return false;
         }
         $value = trim((string) $value);
-        return $value === '' || (bool) preg_match('/^\\d+$/', $value);
+        if ($value === '' || (bool) preg_match('/^\d+$/', $value)) {
+            return false;
+        }
+        if (!preg_match('/[\p{L}]/u', $value)) {
+            return false;
+        }
+        $sanitized = preg_replace('/[*0-9!<>,;?=+()@#"°{}_$%:\/\\\\^]/u', '', $value);
+        $sanitized = preg_replace('/[^\p{L}\s\-\']/u', '', $sanitized);
+        $sanitized = trim(preg_replace('/\s+/u', ' ', (string) $sanitized));
+        if ($sanitized === '') {
+            return false;
+        }
+        if (class_exists('Validate') && method_exists('Validate', 'isName')) {
+            return Validate::isName($sanitized);
+        }
+        return !preg_match('/[0-9!<>,;?=+()@#"°{}_$%:\/\\\\*^]/u', $sanitized);
     }
 
-    private static function validName($value, $fallback)
+    public static function isInvalidName($value)
     {
-        if (self::isInvalidName($value)) {
+        return !self::isUsableName($value);
+    }
+
+    public static function validName($value, $fallback)
+    {
+        return self::sanitizeName($value, $fallback);
+    }
+
+    public static function sanitizeName($value, $fallback = '')
+    {
+        if (is_array($value) || is_object($value) || is_bool($value) || $value === null) {
+            $value = '';
+        }
+        $value = trim((string) $value);
+        // Remover dígitos, asteriscos de enmascaramiento y caracteres prohibidos por PrestaShop
+        $value = preg_replace('/[*0-9!<>,;?=+()@#"°{}_$%:\/\\\\^]/u', '', $value);
+        $value = preg_replace('/[^\p{L}\s\-\']/u', '', $value);
+        $value = preg_replace('/\s+/u', ' ', (string) $value);
+        $value = trim((string) $value, " \t\n\r\0\x0B-'.");
+
+        if (function_exists('mb_substr')) {
+            $value = mb_substr($value, 0, 32, 'UTF-8');
+        } else {
+            $value = substr($value, 0, 32);
+        }
+
+        if ($value === '' || !preg_match('/[\p{L}]/u', $value)) {
             return $fallback;
         }
-        return self::validText($value, $fallback);
+
+        if (class_exists('Validate') && method_exists('Validate', 'isName') && !Validate::isName($value)) {
+            return $fallback;
+        }
+
+        return $value;
+    }
+
+    public static function sanitizeAndComplementNames(&$firstName, &$lastName, $fallbackFirst = 'Cliente', $fallbackLast = 'Yuju')
+    {
+        $cleanFirst = self::sanitizeName($firstName, '');
+        $cleanLast = self::sanitizeName($lastName, '');
+
+        // Complementación inteligente: si first_name contiene nombre compuesto y last_name quedó vacío
+        if ($cleanLast === '' && $cleanFirst !== '') {
+            $words = preg_split('/\s+/u', $cleanFirst, -1, PREG_SPLIT_NO_EMPTY);
+            if (is_array($words) && count($words) >= 2) {
+                $lastWord = array_pop($words);
+                $firstPart = implode(' ', $words);
+                $firstCandidate = self::sanitizeName($firstPart, '');
+                $lastCandidate = self::sanitizeName($lastWord, '');
+                if ($firstCandidate !== '' && $lastCandidate !== '') {
+                    $cleanFirst = $firstCandidate;
+                    $cleanLast = $lastCandidate;
+                }
+            }
+        } elseif ($cleanFirst === '' && $cleanLast !== '') {
+            $words = preg_split('/\s+/u', $cleanLast, -1, PREG_SPLIT_NO_EMPTY);
+            if (is_array($words) && count($words) >= 2) {
+                $firstWord = array_shift($words);
+                $lastPart = implode(' ', $words);
+                $firstCandidate = self::sanitizeName($firstWord, '');
+                $lastCandidate = self::sanitizeName($lastPart, '');
+                if ($firstCandidate !== '' && $lastCandidate !== '') {
+                    $cleanFirst = $firstCandidate;
+                    $cleanLast = $lastCandidate;
+                }
+            }
+        }
+
+        if ($cleanFirst === '') {
+            $cleanFirst = self::sanitizeName($fallbackFirst, 'Cliente');
+            if ($cleanFirst === '') {
+                $cleanFirst = 'Cliente';
+            }
+        }
+        if ($cleanLast === '') {
+            $cleanLast = self::sanitizeName($fallbackLast, 'Yuju');
+            if ($cleanLast === '') {
+                $cleanLast = 'Yuju';
+            }
+        }
+
+        if (function_exists('mb_substr')) {
+            $cleanFirst = mb_substr($cleanFirst, 0, 32, 'UTF-8');
+            $cleanLast = mb_substr($cleanLast, 0, 32, 'UTF-8');
+        } else {
+            $cleanFirst = substr($cleanFirst, 0, 32);
+            $cleanLast = substr($cleanLast, 0, 32);
+        }
+
+        if (class_exists('Validate') && method_exists('Validate', 'isName')) {
+            if (!Validate::isName($cleanFirst)) {
+                $cleanFirst = 'Cliente';
+            }
+            if (!Validate::isName($cleanLast)) {
+                $cleanLast = 'Yuju';
+            }
+        }
+
+        $firstName = $cleanFirst;
+        $lastName = $cleanLast;
     }
 
     private static function validText($value, $fallback)
