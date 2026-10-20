@@ -101,8 +101,7 @@ class Yuju extends Module
                 'actualizar estados intermedios de productos' => 'ensureProductStatusIntermediateWebhookStates',
                 'crear tablas de auditoría' => 'ensureAuditTables',
                 'crear pestañas del panel administrativo' => 'installTabs',
-                // Registrar solo el hook visual del detalle de pedidos; los hooks de sincronización siguen manuales.
-                'registrar hook de detalle de órdenes' => 'registerOrderDetailHook',
+                // La instalación no registra hooks; los hooks visuales se gestionan fuera de install().
                 'guardar configuración inicial' => 'installConfiguration',
                 'crear directorios del módulo' => 'createDirectories',
                 // El transportista se crea de forma diferida; nunca bloquea la instalación.
