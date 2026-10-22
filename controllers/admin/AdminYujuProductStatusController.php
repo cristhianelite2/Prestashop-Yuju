@@ -1195,6 +1195,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 case 'resendPendingCreate':
                     $this->ajaxProcessResendPendingCreate();
                     break;
+                case 'retryQueuedProduct':
+                    $this->ajaxProcessRetryQueuedProduct();
+                    break;
             }
             exit;
         }
@@ -2828,6 +2831,31 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'success' => false,
                 'message' => 'Error al reenviar: ' . $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * AJAX: Reintenta un producto atascado en cola desde el modal.
+     */
+    protected function ajaxProcessRetryQueuedProduct()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $productId = (int) Tools::getValue('product_id');
+        if ($productId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'ID de producto inválido.']);
+            return;
+        }
+
+        try {
+            require_once dirname(__FILE__) . '/../../classes/YujuSyncQueue.php';
+            $queue = new YujuSyncQueue();
+            $result = $queue->retryProduct($productId);
+            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No se pudo reintentar el producto: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE);
         }
     }
 
