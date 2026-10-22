@@ -78,6 +78,9 @@ class AdminYujuLogsController extends ModuleAdminController
         if (Tools::isSubmit('ajax') && Tools::getValue('ajax')) {
             $action = (string) Tools::getValue('action');
             switch ($action) {
+                case 'processQueueNow':
+                    $this->ajaxProcessQueueNow();
+                    break;
                 case 'refreshBulkOfferTasks':
                     $this->ajaxProcessRefreshBulkOfferTasks();
                     break;
@@ -95,6 +98,69 @@ class AdminYujuLogsController extends ModuleAdminController
         }
 
         return parent::postProcess();
+    }
+
+    /**
+     * Ejecuta manualmente un lote pequeño de la cola para diagnóstico y recuperación.
+     * Nunca declara confirmado un ID Yuju si todavía no está guardado en el estado local.
+     */
+    protected function ajaxProcessQueueNow()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncQueue.php';
+            $queue = new YujuSyncQueue();
+            $stats = $queue->processBatch(5);
+            $items = [];
+
+            foreach ((array) ($stats['items'] ?? []) as $item) {
+                $productId = (int) ($item['product_id'] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
+                $status = Db::getInstance()->getRow(
+                    'SELECT yuju_product_id, sync_status, last_error
+                     FROM `' . _DB_PREFIX_ . 'yuju_product_status`
+                     WHERE prestashop_product_id = ' . $productId . '
+                       AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)
+                     ORDER BY id ASC'
+                );
+                $yujuId = trim((string) ($status['yuju_product_id'] ?? ''));
+                if ($yujuId === '' || $yujuId === '0' || strtolower($yujuId) === 'null') {
+                    $yujuId = null;
+                }
+                $items[] = [
+                    'queue_id' => (int) ($item['queue_id'] ?? 0),
+                    'prestashop_product_id' => $productId,
+                    'yuju_product_id' => $yujuId,
+                    'sync_status' => (string) ($status['sync_status'] ?? 'unknown'),
+                    'ok' => !empty($item['ok']),
+                    'error' => (string) ($item['error'] ?? ($status['last_error'] ?? '')),
+                    'awaiting_id' => !empty($item['ok']) && $yujuId === null
+                        && (string) ($status['sync_status'] ?? '') === 'creating_in_yuju',
+                ];
+            }
+
+            die(json_encode([
+                'success' => true,
+                'message' => 'Se ejecutó un lote de hasta 5 productos. Un producto solo se considera confirmado cuando aparece su ID de Yuju.',
+                'stats' => [
+                    'processed' => (int) ($stats['processed'] ?? 0),
+                    'success' => (int) ($stats['success'] ?? 0),
+                    'failed' => (int) ($stats['failed'] ?? 0),
+                    'api_calls' => (int) ($stats['api_calls'] ?? 0),
+                    'pending' => (int) (($queue->getQueueStats()['pending'] ?? 0)),
+                ],
+                'items' => $items,
+            ], JSON_UNESCAPED_UNICODE));
+        } catch (Throwable $e) {
+            http_response_code(500);
+            die(json_encode([
+                'success' => false,
+                'message' => 'No se pudo procesar la cola: ' . $e->getMessage(),
+            ], JSON_UNESCAPED_UNICODE));
+        }
     }
 
     protected function ajaxProcessRefreshBulkOfferTasks()
