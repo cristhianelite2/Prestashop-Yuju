@@ -2600,6 +2600,14 @@ class YujuProductManager
                             );
                         }
 
+                        $this->logNoApiCallHistory(
+                            $product_id,
+                            $pendingStatus === 'creating_in_yuju' ? 'create' : 'delete',
+                            'warning',
+                            $waitMsg,
+                            $yujuIdPending,
+                            $options
+                        );
                         $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
                         return [
@@ -2636,6 +2644,7 @@ class YujuProductManager
                         null,
                         false
                     );
+                    $this->logNoApiCallHistory($product_id, 'create', 'warning', $waitMsg, null, $options);
                     $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
                     return [
@@ -2732,6 +2741,16 @@ class YujuProductManager
                         $existing_yuju_id
                     );
                     $markMs($timings, 'persist_ms', $t0);
+                    if (($options['origin'] ?? '') === 'bulk') {
+                        $this->logNoApiCallHistory(
+                            $product_id,
+                            'update',
+                            'success',
+                            'Sin cambios vs el último envío; no se llamó a Yuju.',
+                            $existing_yuju_id,
+                            $options
+                        );
+                    }
                     $timings['total_ms'] = round(($tNow() - $start_time) * 1000, 1);
 
                     return [
@@ -3061,8 +3080,29 @@ class YujuProductManager
         return $cache;
     }
 
-    public function logSyncHistory($data)
+    /**
+     * Historial para respuestas "exitosas" de sendProductToYuju() que no llaman a la API
+     * (en espera de webhook / sin cambios). Reutiliza logSyncHistory().
+     */
+    protected function logNoApiCallHistory($product_id, $action, $status, $message, $yuju_product_id, array $options)
     {
+        return $this->logSyncHistory([
+            'prestashop_product_id' => (int) $product_id,
+            'yuju_product_id' => $yuju_product_id !== null ? (string) $yuju_product_id : '',
+            'sync_direction' => 'to_yuju',
+            'action' => $action,
+            'status' => $status,
+            'http_status_code' => 0,
+            'request_data' => null,
+            'response_data' => null,
+            'error_message' => (string) $message,
+            'sync_duration' => 0,
+            'created_by' => $options['origin'] ?? $this->detectSyncOrigin(),
+        ]);
+    }
+
+    public function logSyncHistory($data)
+{
         try {
             $created_by = isset($data['created_by']) ? trim((string) $data['created_by']) : '';
             if ($created_by === '') {
