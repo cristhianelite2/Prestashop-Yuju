@@ -1349,6 +1349,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         if ($product_count > 5) {
             $sync_queue = new YujuSyncQueue();
             $queued_count = 0;
+            $queued_product_ids = [];
             $skipped_count = 0;
             $error_count = 0;
             $errors = [];
@@ -1424,6 +1425,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
                     if ($result) {
                         ++$queued_count;
+                        $queued_product_ids[] = (int) $product_id;
                     } else {
                         ++$error_count;
                         $errors[] = 'Error agregando producto ID ' . (int) $product_id . ' a la cola';
@@ -1464,7 +1466,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     'details' => pSQL(json_encode([
                         'event' => 'bulk_products_queued',
                         'bulk_action' => $bulk_action,
-                        'queued_product_ids' => array_values(array_map('intval', $product_ids)),
+                        'queued_product_ids' => array_values(array_map('intval', $queued_product_ids)),
                         'queued_count' => $queued_count,
                         'skipped_count' => $skipped_count,
                         'error_count' => $error_count,
