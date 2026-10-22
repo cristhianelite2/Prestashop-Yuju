@@ -50,11 +50,11 @@ class AdminYujuLogsController extends ModuleAdminController
 
         $logs = $this->getLogs();
         $queue_stats = $this->getQueueStats();
-        $sync_history = $this->getRecentSyncHistory(100);
-        $recent_queue_items = $this->getRecentQueueItems(100);
+        $sync_history = $this->getRecentSyncHistory(20);
+        $recent_queue_items = $this->getRecentQueueItems(20);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
         $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
-        $bulk_sync_logs = $this->getRecentBulkSyncLogs(100);
+        $bulk_sync_logs = $this->getRecentBulkSyncLogs(20);
 
         $this->context->smarty->assign([
             'bulk_offer_tasks' => $bulk_offer_tasks,
@@ -529,24 +529,34 @@ class AdminYujuLogsController extends ModuleAdminController
 
     protected function getLogs()
     {
-        $log_dir = _PS_MODULE_DIR_ . 'yuju/logs/';
+        $logDir = _PS_MODULE_DIR_ . 'yuju/logs/';
         $logs = [];
 
-        if (is_dir($log_dir)) {
-            $files = scandir($log_dir);
-
-            foreach ($files as $file) {
-                if (pathinfo($file, PATHINFO_EXTENSION) === 'log' || $file === 'yuju_bulk_offer_tasks.json') {
-                    $logs[] = [
-                        'filename' => $file,
-                        'size' => filesize($log_dir . $file),
-                        'modified' => filemtime($log_dir . $file),
-                    ];
-                }
-            }
+        if (!is_dir($logDir)) {
+            return [];
         }
 
-        return $logs;
+        foreach (scandir($logDir) as $file) {
+            // El histórico JSON de tareas ya se muestra arriba; no duplicarlo como archivo.
+            if (pathinfo($file, PATHINFO_EXTENSION) !== 'log') {
+                continue;
+            }
+            $path = $logDir . $file;
+            if (!is_file($path)) {
+                continue;
+            }
+            $logs[] = [
+                'filename' => $file,
+                'size' => (int) @filesize($path),
+                'modified' => (int) @filemtime($path),
+            ];
+        }
+
+        usort($logs, static function ($a, $b) {
+            return $b['modified'] <=> $a['modified'];
+        });
+
+        return array_slice($logs, 0, 10);
     }
 
     protected function getQueueStats()
