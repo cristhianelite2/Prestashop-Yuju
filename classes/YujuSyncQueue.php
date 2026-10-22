@@ -890,18 +890,21 @@ class YujuSyncQueue
             WHERE id = ' . (int)$queue_id
         );
         
-        if ($item && $item['attempts'] >= $item['max_attempts']) {
-            $this->updateQueueStatus($queue_id, 'failed');
-            $failedItem = Db::getInstance()->getRow(
+        if ($item) {
+            $failed = (int) $item['attempts'] >= (int) $item['max_attempts'];
+            if ($failed) {
+                $this->updateQueueStatus($queue_id, 'failed');
+            }
+            $queueItem = Db::getInstance()->getRow(
                 'SELECT prestashop_product_id, prestashop_product_attribute_id FROM ' . _DB_PREFIX_ . 'yuju_sync_queue WHERE id = ' . (int) $queue_id
             );
-            if ($failedItem) {
-                $attributeId = (int) ($failedItem['prestashop_product_attribute_id'] ?? 0);
+            if ($queueItem) {
+                $attributeId = (int) ($queueItem['prestashop_product_attribute_id'] ?? 0);
                 Db::getInstance()->update('yuju_product_status', [
-                    'sync_status' => 'error',
+                    'sync_status' => pSQL($failed ? 'error' : 'queued'),
                     'last_error' => pSQL((string) $error_message),
                     'updated_at' => date('Y-m-d H:i:s'),
-                ], 'prestashop_product_id = ' . (int) $failedItem['prestashop_product_id'] . ' AND ' .
+                ], 'prestashop_product_id = ' . (int) $queueItem['prestashop_product_id'] . ' AND ' .
                     ($attributeId > 0 ? 'prestashop_product_attribute_id = ' . $attributeId : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
             }
         }
