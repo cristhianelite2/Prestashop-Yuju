@@ -1296,6 +1296,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
         if ($this->module && method_exists($this->module, 'ensureSyncQueueActionIncludesDelete')) {
             $this->module->ensureSyncQueueActionIncludesDelete();
         }
+        if ($this->module && method_exists($this->module, 'ensureQueueAndSyncLogsTables')) {
+            $this->module->ensureQueueAndSyncLogsTables();
+        }
 
         $logs_url = $this->context->link->getAdminLink('AdminYujuLogs', true);
 
@@ -1375,6 +1378,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $sync_queue = new YujuSyncQueue();
             $queued_count = 0;
             $queued_product_ids = [];
+            $waiting_ids = [];
             $skipped_count = 0;
             $error_count = 0;
             $errors = [];
@@ -1449,11 +1453,19 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     }
 
                     if ($result) {
-                        ++$queued_count;
-                        $queued_product_ids[] = (int) $product_id;
+                        if ($sync_queue->getLastOutcome() === 'waiting_webhook') {
+                            // Ya enviado a Yuju y esperando webhook: no se encoló nada nuevo.
+                            ++$skipped_count;
+                            $waiting_ids[] = (int) $product_id;
+                        } else {
+                            ++$queued_count;
+                            $queued_product_ids[] = (int) $product_id;
+                        }
                     } else {
                         ++$error_count;
-                        $errors[] = 'Error agregando producto ID ' . (int) $product_id . ' a la cola';
+                        $detail = $sync_queue->getLastError();
+                        $errors[] = 'Error agregando producto ID ' . (int) $product_id . ' a la cola'
+                            . ($detail !== '' ? ': ' . $detail : '');
                     }
                 } catch (Throwable $e) {
                     ++$error_count;
@@ -1469,40 +1481,23 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 $error_count
             );
 
-            // Registrar la solicitud del lote en el historial visible de AdminYujuLogs.
-            // Es un registro de aceptación en cola, no una afirmación de que Yuju ya lo procesó.
-            try {
-                $now = date('Y-m-d H:i:s');
-                $employee = isset($this->context->employee) && Validate::isLoadedObject($this->context->employee)
-                    ? (string) $this->context->employee->email
-                    : 'admin';
-                Db::getInstance()->insert('yuju_sync_logs', [
-                    'sync_type' => 'manual',
-                    'entity_type' => 'products',
-                    'sync_direction' => 'prestashop_to_yuju',
-                    'status' => ($queued_count > 0 || $skipped_count > 0) ? 'completed' : 'failed',
-                    'total_items' => count($product_ids),
-                    'processed_items' => $queued_count + $skipped_count + $error_count,
-                    'success_items' => $queued_count + $skipped_count,
-                    'error_items' => $error_count,
-                    'start_time' => $now,
-                    'end_time' => $now,
-                    'duration' => 0,
-                    'error_message' => $error_count > 0 ? pSQL(implode("\\n", $errors), true) : null,
-                    'details' => pSQL(json_encode([
-                        'event' => 'bulk_products_queued',
-                        'bulk_action' => $bulk_action,
-                        'queued_product_ids' => array_values(array_map('intval', $queued_product_ids)),
-                        'queued_count' => $queued_count,
-                        'skipped_count' => $skipped_count,
-                        'error_count' => $error_count,
-                        'errors' => $errors,
-                        'note' => 'Productos aceptados en cola; el envío real a Yuju ocurre al procesar la cola.',
-                    ], JSON_UNESCAPED_UNICODE), true),
-                    'created_by' => pSQL($employee),
-                ]);
-            } catch (Throwable $logException) {
-                error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $logException->getMessage());
+            // Registro del lote en AdminYujuLogs (verifica que el INSERT realmente se guarde).
+            $log_result = $this->recordBulkRequestLog(
+                $bulk_action,
+                $product_ids,
+                $queued_count,
+                $skipped_count,
+                $error_count,
+                $errors,
+                [
+                    'event' => 'bulk_products_queued',
+                    'queued_product_ids' => array_values(array_map('intval', $queued_product_ids)),
+                    'waiting_webhook_ids' => array_values(array_map('intval', $waiting_ids)),
+                    'note' => 'Productos aceptados en cola; el envío real a Yuju ocurre al procesar la cola.',
+                ]
+            );
+            if (!empty($waiting_ids)) {
+                $message .= ' ' . count($waiting_ids) . ' ya estaban enviados y esperan confirmación (webhook) de Yuju.';
             }
             if ($bulk_action === 'delete' && $skipped_count > 0) {
                 $message .= ' Omitidos: sin ID Yuju (no hay nada que borrar en marketplaces).';
@@ -1520,6 +1515,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'message' => $message,
                 'logs_url' => $logs_url,
                 'errors' => $errors,
+                'log_saved' => $log_result['saved'],
+                'log_error' => $log_result['error'],
                 'details' => [
                     'queued' => $queued_count,
                     'skipped' => $skipped_count,
@@ -1637,12 +1634,30 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $message .= "\n\n" . implode("\n", $errors);
         }
 
+        $log_result = $this->recordBulkRequestLog(
+            $bulk_action,
+            $product_ids,
+            $success_count,
+            $skipped_count,
+            $error_count,
+            $errors,
+            [
+                'event' => 'bulk_products_direct',
+                'created' => $created_count,
+                'updated' => $updated_count,
+                'synced_no_diff' => $synced_no_diff_count,
+                'note' => 'Envío directo a Yuju (sin cola).',
+            ]
+        );
+
         header('Content-Type: application/json');
         echo json_encode([
             'success' => ($success_count > 0 || $skipped_count > 0 || $synced_no_diff_count > 0) && $error_count == 0,
             'message' => $message,
             'logs_url' => $logs_url,
             'errors' => $errors,
+            'log_saved' => $log_result['saved'],
+            'log_error' => $log_result['error'],
             'details' => [
                 'success' => $success_count,
                 'created' => $created_count,
@@ -1681,6 +1696,63 @@ class AdminYujuProductStatusController extends ModuleAdminController
     /**
      * @param array|false $status_row Fila de yuju_product_status o false
      */
+    /**
+     * Registra el lote en yuju_sync_logs (AdminYujuLogs → "Últimos lotes solicitados desde Productos").
+     * Db::insert() devuelve false sin lanzar excepción, por eso se verifica el resultado.
+     *
+     * @return array{saved: bool, error: string}
+     */
+    protected function recordBulkRequestLog($bulk_action, array $product_ids, $ok_count, $skipped_count, $error_count, array $errors, array $details = [])
+    {
+        try {
+            $ok_count = (int) $ok_count;
+            $skipped_count = (int) $skipped_count;
+            $error_count = (int) $error_count;
+            $now = date('Y-m-d H:i:s');
+            $employee = isset($this->context->employee) && Validate::isLoadedObject($this->context->employee)
+                ? (string) $this->context->employee->email
+                : 'admin';
+
+            $saved = (bool) Db::getInstance()->insert('yuju_sync_logs', [
+                'sync_type' => 'manual',
+                'entity_type' => 'products',
+                'sync_direction' => 'prestashop_to_yuju',
+                'status' => ($ok_count > 0 || $skipped_count > 0) ? 'completed' : 'failed',
+                'total_items' => count($product_ids),
+                'processed_items' => $ok_count + $skipped_count + $error_count,
+                'success_items' => $ok_count + $skipped_count,
+                'error_items' => $error_count,
+                'start_time' => $now,
+                'end_time' => $now,
+                'duration' => 0,
+                'error_message' => $error_count > 0
+                    ? pSQL(Tools::substr(implode("\\n", $errors), 0, 5000), true)
+                    : '',
+                'details' => pSQL(json_encode(array_merge([
+                    'bulk_action' => $bulk_action,
+                    'ok_count' => $ok_count,
+                    'skipped_count' => $skipped_count,
+                    'error_count' => $error_count,
+                    'errors' => array_slice($errors, 0, 50),
+                ], $details), JSON_UNESCAPED_UNICODE), true),
+                'created_by' => pSQL($employee),
+            ]);
+
+            if ($saved) {
+                return ['saved' => true, 'error' => ''];
+            }
+
+            $dbError = (string) Db::getInstance()->getMsgError();
+            error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $dbError);
+
+            return ['saved' => false, 'error' => $dbError !== '' ? $dbError : 'INSERT sin detalle'];
+        } catch (Throwable $e) {
+            error_log('[Yuju ProductStatus] Excepción al registrar el lote en yuju_sync_logs: ' . $e->getMessage());
+
+            return ['saved' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     protected function yujuStatusRowHasProductLink($status_row)
     {
         if (!$status_row || !isset($status_row['yuju_product_id'])) {
