@@ -1696,9 +1696,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
     }
 
     /**
-     * @param array|false $status_row Fila de yuju_product_status o false
-     */
-    /**
      * Registra y verifica el lote en yuju_sync_logs (AdminYujuLogs).
      *
      * @return array{saved: bool, error: string, id: int}
