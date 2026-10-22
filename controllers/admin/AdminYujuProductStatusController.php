@@ -1359,8 +1359,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
         $product_count = count($product_ids);
 
-        // Más de 5 productos: cola
-        if ($product_count > 5) {
+        // El flujo de validación previa siempre debe encolar: no ejecutar llamadas síncronas a Yuju
+        // después de validar, aunque el usuario haya seleccionado 5 productos o menos.
+        $force_queue = (string) Tools::getValue('force_queue', '') === '1';
+        if ($product_count > 5 || $force_queue) {
             $sync_queue = new YujuSyncQueue();
             $queued_count = 0;
             $queued_product_ids = [];
@@ -1444,9 +1446,10 @@ class AdminYujuProductStatusController extends ModuleAdminController
                         ++$error_count;
                         $errors[] = 'Error agregando producto ID ' . (int) $product_id . ' a la cola';
                     }
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     ++$error_count;
                     $errors[] = 'Producto ID ' . (int) $product_id . ': ' . $e->getMessage();
+                    error_log('[Yuju ProductStatus] Error en lote al encolar producto ' . (int) $product_id . ': ' . $e->getMessage());
                 }
             }
 
@@ -1489,7 +1492,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                     ], JSON_UNESCAPED_UNICODE), true),
                     'created_by' => pSQL($employee),
                 ]);
-            } catch (Exception $logException) {
+            } catch (Throwable $logException) {
                 error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $logException->getMessage());
             }
             if ($bulk_action === 'delete' && $skipped_count > 0) {
