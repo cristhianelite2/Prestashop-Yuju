@@ -1933,7 +1933,7 @@ $(document).ready(function() {
                     action: 'validateCreateBatch',
                     token: YUJU_PS_TOKEN,
                     validate_step: 'batch',
-                    product_ids_json: JSON.stringify(productIds)
+                    product_ids: productIds
                 },
                 success: function(r) {
                     if (window.yujuCancelCreateValidate) {
@@ -2001,8 +2001,8 @@ $(document).ready(function() {
                     action: 'validateCreateBatch',
                     token: YUJU_PS_TOKEN,
                     validate_step: 'product',
-                    product_ids_json: JSON.stringify(productIds),
-                    batch_invalid_ids_json: JSON.stringify(batchInvalidList),
+                    product_ids: productIds,
+                    batch_invalid_ids: batchInvalidList,
                     product_index: startIdx,
                     chunk_size: Math.max(1, Math.min(chunkSize, parseInt(requestedChunkSize || chunkSize, 10) || chunkSize))
                 },
