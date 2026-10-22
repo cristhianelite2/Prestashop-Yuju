@@ -577,6 +577,34 @@
 </div>
 {/if}
 
+{if isset($bulk_sync_logs) && count($bulk_sync_logs) > 0}
+<div class="panel">
+    <div class="panel-heading"><i class="icon-list-alt"></i> Últimos lotes solicitados desde Productos</div>
+    <div class="panel-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-condensed">
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Acción</th><th>Estado</th><th>Total</th><th>Aceptados / procesados</th><th>Errores</th><th>Detalle</th></tr></thead>
+                <tbody>
+                    {foreach from=$bulk_sync_logs item=row}
+                    <tr class="{if $row.status == 'failed'}danger{elseif $row.error_items > 0}warning{else}success{/if}">
+                        <td>{$row.start_time|escape:'html':'UTF-8'}</td>
+                        <td>{$row.sync_type|escape:'html':'UTF-8'}</td>
+                        <td>{$row.entity_type|escape:'html':'UTF-8'} / {$row.sync_direction|escape:'html':'UTF-8'}</td>
+                        <td>{$row.status|escape:'html':'UTF-8'}</td>
+                        <td>{$row.total_items|intval}</td><td>{$row.success_items|intval} / {$row.processed_items|intval}</td><td>{$row.error_items|intval}</td>
+                        <td style="white-space:pre-wrap;word-break:break-word;max-width:420px;">{$row.error_message|default:'—'|escape:'html':'UTF-8'}
+                            {if $row.details}<details><summary>Ver IDs y detalle</summary><pre style="white-space:pre-wrap;max-width:420px;">{$row.details|escape:'html':'UTF-8'}</pre></details>{/if}
+                        </td>
+                    </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+        <p class="help-block">Este historial registra la solicitud del lote y los productos aceptados por la cola. No significa que Yuju ya los haya recibido; el envío real se refleja en la cola y en el historial por producto.</p>
+    </div>
+</div>
+{/if}
+
 {if isset($sync_history) && count($sync_history) > 0}
 <div class="panel">
     <div class="panel-heading">
