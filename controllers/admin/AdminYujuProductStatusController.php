@@ -729,6 +729,17 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 })));
             }
         }
+        // Los IDs también pueden llegar como product_ids[] para evitar reglas WAF
+        // que bloquean cuerpos POST con JSON serializado.
+        if (empty($product_ids)) {
+            $posted_ids = Tools::getValue('product_ids', []);
+            if (!is_array($posted_ids)) {
+                $posted_ids = ($posted_ids !== '' && $posted_ids !== null) ? [$posted_ids] : [];
+            }
+            $product_ids = array_values(array_unique(array_filter(array_map('intval', $posted_ids), static function ($id) {
+                return $id > 0;
+            })));
+        }
 
         if (empty($product_ids)) {
             echo json_encode([
