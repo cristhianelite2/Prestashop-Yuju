@@ -1850,7 +1850,9 @@ $(document).ready(function() {
         // Agrupar hasta 5 productos por petición para reducir solicitudes POST consecutivas,
         // que pueden activar reglas de frecuencia del WAF/ModSecurity en lotes pequeños.
         // El controlador limita cada bloque a 25 productos.
-        var chunkSize = productIds.length > 80 ? 10 : (productIds.length > 40 ? 5 : Math.min(5, productIds.length));
+        // Pocas peticiones: el servidor corta por tiempo (ver ajaxProcessValidateCreateBatch) y devuelve next_product_index.
+        var chunkSize = 25;
+        var yujuRetryByIndex = {};
 
         function appendValidateLog(kind, line, options) {
             options = options || {};
@@ -2053,6 +2055,14 @@ $(document).ready(function() {
                     runProductChunk(r.next_product_index || 0);
                 },
                 error: function(xhr, textStatus, errorThrown) {
+                    // 403 = límite de peticiones del servidor/WAF: esperar y repetir el MISMO bloque
+                    // (dividirlo solo multiplica las peticiones y empeora el bloqueo).
+                    if (xhr && xhr.status === 403 && (yujuRetryByIndex[startIdx] || 0) < 2) {
+                        yujuRetryByIndex[startIdx] = (yujuRetryByIndex[startIdx] || 0) + 1;
+                        appendValidateLog('warn', 'El servidor limitó las peticiones (HTTP 403). Esperando 20 s para reintentar…');
+                        setTimeout(function() { runProductChunk(startIdx, requestedChunkSize); }, 20000);
+                        return;
+                    }
                     // Si el WAF/servidor rechaza una petición por el tamaño del bloque,
                     // reducirlo progresivamente para aislar el producto que provoca el 403.
                     var attemptedSize = Math.max(1, Math.min(chunkSize, parseInt(requestedChunkSize || chunkSize, 10) || chunkSize));
@@ -2165,7 +2175,7 @@ $(document).ready(function() {
         runBatchStep();
     }
     
-    var YUJU_SEND_CHUNK_SIZE = 5;
+    var YUJU_SEND_CHUNK_SIZE = 50;
 
     // Envía el lote validado secuencialmente. Si una petición falla, divide el bloque
     // hasta aislar el producto que provoca el rechazo (p. ej. HTTP 403 del WAF).
@@ -2248,6 +2258,13 @@ $(document).ready(function() {
                 updateProgress();
                 next();
             }).fail(function(xhr, textStatus) {
+                if (xhr && xhr.status === 403 && (block.retries || 0) < 2) {
+                    block.retries = (block.retries || 0) + 1;
+                    pending.unshift(block);
+                    $('#yuju-validate-micro-detail').text(' · Límite de peticiones (403). Reintentando en 20 s…');
+                    setTimeout(next, 20000);
+                    return;
+                }
                 if (block.length > 1) {
                     var mid = Math.ceil(block.length / 2);
                     pending.unshift(block.slice(mid));
