@@ -816,16 +816,22 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
 
         $requested_chunk = (int) Tools::getValue('chunk_size', 1);
-        $chunk_size = max(1, min(25, $requested_chunk === 0 ? 1 : $requested_chunk));
+        $chunk_size = max(1, min(50, $requested_chunk === 0 ? 1 : $requested_chunk));
         if ($total_products > 60) {
             $chunk_size = max($chunk_size, 5);
-            $chunk_size = min(25, $chunk_size);
+            $chunk_size = min(50, $chunk_size);
         }
 
         $results = [];
         $processed = 0;
+        $t_start = microtime(true);
 
         for ($k = 0; $k < $chunk_size && $index + $k < $total_products; ++$k) {
+            // Presupuesto de tiempo por petición: devolver lo avanzado y que el cliente continúe
+            // con next_product_index (menos peticiones sin arriesgar un timeout).
+            if ($processed > 0 && (microtime(true) - $t_start) > 20) {
+                break;
+            }
             $pid = $product_ids[$index + $k];
             $product = new Product($pid, false, $id_lang);
             $name = Validate::isLoadedObject($product) ? (string) $product->name : '(producto #' . $pid . ')';
