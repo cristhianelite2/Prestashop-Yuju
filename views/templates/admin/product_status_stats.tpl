@@ -2182,7 +2182,10 @@ $(document).ready(function() {
             // Enviar los IDs solo como JSON escalar. Repetir product_ids[] en el POST
             // puede activar reglas WAF/ModSecurity cuando se selecciona más de un producto.
             product_ids_json: JSON.stringify(productIds.map(function(id) { return parseInt(id, 10) || 0; }).filter(function(id) { return id > 0; })),
-            bulk_action: bulkAction
+            bulk_action: bulkAction,
+            // El lote ya pasó validación individual; conservarlo en cola evita llamadas síncronas
+            // y garantiza un registro auditable incluso para selecciones pequeñas.
+            force_queue: fromValidationModal ? 1 : 0
         };
         if (opts.bulk_delete_confirmed) {
             postData.bulk_delete_confirmed = opts.bulk_delete_confirmed;
