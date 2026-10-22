@@ -56,6 +56,7 @@ class AdminYujuLogsController extends ModuleAdminController
             'logs' => $logs,
             'queue_stats' => $queue_stats,
             'sync_history' => $sync_history,
+            'bulk_sync_logs' => $this->getRecentBulkSyncLogs(100),
             'recent_queue_items' => $recent_queue_items,
             'module_dir' => $this->module->getPathUri(),
             'db_prefix' => _DB_PREFIX_,
@@ -398,6 +399,35 @@ class AdminYujuLogsController extends ModuleAdminController
             ) ?: [];
         } catch (Exception $e) {
             error_log('[Yuju Logs] No se pudo leer la cola de sincronización: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Historial de solicitudes masivas iniciadas desde el listado de productos.
+     *
+     * @param int $limit
+     * @return array
+     */
+    protected function getRecentBulkSyncLogs($limit = 100)
+    {
+        try {
+            $table = _DB_PREFIX_ . 'yuju_sync_logs';
+            $exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"');
+            if (empty($exists)) {
+                return [];
+            }
+            $limit = max(1, min(500, (int) $limit));
+            return Db::getInstance()->executeS(
+                'SELECT id, sync_type, entity_type, sync_direction, status, total_items,
+                        processed_items, success_items, error_items, start_time, end_time,
+                        error_message, details, created_by
+                 FROM `' . bqSQL($table) . '`
+                 ORDER BY start_time DESC, id DESC
+                 LIMIT ' . $limit
+            ) ?: [];
+        } catch (Throwable $e) {
+            error_log('[Yuju Logs] No se pudo leer el historial de lotes: ' . $e->getMessage());
             return [];
         }
     }
