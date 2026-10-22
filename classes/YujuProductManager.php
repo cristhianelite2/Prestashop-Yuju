@@ -1055,17 +1055,14 @@ class YujuProductManager
         if (!is_array($rows)) {
             return null;
         }
-        // Preferir success con request/response con datos
+        // Solo un create registrado como success demuestra que Yuju aceptó
+        // la petición. Un historial con status=error contiene request_data
+        // porque se intentó enviar, pero NO prueba que el producto exista en
+        // Yuju; no debe bloquear futuros reintentos desde la cola.
         foreach ($rows as $row) {
             if (($row['status'] ?? '') !== 'success') {
                 continue;
             }
-            if ($this->isNonEmptyJsonPayload($row['request_data'] ?? '')
-                || $this->isNonEmptyJsonPayload($row['response_data'] ?? '')) {
-                return $row;
-            }
-        }
-        foreach ($rows as $row) {
             if ($this->isNonEmptyJsonPayload($row['request_data'] ?? '')
                 || $this->isNonEmptyJsonPayload($row['response_data'] ?? '')) {
                 return $row;
