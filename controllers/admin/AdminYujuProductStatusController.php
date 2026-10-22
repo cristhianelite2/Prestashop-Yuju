@@ -1517,6 +1517,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'errors' => $errors,
                 'log_saved' => $log_result['saved'],
                 'log_error' => $log_result['error'],
+                'log_id' => (int) ($log_result['id'] ?? 0),
                 'details' => [
                     'queued' => $queued_count,
                     'skipped' => $skipped_count,
@@ -1658,6 +1659,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             'errors' => $errors,
             'log_saved' => $log_result['saved'],
             'log_error' => $log_result['error'],
+            'log_id' => (int) ($log_result['id'] ?? 0),
             'details' => [
                 'success' => $success_count,
                 'created' => $created_count,
@@ -1697,10 +1699,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
      * @param array|false $status_row Fila de yuju_product_status o false
      */
     /**
-     * Registra el lote en yuju_sync_logs (AdminYujuLogs → "Últimos lotes solicitados desde Productos").
-     * Db::insert() devuelve false sin lanzar excepción, por eso se verifica el resultado.
+     * Registra y verifica el lote en yuju_sync_logs (AdminYujuLogs).
      *
-     * @return array{saved: bool, error: string}
+     * @return array{saved: bool, error: string, id: int}
      */
     protected function recordBulkRequestLog($bulk_action, array $product_ids, $ok_count, $skipped_count, $error_count, array $errors, array $details = [])
     {
@@ -1713,7 +1714,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 ? (string) $this->context->employee->email
                 : 'admin';
 
-            $saved = (bool) Db::getInstance()->insert('yuju_sync_logs', [
+            $db = Db::getInstance();
+            $inserted = (bool) $db->insert('yuju_sync_logs', [
                 'sync_type' => 'manual',
                 'entity_type' => 'products',
                 'sync_direction' => 'prestashop_to_yuju',
@@ -1726,7 +1728,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'end_time' => $now,
                 'duration' => 0,
                 'error_message' => $error_count > 0
-                    ? pSQL(Tools::substr(implode("\\n", $errors), 0, 5000), true)
+                    ? pSQL(Tools::substr(implode("\n", $errors), 0, 5000), true)
                     : '',
                 'details' => pSQL(json_encode(array_merge([
                     'bulk_action' => $bulk_action,
@@ -1738,31 +1740,32 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'created_by' => pSQL($employee),
             ]);
 
-            if ($saved) {
-                return ['saved' => true, 'error' => ''];
+            $logId = (int) $db->Insert_ID();
+            if (!$inserted || $logId <= 0) {
+                $dbError = (string) $db->getMsgError();
+                $detail = $dbError !== '' ? $dbError : 'Db::insert no confirmó el ID del registro';
+                error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $detail);
+                return ['saved' => false, 'error' => $detail, 'id' => 0];
             }
 
-            $dbError = (string) Db::getInstance()->getMsgError();
-            error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $dbError);
+            // Confirmar que AdminYujuLogs pueda leer el registro insertado.
+            $confirmedId = (int) $db->getValue(
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_sync_logs WHERE id = ' . $logId . ' LIMIT 1'
+            );
+            if ($confirmedId !== $logId) {
+                $dbError = (string) $db->getMsgError();
+                $detail = 'INSERT devolvió el ID ' . $logId . ', pero no se pudo confirmar su lectura.'
+                    . ($dbError !== '' ? ' SQL: ' . $dbError : '');
+                error_log('[Yuju ProductStatus] ' . $detail);
+                return ['saved' => false, 'error' => $detail, 'id' => 0];
+            }
 
-            return ['saved' => false, 'error' => $dbError !== '' ? $dbError : 'INSERT sin detalle'];
+            return ['saved' => true, 'error' => '', 'id' => $logId];
         } catch (Throwable $e) {
             error_log('[Yuju ProductStatus] Excepción al registrar el lote en yuju_sync_logs: ' . $e->getMessage());
-
-            return ['saved' => false, 'error' => $e->getMessage()];
+            return ['saved' => false, 'error' => $e->getMessage(), 'id' => 0];
         }
     }
-
-    protected function yujuStatusRowHasProductLink($status_row)
-    {
-        if (!$status_row || !isset($status_row['yuju_product_id'])) {
-            return false;
-        }
-        $yuju_pid = trim((string) $status_row['yuju_product_id']);
-
-        return $yuju_pid !== '' && strtolower($yuju_pid) !== 'null' && $yuju_pid !== '0';
-    }
-
     /**
      * Referencias (SKU) que en PrestaShop están repetidas en más de un id_product,
      * cuando al menos uno de los IDs solicitados usa esa referencia (tras TRIM).
