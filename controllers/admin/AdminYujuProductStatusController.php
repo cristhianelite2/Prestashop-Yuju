@@ -1347,8 +1347,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
 
         // Eliminar productos en Yuju no depende del SKU en PrestaShop: usa yuju_product_id.
-        // Solo validamos duplicados de referencia cuando vamos a crear/actualizar.
-        if ($bulk_action !== 'delete') {
+        $already_validated = (string) Tools::getValue('already_validated', '') === '1';
+
+        // El modal ya verificó SKU y reglas de creación por producto. Evitar repetir
+        // consultas costosas sobre todo el catálogo al recibir cada bloque validado.
+        if ($bulk_action !== 'delete' && !$already_validated) {
             $sku_conflicts = $this->getDuplicateSkuConflictsForProductIds($product_ids);
             if (!empty($sku_conflicts)) {
                 $this->respondJsonDuplicateSkuConflicts($sku_conflicts, $logs_url);
@@ -1392,8 +1395,8 @@ class AdminYujuProductStatusController extends ModuleAdminController
                             continue;
                         }
                         $result = $sync_queue->addToQueue((int) $product_id, 'delete', 'normal', []);
-                    } elseif ($bulk_action === 'create' && !$has_yuju_link) {
-                        // Solo CREATE real si nunca existió en Yuju
+                    } elseif ($bulk_action === 'create' && !$has_yuju_link && !$already_validated) {
+                        // Solo CREATE real si nunca existió en Yuju; el modal puede haberlo validado ya.
                         $validation = $this->product_manager->validateProductForYujuCreate((int) $product_id);
                         if (empty($validation['success'])) {
                             $validation_msg = implode(' ', $validation['errors']);
