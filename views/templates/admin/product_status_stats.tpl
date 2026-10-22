@@ -2225,7 +2225,8 @@ $(document).ready(function() {
                     if (fromValidationModal && typeof window.yujuSetValidateProgressFinal === 'function') {
                         window.yujuSetValidateProgressFinal();
                     }
-                    showNotification(response.message || 'Productos enviados correctamente', 'success');
+                    var hasPartialErrors = !!(response && response.details && parseInt(response.details.errors || 0, 10) > 0);
+                    showNotification(response.message || 'Productos aceptados para envío a Yuju', hasPartialErrors ? 'warning' : 'success', response && response.logs_url ? response.logs_url : YUJU_PS_LOGS_URL);
                     if (!fromValidationModal) {
                         setTimeout(function() {
                             location.reload(true);
