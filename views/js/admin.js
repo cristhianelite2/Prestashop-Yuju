@@ -905,7 +905,7 @@ var YujuAdmin = {
                 .addClass('alert ' + alertClass)
                 .html(self.escapeHtml(message || '') + (meta && meta.length ? ('<br><small>' + self.escapeHtml(meta.join(' · ')) + '</small>') : ''))
                 .show();
-            $out.val(output || '(sin salida)');
+            $out.val(output || '(Sin salida capturada. El servidor no devolvió texto stdout/stderr para este proceso. Revisa el código de salida y el diagnóstico del job; código 0 no garantiza que se hayan realizado cambios.)');
             $btn.prop('disabled', false).html(originalHtml);
             self.loadCronManagerData();
         };
