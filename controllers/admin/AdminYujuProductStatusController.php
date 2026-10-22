@@ -1746,8 +1746,9 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
 
             // Confirmar que AdminYujuLogs pueda leer el registro insertado.
+            // Db::getValue() ya limita internamente a una fila; no agregar LIMIT 1 aquí.
             $confirmedId = (int) $db->getValue(
-                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_sync_logs WHERE id = ' . $logId . ' LIMIT 1'
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_sync_logs WHERE id = ' . $logId
             );
             if ($confirmedId !== $logId) {
                 $dbError = (string) $db->getMsgError();
