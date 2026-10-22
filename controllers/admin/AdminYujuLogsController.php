@@ -25,6 +25,7 @@ require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuLogger.php';
 class AdminYujuLogsController extends ModuleAdminController
 {
     protected $logger;
+    protected $bulkSyncLogsError = '';
 
     public function __construct()
     {
@@ -53,13 +54,15 @@ class AdminYujuLogsController extends ModuleAdminController
         $recent_queue_items = $this->getRecentQueueItems(100);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
         $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
+        $bulk_sync_logs = $this->getRecentBulkSyncLogs(100);
 
         $this->context->smarty->assign([
             'bulk_offer_tasks' => $bulk_offer_tasks,
             'logs' => $logs,
             'queue_stats' => $queue_stats,
             'sync_history' => $sync_history,
-            'bulk_sync_logs' => $this->getRecentBulkSyncLogs(100),
+            'bulk_sync_logs' => $bulk_sync_logs,
+            'bulk_sync_logs_error' => $this->bulkSyncLogsError,
             'recent_queue_items' => $recent_queue_items,
             'module_dir' => $this->module->getPathUri(),
             'db_prefix' => _DB_PREFIX_,
@@ -414,26 +417,49 @@ class AdminYujuLogsController extends ModuleAdminController
      */
     protected function getRecentBulkSyncLogs($limit = 100)
     {
+        $this->bulkSyncLogsError = '';
+        $table = _DB_PREFIX_ . 'yuju_sync_logs';
         try {
-            $table = _DB_PREFIX_ . 'yuju_sync_logs';
-            $exists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"');
-            if (empty($exists)) {
+            $db = Db::getInstance();
+            $exists = $db->executeS('SHOW TABLES LIKE "' . pSQL($table) . '"');
+            if ($exists === false) {
+                $dbError = (string) $db->getMsgError();
+                $this->bulkSyncLogsError = 'No se pudo comprobar la tabla ' . $table . ': '
+                    . ($dbError !== '' ? $dbError : 'error SQL sin detalle');
+                error_log('[Yuju Logs] ' . $this->bulkSyncLogsError);
                 return [];
             }
+            if (empty($exists)) {
+                $this->bulkSyncLogsError = 'No existe la tabla ' . $table . '. La inicialización de tablas del módulo no la creó.';
+                error_log('[Yuju Logs] ' . $this->bulkSyncLogsError);
+                return [];
+            }
+
             $limit = max(1, min(500, (int) $limit));
-            return Db::getInstance()->executeS(
+            $rows = $db->executeS(
                 'SELECT id, sync_type, entity_type, sync_direction, status, total_items,
                         processed_items, success_items, error_items, start_time, end_time,
                         error_message, details, created_by
-                 FROM `' . bqSQL($table) . '`
+                 FROM ' . bqSQL($table) . '
                  ORDER BY start_time DESC, id DESC
                  LIMIT ' . $limit
-            ) ?: [];
+            );
+            if ($rows === false) {
+                $dbError = (string) $db->getMsgError();
+                $this->bulkSyncLogsError = 'No se pudo consultar ' . $table . ': '
+                    . ($dbError !== '' ? $dbError : 'error SQL sin detalle');
+                error_log('[Yuju Logs] ' . $this->bulkSyncLogsError);
+                return [];
+            }
+
+            return is_array($rows) ? $rows : [];
         } catch (Throwable $e) {
-            error_log('[Yuju Logs] No se pudo leer el historial de lotes: ' . $e->getMessage());
+            $this->bulkSyncLogsError = 'Excepción al consultar lotes: ' . $e->getMessage();
+            error_log('[Yuju Logs] ' . $this->bulkSyncLogsError);
             return [];
         }
     }
+
 
     protected function getLogs()
     {
