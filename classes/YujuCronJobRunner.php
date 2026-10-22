@@ -198,9 +198,10 @@ class YujuCronJobRunner
         $job['duration_ms'] = (int) $durationMs;
         $job['finished_at'] = date('Y-m-d H:i:s');
         $job['output'] = (string) $output;
+        $hasOutput = trim((string) $output) !== '';
         $job['message'] = $ok
-            ? 'Cron ejecutado correctamente.'
-            : ('El cron terminó con error (exit code ' . $exitCode . ').');
+            ? ($hasOutput ? 'El proceso terminó con código 0. Revisa el diagnóstico y la salida para confirmar qué hizo el cron.' : 'El proceso terminó con código 0, pero no produjo salida capturable.')
+            : ('ERROR: el cron terminó con código de salida ' . $exitCode . '. Revisa el diagnóstico y la salida capturada.');
 
         $written = $this->writeJob($jobId, $job);
         $this->updateRunsRegistry(
