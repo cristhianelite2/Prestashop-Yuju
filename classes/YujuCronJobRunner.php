@@ -237,11 +237,32 @@ class YujuCronJobRunner
             return true;
         }
 
-        // Linux / producción
-        $full = $command . ' > /dev/null 2>&1 &';
-        @exec($full);
+        // Linux / producción. No asumir que exec() está habilitado:
+        // en hosting compartido puede estar en disable_functions.
+        $full = $command . ' > /dev/null 2>&1 < /dev/null &';
 
-        return true;
+        if (function_exists('exec')) {
+            $output = [];
+            $exitCode = 1;
+            @exec($full, $output, $exitCode);
+            // El comando se ejecuta en background; un exit code cero confirma
+            // que el shell aceptó el lanzamiento, no que el job haya terminado.
+            if ($exitCode === 0) {
+                return true;
+            }
+        }
+
+        // Alternativa para entornos donde exec() está deshabilitado pero
+        // popen() sigue permitido. La salida se redirige para no bloquear.
+        if (function_exists('popen')) {
+            $handle = @popen($full, 'r');
+            if (is_resource($handle)) {
+                @pclose($handle);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
