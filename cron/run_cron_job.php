@@ -52,61 +52,83 @@ if (!$phpBin || stripos((string) $phpBin, 'php-fpm') !== false) {
 }
 
 $command = escapeshellarg($phpBin)
-    . ' -d date.timezone=America/Bogota '
+    . ' -d date.timezone=America/Bogota -d display_errors=1 -d log_errors=0 '
     . escapeshellarg($target)
     . ' 2>&1';
 
 $outputLines = [];
 $exitCode = 1;
 $start = microtime(true);
+$startedAt = date('Y-m-d H:i:s');
+$launchMethod = '';
 
 if (function_exists('exec')) {
+    $launchMethod = 'exec';
     @exec($command, $outputLines, $exitCode);
 } elseif (function_exists('proc_open')) {
+    $launchMethod = 'proc_open';
+    // Un único pipe para stdout+stderr evita bloqueos al leer dos pipes por separado.
+    $combinedCommand = $command;
     $pipes = [];
-    $process = @proc_open($command, [
+    $process = @proc_open($combinedCommand, [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
+        2 => ['redirect', 1],
     ], $pipes);
     if (is_resource($process)) {
         if (isset($pipes[0]) && is_resource($pipes[0])) {
             fclose($pipes[0]);
         }
-        $stdout = isset($pipes[1]) && is_resource($pipes[1]) ? stream_get_contents($pipes[1]) : '';
-        $stderr = isset($pipes[2]) && is_resource($pipes[2]) ? stream_get_contents($pipes[2]) : '';
+        $captured = isset($pipes[1]) && is_resource($pipes[1]) ? stream_get_contents($pipes[1]) : '';
         if (isset($pipes[1]) && is_resource($pipes[1])) {
             fclose($pipes[1]);
         }
-        if (isset($pipes[2]) && is_resource($pipes[2])) {
-            fclose($pipes[2]);
-        }
         $exitCode = (int) @proc_close($process);
-        $combined = trim((string) $stdout . "\n" . (string) $stderr);
-        if ($combined !== '') {
-            $outputLines = preg_split('/\r?\n/', $combined);
-        }
+        $outputLines = preg_split('/\r?\n/', trim((string) $captured));
     } else {
-        $outputLines[] = 'No se pudo iniciar el proceso PHP: proc_open() falló.';
+        $exitCode = 127;
+        $outputLines[] = 'ERROR: no se pudo iniciar el proceso PHP: proc_open() falló.';
     }
 } elseif (function_exists('popen')) {
+    $launchMethod = 'popen';
     $handle = @popen($command, 'r');
     if (is_resource($handle)) {
         $captured = stream_get_contents($handle);
         $exitCode = (int) @pclose($handle);
         $outputLines = preg_split('/\r?\n/', trim((string) $captured));
     } else {
-        $outputLines[] = 'No se pudo iniciar el proceso PHP mediante popen().';
+        $exitCode = 127;
+        $outputLines[] = 'ERROR: no se pudo iniciar el proceso PHP mediante popen().';
     }
 } else {
-    $outputLines[] = 'El hosting deshabilitó exec(), proc_open() y popen(); no es posible lanzar el cron desde el modal. Configure el cron desde cPanel o solicite habilitar una función de ejecución de procesos.';
+    $launchMethod = 'ninguno';
+    $exitCode = 127;
+    $outputLines[] = 'ERROR: el hosting deshabilitó exec(), proc_open() y popen(); no es posible ejecutar el cron desde el modal. Configure una tarea cron desde cPanel o solicite al hosting habilitar una función de ejecución de procesos.';
 }
 
 $durationMs = (int) round((microtime(true) - $start) * 1000);
-$output = trim(implode("\n", $outputLines));
-if ($output === '') {
-    $output = '(sin salida)';
+$scriptOutput = trim(implode("\n", $outputLines));
+$summary = [
+    '=== DIAGNÓSTICO DE EJECUCIÓN ===',
+    'Job: ' . $jobId,
+    'Script: ' . $script,
+    'Archivo: ' . $target,
+    'PHP CLI: ' . $phpBin,
+    'Método de ejecución: ' . $launchMethod,
+    'Inicio: ' . $startedAt,
+    'Fin: ' . date('Y-m-d H:i:s'),
+    'Duración: ' . $durationMs . ' ms',
+    'Código de salida: ' . (int) $exitCode . ($exitCode === 0 ? ' (correcto)' : ' (ERROR)'),
+    '',
+    '=== SALIDA ESTÁNDAR / ERRORES DEL SCRIPT ===',
+];
+if ($scriptOutput === '') {
+    $summary[] = 'El script no escribió nada en stdout ni stderr.';
+    $summary[] = 'Esto NO demuestra por sí solo que la sincronización haya realizado cambios.';
+} else {
+    $summary[] = $scriptOutput;
 }
+$output = implode("\n", $summary);
 
 $runner->markFinished($jobId, (int) $exitCode, $output, $durationMs);
 exit((int) $exitCode);
