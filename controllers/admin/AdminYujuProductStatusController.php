@@ -1435,11 +1435,47 @@ class AdminYujuProductStatusController extends ModuleAdminController
             }
 
             $message = sprintf(
-                '%d producto(s) en cola. %d omitido(s). %d error(es).',
+                '%d producto(s) aceptado(s) en la cola. %d omitido(s). %d error(es).',
                 $queued_count,
                 $skipped_count,
                 $error_count
             );
+
+            // Registrar la solicitud del lote en el historial visible de AdminYujuLogs.
+            // Es un registro de aceptación en cola, no una afirmación de que Yuju ya lo procesó.
+            try {
+                $now = date('Y-m-d H:i:s');
+                $employee = isset($this->context->employee) && Validate::isLoadedObject($this->context->employee)
+                    ? (string) $this->context->employee->email
+                    : 'admin';
+                Db::getInstance()->insert('yuju_sync_logs', [
+                    'sync_type' => 'manual',
+                    'entity_type' => 'products',
+                    'sync_direction' => 'prestashop_to_yuju',
+                    'status' => ($queued_count > 0 || $skipped_count > 0) ? 'completed' : 'failed',
+                    'total_items' => count($product_ids),
+                    'processed_items' => $queued_count + $skipped_count + $error_count,
+                    'success_items' => $queued_count + $skipped_count,
+                    'error_items' => $error_count,
+                    'start_time' => $now,
+                    'end_time' => $now,
+                    'duration' => 0,
+                    'error_message' => $error_count > 0 ? pSQL(implode("\\n", $errors), true) : null,
+                    'details' => pSQL(json_encode([
+                        'event' => 'bulk_products_queued',
+                        'bulk_action' => $bulk_action,
+                        'queued_product_ids' => array_values(array_map('intval', $product_ids)),
+                        'queued_count' => $queued_count,
+                        'skipped_count' => $skipped_count,
+                        'error_count' => $error_count,
+                        'errors' => $errors,
+                        'note' => 'Productos aceptados en cola; el envío real a Yuju ocurre al procesar la cola.',
+                    ], JSON_UNESCAPED_UNICODE), true),
+                    'created_by' => pSQL($employee),
+                ]);
+            } catch (Exception $logException) {
+                error_log('[Yuju ProductStatus] No se pudo registrar el lote en yuju_sync_logs: ' . $logException->getMessage());
+            }
             if ($bulk_action === 'delete' && $skipped_count > 0) {
                 $message .= ' Omitidos: sin ID Yuju (no hay nada que borrar en marketplaces).';
             }
@@ -1452,7 +1488,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 $message .= "\n\n" . implode("\n", $errors);
             }
             echo json_encode([
-                'success' => ($queued_count > 0 || $skipped_count > 0) && $error_count == 0,
+                'success' => ($queued_count > 0 || $skipped_count > 0),
                 'message' => $message,
                 'logs_url' => $logs_url,
                 'errors' => $errors,
