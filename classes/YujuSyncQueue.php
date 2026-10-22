@@ -498,11 +498,19 @@ class YujuSyncQueue
         $stats['by_action'][$action]['processed']++;
 
         $this->updateQueueStatus($item['id'], 'processing');
-        $this->setProductStatusForQueueAction(
-            (int) $item['prestashop_product_id'],
-            $action,
-            (int) ($item['prestashop_product_attribute_id'] ?? 0)
-        );
+
+        // En CREATE, no marcar creating_in_yuju aquí: sendProductToYuju()
+        // debe decidir si hay evidencia real de un envío previo y marcar el
+        // estado intermedio justo antes de llamar a la API. Si lo marcamos
+        // aquí, el método puede confundir esta misma ejecución con un create
+        // ya enviado y salir sin hacer ninguna petición a Yuju.
+        if ($action !== 'create') {
+            $this->setProductStatusForQueueAction(
+                (int) $item['prestashop_product_id'],
+                $action,
+                (int) ($item['prestashop_product_attribute_id'] ?? 0)
+            );
+        }
 
         $itemDetail = [
             'queue_id' => (int) $item['id'],
