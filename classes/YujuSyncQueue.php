@@ -151,7 +151,7 @@ class YujuSyncQueue
                 'status' => 'pending',
                 'data' => pSQL(json_encode($data)),
                 'attempts' => 0,
-                'max_attempts' => 3,
+                'max_attempts' => 2,
                 'created_at' => date('Y-m-d H:i:s'),
             ]);
 
@@ -338,6 +338,7 @@ class YujuSyncQueue
 
         $apiBudget = $this->resolveBatchSize($batch_size);
         $product_manager = new YujuProductManager();
+        $this->recoverStaleQueueItems();
 
         $stats = [
             'processed' => 0,
@@ -731,6 +732,125 @@ class YujuSyncQueue
     }
 
     /**
+     * Recupera elementos que quedaron en processing por una caída o timeout.
+     * Se ejecuta desde el worker existente (cron/process_queue.php).
+     */
+    public function recoverStaleQueueItems()
+    {
+        $cutoff = date('Y-m-d H:i:s', time() - 300);
+        $stale = Db::getInstance()->executeS(
+            'SELECT id, prestashop_product_id, prestashop_product_attribute_id, action, attempts, max_attempts
+             FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+             WHERE status = "processing"
+               AND COALESCE(last_attempt_at, created_at) < "' . pSQL($cutoff) . '"
+             ORDER BY id ASC
+             LIMIT 500'
+        );
+        if (!is_array($stale) || empty($stale)) {
+            return 0;
+        }
+
+        foreach ($stale as $item) {
+            $id = (int) $item['id'];
+            $productId = (int) $item['prestashop_product_id'];
+            $attributeId = (int) ($item['prestashop_product_attribute_id'] ?? 0);
+            $attempts = (int) ($item['attempts'] ?? 0) + 1;
+            $maxAttempts = max(1, (int) ($item['max_attempts'] ?? 2));
+            $failed = $attempts >= $maxAttempts;
+            $message = 'La tarea quedó en procesamiento más de 5 minutos sin finalizar.';
+            Db::getInstance()->update('yuju_sync_queue', [
+                'attempts' => $attempts,
+                'status' => $failed ? 'failed' : 'pending',
+                'error_message' => pSQL($message),
+                'last_attempt_at' => date('Y-m-d H:i:s'),
+                'processed_at' => $failed ? date('Y-m-d H:i:s') : null,
+            ], 'id = ' . $id);
+
+            $whereEntity = 'prestashop_product_id = ' . $productId . ' AND ' .
+                ($attributeId > 0 ? 'prestashop_product_attribute_id = ' . $attributeId : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)');
+            Db::getInstance()->update('yuju_product_status', [
+                'sync_status' => pSQL($failed ? 'error' : 'queued'),
+                'last_error' => pSQL($message),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ], $whereEntity);
+
+            $this->logger->warning('Cola: tarea stale recuperada', [
+                'queue_id' => $id,
+                'product_id' => $productId,
+                'attempts' => $attempts,
+                'max_attempts' => $maxAttempts,
+                'status' => $failed ? 'failed' : 'pending',
+            ]);
+        }
+
+        return count($stale);
+    }
+
+    /**
+     * Reintento manual desde el modal. Reutiliza la fila de cola existente para
+     * evitar crear tareas duplicadas y reinicia el contador solo por petición explícita.
+     */
+    public function retryProduct($productId)
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'ID de producto inválido.'];
+        }
+
+        $statusRow = Db::getInstance()->getRow(
+            'SELECT yuju_product_id, sync_status FROM ' . _DB_PREFIX_ . 'yuju_product_status
+             WHERE prestashop_product_id = ' . $productId . '
+               AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)
+             ORDER BY id ASC'
+        );
+        $yujuId = trim((string) ($statusRow['yuju_product_id'] ?? ''));
+        $action = ($yujuId !== '' && $yujuId !== '0' && strtolower($yujuId) !== 'null') ? 'update' : 'create';
+        $existing = Db::getInstance()->getRow(
+            'SELECT id, status, last_attempt_at FROM ' . _DB_PREFIX_ . 'yuju_sync_queue
+             WHERE prestashop_product_id = ' . $productId . '
+               AND prestashop_product_attribute_id = 0
+               AND action = "' . pSQL($action) . '"
+               AND status IN ("pending", "processing", "failed")
+             ORDER BY id DESC'
+        );
+
+        if ($existing && $existing['status'] === 'processing') {
+            $lastAttempt = strtotime((string) ($existing['last_attempt_at'] ?? ''));
+            if ($lastAttempt && (time() - $lastAttempt) < 300) {
+                return ['success' => false, 'message' => 'La tarea sigue en procesamiento. Espera a que cumpla 5 minutos antes de reintentar.'];
+            }
+        }
+
+        if ($existing) {
+            Db::getInstance()->update('yuju_sync_queue', [
+                'status' => 'pending',
+                'attempts' => 0,
+                'max_attempts' => 2,
+                'error_message' => null,
+                'created_at' => date('Y-m-d H:i:s'),
+                'processed_at' => null,
+            ], 'id = ' . (int) $existing['id']);
+        } else {
+            require_once dirname(__FILE__) . '/YujuProductManager.php';
+            $queueData = ['defer' => true, 'manual_retry' => true];
+            if ($action === 'create') {
+                $queueData['force_resend_create'] = true;
+            }
+            if (!$this->addToQueue($productId, $action, 'normal', $queueData)) {
+                return ['success' => false, 'message' => 'No fue posible volver a agregar el producto a la cola.'];
+            }
+        }
+
+        Db::getInstance()->update('yuju_product_status', [
+            'sync_status' => 'queued',
+            'last_error' => null,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ], 'prestashop_product_id = ' . $productId . ' AND (prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)');
+
+        return ['success' => true, 'message' => 'Producto devuelto a la cola. El worker lo procesará en la próxima ejecución.'];
+    }
+
+    /**
      * Actualizar estado de un elemento en la cola
      */
     private function updateQueueStatus($queue_id, $status)
@@ -772,6 +892,18 @@ class YujuSyncQueue
         
         if ($item && $item['attempts'] >= $item['max_attempts']) {
             $this->updateQueueStatus($queue_id, 'failed');
+            $failedItem = Db::getInstance()->getRow(
+                'SELECT prestashop_product_id, prestashop_product_attribute_id FROM ' . _DB_PREFIX_ . 'yuju_sync_queue WHERE id = ' . (int) $queue_id
+            );
+            if ($failedItem) {
+                $attributeId = (int) ($failedItem['prestashop_product_attribute_id'] ?? 0);
+                Db::getInstance()->update('yuju_product_status', [
+                    'sync_status' => 'error',
+                    'last_error' => pSQL((string) $error_message),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ], 'prestashop_product_id = ' . (int) $failedItem['prestashop_product_id'] . ' AND ' .
+                    ($attributeId > 0 ? 'prestashop_product_attribute_id = ' . $attributeId : '(prestashop_product_attribute_id IS NULL OR prestashop_product_attribute_id = 0)'));
+            }
         }
     }
     
