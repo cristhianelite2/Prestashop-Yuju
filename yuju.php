@@ -371,6 +371,21 @@ class Yuju extends Module
     }
 
     /**
+     * Crea las tablas de cola y de logs de lotes si faltan (instalaciones antiguas).
+     * Reutiliza sql/install.sql (CREATE TABLE IF NOT EXISTS).
+     */
+    public function ensureQueueAndSyncLogsTables()
+    {
+        static $done = false;
+        if ($done) {
+            return true;
+        }
+        $done = true;
+
+        return $this->executeCreateTablesFromInstall(['yuju_sync_queue', 'yuju_sync_logs']);
+    }
+
+    /**
      * Crea tablas de auditoría de ofertas si faltan (instalaciones ya existentes).
      *
      * @return bool
