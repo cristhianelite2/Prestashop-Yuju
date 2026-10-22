@@ -50,11 +50,11 @@ class AdminYujuLogsController extends ModuleAdminController
 
         $logs = $this->getLogs();
         $queue_stats = $this->getQueueStats();
-        $sync_history = $this->getRecentSyncHistory(20);
-        $recent_queue_items = $this->getRecentQueueItems(20);
+        $sync_history = $this->getRecentSyncHistory(10);
+        $recent_queue_items = $this->getRecentQueueItems(10);
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
-        $bulk_offer_tasks = YujuOfferAuditor::getBulkOfferTaskHistory(false);
-        $bulk_sync_logs = $this->getRecentBulkSyncLogs(20);
+        $bulk_offer_tasks = array_slice(YujuOfferAuditor::getBulkOfferTaskHistory(false), -20);
+        $bulk_sync_logs = $this->getRecentBulkSyncLogs(10);
 
         $this->context->smarty->assign([
             'bulk_offer_tasks' => $bulk_offer_tasks,
@@ -556,7 +556,7 @@ class AdminYujuLogsController extends ModuleAdminController
             return $b['modified'] <=> $a['modified'];
         });
 
-        return array_slice($logs, 0, 10);
+        return array_slice($logs, 0, 5);
     }
 
     protected function getQueueStats()
