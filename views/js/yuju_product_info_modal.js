@@ -876,6 +876,14 @@
         }
 
         $('#modal-product-sync-status').html(renderSyncStatusBadge(syncStatus, yujuProductId));
+        var normalizedStatus = String(syncStatus || '').toLowerCase().trim();
+        if (['queued', 'pending'].indexOf(normalizedStatus) !== -1) {
+            $('#modal-product-queue-retry-wrap').show();
+            $('#modal-product-queue-retry').prop('disabled', false).html('<i class="icon-refresh"></i> Reintentar');
+            $('#modal-product-queue-retry-message').text('');
+        } else {
+            $('#modal-product-queue-retry-wrap').hide();
+        }
 
         if (lastError) {
             $('#modal-product-last-error-text').text(lastError);
@@ -967,6 +975,49 @@
             var $btn = $(this);
             resendPending($btn.data('product-id') || $btn.attr('data-product-id'), $btn);
             return false;
+        });
+
+        $(document).on('click.yujuQueueRetry', '#modal-product-queue-retry', function (e) {
+            e.preventDefault();
+            var productId = parseInt($('#modal-product-id').text(), 10) || 0;
+            var $btn = $(this);
+            if (!productId || $btn.prop('disabled')) {
+                return;
+            }
+            $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Reintentando…');
+            $('#modal-product-queue-retry-message').text('');
+            $.ajax({
+                url: ajaxUrl(),
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    ajax: true,
+                    action: 'retryQueuedProduct',
+                    token: ajaxToken(),
+                    product_id: productId
+                }
+            }).done(function (response) {
+                var ok = !!(response && response.success);
+                $('#modal-product-queue-retry-message')
+                    .removeClass('text-success text-danger')
+                    .addClass(ok ? 'text-success' : 'text-danger')
+                    .text((response && response.message) || 'Sin respuesta del servidor.');
+                if (ok) {
+                    currentModalCtx.sync_status = 'queued';
+                    currentModalCtx.last_error = '';
+                    $('#modal-product-sync-status').html(renderSyncStatusBadge('queued', currentModalCtx.yuju_product_id));
+                    $('#modal-product-last-error').hide();
+                    if (typeof onChangedCb === 'function') {
+                        onChangedCb({ action: 'retry', product_id: productId });
+                    }
+                    loadHistory(1);
+                }
+            }).fail(function () {
+                $('#modal-product-queue-retry-message').removeClass('text-success').addClass('text-danger')
+                    .text('Error de conexión al solicitar el reintento.');
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="icon-refresh"></i> Reintentar');
+            });
         });
 
         $(document).on('click', '.view-sync-details', function () {
