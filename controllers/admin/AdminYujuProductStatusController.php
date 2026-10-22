@@ -1764,6 +1764,23 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
     }
     /**
+     * Comprueba si la fila de estado del producto contiene una referencia válida a Yuju.
+     *
+     * @param array|false $status_row Fila de yuju_product_status o false
+     * @return bool
+     */
+    protected function yujuStatusRowHasProductLink($status_row)
+    {
+        if (!$status_row || !isset($status_row['yuju_product_id'])) {
+            return false;
+        }
+
+        $yuju_pid = trim((string) $status_row['yuju_product_id']);
+
+        return $yuju_pid !== '' && strtolower($yuju_pid) !== 'null' && $yuju_pid !== '0';
+    }
+
+    /**
      * Referencias (SKU) que en PrestaShop están repetidas en más de un id_product,
      * cuando al menos uno de los IDs solicitados usa esa referencia (tras TRIM).
      *
