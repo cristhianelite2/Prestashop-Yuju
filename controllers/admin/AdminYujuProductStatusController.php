@@ -784,8 +784,11 @@ class AdminYujuProductStatusController extends ModuleAdminController
             return;
         }
 
-        $batch_invalid_raw = Tools::getValue('batch_invalid_ids_json', '[]');
-        $batch_invalid_decoded = json_decode((string) $batch_invalid_raw, true);
+        $batch_invalid_raw = Tools::getValue('batch_invalid_ids_json', '');
+        $batch_invalid_decoded = $batch_invalid_raw !== '' ? json_decode((string) $batch_invalid_raw, true) : null;
+        if (!is_array($batch_invalid_decoded)) {
+            $batch_invalid_decoded = Tools::getValue('batch_invalid_ids', []);
+        }
         $batch_invalid_map = [];
         if (is_array($batch_invalid_decoded)) {
             foreach ($batch_invalid_decoded as $bid) {
