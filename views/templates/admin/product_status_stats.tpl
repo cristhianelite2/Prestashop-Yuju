@@ -2073,7 +2073,7 @@ $(document).ready(function() {
                     }
                     var statusCode = xhr && xhr.status ? 'HTTP ' + xhr.status + ' ' + (xhr.statusText || '') : (textStatus || 'error de red');
                     var detail = 'El servidor rechazó la validación individual (' + statusCode.trim() + '). Se omitió este producto y el lote continuará.';
-                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\s+/g, ' ').trim() : '';
                     if (body) {
                         detail += ' Respuesta: ' + body.substring(0, 220);
                     } else if (errorThrown) {
