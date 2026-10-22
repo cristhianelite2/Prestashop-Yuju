@@ -577,7 +577,13 @@
 </div>
 {/if}
 
-{if isset($bulk_sync_logs) && count($bulk_sync_logs) > 0}
+{if isset($bulk_sync_logs_error) && $bulk_sync_logs_error}
+<div class="alert alert-danger">
+    <strong>No se pudo leer el historial de lotes:</strong> {$bulk_sync_logs_error|escape:'html':'UTF-8'}
+</div>
+{/if}
+
+{if isset($bulk_sync_logs)}
 <div class="panel">
     <div class="panel-heading"><i class="icon-list-alt"></i> Últimos lotes solicitados desde Productos</div>
     <div class="panel-body">
@@ -585,6 +591,7 @@
             <table class="table table-striped table-bordered table-condensed">
                 <thead><tr><th>Fecha</th><th>Tipo</th><th>Acción</th><th>Estado</th><th>Total</th><th>Aceptados / procesados</th><th>Errores</th><th>Detalle</th></tr></thead>
                 <tbody>
+                    {if count($bulk_sync_logs) > 0}
                     {foreach from=$bulk_sync_logs item=row}
                     <tr class="{if $row.status == 'failed'}danger{elseif $row.error_items > 0}warning{else}success{/if}">
                         <td>{$row.start_time|escape:'html':'UTF-8'}</td>
@@ -597,6 +604,9 @@
                         </td>
                     </tr>
                     {/foreach}
+                    {else}
+                    <tr><td colspan="8" class="text-center text-muted">No hay lotes registrados en yuju_sync_logs.</td></tr>
+                    {/if}
                 </tbody>
             </table>
         </div>
