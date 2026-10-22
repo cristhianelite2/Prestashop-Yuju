@@ -2155,15 +2155,123 @@ $(document).ready(function() {
             sendProductsToYuju(validIds, {
                 bulk_action: 'create',
                 skip_send_button_state: true,
-                from_validation_modal: true
+                from_validation_modal: true,
+                chunked_validated_send: true
             });
         }
 
         runBatchStep();
     }
     
+    var YUJU_SEND_CHUNK_SIZE = 5;
+
+    // Envía el lote validado secuencialmente. Si una petición falla (WAF, timeout o
+    // respuesta no JSON), divide ese bloque hasta aislar el/los producto(s) problemáticos.
+    function postSendProducts(productIds, opts) {
+        opts = opts || {};
+        var ids = (productIds || []).map(function(id) { return parseInt(id, 10) || 0; }).filter(function(id) { return id > 0; });
+        var total = ids.length;
+        var cursor = 0;
+        var accepted = [];
+        var failures = [];
+        var skipped = 0;
+        var errorCount = 0;
+        var logsUrl = YUJU_PS_LOGS_URL;
+
+        function updateProgress() {
+            $('#yuju-phase-send-state').text('Enviando ' + Math.min(cursor, total) + ' de ' + total);
+            $('#yuju-validate-chip-progress').text('Enviando ' + Math.min(cursor, total) + ' de ' + total);
+            $('#yuju-create-validate-footer-hint').text('Enviando ' + Math.min(cursor, total) + ' de ' + total + ' productos válidos…');
+        }
+        function finish() {
+            window.yujuValidateModalBusy = false;
+            yujuSetValidateModalCloseVisible(true);
+            $('#yuju-create-validate-progress-bar').removeClass('progress-bar-striped active');
+            if (typeof window.yujuSetValidateProgressFinal === 'function') window.yujuSetValidateProgressFinal();
+            var ok = accepted.length > 0 || skipped > 0;
+            var message = accepted.length + ' producto(s) aceptado(s) en la cola. ' + skipped + ' omitido(s). ' + errorCount + ' error(es).';
+            var $log = $('#yuju-create-validate-log');
+            $log.append($('<div class="yuju-validate-v2__logline ' + (errorCount ? 'yuju-validate-v2__logline--warn' : 'yuju-validate-v2__logline--ok') + '"></div>').text(message));
+            failures.forEach(function(item) {
+                $log.append($('<div class="yuju-validate-v2__logline yuju-validate-v2__logline--err"></div>').text('Producto ID ' + item.id + ': no se pudo enviar a la cola (' + item.reason + ')'));
+            });
+            var el = $log.get(0); if (el) $log.scrollTop(el.scrollHeight);
+            $('#yuju-phase-send').removeClass('yuju-validate-v2__phase--hidden yuju-validate-v2__phase--pending yuju-validate-v2__phase--running yuju-validate-v2__phase--err yuju-validate-v2__phase--warn').addClass(errorCount ? 'yuju-validate-v2__phase--warn' : 'yuju-validate-v2__phase--ok');
+            $('#yuju-phase-send-state').text(errorCount ? 'Completado con errores' : 'Correcto');
+            $('#yuju-validate-chip-progress').text(errorCount ? 'Envío parcial' : 'Envío completado');
+            showNotification(message + (failures.length ? ' Revise el detalle del modal para los productos que fallaron.' : ''), errorCount ? 'warning' : 'success', logsUrl);
+            window.yujuValidateModalPendingReload = ok;
+        }
+        function requestBlock(block) {
+            if (!block.length) return;
+            updateProgress();
+            $.ajax({
+                url: YUJU_PS_AJAX_URL,
+                method: 'POST',
+                dataType: 'json',
+                timeout: 45000,
+                data: {
+                    ajax: true,
+                    action: 'sendProducts',
+                    token: YUJU_PS_TOKEN,
+                    product_ids_json: JSON.stringify(block),
+                    bulk_action: opts.bulk_action || 'create',
+                    force_queue: 1,
+                    already_validated: 1
+                }
+            }).done(function(response) {
+                if (response && response.logs_url) logsUrl = response.logs_url;
+                if (response && response.success) {
+                    var details = response.details || {};
+                    accepted = accepted.concat(block);
+                    skipped += parseInt(details.skipped || 0, 10) || 0;
+                    errorCount += parseInt(details.errors || 0, 10) || 0;
+                    if (details.error_messages && details.error_messages.length) {
+                        details.error_messages.forEach(function(msg) { failures.push({id: 0, reason: msg}); });
+                    }
+                    cursor += block.length;
+                    updateProgress();
+                    next();
+                } else if (block.length > 1) {
+                    var mid = Math.ceil(block.length / 2);
+                    requestBlock(block.slice(0, mid));
+                    requestBlock(block.slice(mid));
+                } else {
+                    cursor += block.length;
+                    errorCount++;
+                    failures.push({id: block[0], reason: (response && response.message) || 'respuesta sin éxito'});
+                    updateProgress();
+                    next();
+                }
+            }).fail(function(xhr, textStatus) {
+                if (block.length > 1) {
+                    var mid = Math.ceil(block.length / 2);
+                    requestBlock(block.slice(0, mid));
+                    requestBlock(block.slice(mid));
+                } else {
+                    cursor++;
+                    errorCount++;
+                    var status = xhr && xhr.status ? 'HTTP ' + xhr.status : textStatus;
+                    failures.push({id: block[0], reason: status || 'error de conexión'});
+                    updateProgress();
+                    next();
+                }
+            });
+        }
+        function next() {
+            if (cursor >= total) { finish(); return; }
+            requestBlock(ids.slice(cursor, cursor + YUJU_SEND_CHUNK_SIZE));
+        }
+        if (!ids.length) { finish(); return; }
+        next();
+    }
+
     function sendProductsToYuju(productIds, opts) {
         opts = opts || {};
+        if (opts.from_validation_modal && opts.chunked_validated_send) {
+            postSendProducts(productIds, opts);
+            return;
+        }
         var bulkAction = opts.bulk_action || getSelectedBulkAction();
         var $btn = $('#send-selected-products');
         var skipBtn = !!opts.skip_send_button_state;
@@ -2185,7 +2293,8 @@ $(document).ready(function() {
             bulk_action: bulkAction,
             // El lote ya pasó validación individual; conservarlo en cola evita llamadas síncronas
             // y garantiza un registro auditable incluso para selecciones pequeñas.
-            force_queue: fromValidationModal ? 1 : 0
+            force_queue: fromValidationModal ? 1 : 0,
+            already_validated: fromValidationModal ? 1 : 0
         };
         if (opts.bulk_delete_confirmed) {
             postData.bulk_delete_confirmed = opts.bulk_delete_confirmed;
