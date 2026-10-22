@@ -64,6 +64,8 @@ if ($batchSize > 500) {
 }
 
 $queue = new YujuSyncQueue();
+// Recuperar tareas abandonadas antes de comprobar si quedan pendientes.
+$recoveredStale = $queue->recoverStaleQueueItems();
 $started = microtime(true);
 
 $line = function ($msg) use ($isCli) {
