@@ -82,6 +82,12 @@
                                     <strong><i class="icon-warning-sign"></i> Detalle del error:</strong>
                                     <div id="modal-product-last-error-text" style="margin-top:6px;white-space:pre-wrap;word-break:break-word;"></div>
                                 </div>
+                                <div id="modal-product-queue-retry-wrap" style="display:none;margin-top:10px;">
+                                    <button type="button" id="modal-product-queue-retry" class="btn btn-warning">
+                                        <i class="icon-refresh"></i> Reintentar
+                                    </button>
+                                    <span id="modal-product-queue-retry-message" class="text-muted" style="margin-left:8px;"></span>
+                                </div>
                                 <table class="table table-bordered" style="margin-top:10px;margin-bottom:0;">
                                     <tbody>
                                         <tr>
