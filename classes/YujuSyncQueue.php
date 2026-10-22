@@ -5,6 +5,22 @@
 class YujuSyncQueue
 {
     private $logger;
+
+    /** @var string Resultado de la última llamada a addToQueue(): queued|reused|waiting_webhook|failed */
+    private $lastOutcome = 'failed';
+
+    /** @var string Último error SQL/excepción de addToQueue() */
+    private $lastError = '';
+
+    public function getLastOutcome()
+    {
+        return $this->lastOutcome;
+    }
+
+    public function getLastError()
+    {
+        return $this->lastError;
+    }
     
     public function __construct()
     {
@@ -57,6 +73,8 @@ class YujuSyncQueue
         try {
             $product_id = (int) $product_id;
             $action = (string) $action;
+            $this->lastOutcome = 'failed';
+            $this->lastError = '';
             if (!is_array($data)) {
                 $data = [];
             }
@@ -125,6 +143,7 @@ class YujuSyncQueue
                     'status' => $existing['status'],
                 ]);
 
+                $this->lastOutcome = 'reused';
                 return true;
             }
 
@@ -139,11 +158,12 @@ class YujuSyncQueue
                         'product_id' => $product_id,
                     ]);
 
+                    $this->lastOutcome = 'waiting_webhook';
                     return true;
                 }
             }
 
-            Db::getInstance()->insert('yuju_sync_queue', [
+            $inserted = Db::getInstance()->insert('yuju_sync_queue', [
                 'prestashop_product_id' => $product_id,
                 'prestashop_product_attribute_id' => $attributeId,
                 'action' => pSQL($action),
@@ -156,9 +176,19 @@ class YujuSyncQueue
             ]);
 
             $newId = (int) Db::getInstance()->Insert_ID();
-            if ($newId > 0) {
-                $this->cancelDuplicatePendingItems($product_id, $action, $newId, $attributeId);
+            if (!$inserted || $newId <= 0) {
+                $this->lastOutcome = 'failed';
+                $this->lastError = (string) Db::getInstance()->getMsgError();
+                $this->logger->error('Cola: no se pudo insertar el trabajo', [
+                    'product_id' => $product_id,
+                    'action' => $action,
+                    'db_error' => $this->lastError,
+                ]);
+                return false;
             }
+
+            $this->cancelDuplicatePendingItems($product_id, $action, $newId, $attributeId);
+            $this->lastOutcome = 'queued';
 
             $this->logger->info('Cola: Producto agregado', [
                 'product_id' => $product_id,
@@ -169,6 +199,8 @@ class YujuSyncQueue
 
             return true;
         } catch (Exception $e) {
+            $this->lastOutcome = 'failed';
+            $this->lastError = $e->getMessage();
             $this->logger->error('Cola: Error al agregar producto', [
                 'error' => $e->getMessage(),
                 'product_id' => $product_id
