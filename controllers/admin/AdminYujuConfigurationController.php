@@ -932,10 +932,26 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         $candidates = array_merge($candidates, [
             'php',
+            'php8.4',
             'php8.3',
             'php8.2',
+            'php8.1',
             '/usr/bin/php',
             '/usr/local/bin/php',
+            // cPanel EasyApache (EA-PHP): rutas habituales de PHP CLI.
+            '/opt/cpanel/ea-php84/root/usr/bin/php',
+            '/opt/cpanel/ea-php83/root/usr/bin/php',
+            '/opt/cpanel/ea-php82/root/usr/bin/php',
+            '/opt/cpanel/ea-php81/root/usr/bin/php',
+            // CloudLinux alt-php: ambas convenciones comunes de ruta.
+            '/opt/alt/php84/usr/bin/php',
+            '/opt/alt/php83/usr/bin/php',
+            '/opt/alt/php82/usr/bin/php',
+            '/opt/alt/php81/usr/bin/php',
+            '/opt/cloudlinux/alt-php84/root/usr/bin/php',
+            '/opt/cloudlinux/alt-php83/root/usr/bin/php',
+            '/opt/cloudlinux/alt-php82/root/usr/bin/php',
+            '/opt/cloudlinux/alt-php81/root/usr/bin/php',
         ]);
 
         $checked = [];
