@@ -2185,7 +2185,8 @@ $(document).ready(function() {
         var total = ids.length;
         var pending = [];
         var cursor = 0;
-        var accepted = [];
+        var queuedTotal = 0;
+        var logWarnings = [];
         var failures = [];
         var skipped = 0;
         var errorCount = 0;
@@ -2203,8 +2204,11 @@ $(document).ready(function() {
             yujuSetValidateModalCloseVisible(true);
             $('#yuju-create-validate-progress-bar').removeClass('progress-bar-striped active');
             if (typeof window.yujuSetValidateProgressFinal === 'function') window.yujuSetValidateProgressFinal();
-            var ok = accepted.length > 0 || skipped > 0;
-            var message = accepted.length + ' producto(s) aceptado(s) en la cola. ' + skipped + ' omitido(s). ' + errorCount + ' error(es).';
+            var ok = queuedTotal > 0 || skipped > 0;
+            var message = queuedTotal + ' producto(s) aceptado(s) en la cola. ' + skipped + ' omitido(s). ' + errorCount + ' error(es).';
+            if (logWarnings.length) {
+                message += ' Aviso: no se pudo guardar el registro en Logs (' + logWarnings[0] + ').';
+            }
             var $log = $('#yuju-create-validate-log');
             $log.append($('<div class="yuju-validate-v2__logline ' + (errorCount ? 'yuju-validate-v2__logline--warn' : 'yuju-validate-v2__logline--ok') + '"></div>').text(message));
             failures.forEach(function(item) {
@@ -2239,7 +2243,8 @@ $(document).ready(function() {
                 if (response && response.logs_url) logsUrl = response.logs_url;
                 if (response && response.success) {
                     var details = response.details || {};
-                    accepted = accepted.concat(block);
+                    queuedTotal += parseInt(details.queued || 0, 10) || 0;
+                    if (response.log_saved === false) logWarnings.push(response.log_error || 'error desconocido');
                     skipped += parseInt(details.skipped || 0, 10) || 0;
                     errorCount += parseInt(details.errors || 0, 10) || 0;
                     cursor += block.length;
