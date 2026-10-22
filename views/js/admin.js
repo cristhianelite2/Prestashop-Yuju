@@ -905,7 +905,22 @@ var YujuAdmin = {
                 .addClass('alert ' + alertClass)
                 .html(self.escapeHtml(message || '') + (meta && meta.length ? ('<br><small>' + self.escapeHtml(meta.join(' · ')) + '</small>') : ''))
                 .show();
-            $out.val(output || '(Sin salida capturada. El servidor no devolvió texto stdout/stderr para este proceso. Revisa el código de salida y el diagnóstico del job; código 0 no garantiza que se hayan realizado cambios.)');
+            var visibleOutput = String(output || '').trim();
+            if (!visibleOutput) {
+                var diagnostic = [
+                    '=== DIAGNÓSTICO DISPONIBLE EN EL MODAL ===',
+                    'Script: ' + scriptName,
+                    'Job: ' + (jobId || '(no recibido)'),
+                    'Mensaje del backend: ' + String(message || '(sin mensaje)'),
+                    'Metadatos: ' + ((meta && meta.length) ? meta.join(' · ') : '(el servidor no devolvió código de salida ni duración)'),
+                    '',
+                    'El navegador recibió una salida vacía. Si el job tiene ID, el backend no entregó el campo output o el servidor está ejecutando una versión antigua del controlador.',
+                    'Verifica que los archivos de main estén desplegados en modules/yuju/ y recarga el backoffice sin caché (Ctrl+F5).',
+                    'Este mensaje no confirma que el cron haya realizado cambios.'
+                ];
+                visibleOutput = diagnostic.join('\\n');
+            }
+            $out.val(visibleOutput);
             $btn.prop('disabled', false).html(originalHtml);
             self.loadCronManagerData();
         };
