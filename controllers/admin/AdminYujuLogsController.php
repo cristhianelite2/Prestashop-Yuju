@@ -40,6 +40,9 @@ class AdminYujuLogsController extends ModuleAdminController
         if ($this->module && method_exists($this->module, 'ensureSyncHistoryTable')) {
             $this->module->ensureSyncHistoryTable();
         }
+        if ($this->module && method_exists($this->module, 'ensureQueueAndSyncLogsTables')) {
+            $this->module->ensureQueueAndSyncLogsTables();
+        }
 
         $this->context->smarty->assign('current_controller', 'AdminYujuLogs');
         parent::initContent();
