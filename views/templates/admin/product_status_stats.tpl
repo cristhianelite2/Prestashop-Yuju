@@ -2090,6 +2090,8 @@ $(document).ready(function() {
                     appendValidateLog('warn', 'Omitido · ' + failedName + ': ' + detail);
                     refreshValidateStats();
 
+                    // Después del primer 403 individual, continuar de uno en uno para evitar ráfagas del WAF.
+                    chunkSize = 1;
                     var nextIndexAfterFailure = startIdx + 1;
                     setValidateProgress(Math.min(productIds.length + 1, nextIndexAfterFailure + 1), productIds.length + 1);
                     if (nextIndexAfterFailure >= productIds.length) {
