@@ -939,15 +939,58 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     private function detectPhpSapi($bin)
     {
-        $out = [];
-        $code = 1;
         $cmd = escapeshellarg($bin) . " -n -r 'echo PHP_SAPI;' 2>&1";
-        @exec($cmd, $out, $code);
-        if ($code !== 0) {
-            return '';
+
+        // En algunos alojamientos compartidos exec() está deshabilitado.
+        // No llamar una función deshabilitada: PHP puede lanzar un Error fatal
+        // y PrestaShop termina mostrando su página genérica de excepción.
+        if (function_exists('exec')) {
+            $out = [];
+            $code = 1;
+            @exec($cmd, $out, $code);
+            if ($code === 0) {
+                return strtolower(trim(implode("\n", $out)));
+            }
         }
 
-        return strtolower(trim(implode("\n", $out)));
+        if (function_exists('proc_open')) {
+            $pipes = [];
+            $process = @proc_open($cmd, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes);
+            if (is_resource($process)) {
+                if (isset($pipes[0]) && is_resource($pipes[0])) {
+                    fclose($pipes[0]);
+                }
+                $stdout = isset($pipes[1]) && is_resource($pipes[1]) ? stream_get_contents($pipes[1]) : '';
+                $stderr = isset($pipes[2]) && is_resource($pipes[2]) ? stream_get_contents($pipes[2]) : '';
+                if (isset($pipes[1]) && is_resource($pipes[1])) {
+                    fclose($pipes[1]);
+                }
+                if (isset($pipes[2]) && is_resource($pipes[2])) {
+                    fclose($pipes[2]);
+                }
+                $code = @proc_close($process);
+                if ($code === 0) {
+                    return strtolower(trim((string) $stdout));
+                }
+            }
+        }
+
+        if (function_exists('popen')) {
+            $handle = @popen($cmd, 'r');
+            if (is_resource($handle)) {
+                $output = stream_get_contents($handle);
+                $code = @pclose($handle);
+                if ($code === 0) {
+                    return strtolower(trim((string) $output));
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
