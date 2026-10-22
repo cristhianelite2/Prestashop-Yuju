@@ -874,6 +874,27 @@ class AdminYujuConfigurationController extends ModuleAdminController
         $status = isset($job['status']) ? (string) $job['status'] : '';
         $done = in_array($status, ['success', 'error'], true);
 
+        // Nunca devolver un job terminado sin un diagnóstico visible. Esto también
+        // permite entender jobs antiguos cuyo JSON quedó guardado sin el campo output.
+        $output = isset($job['output']) ? trim((string) $job['output']) : '';
+        if ($done && $output === '') {
+            $details = [
+                '=== DIAGNÓSTICO DEL JOB ===',
+                'Job: ' . (isset($job['id']) ? $job['id'] : $jobId),
+                'Script: ' . (isset($job['script']) ? $job['script'] : '(desconocido)'),
+                'Estado final: ' . ($status !== '' ? $status : '(desconocido)'),
+                'Inicio: ' . (!empty($job['started_at']) ? $job['started_at'] : '(no registrado)'),
+                'Fin: ' . (!empty($job['finished_at']) ? $job['finished_at'] : '(no registrado)'),
+                'Código de salida: ' . (isset($job['exit_code']) && $job['exit_code'] !== null ? $job['exit_code'] : '(no registrado)'),
+                'Duración: ' . (isset($job['duration_ms']) && $job['duration_ms'] !== null ? $job['duration_ms'] . ' ms' : '(no registrada)'),
+                '',
+                'ERROR DE DIAGNÓSTICO: el job terminó, pero el archivo persistido no contiene salida stdout/stderr.',
+                'No es posible reconstruir la salida original de este job. Este resultado no confirma que el cron haya realizado cambios.',
+                'Revise permisos de escritura de cache/cron_jobs y confirme que cron/run_cron_job.php y classes/YujuCronJobRunner.php estén actualizados en el servidor.',
+            ];
+            $output = implode("\n", $details);
+        }
+
         $this->yujuAjaxDie(json_encode([
             'success' => true,
             'done' => $done,
@@ -887,7 +908,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
                 'finished_at' => isset($job['finished_at']) ? $job['finished_at'] : null,
                 'exit_code' => isset($job['exit_code']) ? $job['exit_code'] : null,
                 'duration_ms' => isset($job['duration_ms']) ? $job['duration_ms'] : null,
-                'output' => isset($job['output']) ? $job['output'] : '',
+                'output' => $output,
             ],
         ]));
     }
