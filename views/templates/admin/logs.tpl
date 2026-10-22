@@ -451,8 +451,14 @@
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-list"></i> Estado de Cola de Sincronización
+        <span class="pull-right">
+            <button type="button" class="btn btn-primary btn-xs" id="yuju-process-queue-now">
+                <i class="icon-play"></i> Procesar hasta 5 ahora
+            </button>
+        </span>
     </div>
     <div class="panel-body">
+        <div id="yuju-process-queue-result" class="alert" style="display:none; margin-bottom:15px;"></div>
         <div class="row">
         </div>
         <div class="row text-center">
@@ -533,11 +539,67 @@
 </div>
 {/if}
 
+<script type="text/javascript">
+(function ($) {
+    $('#yuju-process-queue-now').on('click', function () {
+        var $button = $(this);
+        var $result = $('#yuju-process-queue-result');
+        if (!window.confirm('Se procesarán hasta 5 productos pendientes y se harán llamadas reales a la API de Yuju. ¿Continuar?')) {
+            return;
+        }
+        $button.prop('disabled', true);
+        $result.removeClass('alert-success alert-warning alert-danger').addClass('alert-info')
+            .text('Procesando hasta 5 productos…').show();
+        $.ajax({
+            url: '{$cleanup_ajax_url|escape:'javascript':'UTF-8'}',
+            type: 'POST',
+            dataType: 'json',
+            timeout: 120000,
+            data: {ldelim}ajax: 1, action: 'processQueueNow'{rdelim}
+        }).done(function (response) {
+            if (!response || !response.success) {
+                $result.removeClass('alert-info').addClass('alert-danger')
+                    .text((response && response.message) || 'No se pudo procesar la cola.');
+                return;
+            }
+            var s = response.stats || {};
+            var lines = [
+                response.message || 'Procesamiento terminado.',
+                'Procesados: ' + (s.processed || 0) + ' · Correctos: ' + (s.success || 0)
+                    + ' · Fallidos: ' + (s.failed || 0) + ' · Llamadas API: ' + (s.api_calls || 0)
+                    + ' · Pendientes restantes: ' + (s.pending || 0)
+            ];
+            (response.items || []).forEach(function (item) {
+                var line = 'PS ' + item.prestashop_product_id + ' · cola #' + item.queue_id
+                    + ' · estado: ' + (item.sync_status || 'desconocido')
+                    + ' · ID Yuju: ' + (item.yuju_product_id || 'SIN CONFIRMAR');
+                if (item.error) line += ' · ' + item.error;
+                if (item.awaiting_id) line += ' · enviado/pendiente de confirmación; falta ID Yuju';
+                lines.push(line);
+            });
+            var hasErrors = (s.failed || 0) > 0;
+            var awaiting = (response.items || []).some(function (item) { return item.awaiting_id; });
+            $result.removeClass('alert-info').addClass(hasErrors ? 'alert-danger' : (awaiting ? 'alert-warning' : 'alert-success'))
+                .text(lines.join('\n')).css('white-space', 'pre-line');
+            if (s.processed) {
+                window.setTimeout(function () { window.location.reload(); }, 2500);
+            }
+        }).fail(function (xhr) {
+            var message = 'Falló la petición al procesar la cola.';
+            if (xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
+            $result.removeClass('alert-info').addClass('alert-danger').text(message);
+        }).always(function () {
+            $button.prop('disabled', false);
+        });
+    });
+})(window.jQuery);
+</script>
+
 {if isset($recent_queue_items) && count($recent_queue_items) > 0}
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-tasks"></i>
-        Últimos 100 productos enviados / trabajos en cola
+        Últimos 20 productos enviados / trabajos en cola
     </div>
     <div class="panel-body">
         <div class="table-responsive">
@@ -619,7 +681,7 @@
 <div class="panel">
     <div class="panel-heading">
         <i class="icon-history"></i>
-        Últimos 100 intentos de envío a Yuju (historial)
+        Últimos 20 intentos de envío a Yuju (historial)
     </div>
     <div class="panel-body">
         <div class="table-responsive">
