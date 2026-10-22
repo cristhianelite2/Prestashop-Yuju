@@ -167,7 +167,7 @@ class AdminYujuLogsController extends ModuleAdminController
     {
         header('Content-Type: application/json; charset=utf-8');
         require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuOfferAuditor.php';
-        $tasks = YujuOfferAuditor::refreshBulkOfferTaskHistory();
+        $tasks = array_slice(YujuOfferAuditor::refreshBulkOfferTaskHistory(), -20);
         die(json_encode(['success' => true, 'tasks' => $tasks], JSON_UNESCAPED_UNICODE));
     }
 
@@ -179,7 +179,7 @@ class AdminYujuLogsController extends ModuleAdminController
         $taskId = trim((string) Tools::getValue('task_id', ''));
         $result = YujuOfferAuditor::recoverBulkOfferTaskById($taskId);
         if (!empty($result['success'])) {
-            $result['tasks'] = YujuOfferAuditor::getBulkOfferTaskHistory(false);
+            $result['tasks'] = array_slice(YujuOfferAuditor::getBulkOfferTaskHistory(false), -20);
         }
         die(json_encode($result, JSON_UNESCAPED_UNICODE));
     }
