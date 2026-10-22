@@ -2165,23 +2165,26 @@ $(document).ready(function() {
     
     var YUJU_SEND_CHUNK_SIZE = 5;
 
-    // Envía el lote validado secuencialmente. Si una petición falla (WAF, timeout o
-    // respuesta no JSON), divide ese bloque hasta aislar el/los producto(s) problemáticos.
+    // Envía el lote validado secuencialmente. Si una petición falla, divide el bloque
+    // hasta aislar el producto que provoca el rechazo (p. ej. HTTP 403 del WAF).
     function postSendProducts(productIds, opts) {
         opts = opts || {};
         var ids = (productIds || []).map(function(id) { return parseInt(id, 10) || 0; }).filter(function(id) { return id > 0; });
         var total = ids.length;
+        var pending = [];
         var cursor = 0;
         var accepted = [];
         var failures = [];
         var skipped = 0;
         var errorCount = 0;
         var logsUrl = YUJU_PS_LOGS_URL;
+        for (var i = 0; i < ids.length; i += YUJU_SEND_CHUNK_SIZE) pending.push(ids.slice(i, i + YUJU_SEND_CHUNK_SIZE));
 
         function updateProgress() {
-            $('#yuju-phase-send-state').text('Enviando ' + Math.min(cursor, total) + ' de ' + total);
-            $('#yuju-validate-chip-progress').text('Enviando ' + Math.min(cursor, total) + ' de ' + total);
-            $('#yuju-create-validate-footer-hint').text('Enviando ' + Math.min(cursor, total) + ' de ' + total + ' productos válidos…');
+            var label = 'Enviando ' + Math.min(cursor, total) + ' de ' + total;
+            $('#yuju-phase-send-state').text(label);
+            $('#yuju-validate-chip-progress').text(label);
+            $('#yuju-create-validate-footer-hint').text(label + ' productos válidos…');
         }
         function finish() {
             window.yujuValidateModalBusy = false;
@@ -2202,9 +2205,10 @@ $(document).ready(function() {
             showNotification(message + (failures.length ? ' Revise el detalle del modal para los productos que fallaron.' : ''), errorCount ? 'warning' : 'success', logsUrl);
             window.yujuValidateModalPendingReload = ok;
         }
-        function requestBlock(block) {
-            if (!block.length) return;
+        function next() {
+            if (!pending.length) { finish(); return; }
             updateProgress();
+            var block = pending.shift();
             $.ajax({
                 url: YUJU_PS_AJAX_URL,
                 method: 'POST',
@@ -2226,41 +2230,35 @@ $(document).ready(function() {
                     accepted = accepted.concat(block);
                     skipped += parseInt(details.skipped || 0, 10) || 0;
                     errorCount += parseInt(details.errors || 0, 10) || 0;
+                    cursor += block.length;
                     if (details.error_messages && details.error_messages.length) {
                         details.error_messages.forEach(function(msg) { failures.push({id: 0, reason: msg}); });
                     }
-                    cursor += block.length;
-                    updateProgress();
-                    next();
                 } else if (block.length > 1) {
                     var mid = Math.ceil(block.length / 2);
-                    requestBlock(block.slice(0, mid));
-                    requestBlock(block.slice(mid));
+                    pending.unshift(block.slice(mid));
+                    pending.unshift(block.slice(0, mid));
                 } else {
-                    cursor += block.length;
+                    cursor++;
                     errorCount++;
                     failures.push({id: block[0], reason: (response && response.message) || 'respuesta sin éxito'});
-                    updateProgress();
-                    next();
                 }
+                updateProgress();
+                next();
             }).fail(function(xhr, textStatus) {
                 if (block.length > 1) {
                     var mid = Math.ceil(block.length / 2);
-                    requestBlock(block.slice(0, mid));
-                    requestBlock(block.slice(mid));
+                    pending.unshift(block.slice(mid));
+                    pending.unshift(block.slice(0, mid));
                 } else {
                     cursor++;
                     errorCount++;
                     var status = xhr && xhr.status ? 'HTTP ' + xhr.status : textStatus;
                     failures.push({id: block[0], reason: status || 'error de conexión'});
-                    updateProgress();
-                    next();
                 }
+                updateProgress();
+                next();
             });
-        }
-        function next() {
-            if (cursor >= total) { finish(); return; }
-            requestBlock(ids.slice(cursor, cursor + YUJU_SEND_CHUNK_SIZE));
         }
         if (!ids.length) { finish(); return; }
         next();
