@@ -1981,7 +1981,7 @@ $(document).ready(function() {
             });
         }
 
-        function runProductChunk(startIdx) {
+        function runProductChunk(startIdx, requestedChunkSize) {
             if (window.yujuCancelCreateValidate) {
                 validationFailed('Validación cancelada.', {});
                 return;
@@ -2004,7 +2004,7 @@ $(document).ready(function() {
                     product_ids_json: JSON.stringify(productIds),
                     batch_invalid_ids_json: JSON.stringify(batchInvalidList),
                     product_index: startIdx,
-                    chunk_size: chunkSize
+                    chunk_size: Math.max(1, Math.min(chunkSize, parseInt(requestedChunkSize || chunkSize, 10) || chunkSize))
                 },
                 success: function(r) {
                     if (window.yujuCancelCreateValidate) {
@@ -2053,20 +2053,50 @@ $(document).ready(function() {
                     runProductChunk(r.next_product_index || 0);
                 },
                 error: function(xhr, textStatus, errorThrown) {
-                    var detail = 'Error de red durante la validación de productos.';
-                    if (xhr && xhr.status) {
-                        detail += ' HTTP ' + xhr.status + (xhr.statusText ? ' ' + xhr.statusText : '');
-                    } else if (textStatus) {
-                        detail += ' (' + textStatus + ')';
+                    // Si el WAF/servidor rechaza una petición por el tamaño del bloque,
+                    // reducirlo progresivamente para aislar el producto que provoca el 403.
+                    var attemptedSize = Math.max(1, Math.min(chunkSize, parseInt(requestedChunkSize || chunkSize, 10) || chunkSize));
+                    if (attemptedSize > 1) {
+                        var smallerSize = Math.max(1, Math.floor(attemptedSize / 2));
+                        appendValidateLog('warn',
+                            'El servidor rechazó el bloque de ' + attemptedSize + ' productos (HTTP ' +
+                            (xhr && xhr.status ? xhr.status : 'red') + '). Se reintentará con bloques de ' + smallerSize + ' sin detener el lote.');
+                        runProductChunk(startIdx, smallerSize);
+                        return;
                     }
-                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\s+/g, ' ').trim() : '';
+
+                    // Si falla incluso un producto individual, registrar ese producto y continuar.
+                    var failedId = productIds[startIdx];
+                    if (failedId === undefined || failedId === null) {
+                        validationFailed('No se pudo identificar el producto que falló durante la validación.', {});
+                        return;
+                    }
+                    var statusCode = xhr && xhr.status ? 'HTTP ' + xhr.status + ' ' + (xhr.statusText || '') : (textStatus || 'error de red');
+                    var detail = 'El servidor rechazó la validación individual (' + statusCode.trim() + '). Se omitió este producto y el lote continuará.';
+                    var body = xhr && xhr.responseText ? String(xhr.responseText).replace(/\\s+/g, ' ').trim() : '';
                     if (body) {
-                        detail += ' Respuesta del servidor: ' + body.substring(0, 450);
+                        detail += ' Respuesta: ' + body.substring(0, 220);
                     } else if (errorThrown) {
                         detail += ' ' + String(errorThrown);
                     }
-                    validationFailed(detail, {});
-                    setPhaseState('rules', 'err');
+
+                    var failedName = 'ID ' + failedId;
+                    invalidProducts.push({
+                        id: failedId,
+                        name: failedName,
+                        error: detail
+                    });
+                    failCount++;
+                    appendValidateLog('warn', 'Omitido · ' + failedName + ': ' + detail);
+                    refreshValidateStats();
+
+                    var nextIndexAfterFailure = startIdx + 1;
+                    setValidateProgress(Math.min(productIds.length + 1, nextIndexAfterFailure + 1), productIds.length + 1);
+                    if (nextIndexAfterFailure >= productIds.length) {
+                        finishValidationAndSend();
+                    } else {
+                        runProductChunk(nextIndexAfterFailure);
+                    }
                 }
             });
         }
