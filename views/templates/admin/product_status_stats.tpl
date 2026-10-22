@@ -2187,6 +2187,7 @@ $(document).ready(function() {
         var cursor = 0;
         var queuedTotal = 0;
         var logWarnings = [];
+        var logSavedIds = [];
         var failures = [];
         var skipped = 0;
         var errorCount = 0;
@@ -2206,19 +2207,22 @@ $(document).ready(function() {
             if (typeof window.yujuSetValidateProgressFinal === 'function') window.yujuSetValidateProgressFinal();
             var ok = queuedTotal > 0 || skipped > 0;
             var message = queuedTotal + ' producto(s) aceptado(s) en la cola. ' + skipped + ' omitido(s). ' + errorCount + ' error(es).';
+            if (logSavedIds.length) {
+                message += ' Registro en Logs confirmado (ID ' + logSavedIds[0] + (logSavedIds.length > 1 ? ', +' + (logSavedIds.length - 1) : '') + ').';
+            }
             if (logWarnings.length) {
-                message += ' Aviso: no se pudo guardar el registro en Logs (' + logWarnings[0] + ').';
+                message += ' Aviso: no se confirmó el registro en Logs (' + logWarnings[0] + ').';
             }
             var $log = $('#yuju-create-validate-log');
-            $log.append($('<div class="yuju-validate-v2__logline ' + (errorCount ? 'yuju-validate-v2__logline--warn' : 'yuju-validate-v2__logline--ok') + '"></div>').text(message));
+            $log.append($('<div class="yuju-validate-v2__logline ' + ((errorCount || logWarnings.length) ? 'yuju-validate-v2__logline--warn' : 'yuju-validate-v2__logline--ok') + '"></div>').text(message));
             failures.forEach(function(item) {
                 $log.append($('<div class="yuju-validate-v2__logline yuju-validate-v2__logline--err"></div>').text('Producto ID ' + item.id + ': no se pudo enviar a la cola (' + item.reason + ')'));
             });
             var el = $log.get(0); if (el) $log.scrollTop(el.scrollHeight);
-            $('#yuju-phase-send').removeClass('yuju-validate-v2__phase--hidden yuju-validate-v2__phase--pending yuju-validate-v2__phase--running yuju-validate-v2__phase--err yuju-validate-v2__phase--warn').addClass(errorCount ? 'yuju-validate-v2__phase--warn' : 'yuju-validate-v2__phase--ok');
-            $('#yuju-phase-send-state').text(errorCount ? 'Completado con errores' : 'Correcto');
+            $('#yuju-phase-send').removeClass('yuju-validate-v2__phase--hidden yuju-validate-v2__phase--pending yuju-validate-v2__phase--running yuju-validate-v2__phase--err yuju-validate-v2__phase--warn').addClass((errorCount || logWarnings.length) ? 'yuju-validate-v2__phase--warn' : 'yuju-validate-v2__phase--ok');
+            $('#yuju-phase-send-state').text((errorCount || logWarnings.length) ? 'Completado con avisos/errores' : 'Correcto');
             $('#yuju-validate-chip-progress').text(errorCount ? 'Envío parcial' : 'Envío completado');
-            showNotification(message + (failures.length ? ' Revise el detalle del modal para los productos que fallaron.' : ''), errorCount ? 'warning' : 'success', logsUrl);
+            showNotification(message + (failures.length ? ' Revise el detalle del modal para los productos que fallaron.' : ''), (errorCount || logWarnings.length) ? 'warning' : 'success', logsUrl);
             window.yujuValidateModalPendingReload = ok;
         }
         function next() {
@@ -2244,7 +2248,15 @@ $(document).ready(function() {
                 if (response && response.success) {
                     var details = response.details || {};
                     queuedTotal += parseInt(details.queued || 0, 10) || 0;
-                    if (response.log_saved === false) logWarnings.push(response.log_error || 'error desconocido');
+                    if (response.log_saved === true) {
+                        var logId = parseInt(response.log_id || 0, 10) || 0;
+                        if (logId > 0) logSavedIds.push(logId);
+                        else logWarnings.push('el servidor no devolvió el ID del registro guardado');
+                    } else if (response.log_saved === false) {
+                        logWarnings.push(response.log_error || 'error desconocido');
+                    } else {
+                        logWarnings.push('el servidor no confirmó el guardado (falta log_saved en la respuesta; comprueba que los PHP del módulo estén actualizados)');
+                    }
                     skipped += parseInt(details.skipped || 0, 10) || 0;
                     errorCount += parseInt(details.errors || 0, 10) || 0;
                     cursor += block.length;
