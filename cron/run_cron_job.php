@@ -57,9 +57,51 @@ $command = escapeshellarg($phpBin)
     . ' 2>&1';
 
 $outputLines = [];
-$exitCode = 0;
+$exitCode = 1;
 $start = microtime(true);
-@exec($command, $outputLines, $exitCode);
+
+if (function_exists('exec')) {
+    @exec($command, $outputLines, $exitCode);
+} elseif (function_exists('proc_open')) {
+    $pipes = [];
+    $process = @proc_open($command, [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes);
+    if (is_resource($process)) {
+        if (isset($pipes[0]) && is_resource($pipes[0])) {
+            fclose($pipes[0]);
+        }
+        $stdout = isset($pipes[1]) && is_resource($pipes[1]) ? stream_get_contents($pipes[1]) : '';
+        $stderr = isset($pipes[2]) && is_resource($pipes[2]) ? stream_get_contents($pipes[2]) : '';
+        if (isset($pipes[1]) && is_resource($pipes[1])) {
+            fclose($pipes[1]);
+        }
+        if (isset($pipes[2]) && is_resource($pipes[2])) {
+            fclose($pipes[2]);
+        }
+        $exitCode = (int) @proc_close($process);
+        $combined = trim((string) $stdout . "\n" . (string) $stderr);
+        if ($combined !== '') {
+            $outputLines = preg_split('/\r?\n/', $combined);
+        }
+    } else {
+        $outputLines[] = 'No se pudo iniciar el proceso PHP: proc_open() falló.';
+    }
+} elseif (function_exists('popen')) {
+    $handle = @popen($command, 'r');
+    if (is_resource($handle)) {
+        $captured = stream_get_contents($handle);
+        $exitCode = (int) @pclose($handle);
+        $outputLines = preg_split('/\r?\n/', trim((string) $captured));
+    } else {
+        $outputLines[] = 'No se pudo iniciar el proceso PHP mediante popen().';
+    }
+} else {
+    $outputLines[] = 'El hosting deshabilitó exec(), proc_open() y popen(); no es posible lanzar el cron desde el modal. Configure el cron desde cPanel o solicite habilitar una función de ejecución de procesos.';
+}
+
 $durationMs = (int) round((microtime(true) - $start) * 1000);
 $output = trim(implode("\n", $outputLines));
 if ($output === '') {
