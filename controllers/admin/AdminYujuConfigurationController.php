@@ -69,7 +69,11 @@ class AdminYujuConfigurationController extends ModuleAdminController
 
         if ($this->module) {
             $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
-            $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
+            // Romper la caché del navegador al cambiar admin.js, para evitar
+            // que el backoffice siga mostrando el diagnóstico antiguo.
+            $adminJsPath = dirname(__FILE__) . '/../../views/js/admin.js';
+            $adminJsVersion = is_file($adminJsPath) ? (string) @filemtime($adminJsPath) : (string) time();
+            $this->addJS($this->module->getPathUri() . 'views/js/admin.js?v=' . rawurlencode($adminJsVersion));
         }
     }
 
