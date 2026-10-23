@@ -796,6 +796,81 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
+     * AJAX: devuelve URLs protegidas para programadores externos de tareas web.
+     * Cada script tiene un token aleatorio e independiente.
+     */
+    public function ajaxProcessGetCronUrlTasks()
+    {
+        $regenerate = (bool) Tools::getValue('regenerate', false);
+        $scripts = [
+            'cron.php' => [
+                'label' => 'Tareas generales',
+                'description' => 'Sincronización y tareas generales programadas. Frecuencia sugerida: cada 5 minutos.',
+            ],
+            'process_queue.php' => [
+                'label' => 'Cola de sincronización',
+                'description' => 'Procesa cambios pendientes de productos. Frecuencia sugerida: cada 2 minutos.',
+            ],
+        ];
+
+        $tokens = YujuConfig::get('YUJU_CRON_URL_TOKENS', []);
+        if (is_string($tokens)) {
+            $decoded = json_decode($tokens, true);
+            $tokens = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($tokens)) {
+            $tokens = [];
+        }
+
+        $changed = false;
+        foreach ($scripts as $script => $metadata) {
+            if ($regenerate || empty($tokens[$script]) || !preg_match('/^[a-f0-9]{64}$/', (string) $tokens[$script])) {
+                try {
+                    $tokens[$script] = bin2hex(random_bytes(32));
+                } catch (Exception $e) {
+                    $this->yujuAjaxDie(json_encode([
+                        'success' => false,
+                        'message' => 'No se pudieron generar los tokens seguros para las URLs.',
+                    ]));
+                }
+                $changed = true;
+            }
+        }
+
+        if ($changed && !YujuConfig::set(
+            'YUJU_CRON_URL_TOKENS',
+            json_encode($tokens),
+            'string',
+            'Tokens individuales para URLs protegidas de tareas programadas Yuju'
+        )) {
+            $this->yujuAjaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudieron guardar los tokens. Comprueba que la tabla de configuración de Yuju esté disponible.',
+            ]));
+        }
+
+        $baseUrl = Tools::getShopDomainSsl(true) . __PS_BASE_URI__ . 'modules/yuju/cron/trigger.php';
+        $rows = [];
+        foreach ($scripts as $script => $metadata) {
+            $rows[] = [
+                'script' => $script,
+                'label' => $metadata['label'],
+                'description' => $metadata['description'],
+                'url' => $baseUrl . '?task=' . rawurlencode($script) . '&token=' . rawurlencode($tokens[$script]),
+            ];
+        }
+
+        $this->yujuAjaxDie(json_encode([
+            'success' => true,
+            'regenerated' => $regenerate,
+            'tasks' => $rows,
+            'message' => $regenerate
+                ? 'Se regeneraron los tokens. Las URLs anteriores dejaron de funcionar.'
+                : 'URLs protegidas listas. Guárdalas únicamente en tu programador externo.',
+        ]));
+    }
+
+    /**
      * AJAX: lanza un cron en segundo plano (no bloquea la sesión del BO).
      */
     public function ajaxProcessRunCronScript()
