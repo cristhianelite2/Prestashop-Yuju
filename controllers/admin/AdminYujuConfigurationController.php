@@ -1031,6 +1031,9 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'PHP_BINARY: ' . (PHP_BINARY ? PHP_BINARY : '(vacío)'),
             'PHP_BINDIR: ' . (defined('PHP_BINDIR') ? PHP_BINDIR : '(n/d)'),
             'disable_functions: ' . ($disabled !== '' ? $disabled : '(ninguna)'),
+            'Disponibilidad de funciones: exec=' . (function_exists('exec') ? 'sí' : 'no')
+                . ', proc_open=' . (function_exists('proc_open') ? 'sí' : 'no')
+                . ', popen=' . (function_exists('popen') ? 'sí' : 'no'),
             'Candidatos probados:',
         ], $this->phpCliAttempts));
     }
