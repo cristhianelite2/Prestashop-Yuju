@@ -767,6 +767,87 @@ class AdminYujuConfigurationController extends ModuleAdminController
     }
 
     /**
+     * AJAX: publica el endpoint protegido fuera de /modules si todavía no existe.
+     * Nunca sobrescribe un archivo ya instalado en la raíz de la tienda.
+     */
+    public function ajaxProcessInstallExternalCronTrigger()
+    {
+        $source = _PS_MODULE_DIR_ . 'yuju/tools/trigger.php';
+        $shopRoot = defined('_PS_ROOT_DIR_') ? _PS_ROOT_DIR_ : dirname(rtrim(_PS_MODULE_DIR_, '/\\\\'));
+        $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju';
+        $target = $targetDir . DIRECTORY_SEPARATOR . 'trigger.php';
+
+        if (is_file($target)) {
+            $this->yujuAjaxDie(json_encode([
+                'success' => true,
+                'copied' => false,
+                'exists' => true,
+                'message' => 'El archivo ' . $target . ' ya existe. No se modificó ni sobrescribió.',
+            ]));
+        }
+
+        if (!is_file($source) || !is_readable($source)) {
+            $this->yujuAjaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se encontró el archivo fuente tools/trigger.php dentro del módulo actualizado.',
+            ]));
+        }
+
+        if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            $this->yujuAjaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo crear la carpeta yuju fuera de modules. Verifica los permisos de la raíz de PrestaShop.',
+            ]));
+        }
+
+        $input = @fopen($source, 'rb');
+        $output = @fopen($target, 'x');
+
+        if ($output === false) {
+            if (is_file($target)) {
+                $this->yujuAjaxDie(json_encode([
+                    'success' => true,
+                    'copied' => false,
+                    'exists' => true,
+                    'message' => 'El archivo ya existe. No se sobrescribió.',
+                ]));
+            }
+            if (is_resource($input)) {
+                fclose($input);
+            }
+            $this->yujuAjaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo crear ' . $target . '. Comprueba los permisos de escritura de la raíz de PrestaShop.',
+            ]));
+        }
+
+        $copiedBytes = is_resource($input) ? @stream_copy_to_stream($input, $output) : false;
+        if (is_resource($input)) {
+            fclose($input);
+        }
+        fclose($output);
+
+        if ($copiedBytes === false || $copiedBytes <= 0) {
+            @unlink($target);
+            $this->yujuAjaxDie(json_encode([
+                'success' => false,
+                'message' => 'No se pudo copiar el endpoint completo. No se dejó un archivo parcial.',
+            ]));
+        }
+
+        @chmod($target, 0644);
+        clearstatcache(true, $target);
+
+        $this->yujuAjaxDie(json_encode([
+            'success' => true,
+            'copied' => true,
+            'exists' => true,
+            'path' => $target,
+            'message' => 'Endpoint instalado correctamente en ' . $target . '.',
+        ]));
+    }
+
+    /**
      * AJAX: listado de scripts cron y última ejecución registrada.
      */
     public function ajaxProcessGetCronManagerData()
