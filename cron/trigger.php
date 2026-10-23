@@ -79,5 +79,8 @@ if (function_exists('ob_implicit_flush')) {
     @ob_implicit_flush(true);
 }
 
+// Permitir la ejecución web únicamente tras validar el token del endpoint.
+define('YUJU_CRON_TRIGGER_AUTHORIZED', true);
+
 // El script mantiene su propia lógica de bloqueo, cuotas y registro.
 require $script;
