@@ -75,6 +75,12 @@ var YujuAdmin = {
             self.testProducts();
         });
 
+        // Instalar endpoint externo de CRON fuera de /modules, sin sobrescribirlo.
+        $(document).on('click', '#yuju-install-external-trigger', function(e) {
+            e.preventDefault();
+            self.installExternalCronTrigger();
+        });
+
         // Cron manager
         $(document).on('click', '#yuju-open-cron-manager', function(e) {
             e.preventDefault();
@@ -763,6 +769,50 @@ var YujuAdmin = {
 
         $fs.css('z-index', 20060);
         $fs.modal('show');
+    },
+
+    /**
+     * Copia el endpoint de CRON fuera de /modules si todavía no existe.
+     */
+    installExternalCronTrigger: function() {
+        var $button = $('#yuju-install-external-trigger');
+        var $status = $('#yuju-external-trigger-status');
+        var originalHtml = $button.html();
+
+        if (!window.confirm('Se instalará /yuju/trigger.php fuera de /modules. Si el archivo ya existe, se conservará sin cambios. ¿Continuar?')) {
+            return;
+        }
+
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Verificando archivo…');
+        $status.removeClass('text-success text-danger').text('Comprobando si el archivo ya existe…');
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'installExternalCronTrigger',
+                token: this.config.token
+            },
+            success: function(response) {
+                if (response && response.success) {
+                    $status.addClass('text-success').text(response.message || 'Archivo verificado.');
+                } else {
+                    $status.addClass('text-danger').text(response && response.message ? response.message : 'No se pudo instalar el archivo externo.');
+                }
+            },
+            error: function(xhr) {
+                var message = 'Error de comunicación al instalar el archivo externo.';
+                if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                $status.addClass('text-danger').text(message);
+            },
+            complete: function() {
+                $button.prop('disabled', false).html(originalHtml);
+            }
+        });
     },
 
     /**
