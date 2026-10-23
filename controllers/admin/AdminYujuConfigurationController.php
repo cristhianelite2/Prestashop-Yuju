@@ -27,6 +27,9 @@ require_once dirname(__FILE__) . '/../../config/config.php';
 
 class AdminYujuConfigurationController extends ModuleAdminController
 {
+    /** @var string[] Intentos de detección del PHP CLI (para diagnóstico en el modal). */
+    private $phpCliAttempts = [];
+
     /**
      * Emite una respuesta JSON y termina la petición AJAX.
      * PrestaShop 9 ya no expone ajaxDie() en este controlador.
@@ -828,7 +831,8 @@ class AdminYujuConfigurationController extends ModuleAdminController
         if (!$phpBin) {
             $this->yujuAjaxDie(json_encode([
                 'success' => false,
-                'message' => 'No se encontró un binario PHP CLI válido para ejecutar crons.',
+                'message' => 'No se encontró un binario PHP CLI válido para ejecutar crons.'
+                    . "\n" . $this->getPhpCliDiagnostics(),
             ]));
         }
 
@@ -924,13 +928,45 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     private function resolvePhpCliBinary()
     {
+        $this->phpCliAttempts = [];
+
+        // Sin exec/proc_open/popen PHP no puede lanzar procesos: ningún binario serviría.
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+        if (count(array_intersect(['exec', 'proc_open', 'popen'], $disabled)) === 3) {
+            $this->phpCliAttempts[] = 'exec, proc_open y popen están en disable_functions: '
+                . 'el servidor no permite lanzar procesos desde PHP. Usa solo crontab.';
+
+            return null;
+        }
+
+        $ver = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
         $candidates = [];
 
+        // 1) Ruta fijada manualmente (prioridad máxima).
+        $custom = trim((string) YujuConfig::get('YUJU_PHP_CLI_PATH', ''));
+        if ($custom !== '') {
+            $candidates[] = $custom;
+        }
+
+        // 2) PHP actual y derivados: bajo php-fpm, "php" / "phpX.Y" suelen estar en el mismo directorio.
         if (defined('PHP_BINARY') && PHP_BINARY) {
             $candidates[] = PHP_BINARY;
         }
+        $dirs = [];
+        if (defined('PHP_BINARY') && PHP_BINARY) {
+            $dirs[] = dirname(PHP_BINARY);
+        }
+        if (defined('PHP_BINDIR') && PHP_BINDIR) {
+            $dirs[] = PHP_BINDIR;
+        }
+        foreach (array_unique($dirs) as $dir) {
+            $candidates[] = $dir . '/php';
+            $candidates[] = $dir . '/php' . $ver;
+        }
 
+        // 3) Nombres en PATH y rutas habituales.
         $candidates = array_merge($candidates, [
+            'php' . $ver,
             'php',
             'php8.4',
             'php8.3',
@@ -938,12 +974,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
             'php8.1',
             '/usr/bin/php',
             '/usr/local/bin/php',
-            // cPanel EasyApache (EA-PHP): rutas habituales de PHP CLI.
+            // cPanel EasyApache (EA-PHP).
             '/opt/cpanel/ea-php84/root/usr/bin/php',
             '/opt/cpanel/ea-php83/root/usr/bin/php',
             '/opt/cpanel/ea-php82/root/usr/bin/php',
             '/opt/cpanel/ea-php81/root/usr/bin/php',
-            // CloudLinux alt-php: ambas convenciones comunes de ruta.
+            // CloudLinux alt-php.
             '/opt/alt/php84/usr/bin/php',
             '/opt/alt/php83/usr/bin/php',
             '/opt/alt/php82/usr/bin/php',
@@ -953,6 +989,14 @@ class AdminYujuConfigurationController extends ModuleAdminController
             '/opt/cloudlinux/alt-php82/root/usr/bin/php',
             '/opt/cloudlinux/alt-php81/root/usr/bin/php',
         ]);
+
+        // 4) Plesk, Remi y similares (versión variable).
+        foreach (['/opt/plesk/php/*/bin/php', '/opt/remi/php*/root/usr/bin/php', '/usr/local/php*/bin/php'] as $pattern) {
+            $found = @glob($pattern);
+            if (is_array($found)) {
+                $candidates = array_merge($candidates, $found);
+            }
+        }
 
         $checked = [];
         foreach ($candidates as $bin) {
@@ -966,18 +1010,31 @@ class AdminYujuConfigurationController extends ModuleAdminController
             if ($sapi === 'cli') {
                 return $bin;
             }
+            // No filtrar con is_file()/is_executable(): open_basedir los bloquea aunque exec() sí funcione.
+            $this->phpCliAttempts[] = $bin . ' → ' . ($sapi !== '' ? $sapi : 'sin respuesta');
         }
 
         return null;
     }
 
     /**
-     * Detecta el SAPI de un binario PHP.
-     *
-     * @param string $bin
+     * Texto de diagnóstico cuando no se encuentra PHP CLI.
      *
      * @return string
      */
+    private function getPhpCliDiagnostics()
+    {
+        $disabled = trim((string) ini_get('disable_functions'));
+
+        return implode("\n", array_merge([
+            'PHP_SAPI (web): ' . PHP_SAPI,
+            'PHP_BINARY: ' . (PHP_BINARY ? PHP_BINARY : '(vacío)'),
+            'PHP_BINDIR: ' . (defined('PHP_BINDIR') ? PHP_BINDIR : '(n/d)'),
+            'disable_functions: ' . ($disabled !== '' ? $disabled : '(ninguna)'),
+            'Candidatos probados:',
+        ], $this->phpCliAttempts));
+    }
+
     private function detectPhpSapi($bin)
     {
         $cmd = escapeshellarg($bin) . " -n -r 'echo PHP_SAPI;' 2>&1";
