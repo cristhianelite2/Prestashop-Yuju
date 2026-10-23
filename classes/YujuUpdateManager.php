@@ -438,6 +438,12 @@ class YujuUpdateManager
         }
 
         $target = $targetDir . 'trigger.php';
+        // Conservar cualquier endpoint ya instalado; la configuración dispone
+        // de una acción explícita que también detecta este caso sin sobrescribir.
+        if (is_file($target)) {
+            return;
+        }
+
         $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
         if (!@copy($source, $temp)) {
             throw new Exception('No se pudo copiar el endpoint externo de Yuju.');
