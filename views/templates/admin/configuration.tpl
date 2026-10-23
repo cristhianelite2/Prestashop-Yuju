@@ -1139,7 +1139,13 @@ function openCronManagerModal() {
                             '<button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>' +
                         '</div>' +
                         '<div class="modal-body">' +
-                            '<div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> programe <code>cron.php</code> y <code>process_queue.php</code> (cola) en crontab. Los demás son utilitarios, internos o de diagnóstico. <strong>Ejecutar</strong> desde aquí corre en segundo plano y no bloquea el BO.</div>' +
+                            '<div class="alert alert-info" style="margin-bottom:12px;"><strong>Programación:</strong> usa las URLs protegidas para activar las tareas con un servicio externo de programación HTTP. El botón <strong>Ejecutar</strong> sigue disponible para pruebas manuales desde el Back Office.</div>' +
+                            '<div class="well" id="yuju-cron-url-panel" style="margin-bottom:12px;">' +
+                                '<div style="font-weight:600;margin-bottom:6px;">URLs protegidas para programación externa</div>' +
+                                '<p class="help-block">Cada tarea tiene un token independiente. No compartas estas direcciones públicamente. Si regeneras los tokens, las URLs anteriores dejarán de funcionar.</p>' +
+                                '<div style="margin-bottom:8px;"><button type="button" id="yuju-load-cron-urls" class="btn btn-default btn-sm"><i class="icon-link"></i> Mostrar / actualizar URLs</button> <button type="button" id="yuju-regenerate-cron-urls" class="btn btn-warning btn-sm"><i class="icon-refresh"></i> Regenerar tokens</button></div>' +
+                                '<div id="yuju-cron-url-results"><span class="text-muted">Cargando URLs protegidas…</span></div>' +
+                            '</div>' +
                             '<div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>' +
                             '<div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">' +
                                 '<label style="margin:0; font-weight:600; cursor:pointer;">' +
@@ -1907,7 +1913,13 @@ $(document).ready(function() {
                 <button type="button" class="yuju-cron-modal-close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info" style="margin-bottom:12px;"><strong>Recomendación:</strong> programe <code>cron.php</code> y <code>process_queue.php</code> (cola) en crontab. Los demás son utilitarios, internos o de diagnóstico. <strong>Ejecutar</strong> desde aquí corre en segundo plano y no bloquea el BO.</div>
+                <div class="alert alert-info" style="margin-bottom:12px;"><strong>Programación:</strong> usa las URLs protegidas para activar las tareas con un servicio externo de programación HTTP. El botón <strong>Ejecutar</strong> sigue disponible para pruebas manuales desde el Back Office.</div>
+                <div class="well" id="yuju-cron-url-panel" style="margin-bottom:12px;">
+                    <div style="font-weight:600;margin-bottom:6px;">URLs protegidas para programación externa</div>
+                    <p class="help-block">Cada tarea tiene un token independiente. No compartas estas direcciones públicamente. Si regeneras los tokens, las URLs anteriores dejarán de funcionar.</p>
+                    <div style="margin-bottom:8px;"><button type="button" id="yuju-load-cron-urls" class="btn btn-default btn-sm"><i class="icon-link"></i> Mostrar / actualizar URLs</button> <button type="button" id="yuju-regenerate-cron-urls" class="btn btn-warning btn-sm"><i class="icon-refresh"></i> Regenerar tokens</button></div>
+                    <div id="yuju-cron-url-results"><span class="text-muted">Cargando URLs protegidas…</span></div>
+                </div>
                 <div id="yuju-cron-manager-alert" class="alert" style="display:none;"></div>
                 <div class="yuju-cron-manager-filters" style="margin:0 0 12px 0; display:flex; gap:14px; flex-wrap:wrap;">
                     <label style="margin:0; font-weight:600; cursor:pointer;">
