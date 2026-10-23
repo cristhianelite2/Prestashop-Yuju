@@ -294,7 +294,7 @@
                             </p>
                             <div style="margin-top:10px;">
                                 <button type="button" id="yuju-install-external-trigger" class="btn btn-default btn-sm">
-                                    <i class="icon-copy"></i> Instalar archivo externo de CRON
+                                    <i class="icon-copy"></i> Instalar endpoints externos de CRON y webhooks
                                 </button>
                                 <div id="yuju-external-trigger-status" class="help-block" style="margin-top:6px;">
                                     Copia <code>trigger.php</code> a la carpeta <code>/yuju/</code> de la raíz de PrestaShop, fuera de <code>/modules/</code>. Si ya existe, no lo sobrescribe.
