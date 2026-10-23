@@ -14,7 +14,7 @@ if (!is_file($shopConfig)) {
 }
 
 require_once $shopConfig;
-$shopInit = dirname($shopConfig) . '/init.php';
+$shopInit = $moduleRoot . '/../../init.php';
 if (is_file($shopInit)) {
     require_once $shopInit;
 }
