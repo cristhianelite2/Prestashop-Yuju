@@ -292,6 +292,14 @@
                                 <code>process_queue.php</code> cada 1–2 min (cola de productos, respeta YUJU_BATCH_SIZE).
                                 «Ejecutar» en el gestor lanza en segundo plano y no bloquea el backoffice.
                             </p>
+                            <div style="margin-top:10px;">
+                                <button type="button" id="yuju-install-external-trigger" class="btn btn-default btn-sm">
+                                    <i class="icon-copy"></i> Instalar archivo externo de CRON
+                                </button>
+                                <div id="yuju-external-trigger-status" class="help-block" style="margin-top:6px;">
+                                    Copia <code>trigger.php</code> a la carpeta <code>/yuju/</code> de la raíz de PrestaShop, fuera de <code>/modules/</code>. Si ya existe, no lo sobrescribe.
+                                </div>
+                            </div>
                             {if isset($oauth_status) && $oauth_status.configured && $oauth_status.has_token && $oauth_status.is_connected && isset($config.YUJU_CLIENT_ID) && $config.YUJU_CLIENT_ID|trim != '' && isset($config.YUJU_CLIENT_SECRET) && $config.YUJU_CLIENT_SECRET|trim != ''}
                                 <button type="button" id="yuju-open-cron-manager" class="btn btn-info btn-sm" style="margin-top:8px;" onclick="return openCronManagerModal();">
                                     <i class="icon-time"></i> Administrar crons
