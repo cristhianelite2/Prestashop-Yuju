@@ -177,6 +177,9 @@ class YujuUpdateManager
 
             $filesCopied = $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
+            // Instalar el endpoint protegido fuera de /modules para servidores que bloquean PHP allí.
+            $this->deployExternalCronTrigger($sourceRoot);
+
             // Asegurar que los hooks de vistas de órdenes y assets estén registrados tras actualizar
             try {
                 if (file_exists($this->moduleDir . 'yuju.php')) {
@@ -412,11 +415,45 @@ class YujuUpdateManager
         return null;
     }
 
+    /**
+     * Publica el endpoint en <raíz de PrestaShop>/yuju/trigger.php.
+     * La carpeta yuju del ZIP es una carga de despliegue, no parte del módulo.
+     */
+    private function deployExternalCronTrigger($sourceRoot)
+    {
+        $source = rtrim($sourceRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR . 'trigger.php';
+        if (!is_file($source)) {
+            throw new Exception('El paquete no contiene el endpoint externo yuju/trigger.php.');
+        }
+
+        $shopRoot = defined('_PS_ROOT_DIR_')
+            ? _PS_ROOT_DIR_
+            : dirname(dirname($this->moduleDir));
+        $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
+        if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            throw new Exception('No se pudo crear la carpeta yuju en la raíz de PrestaShop para publicar el endpoint externo.');
+        }
+        if (!is_writable($targetDir)) {
+            throw new Exception('La carpeta ' . $targetDir . ' no permite publicar el endpoint externo de Yuju.');
+        }
+
+        $target = $targetDir . 'trigger.php';
+        $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
+        if (!@copy($source, $temp)) {
+            throw new Exception('No se pudo copiar el endpoint externo de Yuju.');
+        }
+        if (!@rename($temp, $target)) {
+            @unlink($temp);
+            throw new Exception('No se pudo instalar yuju/trigger.php. Verifique los permisos de la raíz de PrestaShop.');
+        }
+        @chmod($target, 0644);
+    }
+
     private function copyModuleFiles($source, $destination)
     {
         $excludeTopLevel = [
             '.git', '.github', 'logs', 'cache', 'exports', 'vendor',
-            'node_modules', '.idea', '.vscode', '.trae', 'deployment',
+            'node_modules', '.idea', '.vscode', '.trae', 'deployment', 'yuju',
         ];
         $copied = 0;
         $iterator = new RecursiveIteratorIterator(
