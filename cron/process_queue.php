@@ -13,6 +13,12 @@
  *   --max-seconds=S  Tope de tiempo wall-clock (default 50)
  */
 
+// Las llamadas web deben pasar por trigger.php, que valida el token por tarea.
+if (php_sapi_name() !== 'cli' && !defined('YUJU_CRON_TRIGGER_AUTHORIZED')) {
+    http_response_code(403);
+    exit('Acceso denegado. Use la URL protegida de programación de Yuju.');
+}
+
 if (!defined('_PS_VERSION_')) {
     $candidates = [
         dirname(__FILE__) . '/../../config/config.inc.php',
