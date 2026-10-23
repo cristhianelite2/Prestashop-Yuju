@@ -24,6 +24,12 @@
  * https://tutienda.com/modules/yuju/cron/cron.php
  */
 
+// Las llamadas web deben pasar por trigger.php, que valida el token por tarea.
+if (php_sapi_name() !== 'cli' && !defined('YUJU_CRON_TRIGGER_AUTHORIZED')) {
+    http_response_code(403);
+    exit('Acceso denegado. Use la URL protegida de programación de Yuju.');
+}
+
 // Configuración de PrestaShop
 $root_path = dirname(__FILE__, 2);
 require_once $root_path . '/../../config/config.inc.php';
