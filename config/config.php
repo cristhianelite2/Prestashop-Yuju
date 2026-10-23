@@ -92,6 +92,8 @@ class YujuConfig
             // Sync Settings
             'YUJU_BATCH_SIZE' => 100,
             'YUJU_BATCH_FREQUENCY' => 60, // seconds
+            // Ruta absoluta al PHP CLI (opcional). Vacío = autodetección.
+            'YUJU_PHP_CLI_PATH' => '',
             'YUJU_MAX_DAILY_SYNCS' => 2, // products-offer-report: máx. cada 12h (= 2/día)
             'YUJU_SYNC_BATCH_SIZE' => self::DEFAULT_BATCH_SIZE,
             'YUJU_SYNC_FREQUENCY' => self::DEFAULT_SYNC_FREQUENCY,
