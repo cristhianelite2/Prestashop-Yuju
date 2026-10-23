@@ -421,9 +421,14 @@ class YujuUpdateManager
      */
     private function deployExternalCronTrigger($sourceRoot)
     {
-        $source = rtrim($sourceRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR . 'trigger.php';
-        if (!is_file($source)) {
-            throw new Exception('El paquete no contiene el endpoint externo yuju/trigger.php.');
+        $sourceDir = rtrim($sourceRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
+        $files = ['trigger.php', 'webhook_manager.php'];
+
+        foreach ($files as $fileName) {
+            $source = $sourceDir . $fileName;
+            if (!is_file($source)) {
+                throw new Exception('El paquete no contiene el endpoint externo yuju/' . $fileName . '.');
+            }
         }
 
         $shopRoot = defined('_PS_ROOT_DIR_')
@@ -431,28 +436,32 @@ class YujuUpdateManager
             : dirname(dirname($this->moduleDir));
         $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
         if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
-            throw new Exception('No se pudo crear la carpeta yuju en la raíz de PrestaShop para publicar el endpoint externo.');
+            throw new Exception('No se pudo crear la carpeta yuju en la raíz de PrestaShop para publicar los endpoints externos.');
         }
         if (!is_writable($targetDir)) {
-            throw new Exception('La carpeta ' . $targetDir . ' no permite publicar el endpoint externo de Yuju.');
+            throw new Exception('La carpeta ' . $targetDir . ' no permite publicar los endpoints externos de Yuju.');
         }
 
-        $target = $targetDir . 'trigger.php';
-        // Conservar cualquier endpoint ya instalado; la configuración dispone
-        // de una acción explícita que también detecta este caso sin sobrescribir.
-        if (is_file($target)) {
-            return;
-        }
+        foreach ($files as $fileName) {
+            $source = $sourceDir . $fileName;
+            $target = $targetDir . $fileName;
 
-        $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
-        if (!@copy($source, $temp)) {
-            throw new Exception('No se pudo copiar el endpoint externo de Yuju.');
+            // Conservar cada archivo ya instalado; la configuración puede
+            // instalarlos explícitamente sin sobrescribir versiones existentes.
+            if (is_file($target)) {
+                continue;
+            }
+
+            $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
+            if (!@copy($source, $temp)) {
+                throw new Exception('No se pudo copiar el endpoint externo yuju/' . $fileName . '.');
+            }
+            if (!@rename($temp, $target)) {
+                @unlink($temp);
+                throw new Exception('No se pudo instalar yuju/' . $fileName . '. Verifique los permisos de la raíz de PrestaShop.');
+            }
+            @chmod($target, 0644);
         }
-        if (!@rename($temp, $target)) {
-            @unlink($temp);
-            throw new Exception('No se pudo instalar yuju/trigger.php. Verifique los permisos de la raíz de PrestaShop.');
-        }
-        @chmod($target, 0644);
     }
 
     private function copyModuleFiles($source, $destination)
