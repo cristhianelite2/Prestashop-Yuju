@@ -849,7 +849,7 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]));
         }
 
-        $baseUrl = Tools::getShopDomainSsl(true) . __PS_BASE_URI__ . 'modules/yuju/cron/trigger.php';
+        $baseUrl = Tools::getShopDomainSsl(true) . __PS_BASE_URI__ . 'yuju/trigger.php';
         $rows = [];
         foreach ($scripts as $script => $metadata) {
             $rows[] = [
