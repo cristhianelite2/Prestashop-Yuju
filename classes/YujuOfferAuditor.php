@@ -1485,7 +1485,13 @@ class YujuOfferAuditor
         $totals = Db::getInstance()->getRow(
             'SELECT
                 COUNT(*) AS runs_count,
-                COALESCE(SUM(matched), 0) AS sum_matched,
+                COALESCE((
+                    SELECT latest_run.matched
+                    FROM `' . _DB_PREFIX_ . 'yuju_audit_runs` latest_run
+                    WHERE latest_run.status = \'completed\'
+                    ORDER BY latest_run.id DESC
+                    LIMIT 1
+                ), 0) AS sum_matched,
                 COALESCE(SUM(diff_found), 0) AS sum_diff,
                 COALESCE(SUM(fixed), 0) AS sum_fixed,
                 COALESCE(SUM(errors), 0) AS sum_errors
