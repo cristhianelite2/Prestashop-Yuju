@@ -772,26 +772,12 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     public function ajaxProcessInstallExternalCronTrigger()
     {
-        $source = _PS_MODULE_DIR_ . 'yuju/tools/trigger.php';
         $shopRoot = defined('_PS_ROOT_DIR_') ? _PS_ROOT_DIR_ : dirname(rtrim(_PS_MODULE_DIR_, '/\\\\'));
-        $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju';
-        $target = $targetDir . DIRECTORY_SEPARATOR . 'trigger.php';
-
-        if (is_file($target)) {
-            $this->yujuAjaxDie(json_encode([
-                'success' => true,
-                'copied' => false,
-                'exists' => true,
-                'message' => 'El archivo ' . $target . ' ya existe. No se modificó ni sobrescribió.',
-            ]));
-        }
-
-        if (!is_file($source) || !is_readable($source)) {
-            $this->yujuAjaxDie(json_encode([
-                'success' => false,
-                'message' => 'No se encontró el archivo fuente tools/trigger.php dentro del módulo actualizado.',
-            ]));
-        }
+        $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
+        $files = [
+            'trigger.php' => _PS_MODULE_DIR_ . 'yuju/tools/trigger.php',
+            'webhook_manager.php' => _PS_MODULE_DIR_ . 'yuju/tools/webhook_manager.php',
+        ];
 
         if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
             $this->yujuAjaxDie(json_encode([
@@ -800,50 +786,75 @@ class AdminYujuConfigurationController extends ModuleAdminController
             ]));
         }
 
-        $input = @fopen($source, 'rb');
-        $output = @fopen($target, 'x');
+        $copied = [];
+        $existing = [];
+        $errors = [];
 
-        if ($output === false) {
+        foreach ($files as $fileName => $source) {
+            $target = $targetDir . $fileName;
+
+            // Nunca sobrescribir archivos externos que ya estén instalados.
             if (is_file($target)) {
-                $this->yujuAjaxDie(json_encode([
-                    'success' => true,
-                    'copied' => false,
-                    'exists' => true,
-                    'message' => 'El archivo ya existe. No se sobrescribió.',
-                ]));
+                $existing[] = $fileName;
+                continue;
             }
+
+            if (!is_file($source) || !is_readable($source)) {
+                $errors[] = 'No se encontró el archivo fuente ' . $source . '.';
+                continue;
+            }
+
+            $input = @fopen($source, 'rb');
+            $output = @fopen($target, 'x');
+            if ($output === false) {
+                if (is_resource($input)) {
+                    fclose($input);
+                }
+                if (is_file($target)) {
+                    $existing[] = $fileName;
+                } else {
+                    $errors[] = 'No se pudo crear ' . $target . '. Comprueba los permisos de escritura de la raíz de PrestaShop.';
+                }
+                continue;
+            }
+
+            $copiedBytes = is_resource($input) ? @stream_copy_to_stream($input, $output) : false;
             if (is_resource($input)) {
                 fclose($input);
             }
-            $this->yujuAjaxDie(json_encode([
-                'success' => false,
-                'message' => 'No se pudo crear ' . $target . '. Comprueba los permisos de escritura de la raíz de PrestaShop.',
-            ]));
+            fclose($output);
+
+            if ($copiedBytes === false || $copiedBytes <= 0) {
+                @unlink($target);
+                $errors[] = 'No se pudo copiar el archivo completo ' . $fileName . '.';
+                continue;
+            }
+
+            @chmod($target, 0644);
+            clearstatcache(true, $target);
+            $copied[] = $fileName;
         }
 
-        $copiedBytes = is_resource($input) ? @stream_copy_to_stream($input, $output) : false;
-        if (is_resource($input)) {
-            fclose($input);
+        $success = empty($errors);
+        $messages = [];
+        if (!empty($copied)) {
+            $messages[] = 'Copiados: ' . implode(', ', $copied) . '.';
         }
-        fclose($output);
-
-        if ($copiedBytes === false || $copiedBytes <= 0) {
-            @unlink($target);
-            $this->yujuAjaxDie(json_encode([
-                'success' => false,
-                'message' => 'No se pudo copiar el endpoint completo. No se dejó un archivo parcial.',
-            ]));
+        if (!empty($existing)) {
+            $messages[] = 'Ya existían y no se sobrescribieron: ' . implode(', ', $existing) . '.';
         }
-
-        @chmod($target, 0644);
-        clearstatcache(true, $target);
+        if (!empty($errors)) {
+            $messages[] = implode(' ', $errors);
+        }
 
         $this->yujuAjaxDie(json_encode([
-            'success' => true,
-            'copied' => true,
-            'exists' => true,
-            'path' => $target,
-            'message' => 'Endpoint instalado correctamente en ' . $target . '.',
+            'success' => $success,
+            'copied' => !empty($copied),
+            'exists' => empty($errors),
+            'copied_files' => $copied,
+            'existing_files' => $existing,
+            'message' => implode(' ', $messages),
+            'path' => $targetDir,
         ]));
     }
 
