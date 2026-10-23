@@ -1038,20 +1038,25 @@ class AdminYujuConfigurationController extends ModuleAdminController
     private function detectPhpSapi($bin)
     {
         $cmd = escapeshellarg($bin) . " -n -r 'echo PHP_SAPI;' 2>&1";
+        $lastOutput = '';
+        $lastCode = null;
+        $launchMethods = [];
 
-        // En algunos alojamientos compartidos exec() está deshabilitado.
-        // No llamar una función deshabilitada: PHP puede lanzar un Error fatal
-        // y PrestaShop termina mostrando su página genérica de excepción.
+        // No invocar funciones deshabilitadas: PHP 8 puede eliminarlas de function_exists().
         if (function_exists('exec')) {
+            $launchMethods[] = 'exec';
             $out = [];
             $code = 1;
             @exec($cmd, $out, $code);
-            if ($code === 0) {
-                return strtolower(trim(implode("\n", $out)));
+            $lastOutput = trim(implode("\n", $out));
+            $lastCode = $code;
+            if ($code === 0 && $lastOutput !== '') {
+                return strtolower($lastOutput);
             }
         }
 
         if (function_exists('proc_open')) {
+            $launchMethods[] = 'proc_open';
             $pipes = [];
             $process = @proc_open($cmd, [
                 0 => ['pipe', 'r'],
@@ -1071,24 +1076,39 @@ class AdminYujuConfigurationController extends ModuleAdminController
                     fclose($pipes[2]);
                 }
                 $code = @proc_close($process);
-                if ($code === 0) {
+                $lastOutput = trim((string) $stdout . "\n" . (string) $stderr);
+                $lastCode = $code;
+                if ($code === 0 && trim((string) $stdout) !== '') {
                     return strtolower(trim((string) $stdout));
                 }
+            } else {
+                $lastOutput = 'proc_open no pudo crear el proceso';
             }
         }
 
         if (function_exists('popen')) {
+            $launchMethods[] = 'popen';
             $handle = @popen($cmd, 'r');
             if (is_resource($handle)) {
                 $output = stream_get_contents($handle);
                 $code = @pclose($handle);
-                if ($code === 0) {
-                    return strtolower(trim((string) $output));
+                $lastOutput = trim((string) $output);
+                $lastCode = $code;
+                if ($code === 0 && $lastOutput !== '') {
+                    return strtolower($lastOutput);
                 }
+            } else {
+                $lastOutput = 'popen no pudo crear el proceso';
             }
         }
 
-        return '';
+        if (!$launchMethods) {
+            return 'sin respuesta (exec/proc_open/popen no disponibles)';
+        }
+
+        $detail = $lastOutput !== '' ? $lastOutput : 'sin salida del proceso';
+        $codeText = $lastCode !== null ? '; código=' . $lastCode : '';
+        return 'error' . $codeText . ': ' . $detail;
     }
 
     /**
