@@ -84,6 +84,33 @@ var YujuAdmin = {
             e.preventDefault();
             self.loadCronManagerData();
         });
+        $(document).on('click', '#yuju-load-cron-urls', function(e) {
+            e.preventDefault();
+            self.loadCronUrlTasks(false);
+        });
+        $(document).on('click', '#yuju-regenerate-cron-urls', function(e) {
+            e.preventDefault();
+            if (window.confirm('Se crearán nuevos tokens y las URLs anteriores dejarán de funcionar. ¿Deseas continuar?')) {
+                self.loadCronUrlTasks(true);
+            }
+        });
+        $(document).on('click', '.yuju-copy-cron-url', function(e) {
+            e.preventDefault();
+            var $input = $(this).closest('.input-group').find('input');
+            if (!$input.length) {
+                return;
+            }
+            $input.trigger('focus').trigger('select');
+            var copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch (err) {
+                copied = false;
+            }
+            var $button = $(this);
+            $button.attr('title', copied ? 'Copiada' : 'Selecciona y copia la URL manualmente');
+            $button.toggleClass('btn-success', copied);
+        });
         $(document).on('change', '#yuju-cron-filter-recommended, #yuju-cron-filter-hide-diagnostic', function() {
             self.renderCronManagerRows();
         });
@@ -668,6 +695,7 @@ var YujuAdmin = {
         $modal.find('#yuju-cron-manager-alert').hide().removeClass('alert-success alert-danger alert-info').text('');
         $modal.modal('show');
         this.loadCronManagerData();
+        this.loadCronUrlTasks(false);
     },
 
     getCronManagerModal: function() {
@@ -735,6 +763,56 @@ var YujuAdmin = {
 
         $fs.css('z-index', 20060);
         $fs.modal('show');
+    },
+
+    /**
+     * Obtiene o regenera URLs con token individual para programadores HTTP externos.
+     */
+    loadCronUrlTasks: function(regenerate) {
+        var self = this;
+        var $modal = this.getCronManagerModal();
+        var $results = $modal.find('#yuju-cron-url-results');
+        var $buttons = $modal.find('#yuju-load-cron-urls, #yuju-regenerate-cron-urls');
+        $buttons.prop('disabled', true);
+        $results.html('<span class="text-muted">Generando URLs protegidas…</span>');
+
+        $.ajax({
+            url: this.config.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'getCronUrlTasks',
+                token: this.config.token,
+                regenerate: regenerate ? 1 : 0
+            },
+            success: function(response) {
+                if (!response || !response.success || !Array.isArray(response.tasks)) {
+                    $results.html('<div class="alert alert-danger">No se pudieron cargar las URLs protegidas: ' +
+                        self.escapeHtml(response && response.message ? response.message : 'respuesta no válida') + '</div>');
+                    return;
+                }
+
+                var html = '<div class="small text-muted" style="margin-bottom:8px;">' +
+                    self.escapeHtml(response.message || '') + '</div>';
+                response.tasks.forEach(function(task) {
+                    html += '<div class="form-group" style="margin-bottom:12px;">' +
+                        '<label>' + self.escapeHtml(task.label || task.script) + ' <small class="text-muted">(' +
+                        self.escapeHtml(task.script) + ')</small></label>' +
+                        '<div class="input-group">' +
+                        '<input type="text" class="form-control" readonly value="' + self.escapeHtml(task.url || '') + '">' +
+                        '<span class="input-group-btn"><button type="button" class="btn btn-default yuju-copy-cron-url" title="Copiar URL"><i class="icon-copy"></i> Copiar</button></span>' +
+                        '</div><p class="help-block">' + self.escapeHtml(task.description || '') + '</p></div>';
+                });
+                $results.html(html);
+            },
+            error: function() {
+                $results.html('<div class="alert alert-danger">Error de red al generar las URLs protegidas.</div>');
+            },
+            complete: function() {
+                $buttons.prop('disabled', false);
+            }
+        });
     },
 
     /**
