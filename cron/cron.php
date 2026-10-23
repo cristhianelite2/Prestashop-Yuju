@@ -2696,6 +2696,18 @@ try {
             }
         }
         
+        // URL externa para las acciones AJAX de webhooks. Los scripts PHP dentro de /modules
+        // pueden estar bloqueados por reglas del hosting, igual que el endpoint del CRON.
+        const webhookManagerBaseUrl = <?php echo json_encode(rtrim(__PS_BASE_URI__, '/') . '/yuju/webhook_manager.php'); ?>;
+        const webhookManagerToken = <?php echo json_encode((string) ($_GET['token'] ?? '')); ?>;
+        function webhookManagerUrl(action, params = {}) {
+            const url = new URL(webhookManagerBaseUrl, window.location.origin);
+            url.searchParams.set('action', action);
+            url.searchParams.set('token', webhookManagerToken);
+            Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)));
+            return url.toString();
+        }
+
         // Cargar suscripciones de webhooks
         async function loadWebhookSubscriptions() {
             const loadingEl = document.getElementById('webhook-subscriptions-loading');
@@ -2707,7 +2719,7 @@ try {
             errorEl.classList.add('hidden');
             
             try {
-                const response = await fetch('webhook_manager.php?action=get_subscriptions');
+                const response = await fetch(webhookManagerUrl('get_subscriptions'));
                 const data = await response.json();
                 
                 if (!response.ok || !data.success) {
@@ -2867,7 +2879,7 @@ try {
             errorEl.classList.add('hidden');
             
             try {
-                const response = await fetch('webhook_manager.php?action=get_received&limit=50');
+                const response = await fetch(webhookManagerUrl('get_received', { limit: 50 }));
                 const data = await response.json();
                 
                 if (!response.ok || !data.success) {
@@ -3083,7 +3095,7 @@ try {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Creando...';
             
             try {
-                const response = await fetch('webhook_manager.php?action=subscribe', {
+                const response = await fetch(webhookManagerUrl('subscribe'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url, topics })
@@ -3115,7 +3127,7 @@ try {
             }
             
             try {
-                const response = await fetch('webhook_manager.php?action=unsubscribe', {
+                const response = await fetch(webhookManagerUrl('unsubscribe'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ webhook_id: webhookId })
@@ -3168,7 +3180,7 @@ try {
             try {
                 const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/yuju/webhook.php`;
                 
-                const response = await fetch('webhook_manager.php?action=subscribe', {
+                const response = await fetch(webhookManagerUrl('subscribe'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3235,7 +3247,7 @@ try {
             try {
                 const webhookUrl = `https://<?php echo $_SERVER['HTTP_HOST']; ?>/modules/yuju/webhook.php`;
                 
-                const response = await fetch('webhook_manager.php?action=subscribe', {
+                const response = await fetch(webhookManagerUrl('subscribe'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3303,7 +3315,7 @@ try {
                 
                 for (const webhookId of subscriptionsToDelete) {
                     try {
-                        const response = await fetch('webhook_manager.php?action=unsubscribe', {
+                        const response = await fetch(webhookManagerUrl('unsubscribe'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ webhook_id: webhookId })
@@ -3345,7 +3357,7 @@ try {
             }
             
             try {
-                const response = await fetch('webhook_manager.php?action=clear_received', {
+                const response = await fetch(webhookManagerUrl('clear_received'), {
                     method: 'POST'
                 });
                 
