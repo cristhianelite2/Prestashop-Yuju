@@ -779,14 +779,9 @@ try {
                                                         <strong>Error:</strong> <?php echo htmlspecialchars($download['error_message']); ?>
                                                     </p>
                                                     <?php if (($download_http_code == 403 || strpos($download['error_message'], '403') !== false) && $download['status'] === 'failed'): ?>
-                                                        <button 
-                                                            onclick="retryDownload(<?php echo $download['id']; ?>)"
-                                                            id="retry-btn-<?php echo $download['id']; ?>"
-                                                            class="ml-2 px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
-                                                            title="Reintentar descarga con nueva URL"
-                                                        >
-                                                            <i class="fas fa-redo"></i> Reintentar
-                                                        </button>
+                                                        <span class="ml-2 px-2 py-1 text-xs text-orange-700 bg-orange-100 rounded" title="El reintento requiere un endpoint backend que no está implementado">
+                                                            Reintento no disponible
+                                                        </span>
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
@@ -2484,115 +2479,8 @@ try {
             }
         }
         
-        // Reintentar descarga fallida
-        async function retryDownload(downloadId) {
-            const btn = document.getElementById('retry-btn-' + downloadId);
-            const originalHtml = btn.innerHTML;
-            
-            // Deshabilitar botón y mostrar loading
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Descargando...';
-            
-            try {
-                const response = await fetch('retry_download.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ download_id: downloadId })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok || data.error) {
-                    throw new Error(data.error || 'Error al reintentar descarga');
-                }
-                
-                // 1. Ocultar el contenedor de error en los detalles
-                const errorContainer = btn.closest('.bg-red-50');
-                if (errorContainer) {
-                    errorContainer.style.display = 'none';
-                }
-                
-                // 2. Cambiar el estado en la fila de la tabla principal
-                const detailsRow = document.querySelector(`tr[data-download-id="${downloadId}"]`);
-                if (detailsRow) {
-                    // Cambiar el badge de estado (columna 3)
-                    const statusCell = detailsRow.querySelector('td:nth-child(3)');
-                    if (statusCell) {
-                        const statusLabel = data.already_downloaded || data.recovered_from_cache ? 'Recuperado' : 'Reintentado';
-                        statusCell.innerHTML = `
-                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                <i class="fas fa-check-circle"></i> ${statusLabel}
-                            </span>
-                            <span class="ml-2 px-2 py-1 text-xs font-mono rounded bg-green-100 text-green-700">
-                                HTTP 200
-                            </span>
-                        `;
-                    }
-                    
-                    // Actualizar la columna de productos (columna 4)
-                    const productsCell = detailsRow.querySelector('td:nth-child(4)');
-                    if (productsCell) {
-                        productsCell.innerHTML = `
-                            <span class="font-semibold text-purple-600">${data.base_products}</span>
-                            <br><span class="text-xs text-gray-500">${data.file_size_mb} MB</span>
-                        `;
-                    }
-                    
-                    // Eliminar el indicador de error en la columna de detalles (columna 6)
-                    const detailsCell = detailsRow.querySelector('td:nth-child(6)');
-                    if (detailsCell) {
-                        const errorIndicator = detailsCell.querySelector('.bg-red-50');
-                        if (errorIndicator) {
-                            errorIndicator.remove();
-                        }
-                    }
-                }
-                
-                // 3. Actualizar el título de la sección de detalles expandida
-                const detailsSection = document.getElementById('details-' + downloadId);
-                if (detailsSection) {
-                    const errorBadge = detailsSection.querySelector('.bg-red-50');
-                    if (errorBadge) {
-                        const successMessage = data.already_downloaded 
-                            ? 'Ya existía una descarga exitosa previa' 
-                            : (data.recovered_from_cache 
-                                ? 'Archivo recuperado desde cache (sin descargar nuevamente)' 
-                                : 'Descarga reintentada exitosamente');
-                        
-                        errorBadge.innerHTML = `
-                            <p class="text-xs text-green-700">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                <strong>Éxito:</strong> ${successMessage} - ${data.total_products} productos
-                            </p>
-                        `;
-                        errorBadge.classList.remove('bg-red-50', 'border-red-400');
-                        errorBadge.classList.add('bg-green-50', 'border-green-400');
-                    }
-                }
-                
-                // Mostrar mensaje de éxito
-                const statusMsg = data.already_downloaded 
-                    ? '♻️ Ya existía descarga previa' 
-                    : (data.recovered_from_cache 
-                        ? '♻️ Recuperado desde cache' 
-                        : '✅ Descarga completada');
-                        
-                alert(`${statusMsg}!\n\n✅ Total: ${data.total_products} productos\n📦 Base: ${data.base_products}\n🔄 Variaciones: ${data.variations}\n💾 Tamaño: ${data.file_size_mb} MB\n\n⏳ Recargando página...`);
-                
-                // Recargar la página para mostrar la nueva descarga
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error al reintentar descarga: ' + error.message);
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
-        }
+        // No se realiza reintento desde el navegador: no existe un endpoint backend implementado.
+
         
         // Actualizar indicadores visuales en la tabla
         function updateSyncIndicators(results) {
@@ -4071,31 +3959,10 @@ try {
                     console.log('Error encontrado en descarga ID:', downloadId);
                     console.log('Botón de reintentar existe:', retryBtn ? 'SÍ' : 'NO');
                     
-                    // Solo reintentar si existe el botón de retry (error de descarga)
-                    // Si no existe el botón, es otro tipo de error y continuamos con auto-sync
-                    if (retryBtn && downloadId) {
-                        console.log('🔄 Descarga con error detectada (ID: ' + downloadId + '), reintentando automáticamente...');
-                        
-                        // Verificar si es realmente la última descarga (ID más alto)
-                        const allRows = document.querySelectorAll('tr[data-download-id]');
-                        let maxId = 0;
-                        allRows.forEach(row => {
-                            const id = parseInt(row.getAttribute('data-download-id'));
-                            if (id > maxId) maxId = id;
-                        });
-                        
-                        // Solo reintentar si es la última descarga
-                        if (parseInt(downloadId) === maxId) {
-                            // Esperar 2 segundos antes de reintentar (para que el usuario vea la página)
-                            setTimeout(() => {
-                                console.log('▶️ Ejecutando reintento automático de descarga...');
-                                retryDownload(downloadId);
-                            }, 2000);
-                            return; // Terminar aquí, no ejecutar auto-sync
-                        }
-                    } else {
-                        console.log('No hay botón de reintentar, continuando con verificación de auto-sync...');
-                    }
+                    // No intentar reintentos automáticos desde el navegador:
+                    // el endpoint retry_download.php no existe y causaba respuestas 404.
+                    console.log('Descarga fallida detectada; reintento automático desactivado hasta implementar el backend.');
+
                 }
             }
             
