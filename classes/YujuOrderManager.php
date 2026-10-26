@@ -2433,27 +2433,44 @@ class YujuOrderManager
             return (int) Db::getInstance()->Insert_ID();
         }
 
-        $exists = Db::getInstance()->getValue(
-            'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
+        // Recuperación tras INSERT fallido: jamás reasignar una orden Yuju
+        // a otra orden PrestaShop real. Puede haber sido una carrera concurrente
+        // o un conflicto por el índice UNIQUE; en ambos casos se verifica antes.
+        $existingMapping = Db::getInstance()->getRow(
+            'SELECT id, prestashop_order_id FROM `' . _DB_PREFIX_ . 'yuju_order_mapping`
              WHERE yuju_order_id = "' . pSQL($yuju_order_id) . '"'
         );
-        if ($exists && $prestashop_order_id > 0) {
-            try {
-                Db::getInstance()->execute(
-                    'UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping`
-                     SET prestashop_order_id = ' . (int) $prestashop_order_id . ',
-                         updated_at = "' . pSQL($now) . '"
-                     WHERE id = ' . (int) $exists
-                );
-            } catch (Exception $e) {
-                return false;
-            } catch (Throwable $e) {
-                return false;
-            }
-            return (int) $exists;
+        if (!$existingMapping) {
+            return false;
         }
 
-        return false;
+        $existingPsId = (int) ($existingMapping['prestashop_order_id'] ?? 0);
+        if ($prestashop_order_id > 0 && $existingPsId > 0 && $existingPsId !== $prestashop_order_id) {
+            $this->logger->log(
+                'Mapping conflict after insert failure: Yuju ID ' . $yuju_order_id .
+                ' already belongs to PrestaShop order ' . $existingPsId .
+                '; refusing reassignment to ' . $prestashop_order_id,
+                'error'
+            );
+            return false;
+        }
+
+        // Solo permitir completar un placeholder pendiente o reconocer
+        // el mismo vínculo; no actualizar si la comprobación no es concluyente.
+        if ($prestashop_order_id > 0 && $existingPsId <= 0) {
+            $updated = Db::getInstance()->execute(
+                'UPDATE `' . _DB_PREFIX_ . 'yuju_order_mapping`
+                 SET prestashop_order_id = ' . (int) $prestashop_order_id . ',
+                     updated_at = "' . pSQL($now) . '"
+                 WHERE id = ' . (int) $existingMapping['id'] . '
+                   AND prestashop_order_id <= 0'
+            );
+            if (!$updated) {
+                return false;
+            }
+        }
+
+        return (int) $existingMapping['id'];
     }
 
     protected function getOrderMapping($prestashop_order_id)
