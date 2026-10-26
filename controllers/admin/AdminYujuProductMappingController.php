@@ -372,6 +372,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
     private function ajaxRemoveCustomYujuField()
     {
         $name = trim((string) Tools::getValue('field_name'));
+        Db::getInstance()->delete('yuju_product_mapping', 'yuju_field = "' . pSQL($name) . '" AND prestashop_field = "__yuju_custom__"');
         $fields = array_values(array_filter($this->getCustomYujuFields(), function ($field) use ($name) {
             return !isset($field['name']) || $field['name'] !== $name;
         }));
