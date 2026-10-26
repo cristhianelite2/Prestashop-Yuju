@@ -778,34 +778,32 @@ var YujuAdmin = {
         var $button = $('#yuju-install-external-trigger');
         var $status = $('#yuju-external-trigger-status');
         var originalHtml = $button.html();
-
-        if (!window.confirm('Se instalará /yuju/trigger.php fuera de /modules. Si el archivo ya existe, se conservará sin cambios. ¿Continuar?')) {
+        if (!window.confirm('Se descargarán desde GitHub y se instalarán/reemplazarán los cuatro endpoints en /yuju/: oauth.php, terms.php, trigger.php y webhook.php. ¿Continuar?')) {
             return;
         }
-
-        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Verificando archivo…');
-        $status.removeClass('text-success text-danger').text('Comprobando si el archivo ya existe…');
-
+        $button.prop('disabled', true).html('<i class="icon-refresh yuju-spin"></i> Instalando 4 archivos…');
+        $status.removeClass('text-success text-danger').text('Descargando y copiando los cuatro endpoints desde GitHub…');
         $.ajax({
             url: this.config.ajaxUrl,
             type: 'POST',
             dataType: 'json',
-            data: {
-                ajax: true,
-                action: 'installExternalCronTrigger',
-                token: this.config.token
-            },
+            timeout: 95000,
+            data: { ajax: true, action: 'installExternalCronTrigger', token: this.config.token },
             success: function(response) {
                 if (response && response.success) {
-                    $status.addClass('text-success').text(response.message || 'Archivo verificado.');
+                    $status.addClass('text-success').text(response.message + ' Ruta: ' + (response.path || '/yuju/'));
                 } else {
-                    $status.addClass('text-danger').text(response && response.message ? response.message : 'No se pudo instalar el archivo externo.');
+                    $status.addClass('text-danger').text(response && response.message ? response.message : 'No se pudieron instalar los cuatro endpoints.');
                 }
             },
-            error: function(xhr) {
-                var message = 'Error de comunicación al instalar el archivo externo.';
-                if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+            error: function(xhr, status) {
+                var message = 'Error de comunicación al instalar los endpoints.';
+                if (status === 'timeout') {
+                    message = 'La instalación tardó demasiado. Revisa la conexión del servidor con GitHub y los permisos de /yuju/.';
+                } else if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
                     message = xhr.responseJSON.message;
+                } else if (xhr && xhr.responseText) {
+                    message += ' Respuesta: ' + xhr.responseText.substring(0, 250);
                 }
                 $status.addClass('text-danger').text(message);
             },
