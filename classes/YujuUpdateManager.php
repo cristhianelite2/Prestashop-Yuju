@@ -178,7 +178,7 @@ class YujuUpdateManager
             $filesCopied = $this->copyModuleFiles($sourceRoot, $this->moduleDir);
 
             // Instalar el endpoint protegido fuera de /modules para servidores que bloquean PHP allí.
-            $this->deployExternalCronTrigger($sourceRoot);
+            $this->deployExternalEndpoints($sourceRoot);
 
             // Asegurar que los hooks de vistas de órdenes y assets estén registrados tras actualizar
             try {
@@ -419,15 +419,25 @@ class YujuUpdateManager
      * Publica el endpoint en <raíz de PrestaShop>/yuju/trigger.php.
      * La carpeta yuju del ZIP es una carga de despliegue, no parte del módulo.
      */
-    private function deployExternalCronTrigger($sourceRoot)
+    /**
+     * Publica y actualiza los cuatro endpoints externos que viven junto a /modules:
+     * /yuju/oauth.php, terms.php, trigger.php y webhook.php.
+     * Estos archivos se reemplazan en cada actualización para mantenerlos
+     * sincronizados con main, usando escritura temporal para evitar archivos parciales.
+     */
+    private function deployExternalEndpoints($sourceRoot)
     {
-        $sourceDir = rtrim($sourceRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
-        $files = ['trigger.php', 'webhook_manager.php'];
+        $sourceRoot = rtrim($sourceRoot, '/\\\\') . DIRECTORY_SEPARATOR;
+        $sourceFiles = [
+            'oauth.php' => $sourceRoot . 'deployment' . DIRECTORY_SEPARATOR . 'root' . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR . 'oauth.php',
+            'terms.php' => $sourceRoot . 'deployment' . DIRECTORY_SEPARATOR . 'root' . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR . 'terms.php',
+            'trigger.php' => $sourceRoot . 'yuju' . DIRECTORY_SEPARATOR . 'trigger.php',
+            'webhook.php' => $sourceRoot . 'deployment' . DIRECTORY_SEPARATOR . 'root' . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR . 'webhook.php',
+        ];
 
-        foreach ($files as $fileName) {
-            $source = $sourceDir . $fileName;
+        foreach ($sourceFiles as $fileName => $source) {
             if (!is_file($source)) {
-                throw new Exception('El paquete no contiene el endpoint externo yuju/' . $fileName . '.');
+                throw new Exception('El paquete no contiene el endpoint requerido: ' . $fileName . '. No se reemplazaron los endpoints externos.');
             }
         }
 
@@ -436,31 +446,30 @@ class YujuUpdateManager
             : dirname(dirname($this->moduleDir));
         $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
         if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
-            throw new Exception('No se pudo crear la carpeta yuju en la raíz de PrestaShop para publicar los endpoints externos.');
+            throw new Exception('No se pudo crear la carpeta yuju junto a modules.');
         }
         if (!is_writable($targetDir)) {
-            throw new Exception('La carpeta ' . $targetDir . ' no permite publicar los endpoints externos de Yuju.');
+            throw new Exception('La carpeta ' . $targetDir . ' no permite actualizar los endpoints externos.');
         }
 
-        foreach ($files as $fileName) {
-            $source = $sourceDir . $fileName;
+        foreach ($sourceFiles as $fileName => $source) {
             $target = $targetDir . $fileName;
-
-            // Conservar cada archivo ya instalado; la configuración puede
-            // instalarlos explícitamente sin sobrescribir versiones existentes.
-            if (is_file($target)) {
-                continue;
-            }
-
             $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
             if (!@copy($source, $temp)) {
-                throw new Exception('No se pudo copiar el endpoint externo yuju/' . $fileName . '.');
+                @unlink($temp);
+                throw new Exception('No se pudo preparar la actualización de ' . $fileName . '.');
             }
             if (!@rename($temp, $target)) {
                 @unlink($temp);
-                throw new Exception('No se pudo instalar yuju/' . $fileName . '. Verifique los permisos de la raíz de PrestaShop.');
+                throw new Exception('No se pudo reemplazar ' . $fileName . '. Verifique permisos de la carpeta yuju.');
             }
             @chmod($target, 0644);
+        }
+
+        // Retirar el endpoint adicional anterior: el flujo ya no debe depender de él.
+        $legacyFile = $targetDir . 'webhook_manager.php';
+        if (is_file($legacyFile)) {
+            @unlink($legacyFile);
         }
     }
 
