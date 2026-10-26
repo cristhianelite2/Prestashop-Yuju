@@ -126,6 +126,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
         $this->context->smarty->assign([
             'current_controller' => 'AdminYujuProductMapping',
             'product_mappings' => $this->getProductMappings(),
+            'custom_yuju_fields' => $this->getCustomYujuFields(),
             'prestashop_fields' => $this->getPrestashopFields(),
             'yuju_fields' => $this->getYujuFields(),
             'field_types' => $this->getFieldTypes(),
@@ -182,6 +183,12 @@ class AdminYujuProductMappingController extends ModuleAdminController
         $action = Tools::getValue('action');
         
         switch ($action) {
+            case 'saveCustomYujuField':
+                $this->ajaxSaveCustomYujuField();
+                break;
+            case 'removeCustomYujuField':
+                $this->ajaxRemoveCustomYujuField();
+                break;
             case 'saveMappings':
                 $this->ajaxSaveMappings();
                 break;
@@ -297,6 +304,80 @@ class AdminYujuProductMappingController extends ModuleAdminController
         $this->ajaxRender(json_encode($response));
     }
 
+
+    private function getCustomYujuFields()
+    {
+        $raw = Db::getInstance()->getValue(
+            'SELECT config_value FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE config_key = "custom_yuju_fields"'
+        );
+        $fields = json_decode((string) $raw, true);
+        return is_array($fields) ? array_values($fields) : [];
+    }
+
+    private function persistCustomYujuFields(array $fields)
+    {
+        $json = json_encode(array_values($fields), JSON_UNESCAPED_UNICODE);
+        $exists = Db::getInstance()->getValue(
+            'SELECT id FROM `' . _DB_PREFIX_ . 'yuju_configuration` WHERE config_key = "custom_yuju_fields"'
+        );
+        $now = pSQL(date('Y-m-d H:i:s'));
+        if ($exists) {
+            return Db::getInstance()->update('yuju_configuration', [
+                'config_value' => pSQL($json, true),
+                'updated_at' => $now,
+            ], 'config_key = "custom_yuju_fields"');
+        }
+        return Db::getInstance()->insert('yuju_configuration', [
+            'config_key' => 'custom_yuju_fields',
+            'config_value' => pSQL($json, true),
+            'config_type' => 'json',
+            'is_sensitive' => 0,
+            'description' => 'Campos personalizados estáticos de Yuju',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+    }
+
+    private function ajaxSaveCustomYujuField()
+    {
+        $name = trim((string) Tools::getValue('field_name'));
+        $value = trim((string) Tools::getValue('field_value'));
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_.-]{0,99}$/', $name) || $value === '') {
+            $this->ajaxRender(json_encode(['success' => false, 'message' => 'Nombre o valor no válido.']));
+            return;
+        }
+        $fields = $this->getCustomYujuFields();
+        $updated = false;
+        foreach ($fields as &$field) {
+            if (isset($field['name']) && $field['name'] === $name) {
+                $field['value'] = $value;
+                $updated = true;
+                break;
+            }
+        }
+        unset($field);
+        if (!$updated) {
+            foreach ($this->getYujuFields() as $known) {
+                if ($known['id'] === $name) {
+                    $this->ajaxRender(json_encode(['success' => false, 'message' => 'Ese nombre ya corresponde a un campo estándar de Yuju.']));
+                    return;
+                }
+            }
+            $fields[] = ['name' => $name, 'value' => $value];
+        }
+        $ok = $this->persistCustomYujuFields($fields);
+        $this->ajaxRender(json_encode(['success' => (bool) $ok, 'message' => $ok ? 'Campo guardado.' : 'No se pudo guardar.', 'fields' => $fields]));
+    }
+
+    private function ajaxRemoveCustomYujuField()
+    {
+        $name = trim((string) Tools::getValue('field_name'));
+        $fields = array_values(array_filter($this->getCustomYujuFields(), function ($field) use ($name) {
+            return !isset($field['name']) || $field['name'] !== $name;
+        }));
+        $ok = $this->persistCustomYujuFields($fields);
+        $this->ajaxRender(json_encode(['success' => (bool) $ok, 'message' => $ok ? 'Campo quitado.' : 'No se pudo quitar.', 'fields' => $fields]));
+    }
 
     /**
      * Save mappings via AJAX
