@@ -228,14 +228,21 @@ class YujuProductManager
                 $value = round((float) $value, 2);
             }
 
-            // Use default value if empty, 0 or required
-            // Para dimensiones de envío (shipping_depth, shipping_height, shipping_width), usar default si es 0 o vacío
-            if ($yuju_field === 'shipping_depth' || $yuju_field === 'shipping_height' || $yuju_field === 'shipping_width') {
-                if ((empty($value) || $value == 0) && !empty($mapping['default_value'])) {
-                    $value = $mapping['default_value'];
-                }
-            } elseif (empty($value) && $mapping['is_required'] && !empty($mapping['default_value'])) {
-                $value = $mapping['default_value'];
+            // El valor de PrestaShop siempre tiene prioridad; el valor por defecto solo
+            // se usa si el origen no contiene un valor real, independientemente de is_required.
+            $defaultValue = isset($mapping['default_value']) ? $mapping['default_value'] : '';
+            $isEmptyValue = $value === null
+                || (is_string($value) && trim($value) === '')
+                || (is_array($value) && empty($value));
+            $isShippingDimension = in_array($yuju_field, ['shipping_depth', 'shipping_height', 'shipping_width'], true);
+
+            // En dimensiones de envío, cero también significa "sin dimensión" y permite fallback.
+            if ($isShippingDimension && is_numeric($value) && (float) $value == 0.0) {
+                $isEmptyValue = true;
+            }
+
+            if ($isEmptyValue && trim((string) $defaultValue) !== '') {
+                $value = $defaultValue;
             }
 
             // Apply transformation
