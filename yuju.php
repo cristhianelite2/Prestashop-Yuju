@@ -1137,11 +1137,9 @@ class Yuju extends Module
                 $module = strtolower(trim((string) ($orderRow['module'] ?? '')));
                 $payment = strtolower(trim((string) ($orderRow['payment'] ?? '')));
 
-                if (
-                    stripos($carrierName, 'yuju') !== false
-                    || stripos($module, 'yuju') !== false
-                    || stripos($payment, 'yuju') !== false
-                ) {
+                // El módulo de pago/nombre del pago no demuestra el origen de la orden.
+                // Solo se conserva la detección auxiliar por transportista Yuju.
+                if (stripos($carrierName, 'yuju') !== false) {
                     $isYujuOrder = true;
                 }
             }
@@ -1174,12 +1172,7 @@ class Yuju extends Module
                         if ($orderReference === '') {
                             $orderReference = trim((string) $order->reference);
                         }
-                        if (
-                            strtolower((string) $order->module) === 'yuju'
-                            || strtolower((string) $order->payment) === 'yuju'
-                        ) {
-                            $isYujuOrder = true;
-                        }
+                        // No clasificar por módulo de pago ni por nombre del pago.
                         if ($customerEmail === '' && $order->id_customer > 0 && class_exists('Customer')) {
                             $cust = new Customer((int) $order->id_customer);
                             if (Validate::isLoadedObject($cust)) {
@@ -1216,20 +1209,14 @@ class Yuju extends Module
                 $selects[] = '`channel_name`';
             }
 
-            $where = ['`prestashop_order_id` = ' . (int) $orderId];
-            $where[] = '`yuju_order_id` = "' . pSQL((string) $orderId) . '"';
-            if ($orderReference !== '') {
-                $where[] = '`yuju_order_id` = "' . pSQL($orderReference) . '"';
-                if (isset($available['outbound_external_pk'])) {
-                    $where[] = '`outbound_external_pk` = "' . pSQL($orderReference) . '"';
-                }
-            }
-
+            // La correspondencia solo es válida cuando coincide exactamente el ID
+            // interno de la orden PrestaShop. No comparar referencias ni IDs Yuju
+            // contra el ID/reference de PrestaShop.
             $row = Db::getInstance()->getRow(
                 'SELECT ' . implode(', ', $selects)
                 . ' FROM `' . bqSQL($table) . '`'
-                . ' WHERE ' . implode(' OR ', $where)
-                . ' ORDER BY (`prestashop_order_id` = ' . (int) $orderId . ') DESC, `id` DESC'
+                . ' WHERE `prestashop_order_id` = ' . (int) $orderId
+                . ' ORDER BY `id` DESC'
             );
 
             if ($row) {
@@ -1238,64 +1225,64 @@ class Yuju extends Module
                 $idChannel = trim((string) ($row['id_channel'] ?? ''));
                 $channelName = trim((string) ($row['channel_name'] ?? ''));
 
-                if ((int) ($row['prestashop_order_id'] ?? 0) !== (int) $orderId && $orderId > 0) {
-                    Db::getInstance()->execute(
-                        'UPDATE `' . bqSQL($table) . '`
-                         SET `prestashop_order_id` = ' . (int) $orderId . ',
-                             `updated_at` = "' . pSQL(date('Y-m-d H:i:s')) . '"
-                         WHERE `id` = ' . (int) $row['id']
-                    );
-                }
+                // Nunca reasignar una correspondencia a otra orden durante una consulta.
             }
         } catch (Throwable $e) {
             // Ignorar fallo de consulta
         }
 
-        // 3. Si no se encontró en mapping o faltan datos, buscar en ps_yuju_webhook_logs
-        if ($yujuOrderId === '' || $channelName === '') {
+        // 3. Consultar logs solo con coincidencia exacta en entity_id.
+        // No usar LIKE sobre JSON: una referencia incluida como subcadena de otra
+        // orden puede producir falsos positivos. Los logs enriquecen metadatos, pero
+        // no clasifican por sí solos una orden como Yuju.
+        if ($isYujuOrder && ($yujuOrderId === '' || $channelName === '' || $idChannel === '')) {
             try {
-                $searchKeys = array_values(array_filter([
-                    (string) $orderId,
-                    $orderReference,
-                    $yujuOrderId
-                ]));
-                if (!empty($searchKeys)) {
-                    $whereLog = [];
-                    foreach ($searchKeys as $sk) {
-                        if ($sk !== '') {
-                            $whereLog[] = '`entity_id` = "' . pSQL($sk) . '"';
-                            $whereLog[] = '`payload` LIKE "%' . pSQL($sk) . '%"';
-                        }
+                $logKeys = array_values(array_unique(array_filter([
+                    $yujuOrderId,
+                    (string) $orderId
+                ], function ($value) { return $value !== ''; })));
+                foreach ($logKeys as $logKey) {
+                    $logRow = Db::getInstance()->getRow(
+                        'SELECT `payload` FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs`
+                         WHERE `entity_id` = "' . pSQL($logKey) . '"
+                         ORDER BY `id` DESC'
+                    );
+                    if (!$logRow || empty($logRow['payload'])) {
+                        continue;
                     }
-                    if (!empty($whereLog)) {
-                        $logRow = Db::getInstance()->getRow(
-                            'SELECT `payload` FROM `' . _DB_PREFIX_ . 'yuju_webhook_logs`
-                             WHERE ' . implode(' OR ', $whereLog) . '
-                             ORDER BY `id` DESC'
-                        );
-                        if ($logRow && !empty($logRow['payload'])) {
-                            $isYujuOrder = true;
-                            $payload = json_decode($logRow['payload'], true);
-                            if (is_array($payload)) {
-                                $pData = $payload['data'] ?? $payload;
-                                if (isset($pData['order_details']) && is_array($pData['order_details'])) {
-                                    $pData = array_merge($pData['order_details'], $pData);
-                                }
-                                if (isset($pData['orders'][0]) && is_array($pData['orders'][0])) {
-                                    $pData = array_merge($pData['orders'][0], $pData);
-                                }
-                                if ($yujuOrderId === '') {
-                                    $yujuOrderId = trim((string) ($pData['id_order'] ?? ($pData['id'] ?? ($pData['reference'] ?? ''))));
-                                }
-                                if ($idChannel === '') {
-                                    $idChannel = trim((string) ($pData['id_channel'] ?? ($pData['channel_id'] ?? ($pData['channel']['id'] ?? ''))));
-                                }
-                                if ($channelName === '') {
-                                    $channelName = trim((string) ($pData['channel_name'] ?? ($pData['channel']['name'] ?? ($pData['channel']['generic_name'] ?? ($pData['marketplace'] ?? '')))));
-                                }
-                            }
-                        }
+                    $payload = json_decode($logRow['payload'], true);
+                    if (!is_array($payload)) {
+                        continue;
                     }
+                    $pData = $payload['data'] ?? $payload;
+                    if (isset($pData['order_details']) && is_array($pData['order_details'])) {
+                        $pData = array_merge($pData['order_details'], $pData);
+                    }
+                    if (isset($pData['orders'][0]) && is_array($pData['orders'][0])) {
+                        $pData = array_merge($pData['orders'][0], $pData);
+                    }
+
+                    $loggedOrderId = trim((string) ($pData['id_order'] ?? ($pData['order_id'] ?? '')));
+                    $loggedReference = trim((string) ($pData['reference'] ?? ''));
+                    $matchesKnownOrder = (
+                        ($yujuOrderId !== '' && $loggedOrderId !== '' && $loggedOrderId === $yujuOrderId)
+                        || ($orderReference !== '' && $loggedReference !== '' && $loggedReference === $orderReference)
+                        || ($loggedOrderId !== '' && $loggedOrderId === (string) $orderId)
+                    );
+                    if (!$matchesKnownOrder) {
+                        continue;
+                    }
+
+                    if ($yujuOrderId === '') {
+                        $yujuOrderId = $loggedOrderId !== '' ? $loggedOrderId : $loggedReference;
+                    }
+                    if ($idChannel === '') {
+                        $idChannel = trim((string) ($pData['id_channel'] ?? ($pData['channel_id'] ?? ($pData['channel']['id'] ?? ''))));
+                    }
+                    if ($channelName === '') {
+                        $channelName = trim((string) ($pData['channel_name'] ?? ($pData['channel']['name'] ?? ($pData['channel']['generic_name'] ?? ($pData['marketplace'] ?? '')))));
+                    }
+                    break;
                 }
             } catch (Throwable $e) {
                 // Ignorar fallo de búsqueda en logs
@@ -1310,13 +1297,8 @@ class Yuju extends Module
             $yujuOrderId = (string) $orderId;
         }
 
-        // Caso específico para la orden reportada o si fue identificada como Yuju
-        if ($orderId === 81180 || $orderReference === 'AB353649301') {
-            $isYujuOrder = true;
-        }
-
         // Si definitivamente no es una orden Yuju ni tiene indicios, retornar null
-        if (!$isYujuOrder && $orderId !== 81180 && $orderReference === '') {
+        if (!$isYujuOrder) {
             return null;
         }
 
@@ -1336,30 +1318,7 @@ class Yuju extends Module
             YujuChannelResolver::persistOrderMetadata($yujuOrderId, $idChannel, $channelName, $orderId);
         }
 
-        // 5. Deducción desde el email del cliente ({ref}@{marketplace}.com)
-        if ($channelName === '' && $customerEmail !== '') {
-            if (preg_match('/@([a-z0-9_-]+)\.[a-z.]+$/i', $customerEmail, $em)) {
-                $emailSlug = strtolower($em[1]);
-                $knownMarketplaces = [
-                    'mercadolibre' => 'Mercado Libre',
-                    'amazon' => 'Amazon',
-                    'liverpool' => 'Liverpool',
-                    'walmart' => 'Walmart',
-                    'claroshop' => 'Claro Shop',
-                    'sears' => 'Sears',
-                    'coppel' => 'Coppel',
-                    'elektra' => 'Elektra',
-                    'shopee' => 'Shopee',
-                    'shopify' => 'Shopify',
-                    'tiktok' => 'TikTok Shop',
-                ];
-                if (isset($knownMarketplaces[$emailSlug])) {
-                    $channelName = $knownMarketplaces[$emailSlug];
-                } elseif (!in_array($emailSlug, ['gmail', 'hotmail', 'yahoo', 'outlook', 'live', 'icloud', 'yuju'])) {
-                    $channelName = ucfirst($emailSlug);
-                }
-            }
-        }
+        // No deducir marketplace a partir del correo del cliente.
 
         // 6. Deducción desde YUJU_CHANNEL_MARKETPLACE_MAP si tenemos idChannel
         if ($channelName === '' && $idChannel !== '') {
