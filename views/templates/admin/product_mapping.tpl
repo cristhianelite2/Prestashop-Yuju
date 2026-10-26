@@ -683,17 +683,17 @@ function addNewMapping() {
 function addAnotherMapping() {
     var psField = $('#modal-prestashop-field').val();
     var yujuField = $('#modal-yuju-field').val();
+    var customField = customYujuFields.find(function(field) { return field.name === yujuField; });
+    if (customField) {
+        psField = '__yuju_custom__';
+        $('#modal-prestashop-field').val(psField).trigger('change');
+    }
     
     if (!psField || !yujuField) {
         showToast('Debe seleccionar ambos campos', 'error');
         return;
     }
     
-    var customField = customYujuFields.find(function(field) { return field.name === yujuField; });
-    if (customField) {
-        psField = '__yuju_custom__';
-        $('#modal-prestashop-field').val(psField).trigger('change');
-    }
     modalMappings.push({
         prestashop_field: psField,
         yuju_field: yujuField,
@@ -722,12 +722,12 @@ function saveModalMappings() {
     // Si hay campos seleccionados y no se agregaron a modalMappings, agregarlos automáticamente
     var psField = $('#modal-prestashop-field').val();
     var yujuField = $('#modal-yuju-field').val();
+    var selectedCustomField = customYujuFields.find(function(field) { return field.name === yujuField; });
+    if (selectedCustomField) {
+        psField = '__yuju_custom__';
+    }
     
     if (psField && yujuField) {
-        var selectedCustomField = customYujuFields.find(function(field) { return field.name === yujuField; });
-        if (selectedCustomField) {
-            psField = '__yuju_custom__';
-        }
         // Verificar si ya existe en modalMappings
         var exists = modalMappings.some(function(m) {
             return m.prestashop_field === psField && m.yuju_field === yujuField;
