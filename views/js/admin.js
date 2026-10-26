@@ -787,7 +787,8 @@ var YujuAdmin = {
             url: this.config.ajaxUrl,
             type: 'POST',
             dataType: 'json',
-            timeout: 95000,
+            // No dejar el botón bloqueado si el servidor no puede verificar la lectura de la copia.
+            timeout: 30000,
             data: { ajax: true, action: 'installExternalCronTrigger', token: this.config.token },
             success: function(response) {
                 if (response && response.success) {
