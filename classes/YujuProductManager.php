@@ -315,6 +315,20 @@ class YujuProductManager
             $data['description'] = strip_tags($data['description']);
         }
         
+        // Características (opcional): aplicar la misma limpieza HTML que a la descripción.
+        // Puede llegar como texto o como una lista de valores, según el mapeo configurado.
+        if (isset($data['characteristics'])) {
+            if (is_string($data['characteristics'])) {
+                $data['characteristics'] = strip_tags($data['characteristics']);
+            } elseif (is_array($data['characteristics'])) {
+                array_walk_recursive($data['characteristics'], function (&$value) {
+                    if (is_string($value)) {
+                        $value = strip_tags($value);
+                    }
+                });
+            }
+        }
+
         // Marca (opcional)
         if (empty($data['brand']) && $product->id_manufacturer) {
             $manufacturer = new Manufacturer($product->id_manufacturer);
