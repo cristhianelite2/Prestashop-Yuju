@@ -772,88 +772,102 @@ class AdminYujuConfigurationController extends ModuleAdminController
      */
     public function ajaxProcessInstallExternalCronTrigger()
     {
-        $shopRoot = defined('_PS_ROOT_DIR_') ? _PS_ROOT_DIR_ : dirname(rtrim(_PS_MODULE_DIR_, '/\\\\'));
-        $targetDir = rtrim($shopRoot, '/\\\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
-        $files = [
-            'trigger.php' => _PS_MODULE_DIR_ . 'yuju/tools/trigger.php',
-            'webhook_manager.php' => _PS_MODULE_DIR_ . 'yuju/tools/webhook_manager.php',
+        @set_time_limit(90);
+        $shopRoot = defined('_PS_ROOT_DIR_') ? _PS_ROOT_DIR_ : dirname(rtrim(_PS_MODULE_DIR_, '/\\'));
+        $targetDir = rtrim($shopRoot, '/\\') . DIRECTORY_SEPARATOR . 'yuju' . DIRECTORY_SEPARATOR;
+        $sources = [
+            'oauth.php' => 'deployment/root/yuju/oauth.php',
+            'terms.php' => 'deployment/root/yuju/terms.php',
+            'trigger.php' => 'yuju/trigger.php',
+            'webhook.php' => 'deployment/root/yuju/webhook.php',
         ];
 
         if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
-            $this->yujuAjaxDie(json_encode([
-                'success' => false,
-                'message' => 'No se pudo crear la carpeta yuju fuera de modules. Verifica los permisos de la raíz de PrestaShop.',
-            ]));
+            $this->yujuAjaxDie(json_encode(['success' => false, 'message' => 'No se pudo crear ' . $targetDir . '. Verifica permisos.']));
+        }
+        if (!is_writable($targetDir)) {
+            $this->yujuAjaxDie(json_encode(['success' => false, 'message' => 'La carpeta ' . $targetDir . ' no tiene permisos de escritura.']));
         }
 
         $copied = [];
-        $existing = [];
         $errors = [];
-
-        foreach ($files as $fileName => $source) {
-            $target = $targetDir . $fileName;
-
-            // Nunca sobrescribir archivos externos que ya estén instalados.
-            if (is_file($target)) {
-                $existing[] = $fileName;
-                continue;
-            }
-
-            if (!is_file($source) || !is_readable($source)) {
-                $errors[] = 'No se encontró el archivo fuente ' . $source . '.';
-                continue;
-            }
-
-            $input = @fopen($source, 'rb');
-            $output = @fopen($target, 'x');
-            if ($output === false) {
-                if (is_resource($input)) {
-                    fclose($input);
-                }
-                if (is_file($target)) {
-                    $existing[] = $fileName;
+        foreach ($sources as $fileName => $relativePath) {
+            $url = 'https://raw.githubusercontent.com/cristhianelite2/Prestashop-Yuju/main/' . $relativePath;
+            $content = false;
+            if (function_exists('curl_init')) {
+                $ch = curl_init($url);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 3,
+                    CURLOPT_CONNECTTIMEOUT => 8,
+                    CURLOPT_TIMEOUT => 20,
+                    CURLOPT_USERAGENT => 'PrestaShop-Yuju-Endpoint-Installer',
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
+                ]);
+                $body = curl_exec($ch);
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+                if ($body !== false && $httpCode >= 200 && $httpCode < 300) {
+                    $content = $body;
                 } else {
-                    $errors[] = 'No se pudo crear ' . $target . '. Comprueba los permisos de escritura de la raíz de PrestaShop.';
+                    $errors[] = $fileName . ': descarga desde GitHub falló' . ($httpCode ? ' (HTTP ' . $httpCode . ')' : '') . ($curlError ? ' - ' . $curlError : '');
+                }
+            } else {
+                $context = stream_context_create([
+                    'http' => ['timeout' => 20, 'header' => "User-Agent: PrestaShop-Yuju-Endpoint-Installer\r\n"],
+                    'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+                ]);
+                $body = @file_get_contents($url, false, $context);
+                if ($body !== false && $body !== '') {
+                    $content = $body;
+                } else {
+                    $errors[] = $fileName . ': no se pudo descargar desde GitHub (cURL no está disponible).';
+                }
+            }
+
+            if (!is_string($content) || trim($content) === '' || strpos($content, '<?php') === false) {
+                if (is_string($content)) {
+                    $errors[] = $fileName . ': GitHub devolvió contenido vacío o inválido.';
                 }
                 continue;
             }
 
-            $copiedBytes = is_resource($input) ? @stream_copy_to_stream($input, $output) : false;
-            if (is_resource($input)) {
-                fclose($input);
-            }
-            fclose($output);
-
-            if ($copiedBytes === false || $copiedBytes <= 0) {
-                @unlink($target);
-                $errors[] = 'No se pudo copiar el archivo completo ' . $fileName . '.';
+            $temp = $targetDir . '.' . $fileName . '.yuju-tmp-' . bin2hex(random_bytes(5));
+            if (@file_put_contents($temp, $content, LOCK_EX) === false) {
+                $errors[] = $fileName . ': no se pudo escribir el archivo temporal.';
                 continue;
             }
-
-            @chmod($target, 0644);
-            clearstatcache(true, $target);
+            @chmod($temp, 0644);
+            if (!@rename($temp, $targetDir . $fileName)) {
+                @unlink($temp);
+                $errors[] = $fileName . ': no se pudo reemplazar el archivo de destino.';
+                continue;
+            }
             $copied[] = $fileName;
         }
 
-        $success = empty($errors);
-        $messages = [];
-        if (!empty($copied)) {
-            $messages[] = 'Copiados: ' . implode(', ', $copied) . '.';
+        clearstatcache();
+        $verified = [];
+        foreach (array_keys($sources) as $fileName) {
+            if (is_file($targetDir . $fileName) && is_readable($targetDir . $fileName) && filesize($targetDir . $fileName) > 0) {
+                $verified[] = $fileName;
+            } else {
+                $errors[] = $fileName . ': no existe o está vacío después de copiar.';
+            }
         }
-        if (!empty($existing)) {
-            $messages[] = 'Ya existían y no se sobrescribieron: ' . implode(', ', $existing) . '.';
-        }
-        if (!empty($errors)) {
-            $messages[] = implode(' ', $errors);
-        }
-
+        $success = count($verified) === 4 && empty($errors);
+        $message = $success
+            ? 'Instalados y verificados los 4 endpoints: ' . implode(', ', $verified) . '.'
+            : 'Verificados ' . count($verified) . ' de 4 endpoints. ' . implode(' ', array_unique($errors));
         $this->yujuAjaxDie(json_encode([
             'success' => $success,
-            'copied' => !empty($copied),
-            'exists' => empty($errors),
             'copied_files' => $copied,
-            'existing_files' => $existing,
-            'message' => implode(' ', $messages),
+            'verified_files' => $verified,
+            'errors' => array_values(array_unique($errors)),
+            'message' => $message,
             'path' => $targetDir,
         ]));
     }
