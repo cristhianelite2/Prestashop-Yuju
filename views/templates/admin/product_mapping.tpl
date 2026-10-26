@@ -140,7 +140,7 @@
             <!-- Header row -->
             <div class="row mapping-header">
                 <div class="col-md-3">Campo en Prestashop</div>
-                <div class="col-md-3">Campo en Madkting</div>
+                <div class="col-md-3">Campo en Yuju</div>
                 <div class="col-md-3">Valor por Defecto</div>
                 <div class="col-md-3">Acciones</div>
             </div>
@@ -182,10 +182,7 @@
                     <input type="text" id="custom-yuju-name" class="form-control" maxlength="100" placeholder="Ej. seller_reference">
                     <p class="help-block">Usa el nombre exacto que espera la API de Yuju. No incluyas espacios.</p>
                 </div>
-                <div class="form-group">
-                    <label for="custom-yuju-value">Valor fijo</label>
-                    <input type="text" id="custom-yuju-value" class="form-control" maxlength="255" placeholder="Valor que se enviará en cada producto">
-                </div>
+
                 <div id="custom-yuju-fields-list"></div>
             </div>
             <div class="modal-footer">
@@ -477,7 +474,6 @@ $(document).ready(function() {
 
 function openCustomYujuFieldModal() {
     $('#custom-yuju-name').val('');
-    $('#custom-yuju-value').val('');
     renderCustomYujuFields();
     $('#customYujuFieldModal').modal('show');
 }
@@ -487,7 +483,7 @@ function renderCustomYujuFields() {
     if (customYujuFields.length) {
         html += '<hr><strong>Campos custom creados</strong><ul class="list-group" style="margin-top:8px;">';
         customYujuFields.forEach(function(field) {
-            html += '<li class="list-group-item clearfix"><strong>' + $('<div>').text(field.name).html() + '</strong>: ' + $('<div>').text(field.value).html();
+            html += '<li class="list-group-item clearfix"><strong>' + $('<div>').text(field.name).html() + '</strong> <span class="text-muted">(campo disponible para mapear)</span> ';
             html += ' <button type="button" class="btn btn-danger btn-xs pull-right" onclick="removeCustomYujuField(\'' + String(field.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"><i class="icon-times"></i> Quitar</button></li>';
         });
         html += '</ul>';
@@ -514,20 +510,15 @@ function refreshCustomYujuOptions() {
 
 function saveCustomYujuField() {
     var name = $.trim($('#custom-yuju-name').val());
-    var value = $('#custom-yuju-value').val();
     if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,99}$/.test(name)) {
         showToast('Escribe un nombre válido (letras, números, guion, punto o guion bajo; sin espacios).', 'error');
-        return;
-    }
-    if ($.trim(value) === '') {
-        showToast('El valor del campo no puede estar vacío.', 'error');
         return;
     }
     $.ajax({
         url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
         method: 'POST',
         dataType: 'json',
-        data: {ajax: true, action: 'saveCustomYujuField', field_name: name, field_value: value},
+        data: {ajax: true, action: 'saveCustomYujuField', field_name: name},
         success: function(response) {
             if (!response || !response.success) {
                 showToast((response && response.message) || 'No se pudo guardar el campo.', 'error');
@@ -538,7 +529,7 @@ function saveCustomYujuField() {
             renderCustomYujuFields();
             $('#custom-yuju-name').val('');
             $('#custom-yuju-value').val('');
-            showToast('Campo custom guardado. Ya aparece en Selecciona un campo de Yuju.', 'success');
+            showToast('Campo de Yuju guardado. Ya puedes mapearlo con un campo de PrestaShop.', 'success');
         },
         error: function() { showToast('Error de conexión al guardar el campo custom.', 'error'); }
     });
@@ -787,11 +778,6 @@ function saveMappings() {
         var defaultValue = $row.find('.default-value-input').val() || '';
         
         if (psField && yujuField) {
-            if (psField === '__yuju_custom__' && !defaultValue) {
-                showToast('Los campos custom necesitan un valor fijo.', 'error');
-                hasDuplicates = true;
-                return;
-            }
             // Verificar si el campo de Yuju ya fue usado
             if (yujuFieldsUsed.indexOf(yujuField) !== -1) {
                 hasDuplicates = true;
