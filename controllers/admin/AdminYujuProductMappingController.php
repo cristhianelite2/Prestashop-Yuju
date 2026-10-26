@@ -332,7 +332,7 @@ class AdminYujuProductMappingController extends ModuleAdminController
             'config_value' => pSQL($json, true),
             'config_type' => 'json',
             'is_sensitive' => 0,
-            'description' => 'Campos personalizados estáticos de Yuju',
+            'description' => 'Campos personalizados de Yuju disponibles para mapeo',
             'created_at' => $now,
             'updated_at' => $now,
         ]);
@@ -341,30 +341,24 @@ class AdminYujuProductMappingController extends ModuleAdminController
     private function ajaxSaveCustomYujuField()
     {
         $name = trim((string) Tools::getValue('field_name'));
-        $value = trim((string) Tools::getValue('field_value'));
-        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_.-]{0,99}$/', $name) || $value === '') {
-            $this->ajaxRender(json_encode(['success' => false, 'message' => 'Nombre o valor no válido.']));
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_.-]{0,99}$/', $name)) {
+            $this->ajaxRender(json_encode(['success' => false, 'message' => 'Nombre de campo no válido.']));
             return;
         }
         $fields = $this->getCustomYujuFields();
-        $updated = false;
-        foreach ($fields as &$field) {
+        foreach ($fields as $field) {
             if (isset($field['name']) && $field['name'] === $name) {
-                $field['value'] = $value;
-                $updated = true;
-                break;
+                $this->ajaxRender(json_encode(['success' => true, 'message' => 'El campo ya existe.', 'fields' => $fields]));
+                return;
             }
         }
-        unset($field);
-        if (!$updated) {
-            foreach ($this->getYujuFields() as $known) {
-                if ($known['id'] === $name) {
-                    $this->ajaxRender(json_encode(['success' => false, 'message' => 'Ese nombre ya corresponde a un campo estándar de Yuju.']));
-                    return;
-                }
+        foreach ($this->getYujuFields() as $known) {
+            if ($known['id'] === $name) {
+                $this->ajaxRender(json_encode(['success' => false, 'message' => 'Ese nombre ya corresponde a un campo estándar de Yuju.']));
+                return;
             }
-            $fields[] = ['name' => $name, 'value' => $value];
         }
+        $fields[] = ['name' => $name];
         $ok = $this->persistCustomYujuFields($fields);
         $this->ajaxRender(json_encode(['success' => (bool) $ok, 'message' => $ok ? 'Campo guardado.' : 'No se pudo guardar.', 'fields' => $fields]));
     }
