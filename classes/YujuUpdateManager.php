@@ -454,11 +454,29 @@ class YujuUpdateManager
 
         foreach ($sourceFiles as $fileName => $source) {
             $target = $targetDir . $fileName;
+
+            // En Linux PHP no ofrece una fecha de creación fiable para todos los sistemas
+            // de archivos; filemtime permite comparar la fecha de modificación del contenido.
+            // Solo publicar si el archivo fuente del paquete es más nuevo que el externo.
+            $sourceDate = @filemtime($source);
+            $targetDate = is_file($target) ? @filemtime($target) : false;
+
+            if (is_file($target) && $sourceDate !== false && $targetDate !== false && $sourceDate <= $targetDate) {
+                continue;
+            }
+
             $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
             if (!@copy($source, $temp)) {
                 @unlink($temp);
                 throw new Exception('No se pudo preparar la actualización de ' . $fileName . '.');
             }
+
+            // Conservar la marca temporal de la fuente para que futuras comparaciones
+            // no consideren al archivo externo recién copiado como una versión más nueva.
+            if ($sourceDate !== false) {
+                @touch($temp, $sourceDate);
+            }
+
             if (!@rename($temp, $target)) {
                 @unlink($temp);
                 throw new Exception('No se pudo reemplazar ' . $fileName . '. Verifique permisos de la carpeta yuju.');
