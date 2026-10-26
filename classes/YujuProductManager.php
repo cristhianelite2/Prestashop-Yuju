@@ -207,10 +207,17 @@ class YujuProductManager
                 continue;
             }
 
-            // Campo personalizado de Yuju: enviar el valor fijo configurado, sin buscarlo en PrestaShop.
+            // Los campos personalizados de Yuju también deben tomar su valor del producto
+            // cuando están mapeados a un campo real de PrestaShop. "__yuju_custom__"
+            // se conserva únicamente como compatibilidad con mapeos antiguos de valor fijo.
             if ($ps_field === '__yuju_custom__') {
                 $value = isset($mapping['default_value']) ? $mapping['default_value'] : '';
-            // Get value from PrestaShop product
+            } elseif ($ps_field === 'manufacturer_name') {
+                $manufacturerId = (int) ($product->id_manufacturer ?? 0);
+                $manufacturer = $manufacturerId > 0 ? new Manufacturer($manufacturerId) : null;
+                $value = ($manufacturer && Validate::isLoadedObject($manufacturer))
+                    ? (string) $manufacturer->name
+                    : '';
             } elseif (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'])) {
                 $value = isset($product->{$ps_field}[$default_lang]) ? $product->{$ps_field}[$default_lang] : '';
             } elseif ($ps_field === 'price_final') {
