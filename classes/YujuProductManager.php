@@ -207,8 +207,11 @@ class YujuProductManager
                 continue;
             }
 
+            // Campo personalizado de Yuju: enviar el valor fijo configurado, sin buscarlo en PrestaShop.
+            if ($ps_field === '__yuju_custom__') {
+                $value = isset($mapping['default_value']) ? $mapping['default_value'] : '';
             // Get value from PrestaShop product
-            if (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'])) {
+            } elseif (in_array($ps_field, ['name', 'description', 'description_short', 'meta_title', 'meta_description', 'meta_keywords', 'link_rewrite', 'available_now', 'available_later'])) {
                 $value = isset($product->{$ps_field}[$default_lang]) ? $product->{$ps_field}[$default_lang] : '';
             } elseif ($ps_field === 'price_final') {
                 // Precio final con impuestos y descuentos aplicados
