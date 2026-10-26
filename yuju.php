@@ -1116,78 +1116,16 @@ class Yuju extends Module
         $channelName = '';
         $orderReference = '';
         $isYujuOrder = false;
-        $customerEmail = '';
 
-        // 1. Consulta SQL directa a ps_orders, ps_customer, ps_carrier (100% fiable)
+        // Obtener la referencia solo como metadato. No se usa para identificar
+        // el origen de la orden; la detección requiere una correspondencia exacta.
         try {
-            $orderRow = Db::getInstance()->getRow('
-                SELECT o.`id_order`, o.`reference`, o.`id_customer`, o.`id_carrier`, o.`module`, o.`payment`,
-                       c.`email` AS customer_email,
-                       car.`name` AS carrier_name
-                FROM `' . _DB_PREFIX_ . 'orders` o
-                LEFT JOIN `' . _DB_PREFIX_ . 'customer` c ON (o.`id_customer` = c.`id_customer`)
-                LEFT JOIN `' . _DB_PREFIX_ . 'carrier` car ON (o.`id_carrier` = car.`id_carrier`)
-                WHERE o.`id_order` = ' . (int) $orderId
-            );
-
-            if ($orderRow) {
-                $orderReference = trim((string) ($orderRow['reference'] ?? ''));
-                $customerEmail = strtolower(trim((string) ($orderRow['customer_email'] ?? '')));
-                $carrierName = trim((string) ($orderRow['carrier_name'] ?? ''));
-                $module = strtolower(trim((string) ($orderRow['module'] ?? '')));
-                $payment = strtolower(trim((string) ($orderRow['payment'] ?? '')));
-
-                // El módulo de pago/nombre del pago no demuestra el origen de la orden.
-                // Solo se conserva la detección auxiliar por transportista Yuju.
-                if (stripos($carrierName, 'yuju') !== false) {
-                    $isYujuOrder = true;
-                }
-            }
+            $orderReference = trim((string) Db::getInstance()->getValue(
+                'SELECT `reference` FROM `' . _DB_PREFIX_ . 'orders`
+                 WHERE `id_order` = ' . (int) $orderId
+            ));
         } catch (Throwable $e) {
-            // Ignorar fallo de consulta
-        }
-
-        // 1b. Si el carrier no se detectó como Yuju, comprobar ps_order_carrier
-        if (!$isYujuOrder) {
-            try {
-                $orderCarrierName = Db::getInstance()->getValue('
-                    SELECT car.`name`
-                    FROM `' . _DB_PREFIX_ . 'order_carrier` oc
-                    LEFT JOIN `' . _DB_PREFIX_ . 'carrier` car ON (oc.`id_carrier` = car.`id_carrier`)
-                    WHERE oc.`id_order` = ' . (int) $orderId . '
-                    ORDER BY oc.`id_order_carrier` DESC
-                ');
-                if ($orderCarrierName && stripos((string) $orderCarrierName, 'yuju') !== false) {
-                    $isYujuOrder = true;
-                }
-            } catch (Throwable $e) {}
-        }
-
-        // 1c. Comprobar también con la clase Order si estuviera disponible y aún no tenemos referencia
-        if ($orderReference === '' || !$isYujuOrder) {
-            try {
-                if (class_exists('Order')) {
-                    $order = new Order($orderId);
-                    if (Validate::isLoadedObject($order)) {
-                        if ($orderReference === '') {
-                            $orderReference = trim((string) $order->reference);
-                        }
-                        // No clasificar por módulo de pago ni por nombre del pago.
-                        if ($customerEmail === '' && $order->id_customer > 0 && class_exists('Customer')) {
-                            $cust = new Customer((int) $order->id_customer);
-                            if (Validate::isLoadedObject($cust)) {
-                                $customerEmail = strtolower(trim((string) $cust->email));
-                            }
-                        }
-                        if (!$isYujuOrder && $order->id_carrier > 0 && class_exists('Carrier')) {
-                            $carrier = new Carrier((int) $order->id_carrier);
-                            if (Validate::isLoadedObject($carrier) && stripos((string) $carrier->name, 'yuju') !== false) {
-                                $isYujuOrder = true;
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable $e) {}
+            // La referencia es opcional; no afecta la validación del mapping.
         }
 
         // 2. Consultar ps_yuju_order_mapping
