@@ -320,6 +320,11 @@ var yujuFields = {/literal}{$yuju_fields|json_encode}{literal};
 var currentMappings = {/literal}{$product_mappings|json_encode}{literal};
 var customYujuFields = {/literal}{$custom_yuju_fields|json_encode}{literal} || [];
 prestashopFields.push({id: '__yuju_custom__', name: 'Valor personalizado (Yuju)'});
+customYujuFields.forEach(function(field) {
+    if (!yujuFields.some(function(existing) { return existing.id === field.name; })) {
+        yujuFields.push({id: field.name, name: 'Custom: ' + field.name, required: false});
+    }
+});
 var mappingsCounter = 0;
 var modalMappings = [];
 
@@ -684,10 +689,15 @@ function addAnotherMapping() {
         return;
     }
     
+    var customField = customYujuFields.find(function(field) { return field.name === yujuField; });
+    if (customField) {
+        psField = '__yuju_custom__';
+        $('#modal-prestashop-field').val(psField).trigger('change');
+    }
     modalMappings.push({
         prestashop_field: psField,
         yuju_field: yujuField,
-        default_value: ''
+        default_value: customField ? customField.value : ''
     });
     
     updateModalPreview();
@@ -714,6 +724,10 @@ function saveModalMappings() {
     var yujuField = $('#modal-yuju-field').val();
     
     if (psField && yujuField) {
+        var selectedCustomField = customYujuFields.find(function(field) { return field.name === yujuField; });
+        if (selectedCustomField) {
+            psField = '__yuju_custom__';
+        }
         // Verificar si ya existe en modalMappings
         var exists = modalMappings.some(function(m) {
             return m.prestashop_field === psField && m.yuju_field === yujuField;
@@ -723,7 +737,7 @@ function saveModalMappings() {
             modalMappings.push({
                 prestashop_field: psField,
                 yuju_field: yujuField,
-                default_value: ''
+                default_value: selectedCustomField ? selectedCustomField.value : ''
             });
         }
     }
