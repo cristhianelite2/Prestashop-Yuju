@@ -165,6 +165,34 @@
     </div>
 </div>
 
+<!-- Modal para crear un campo personalizado de Yuju -->
+<div class="modal fade" id="customYujuFieldModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title"><i class="icon-plus"></i> Campo custom de Yuju</h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="custom-yuju-name">Nombre del campo en Yuju</label>
+                    <input type="text" id="custom-yuju-name" class="form-control" maxlength="100" placeholder="Ej. seller_reference">
+                    <p class="help-block">Usa el nombre exacto que espera la API de Yuju. No incluyas espacios.</p>
+                </div>
+                <div class="form-group">
+                    <label for="custom-yuju-value">Valor fijo</label>
+                    <input type="text" id="custom-yuju-value" class="form-control" maxlength="255" placeholder="Valor que se enviará en cada producto">
+                </div>
+                <div id="custom-yuju-fields-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomYujuField()"><i class="icon-save"></i> Guardar campo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal for adding new mapping -->
 <div class="modal fade" id="addMappingModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
@@ -184,7 +212,10 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Selecciona un campo de yuju</label>
+                    <div class="clearfix">
+                        <label class="pull-left">Selecciona un campo de yuju</label>
+                        <button type="button" class="btn btn-default btn-xs pull-right" onclick="openCustomYujuFieldModal()"><i class="icon-plus"></i> Campo custom de Yuju</button>
+                    </div>
                     <select id="modal-yuju-field" class="form-control">
                         <option value="">Seleccionar campo</option>
                         {foreach $yuju_fields as $field}
@@ -287,6 +318,8 @@ function showToast(message, type) {
 var prestashopFields = {/literal}{$prestashop_fields|json_encode}{literal};
 var yujuFields = {/literal}{$yuju_fields|json_encode}{literal};
 var currentMappings = {/literal}{$product_mappings|json_encode}{literal};
+var customYujuFields = {/literal}{$custom_yuju_fields|json_encode}{literal} || [];
+prestashopFields.push({id: '__yuju_custom__', name: 'Valor personalizado (Yuju)'});
 var mappingsCounter = 0;
 var modalMappings = [];
 
@@ -389,6 +422,7 @@ function validateYujuDuplicates() {
 $(document).ready(function() {
     initializeSelect2();
     loadMappings();
+    refreshCustomYujuOptions();
     
     // Validar duplicados en tiempo real
     $(document).on('change', '.yuju-field', function() {
@@ -432,6 +466,96 @@ $(document).ready(function() {
         $('#modal-yuju-field').val('');
     });
 });
+
+function openCustomYujuFieldModal() {
+    $('#custom-yuju-name').val('');
+    $('#custom-yuju-value').val('');
+    renderCustomYujuFields();
+    $('#customYujuFieldModal').modal('show');
+}
+
+function renderCustomYujuFields() {
+    var html = '';
+    if (customYujuFields.length) {
+        html += '<hr><strong>Campos custom creados</strong><ul class="list-group" style="margin-top:8px;">';
+        customYujuFields.forEach(function(field) {
+            html += '<li class="list-group-item clearfix"><strong>' + $('<div>').text(field.name).html() + '</strong>: ' + $('<div>').text(field.value).html();
+            html += ' <button type="button" class="btn btn-danger btn-xs pull-right" onclick="removeCustomYujuField(\'' + String(field.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"><i class="icon-times"></i> Quitar</button></li>';
+        });
+        html += '</ul>';
+    } else {
+        html = '<p class="text-muted">Todavía no hay campos personalizados.</p>';
+    }
+    $('#custom-yuju-fields-list').html(html);
+}
+
+function refreshCustomYujuOptions() {
+    var $select = $('#modal-yuju-field');
+    var selected = $select.val();
+    $select.find('option[data-custom-yuju="1"]').remove();
+    customYujuFields.forEach(function(field) {
+        $('<option>').val(field.name).text('Custom: ' + field.name).attr('data-custom-yuju', '1').appendTo($select);
+    });
+    if (selected && $select.find('option').filter(function(){ return this.value === selected; }).length) {
+        $select.val(selected);
+    } else {
+        $select.val('');
+    }
+    if ($select.data('select2')) $select.trigger('change.select2');
+}
+
+function saveCustomYujuField() {
+    var name = $.trim($('#custom-yuju-name').val());
+    var value = $('#custom-yuju-value').val();
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,99}$/.test(name)) {
+        showToast('Escribe un nombre válido (letras, números, guion, punto o guion bajo; sin espacios).', 'error');
+        return;
+    }
+    if ($.trim(value) === '') {
+        showToast('El valor del campo no puede estar vacío.', 'error');
+        return;
+    }
+    $.ajax({
+        url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+        method: 'POST',
+        dataType: 'json',
+        data: {ajax: true, action: 'saveCustomYujuField', field_name: name, field_value: value},
+        success: function(response) {
+            if (!response || !response.success) {
+                showToast((response && response.message) || 'No se pudo guardar el campo.', 'error');
+                return;
+            }
+            customYujuFields = response.fields || [];
+            refreshCustomYujuOptions();
+            renderCustomYujuFields();
+            $('#custom-yuju-name').val('');
+            $('#custom-yuju-value').val('');
+            showToast('Campo custom guardado. Ya aparece en Selecciona un campo de Yuju.', 'success');
+        },
+        error: function() { showToast('Error de conexión al guardar el campo custom.', 'error'); }
+    });
+}
+
+function removeCustomYujuField(name) {
+    if (!confirm('¿Quitar el campo custom "' + name + '"? Si ya está usado en un mapeo, también deberás quitar ese mapeo.')) return;
+    $.ajax({
+        url: {/literal}'{$ajax_url|escape:'javascript':'UTF-8'}'{literal},
+        method: 'POST',
+        dataType: 'json',
+        data: {ajax: true, action: 'removeCustomYujuField', field_name: name},
+        success: function(response) {
+            if (!response || !response.success) {
+                showToast((response && response.message) || 'No se pudo quitar el campo.', 'error');
+                return;
+            }
+            customYujuFields = response.fields || [];
+            refreshCustomYujuOptions();
+            renderCustomYujuFields();
+            showToast('Campo custom quitado.', 'success');
+        },
+        error: function() { showToast('Error de conexión al quitar el campo custom.', 'error'); }
+    });
+}
 
 function initializeSelect2() {
     $('.select2').select2({
@@ -646,6 +770,11 @@ function saveMappings() {
         var defaultValue = $row.find('.default-value-input').val() || '';
         
         if (psField && yujuField) {
+            if (psField === '__yuju_custom__' && !defaultValue) {
+                showToast('Los campos custom necesitan un valor fijo.', 'error');
+                hasDuplicates = true;
+                return;
+            }
             // Verificar si el campo de Yuju ya fue usado
             if (yujuFieldsUsed.indexOf(yujuField) !== -1) {
                 hasDuplicates = true;
