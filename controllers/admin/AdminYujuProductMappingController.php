@@ -1217,13 +1217,8 @@ class AdminYujuProductMappingController extends ModuleAdminController
                 continue;
             }
 
-            if ($yujuField === 'brand' && ($defaultValue === '' || $defaultValue === 'Global-Laptops')) {
-                $defaultValue = trim((string) Configuration::get('PS_SHOP_NAME'));
-                if ($defaultValue === '') {
-                    $defaultValue = 'PrestaShop';
-                }
-            }
-
+            // No reinyectar valores por defecto al guardar. Si el usuario los quita,
+            // el campo debe permanecer vacío y el mapeo debe usar el dato del producto.
             // Si viene requerido desde defaults canónicos, prevalece.
             $isRequired = isset($defaultByYuju[$yujuField]) ? (int) $defaultByYuju[$yujuField]['is_required'] : 0;
 
