@@ -126,6 +126,9 @@
             <button type="button" id="btn-import-yuju-fields" class="btn btn-info btn-sm">
                 <i class="icon-download"></i> Importar campos de Yuju
             </button>
+            <button type="button" class="btn btn-default btn-sm" onclick="openCustomYujuFieldModal(); return false;">
+                <i class="icon-plus"></i> Administrar campos custom de Yuju
+            </button>
             <button class="btn btn-success btn-sm" onclick="addNewMapping(); return false;">
                 <i class="icon-plus"></i> Nuevo Mapeo de Campo
             </button>
