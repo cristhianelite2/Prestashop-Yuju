@@ -319,7 +319,6 @@ var prestashopFields = {/literal}{$prestashop_fields|json_encode}{literal};
 var yujuFields = {/literal}{$yuju_fields|json_encode}{literal};
 var currentMappings = {/literal}{$product_mappings|json_encode}{literal};
 var customYujuFields = {/literal}{$custom_yuju_fields|json_encode}{literal} || [];
-prestashopFields.push({id: '__yuju_custom__', name: 'Valor personalizado (Yuju)'});
 customYujuFields.forEach(function(field) {
     if (!yujuFields.some(function(existing) { return existing.id === field.name; })) {
         yujuFields.push({id: field.name, name: 'Custom: ' + field.name, required: false});
@@ -528,7 +527,6 @@ function saveCustomYujuField() {
             refreshCustomYujuOptions();
             renderCustomYujuFields();
             $('#custom-yuju-name').val('');
-            $('#custom-yuju-value').val('');
             showToast('Campo de Yuju guardado. Ya puedes mapearlo con un campo de PrestaShop.', 'success');
         },
         error: function() { showToast('Error de conexión al guardar el campo custom.', 'error'); }
