@@ -650,20 +650,19 @@ function getFieldName(fieldId, fieldsArray) {
 
 function toggleDefaultValueField(index) {
     var container = $('#default-value-container-' + index);
+    var input = container.find('input.default-value-input');
     var text = $('#default-toggle-text-' + index);
-    
-    if (container.is(':visible')) {
-        container.slideUp(200);
-        // Limpiar el valor cuando se oculta
-        container.find('input').val('');
+    var isVisible = container.is(':visible');
+
+    if (isVisible) {
+        // Borrar el dato antes de ocultar para que saveMappings no lo envíe.
+        input.val('').trigger('input').trigger('change');
+        container.stop(true, true).hide();
         text.text('Agregar Valor por Defecto');
     } else {
-        container.slideDown(200);
+        container.stop(true, true).show();
         text.text('Quitar Valor por Defecto');
-        // Enfocar el input
-        setTimeout(function() {
-            container.find('input').focus();
-        }, 250);
+        input.trigger('focus');
     }
 }
 
@@ -773,7 +772,10 @@ function saveMappings() {
         var $row = $(this);
         var psField = $row.find('.ps-field').val();
         var yujuField = $row.find('.yuju-field').val();
-        var defaultValue = $row.find('.default-value-input').val() || '';
+        var $defaultContainer = $row.find('[id^="default-value-container-"]');
+        var defaultValue = $defaultContainer.is(':visible')
+            ? ($row.find('.default-value-input').val() || '')
+            : '';
         
         if (psField && yujuField) {
             // Verificar si el campo de Yuju ya fue usado
