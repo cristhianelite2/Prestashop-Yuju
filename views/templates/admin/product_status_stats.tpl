@@ -2948,61 +2948,7 @@ $(document).ready(function() {
         return false;
     });
 
-    function resendPendingCreate(productId, $btn) {
-        productId = parseInt(productId, 10) || 0;
-        if (!productId) {
-            alert('ID de producto no válido');
-            return;
-        }
-        if (!window.confirm('¿Reenviar este producto a Yuju?\n\nSolo si pasó más de 1 hora sin recibir el webhook product-created.')) {
-            return;
-        }
-        var $btnEl = $btn && $btn.jquery ? $btn : $($btn);
-        var $resultBox = $btnEl.closest('.panel-body, td, .modal-body').find('.yuju-find-webhook-result').first();
-        if (!$resultBox.length && $('#sync-history-pending-create').is(':visible')) {
-            $resultBox = $('#sync-history-pending-create .yuju-find-webhook-result').first();
-        }
-        var originalHtml = $btnEl.html();
-        $btnEl.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Enviando…');
 
-        $.ajax({
-            url: YUJU_PS_AJAX_URL,
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                ajax: true,
-                action: 'resendPendingCreate',
-                token: YUJU_PS_TOKEN,
-                product_id: productId
-            },
-            success: function(response) {
-                $btnEl.prop('disabled', false).html(originalHtml);
-                var msg = (response && response.message) ? response.message : 'Sin respuesta';
-                var ok = !!(response && response.success);
-                if ($resultBox.length) {
-                    $resultBox.html('<div class="alert ' + (ok ? 'alert-success' : 'alert-danger') + '" style="margin-bottom:0;">'
-                        + escapeHtml(msg) + '</div>');
-                } else {
-                    alert(msg);
-                }
-                if (ok) {
-                    setTimeout(function() { window.location.reload(true); }, 1200);
-                }
-            },
-            error: function() {
-                $btnEl.prop('disabled', false).html(originalHtml);
-                alert('Error de conexión al reenviar el producto');
-            }
-        });
-    }
-
-    $(document).on('click', '.yuju-resend-pending-create', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var $btn = $(this);
-        resendPendingCreate($btn.data('product-id') || $btn.attr('data-product-id'), $btn);
-        return false;
-    });
 
     /** Mensajes de error unidos (columna guardada + cuerpo errors[] de la respuesta). */
     function collectYujuErrorStrings(errorAttr, responseStr) {
