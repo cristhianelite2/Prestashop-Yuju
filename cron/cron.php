@@ -89,6 +89,21 @@ if ($is_web) {
         <title>Yuju CRON - Estado</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <script>
+        // Definir antes de renderizar el botón para evitar que onclick dependa de scripts posteriores.
+        window.toggleSyncAccordion = function () {
+            var content = document.getElementById('sync-accordion-content');
+            var icon = document.getElementById('accordion-icon');
+            if (!content || !icon) {
+                console.error('No se encontró el contenido o el icono del acordeón de sincronización.');
+                return;
+            }
+            var isHidden = content.classList.contains('hidden');
+            content.classList.toggle('hidden', !isHidden);
+            icon.classList.toggle('fa-chevron-right', !isHidden);
+            icon.classList.toggle('fa-chevron-down', isHidden);
+        };
+        </script>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
         <div class="container mx-auto px-4 py-8">
