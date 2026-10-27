@@ -468,8 +468,7 @@ class YujuUpdateManager
                 throw new Exception('No se pudo preparar la actualización de ' . $fileName . '.');
             }
 
-            // Conservar la marca temporal de la fuente para que futuras comparaciones
-            // no consideren al archivo externo recién copiado como una versión más nueva.
+            // Mantener la fecha del archivo del paquete para facilitar la inspección del despliegue.
             if ($sourceDate !== false) {
                 @touch($temp, $sourceDate);
             }
