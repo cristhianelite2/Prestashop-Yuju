@@ -455,15 +455,12 @@ class YujuUpdateManager
         foreach ($sourceFiles as $fileName => $source) {
             $target = $targetDir . $fileName;
 
-            // En Linux PHP no ofrece una fecha de creación fiable para todos los sistemas
-            // de archivos; filemtime permite comparar la fecha de modificación del contenido.
-            // Solo publicar si el archivo fuente del paquete es más nuevo que el externo.
+            // La marca temporal del ZIP de GitHub no representa la versión instalada:
+            // un endpoint editado manualmente en producción puede tener mtime más reciente
+            // y quedar obsoleto para siempre si se usa esa fecha para decidir si actualizar.
+            // Por eso, cada actualización del módulo reemplaza los endpoints externos
+            // con los archivos incluidos en el mismo commit validado de GitHub.
             $sourceDate = @filemtime($source);
-            $targetDate = is_file($target) ? @filemtime($target) : false;
-
-            if (is_file($target) && $sourceDate !== false && $targetDate !== false && $sourceDate <= $targetDate) {
-                continue;
-            }
 
             $temp = $target . '.yuju-tmp-' . substr(sha1(uniqid('', true)), 0, 10);
             if (!@copy($source, $temp)) {
