@@ -746,6 +746,7 @@ function showProductInfo(id, reference, name, category, idImage, openHistoryTab,
 </div>
 
 {include file='module:yuju/views/templates/admin/_partials/yuju_product_info_modal.tpl'}
+{include file='module:yuju/views/templates/admin/_partials/yuju_inline_category_map_modal.tpl'}
 
 <!-- Modal Filtro Masivo por Lista o Archivo Excel/CSV -->
 <div class="modal fade" id="yuju-bulk-filter-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-bulk-filter-modal-title">
@@ -1404,13 +1405,12 @@ $(document).ready(function() {
         window.location.href = newUrl;
     });
     
-    // Búsqueda de productos con debounce
-    var searchTimeout;
-    $('#product-search').on('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(function() {
+    // Buscar solo al pulsar Enter; escribir o pegar no dispara consultas automáticamente.
+    $('#product-search').off('input.yujuAutoSearch').on('keydown.yujuEnterSearch', function(e) {
+        if (e.which === 13 || e.key === 'Enter') {
+            e.preventDefault();
             $('#apply-filters-btn').click();
-        }, 500);
+        }
     });
 
     var yujuIdSearchTimeout;
