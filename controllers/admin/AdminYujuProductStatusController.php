@@ -1204,6 +1204,12 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 case 'createSyncHistoryTable':
                     $this->ajaxProcessCreateSyncHistoryTable();
                     break;
+                case 'getInlineCategoryMappingOptions':
+                    $this->ajaxProcessGetInlineCategoryMappingOptions();
+                    break;
+                case 'saveInlineCategoryMapping':
+                    $this->ajaxProcessSaveInlineCategoryMapping();
+                    break;
                 case 'validateCreateBatch':
                     $this->ajaxProcessValidateCreateBatch();
                     break;
