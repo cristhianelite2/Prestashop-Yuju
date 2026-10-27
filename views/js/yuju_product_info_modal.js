@@ -948,11 +948,9 @@
         }).done(function (response) {
             if (response && response.success) {
                 $modal.find('.yuju-inline-map-success').text(response.message || 'Mapeo guardado.').show();
-                $('#modal-product-last-error-text').text('Mapeo de categoría guardado: ' + response.prestashop_category_id
-                    + ' → Yuju ' + response.yuju_category_name + ' (' + response.yuju_category_id + '). Puedes reintentar el envío.');
-                if ($('#modal-product-queue-retry-wrap').length) {
-                    $('#modal-product-queue-retry-wrap').show();
-                }
+                $('#modal-product-last-error-text').text('Mapeo guardado: categoría PrestaShop ' + response.prestashop_category_id
+                    + ' → Yuju ' + response.yuju_category_name + ' (' + response.yuju_category_id + '). Ya puedes volver a intentar la sincronización.');
+                $('#modal-product-last-error').removeClass('alert-danger alert-warning').addClass('alert-success').show();
                 if (typeof onChangedCb === 'function') {
                     onChangedCb({ action: 'category_mapping_saved', product_id: productId });
                 }
