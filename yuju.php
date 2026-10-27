@@ -1643,7 +1643,7 @@ window.yujuOrderMetadata = ' . $metaJson . ';
         if (method_exists($controller, 'addJS')) {
             $controller->addJS($this->_path . 'views/js/admin.js');
             if ($includeProductModal) {
-                $controller->addJS($this->_path . 'views/js/yuju_product_info_modal.js');
+                $controller->addJS($this->_path . 'views/js/yuju_product_info_modal.js?v=' . (int) @filemtime(_PS_MODULE_DIR_ . 'yuju/views/js/yuju_product_info_modal.js'));
             }
         }
     }
