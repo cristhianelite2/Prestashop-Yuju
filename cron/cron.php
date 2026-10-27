@@ -1937,10 +1937,16 @@ try {
         </script>
         
         <script>
-        function toggleSyncAccordion() {
+        // Exponer explícitamente la función en window porque el botón usa onclick inline.
+        window.toggleSyncAccordion = function toggleSyncAccordion() {
             const content = document.getElementById('sync-accordion-content');
             const icon = document.getElementById('accordion-icon');
-            
+
+            if (!content || !icon) {
+                console.error('No se encontró el contenido o el icono del acordeón de sincronización.');
+                return;
+            }
+
             if (content.classList.contains('hidden')) {
                 content.classList.remove('hidden');
                 icon.classList.remove('fa-chevron-right');
@@ -1950,8 +1956,8 @@ try {
                 icon.classList.remove('fa-chevron-down');
                 icon.classList.add('fa-chevron-right');
             }
-        }
-        
+        };
+
         function toggleDetails(id) {
             const element = document.getElementById(id);
             const icon = document.getElementById('icon-' + id);
