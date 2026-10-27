@@ -32,7 +32,9 @@
             var cats=(opts.psCategories&&opts.psCategories.length)?opts.psCategories:[{id:opts.psId,name:opts.psName,currentYujuId:opts.currentYujuId}];
             message('muted','');$save.prop('disabled',false).html('<i class="icon-save"></i> Guardar mapeo');
             $psSelect.empty().data('cats',cats);
-            $.each(cats,function(_,cat){$('<option>').val(cat.id).text((cat.name||('Categoría '+cat.id))+' (ID '+cat.id)+(cat.currentYujuId?' · ya mapeada':'')).appendTo($psSelect);});
+            $.each(cats, function (_, cat) {
+                $('<option>').val(cat.id).text((cat.name || ('Categoría ' + cat.id)) + ' (ID ' + cat.id + ')' + (cat.currentYujuId ? ' · ya mapeada' : '')).appendTo($psSelect);
+            });
             $psWrap.toggle(cats.length>1);$('#yuju-inline-map-ps-label').toggle(cats.length<=1);
             var start=$.grep(cats,function(cat){return !cat.currentYujuId;})[0]||cats[0];
             $psSelect.val(String(start.id));applyCategory(start);
@@ -50,20 +52,38 @@
             $select.find('option').each(function(){this.hidden=!!this.value&&q!==''&&String(this.text||'').toLowerCase().indexOf(q)===-1;});
             if(current&&$select.find('option:selected')[0]&&$select.find('option:selected')[0].hidden)$select.val('');
         });
-        $modal.off('.yujuInlineMapStack').on('show.bs.modal.yujuInlineMapStack',function(){
-            if(this.parentNode!==document.body)$(this).appendTo(document.body);
-            var maxZ=1040;
-            $('.modal:visible').not(this).each(function(){maxZ=Math.max(maxZ,parseInt($(this).css('z-index'),10)||1050);});
-            this.style.setProperty('z-index',String(maxZ+20),'important');
-            var $backs=$('body > .modal-backdrop');if($backs.length){$backs.last().addClass('yuju-inline-map-backdrop');$backs.last()[0].style.setProperty('z-index',String(maxZ+10),'important');}
-        }).on('shown.bs.modal.yujuInlineMapStack',function(){$('body').addClass('modal-open');})
-        .on('hidden.bs.modal.yujuInlineMapStack',function(){
-            $('body > .modal-backdrop.yuju-inline-map-backdrop').remove();
-            if($('.modal.in:visible').length)$('body').addClass('modal-open');else $('body').removeClass('modal-open');
-            var payload=savedPayload;savedPayload=null;
-            if(payload)window.setTimeout(function(){$(document).trigger('yuju:categoryMapped',[payload]);},100);
-            else if(ctx.fromResultModal)window.setTimeout(function(){$(document).trigger('yuju:restoreResultModal');$('#yuju-cat-overview-result-modal').modal('show');},200);
-        });
+        $modal.off('.yujuInlineMapStack')
+            .on('show.bs.modal.yujuInlineMapStack', function () {
+                if (this.parentNode !== document.body) $(this).appendTo(document.body);
+                var maxZ = 1040;
+                $('.modal:visible').not(this).each(function () {
+                    maxZ = Math.max(maxZ, parseInt($(this).css('z-index'), 10) || 1050);
+                });
+                this.style.setProperty('z-index', String(maxZ + 20), 'important');
+                // Marca los fondos que ya existían ANTES de que Bootstrap cree el fondo nuevo.
+                $('body > .modal-backdrop').addClass('yuju-preexisting-modal-backdrop');
+            })
+            .on('shown.bs.modal.yujuInlineMapStack', function () {
+                var $newBackdrop = $('body > .modal-backdrop').not('.yuju-preexisting-modal-backdrop').last();
+                if ($newBackdrop.length) {
+                    $newBackdrop.addClass('yuju-inline-map-backdrop');
+                    $newBackdrop[0].style.setProperty('z-index', String((parseInt($(this).css('z-index'), 10) || 1070) - 10), 'important');
+                }
+                $('body').addClass('modal-open');
+            })
+            .on('hidden.bs.modal.yujuInlineMapStack', function () {
+                $('body > .modal-backdrop.yuju-inline-map-backdrop').remove();
+                $('body > .modal-backdrop.yuju-preexisting-modal-backdrop').removeClass('yuju-preexisting-modal-backdrop');
+                if ($('.modal.in:visible').length) $('body').addClass('modal-open');
+                else $('body').removeClass('modal-open');
+                var payload = savedPayload;
+                savedPayload = null;
+                if (payload) window.setTimeout(function () { $(document).trigger('yuju:categoryMapped', [payload]); }, 100);
+                else if (ctx.fromResultModal) window.setTimeout(function () {
+                    $(document).trigger('yuju:restoreResultModal');
+                    $('#yuju-cat-overview-result-modal').modal('show');
+                }, 200);
+            });
         $save.off('click.yujuInlineMap').on('click.yujuInlineMap',function(){
             var psId=parseInt($psId.val(),10)||0,yujuId=String($select.val()||'');
             var yujuName=String($select.find('option:selected').text()||'').replace(/\s*\(ID\s+[^)]+\)\s*$/,'').trim();
