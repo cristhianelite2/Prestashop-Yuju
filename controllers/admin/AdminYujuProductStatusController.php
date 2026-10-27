@@ -23,6 +23,7 @@ if (!defined('_PS_VERSION_')) {
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuProductManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSyncManager.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuSchemaRepair.php';
+require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
 require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuExcelHelper.php';
 
 class AdminYujuProductStatusController extends ModuleAdminController
