@@ -289,4 +289,164 @@ class YujuCategoryMapping extends ObjectModel
         
         return $this->update();
     }
+
+    /**
+     * Opciones de categorías Yuju desde el JSON oficial, caché local y mapeos guardados.
+     * @return array<int, array{id: string, name: string}>
+     */
+    public static function getYujuCategoryOptions()
+    {
+        static $memoryCache = null;
+        if ($memoryCache !== null) {
+            return $memoryCache;
+        }
+
+        $cacheFile = _PS_CACHE_DIR_ . 'yuju_cat_options.json';
+        if (is_readable($cacheFile) && (time() - (int) filemtime($cacheFile)) < 3600) {
+            $cached = json_decode((string) file_get_contents($cacheFile), true);
+            if (is_array($cached) && !empty($cached)) {
+                $memoryCache = $cached;
+                return $memoryCache;
+            }
+        }
+
+        $byId = [];
+
+        // 1) Fuente oficial local del módulo (completa): config/yuju_allowed_values.json
+        $jsonPath = _PS_MODULE_DIR_ . 'yuju/config/yuju_allowed_values.json';
+        if (is_readable($jsonPath)) {
+            $raw = @file_get_contents($jsonPath);
+            $decoded = json_decode((string) $raw, true);
+            if (is_array($decoded) && !empty($decoded['attributes']) && is_array($decoded['attributes'])) {
+                foreach ($decoded['attributes'] as $attr) {
+                    if (!is_array($attr)) {
+                        continue;
+                    }
+                    $attrId = isset($attr['id']) ? (string) $attr['id'] : '';
+                    if ($attrId !== 'id_category' || empty($attr['values']) || !is_array($attr['values'])) {
+                        continue;
+                    }
+                    foreach ($attr['values'] as $v) {
+                        $id = isset($v['id']) ? trim((string) $v['id']) : '';
+                        $name = isset($v['name']) ? trim((string) $v['name']) : '';
+                        if ($id === '' || $name === '') {
+                            continue;
+                        }
+                        $byId[$id] = ['id' => $id, 'name' => $name];
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 2) Complementar con cache si existe (por si hay categorías nuevas en API)
+        $cacheTable = _DB_PREFIX_ . 'yuju_categories_cache';
+        $cacheExistsRows = Db::getInstance()->executeS("SHOW TABLES LIKE '" . pSQL($cacheTable) . "'");
+        if (is_array($cacheExistsRows) && !empty($cacheExistsRows)) {
+            $cacheRows = Db::getInstance()->executeS(
+                'SELECT DISTINCT yuju_category_id AS id, name FROM ' . $cacheTable . ' ORDER BY name ASC'
+            );
+            foreach ((array) $cacheRows as $r) {
+                $id = isset($r['id']) ? trim((string) $r['id']) : '';
+                $name = isset($r['name']) ? trim((string) $r['name']) : '';
+                if ($id === '' || $name === '') {
+                    continue;
+                }
+                if (!isset($byId[$id])) {
+                    $byId[$id] = ['id' => $id, 'name' => $name];
+                }
+            }
+        }
+
+        // 3) Último fallback: categorías presentes en mapeos guardados
+        $mapRows = Db::getInstance()->executeS(
+            'SELECT DISTINCT yuju_category_id AS id, yuju_category_name AS name FROM '
+            . _DB_PREFIX_ . 'yuju_category_mapping WHERE yuju_category_id IS NOT NULL AND yuju_category_id != "" ORDER BY yuju_category_name ASC'
+        );
+        foreach ((array) $mapRows as $r) {
+            $id = isset($r['id']) ? trim((string) $r['id']) : '';
+            $name = isset($r['name']) ? trim((string) $r['name']) : '';
+            if ($id === '' || $name === '') {
+                continue;
+            }
+            if (!isset($byId[$id])) {
+                $byId[$id] = ['id' => $id, 'name' => $name];
+            }
+        }
+
+        $out = array_values($byId);
+        usort($out, function ($a, $b) {
+            return strcasecmp((string) $a['name'], (string) $b['name']);
+        });
+
+        $memoryCache = $out;
+        if (!empty($out)) {
+            @file_put_contents($cacheFile, json_encode($out), LOCK_EX);
+        }
+
+        return $out;
+    }
+
+
+    /**
+     * @param string $yujuCategoryId
+     * @return string
+     */
+    public static function getYujuCategoryNameById($yujuCategoryId)
+    {
+        $yujuCategoryId = trim((string) $yujuCategoryId);
+        if ($yujuCategoryId === '') {
+            return '';
+        }
+        foreach (self::getYujuCategoryOptions() as $option) {
+            if ((string) $option['id'] === $yujuCategoryId) {
+                return (string) $option['name'];
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Guarda o actualiza el mapeo local y habilita la sincronización.
+     * @return array
+     */
+    public static function saveInline($prestashopCategoryId, $yujuCategoryId)
+    {
+        $psId = (int) $prestashopCategoryId;
+        $yujuId = trim((string) $yujuCategoryId);
+        if ($psId <= 0 || $yujuId === '') {
+            return ['success' => false, 'message' => 'Debe seleccionar categoría de PrestaShop y categoría Yuju.'];
+        }
+        $yujuName = self::getYujuCategoryNameById($yujuId);
+        if ($yujuName === '') {
+            return ['success' => false, 'message' => 'La categoría Yuju seleccionada no es válida.'];
+        }
+        self::ensureSharedYujuCategoryAllowed();
+        $db = Db::getInstance();
+        $existingId = (int) $db->getValue(
+            'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping WHERE prestashop_category_id = ' . $psId
+        );
+        $data = [
+            'yuju_category_id' => pSQL($yujuId),
+            'yuju_category_name' => pSQL($yujuName),
+            'sync_enabled' => 1,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ];
+        if ($existingId > 0) {
+            $ok = $db->update('yuju_category_mapping', $data, 'id = ' . $existingId);
+        } else {
+            $data['prestashop_category_id'] = $psId;
+            $data['created_at'] = date('Y-m-d H:i:s');
+            $ok = $db->insert('yuju_category_mapping', $data);
+        }
+        return [
+            'success' => (bool) $ok,
+            'message' => $ok ? 'Mapeo guardado correctamente.' : ('No se pudo guardar el mapeo. ' . $db->getMsgError()),
+            'prestashop_category_id' => $psId,
+            'yuju_category_id' => $yujuId,
+            'yuju_category_name' => $yujuName,
+        ];
+    }
+
+
 }
