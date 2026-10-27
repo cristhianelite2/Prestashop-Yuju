@@ -1,7 +1,8 @@
 <?php
 /**
- * Entrada pública del webhook de Yuju para instalaciones donde PrestaShop
- * vive en /shop y el módulo está publicado en /modules/yuju.
+ * Entrada pública del webhook de Yuju.
+ * Localiza dinámicamente la raíz de PrestaShop, esté en la raíz del dominio
+ * o en un subdirectorio, y enruta la petición al front controller nativo.
  *
  * URL: https://chilangoeshop.com/modules/yuju/webhook.php
  *
