@@ -848,23 +848,64 @@
         if ($('#yuju-inline-category-mapping-modal').length) {
             return $('#yuju-inline-category-mapping-modal');
         }
-        var html = '<div class="modal fade" id="yuju-inline-category-mapping-modal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index:1065;">'
-            + '<div class="modal-dialog modal-lg" role="document"><div class="modal-content">'
-            + '<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">&times;</button>'
-            + '<h4 class="modal-title"><i class="icon-sitemap"></i> Mapear categoría a Yuju</h4></div>'
-            + '<div class="modal-body"><p class="text-muted">Selecciona una categoría de PrestaShop del producto y la categoría equivalente de Yuju. El mapeo se guardará con la sincronización habilitada.</p>'
-            + '<div class="alert alert-danger yuju-inline-map-error" style="display:none;"></div>'
-            + '<div class="alert alert-success yuju-inline-map-success" style="display:none;"></div>'
-            + '<div class="form-group"><label for="yuju-inline-map-ps-category">Categoría PrestaShop</label><select class="form-control" id="yuju-inline-map-ps-category"><option value="">Cargando categorías…</option></select></div>'
-            + '<div class="form-group"><label for="yuju-inline-map-yuju-category">Categoría Yuju</label><select class="form-control" id="yuju-inline-map-yuju-category"><option value="">Cargando categorías…</option></select>'
-            + '<p class="help-block">Si no aparecen categorías Yuju, actualiza/sincroniza primero las categorías desde Mapeo de Categorías.</p></div></div>'
+
+        var styles = '<style id="yuju-inline-category-mapping-styles">'
+            + '#yuju-inline-category-mapping-modal{z-index:1080!important;padding:18px!important;overflow-x:hidden!important;overflow-y:auto!important;}'
+            + '#yuju-inline-category-mapping-modal .modal-dialog{width:600px;max-width:calc(100% - 20px);margin:5vh auto 24px;}'
+            + '#yuju-inline-category-mapping-modal .modal-content{border:0;border-radius:8px;overflow:hidden;box-shadow:0 18px 55px rgba(0,0,0,.32);}'
+            + '#yuju-inline-category-mapping-modal .modal-header{padding:18px 22px;background:#f7faff;border-bottom:1px solid #e3eaf3;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-title-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;margin-right:9px;border-radius:7px;background:#e5efff;color:#2463b5;}'
+            + '#yuju-inline-category-mapping-modal .modal-title{display:flex;align-items:center;font-size:17px;font-weight:600;color:#24364b;}'
+            + '#yuju-inline-category-mapping-modal .modal-body{padding:22px;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-intro{margin:0 0 20px;color:#64748b;line-height:1.55;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-field{margin-bottom:18px;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-field label{display:block;margin-bottom:7px;color:#334155;font-weight:600;}'
+            + '#yuju-inline-category-mapping-modal .form-control{height:40px;border:1px solid #cbd5e1;border-radius:5px;box-shadow:none;}'
+            + '#yuju-inline-category-mapping-modal .form-control:focus{border-color:#6196e8;box-shadow:0 0 0 3px rgba(59,130,246,.12);}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-help{display:block;margin-top:8px;color:#718096;line-height:1.45;}'
+            + '#yuju-inline-category-mapping-modal .alert{border-radius:5px;line-height:1.5;}'
+            + '#yuju-inline-category-mapping-modal .modal-footer{padding:14px 22px;background:#fafbfd;border-top:1px solid #e8edf3;}'
+            + '#yuju-inline-category-mapping-modal .btn{border-radius:4px;padding:8px 13px;}'
+            + 'body>.modal-backdrop.yuju-inline-category-mapping-backdrop{z-index:1070!important;}'
+            + '@media(max-width:767px){#yuju-inline-category-mapping-modal{padding:10px!important;}#yuju-inline-category-mapping-modal .modal-dialog{width:auto;margin:12px auto;}#yuju-inline-category-mapping-modal .modal-body{padding:16px;}}'
+            + '</style>';
+
+        var html = '<div class="modal fade" id="yuju-inline-category-mapping-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-inline-map-title" aria-hidden="true">'
+            + '<div class="modal-dialog" role="document"><div class="modal-content">'
+            + '<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>'
+            + '<h4 class="modal-title" id="yuju-inline-map-title"><span class="yuju-map-title-icon"><i class="icon-sitemap"></i></span> Mapear categoría a Yuju</h4></div>'
+            + '<div class="modal-body"><p class="yuju-map-intro">Relaciona una categoría de PrestaShop con su equivalente en Yuju. El mapeo se guardará con la sincronización habilitada.</p>'
+            + '<div class="alert alert-danger yuju-inline-map-error" style="display:none;" role="alert"></div>'
+            + '<div class="alert alert-success yuju-inline-map-success" style="display:none;" role="status"></div>'
+            + '<div class="yuju-map-field"><label for="yuju-inline-map-ps-category"><i class="icon-tag text-muted"></i> Categoría de PrestaShop</label><select class="form-control" id="yuju-inline-map-ps-category"><option value="">Cargando categorías…</option></select></div>'
+            + '<div class="yuju-map-field" style="margin-bottom:0;"><label for="yuju-inline-map-yuju-category"><i class="icon-sitemap text-muted"></i> Categoría equivalente en Yuju</label><select class="form-control" id="yuju-inline-map-yuju-category"><option value="">Cargando categorías…</option></select>'
+            + '<small class="yuju-map-help">¿No aparecen categorías de Yuju? Sincronízalas primero desde la pantalla «Mapeo de Categorías».</small></div></div>'
             + '<div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>'
             + '<button type="button" class="btn btn-primary" id="yuju-inline-map-save"><i class="icon-save"></i> Guardar mapeo</button></div>'
             + '</div></div></div>';
+
+        $('head').append(styles);
         $('body').append(html);
         var $modal = $('#yuju-inline-category-mapping-modal');
-        $modal.on('show.bs.modal', function () {
-            setTimeout(function () { $modal.css('z-index', 1065); $('.modal-backdrop').last().css('z-index', 1060); }, 0);
+
+        // Bootstrap 3 no administra de forma nativa los modales anidados.
+        // Mantener este modal y su backdrop por encima de la ficha del producto.
+        $modal.on('show.bs.modal.yujuInlineMap', function () {
+            $modal.css('z-index', '1080');
+        });
+        $modal.on('shown.bs.modal.yujuInlineMap', function () {
+            $('body > .modal-backdrop').last()
+                .addClass('yuju-inline-category-mapping-backdrop')
+                .css('z-index', '1070');
+            $modal.css('z-index', '1080');
+            $('body').addClass('modal-open');
+        });
+        $modal.on('hidden.bs.modal.yujuInlineMap', function () {
+            $('body').removeClass('yuju-inline-category-mapping-open');
+            if ($('#productInfoModal').length && ($('#productInfoModal').hasClass('in') || $('#productInfoModal').is(':visible'))) {
+                $('body').addClass('modal-open');
+                $('#productInfoModal').css('z-index', '1050');
+            }
         });
         return $modal;
     }
