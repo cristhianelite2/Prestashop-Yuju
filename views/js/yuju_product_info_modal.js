@@ -844,89 +844,128 @@
             || (value.indexOf('categorías revisadas:') !== -1 && value.indexOf('mapead') !== -1);
     }
 
-    function ensureInlineCategoryMappingModal() {
-        var existing = $('#yuju-inline-category-mapping-modal');
-        if (existing.length) {
-            // Asegurar que no quede dentro de un contenedor con stacking context.
-            if (existing.parent()[0] !== document.body) {
-                existing.appendTo('body');
-            }
-            return existing;
+    function moveModalToBody(selector) {
+        var $element = $(selector);
+        if ($element.length && $element.parent()[0] !== document.body) {
+            $element.appendTo(document.body);
         }
+        return $element;
+    }
+
+    function ensureInlineCategoryMappingModal() {
+        // Bootstrap 3 no maneja bien los modales contenidos dentro de paneles o contenedores
+        // con su propio stacking context. Los dos modales deben ser hijos directos de body.
+        moveModalToBody('#productInfoModal');
+        moveModalToBody('#syncDetailsModal');
 
         var styles = '<style id="yuju-inline-category-mapping-styles">'
-            + '#productInfoModal{z-index:1030!important;}'
-            + 'body>.modal-backdrop:not(.yuju-inline-category-mapping-backdrop){z-index:1020!important;}'
-            + '#yuju-inline-category-mapping-modal{z-index:1070!important;padding:18px!important;overflow-x:hidden!important;overflow-y:auto!important;}'
-            + '#yuju-inline-category-mapping-modal .modal-dialog{position:relative;width:600px;max-width:calc(100% - 24px);margin:5vh auto 24px;transform:none!important;}'
-            + '#yuju-inline-category-mapping-modal .modal-content{position:relative;background:#fff;border:1px solid #dbe3ee;border-radius:10px;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,.38);}'
-            + '#yuju-inline-category-mapping-modal .modal-header{position:relative;display:block;padding:20px 24px;background:#f5f8fc;border-bottom:1px solid #e3eaf3;min-height:70px;}'
-            + '#yuju-inline-category-mapping-modal .yuju-map-title-icon{display:inline-block;width:34px;height:34px;margin-right:9px;border-radius:7px;background:#e5efff;color:#2463b5;vertical-align:middle;text-align:center;line-height:34px;}'
-            + '#yuju-inline-category-mapping-modal .modal-title{display:block;margin:0;padding:0 32px 0 0;font-size:17px;line-height:34px;font-weight:600;color:#24364b;}'
-            + '#yuju-inline-category-mapping-modal .modal-header .close{position:absolute;right:16px;top:16px;margin:0;font-size:26px;line-height:28px;opacity:.55;}'
-            + '#yuju-inline-category-mapping-modal .modal-body{padding:24px;}'
-            + '#yuju-inline-category-mapping-modal .yuju-map-intro{margin:0 0 20px;color:#64748b;line-height:1.55;}'
-            + '#yuju-inline-category-mapping-modal .yuju-map-field{margin-bottom:18px;}'
-            + '#yuju-inline-category-mapping-modal .yuju-map-field label{display:block;margin-bottom:7px;color:#334155;font-weight:600;}'
-            + '#yuju-inline-category-mapping-modal .form-control{height:42px;border:1px solid #cbd5e1;border-radius:5px;box-shadow:none;background:#fff;}'
-            + '#yuju-inline-category-mapping-modal .form-control:focus{border-color:#6196e8;box-shadow:0 0 0 3px rgba(59,130,246,.12);}'
-            + '#yuju-inline-category-mapping-modal .yuju-map-help{display:block;margin-top:8px;color:#718096;line-height:1.45;}'
-            + '#yuju-inline-category-mapping-modal .alert{border-radius:5px;line-height:1.5;}'
-            + '#yuju-inline-category-mapping-modal .modal-footer{padding:14px 22px;background:#fafbfd;border-top:1px solid #e8edf3;text-align:right;}'
-            + '#yuju-inline-category-mapping-modal .modal-footer .btn{border-radius:5px;padding:9px 14px;}'
-            + '#yuju-inline-category-mapping-modal .modal-footer .btn-primary{background:#2463b5;border-color:#2463b5;color:#fff;}'
+            + '#yuju-inline-category-mapping-modal{z-index:1070!important;overflow-x:hidden!important;overflow-y:auto!important;}'
+            + '#yuju-inline-category-mapping-modal .modal-dialog{width:560px;max-width:calc(100% - 30px);margin:45px auto 25px;}'
+            + '#yuju-inline-category-mapping-modal .modal-content{border:1px solid #cfd4da;border-radius:4px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.28);}'
+            + '#yuju-inline-category-mapping-modal .modal-header{padding:14px 18px;background:#f5f5f5;border-bottom:1px solid #ddd;}'
+            + '#yuju-inline-category-mapping-modal .modal-title{margin:0;padding-right:28px;font-size:16px;line-height:1.45;font-weight:600;color:#333;}'
+            + '#yuju-inline-category-mapping-modal .modal-title .icon-sitemap{margin-right:7px;color:#337ab7;}'
+            + '#yuju-inline-category-mapping-modal .modal-header .close{margin-top:-2px;font-size:24px;line-height:1;opacity:.55;}'
+            + '#yuju-inline-category-mapping-modal .modal-body{padding:18px 20px 20px;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-intro{margin:0 0 18px;color:#555;line-height:1.5;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-field{margin-bottom:16px;}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-field label{display:block;margin-bottom:6px;font-weight:600;color:#333;}'
+            + '#yuju-inline-category-mapping-modal .form-control{height:36px;padding:7px 10px;border:1px solid #ccc;border-radius:3px;box-shadow:none;background:#fff;font-size:13px;}'
+            + '#yuju-inline-category-mapping-modal .form-control:focus{border-color:#66afe9;outline:0;box-shadow:0 0 5px rgba(102,175,233,.45);}'
+            + '#yuju-inline-category-mapping-modal .yuju-map-help{display:block;margin-top:6px;color:#777;font-size:12px;line-height:1.45;}'
+            + '#yuju-inline-category-mapping-modal .alert{margin-bottom:12px;white-space:normal;overflow-wrap:anywhere;}'
+            + '#yuju-inline-category-mapping-modal .modal-footer{padding:12px 18px;background:#fafafa;border-top:1px solid #e5e5e5;}'
+            + '#yuju-inline-category-mapping-modal .modal-footer .btn{margin-left:5px;}'
+            + 'body.yuju-inline-category-mapping-open #productInfoModal{z-index:1050!important;}'
+            + 'body>.modal-backdrop.yuju-product-info-backdrop{z-index:1040!important;}'
             + 'body>.modal-backdrop.yuju-inline-category-mapping-backdrop{z-index:1060!important;}'
-            + '@media(max-width:767px){#yuju-inline-category-mapping-modal{padding:10px!important;}#yuju-inline-category-mapping-modal .modal-dialog{width:auto;margin:12px auto;}#yuju-inline-category-mapping-modal .modal-body{padding:16px;}}'
+            + '@media(max-width:767px){#yuju-inline-category-mapping-modal .modal-dialog{width:auto;max-width:none;margin:20px 10px;}#yuju-inline-category-mapping-modal .modal-body{padding:15px;}#yuju-inline-category-mapping-modal .modal-header{padding:12px 15px;}#yuju-inline-category-mapping-modal .modal-footer{padding:10px 15px;}}'
             + '</style>';
 
         var html = '<div class="modal fade" id="yuju-inline-category-mapping-modal" tabindex="-1" role="dialog" aria-labelledby="yuju-inline-map-title" aria-hidden="true">'
             + '<div class="modal-dialog" role="document"><div class="modal-content">'
             + '<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>'
-            + '<h4 class="modal-title" id="yuju-inline-map-title"><span class="yuju-map-title-icon"><i class="icon-sitemap"></i></span> Mapear categoría a Yuju</h4></div>'
-            + '<div class="modal-body"><p class="yuju-map-intro">Relaciona una categoría de PrestaShop con su equivalente en Yuju. El mapeo se guardará con la sincronización habilitada.</p>'
+            + '<h4 class="modal-title" id="yuju-inline-map-title"><i class="icon-sitemap" aria-hidden="true"></i> Mapear categoría a Yuju</h4></div>'
+            + '<div class="modal-body"><p class="yuju-map-intro">Selecciona la categoría de PrestaShop que pertenece al producto y su categoría equivalente en Yuju. El mapeo se guardará con la sincronización habilitada.</p>'
             + '<div class="alert alert-danger yuju-inline-map-error" style="display:none;" role="alert"></div>'
             + '<div class="alert alert-success yuju-inline-map-success" style="display:none;" role="status"></div>'
-            + '<div class="yuju-map-field"><label for="yuju-inline-map-ps-category"><i class="icon-tag text-muted"></i> Categoría de PrestaShop</label><select class="form-control" id="yuju-inline-map-ps-category"><option value="">Cargando categorías…</option></select></div>'
-            + '<div class="yuju-map-field" style="margin-bottom:0;"><label for="yuju-inline-map-yuju-category"><i class="icon-sitemap text-muted"></i> Categoría equivalente en Yuju</label><select class="form-control" id="yuju-inline-map-yuju-category"><option value="">Cargando categorías…</option></select>'
-            + '<small class="yuju-map-help">¿No aparecen categorías de Yuju? Sincronízalas primero desde la pantalla «Mapeo de Categorías».</small></div></div>'
-            + '<div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button> '
-            + '<button type="button" class="btn btn-primary" id="yuju-inline-map-save"><i class="icon-save"></i> Guardar mapeo</button></div>'
+            + '<div class="yuju-map-field"><label for="yuju-inline-map-ps-category">Categoría de PrestaShop</label><select class="form-control" id="yuju-inline-map-ps-category"><option value="">Cargando categorías…</option></select></div>'
+            + '<div class="yuju-map-field" style="margin-bottom:0;"><label for="yuju-inline-map-yuju-category">Categoría equivalente en Yuju</label><select class="form-control" id="yuju-inline-map-yuju-category"><option value="">Cargando categorías…</option></select>'
+            + '<small class="yuju-map-help">Si no aparecen categorías de Yuju, sincronízalas primero desde «Mapeo de Categorías».</small></div></div>'
+            + '<div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>'
+            + '<button type="button" class="btn btn-primary" id="yuju-inline-map-save"><i class="icon-save" aria-hidden="true"></i> Guardar mapeo</button></div>'
             + '</div></div></div>';
 
+        // Reemplazar estilos anteriores en caliente para que no sobreviva el diseño defectuoso.
+        $('#yuju-inline-category-mapping-styles').remove();
         $('head').append(styles);
-        $('body').append(html);
-        var $modal = $('#yuju-inline-category-mapping-modal');
 
-        // Bootstrap 3 no gestiona modales anidados: fijar capas y backdrops explícitamente.
-        $modal.on('show.bs.modal.yujuInlineMap', function () {
-            var productModal = document.getElementById('productInfoModal');
-            if (productModal && (productModal.classList.contains('in') || $(productModal).is(':visible'))) {
-                productModal.style.setProperty('z-index', '1030', 'important');
-            }
-            this.style.setProperty('z-index', '1070', 'important');
-        });
-        $modal.on('shown.bs.modal.yujuInlineMap', function () {
-            var $backdrops = $('body > .modal-backdrop');
-            if ($backdrops.length > 1) {
-                $backdrops.not('.yuju-inline-category-mapping-backdrop').first().each(function () {
-                    this.style.setProperty('z-index', '1020', 'important');
+        var $modal = $('#yuju-inline-category-mapping-modal');
+        if (!$modal.length) {
+            $('body').append(html);
+            $modal = $('#yuju-inline-category-mapping-modal');
+        } else if ($modal.parent()[0] !== document.body) {
+            $modal.appendTo(document.body);
+        }
+
+        // Volver idempotentes los manejadores: una sola configuración de capas por instancia.
+        $modal.off('.yujuInlineMapStack')
+            .on('show.bs.modal.yujuInlineMapStack', function () {
+                var productModal = document.getElementById('productInfoModal');
+                if (productModal && $(productModal).is(':visible')) {
+                    productModal.style.setProperty('z-index', '1050', 'important');
+                }
+
+                // El backdrop del modal que ya está abierto permanece en la capa Bootstrap normal.
+                $('body > .modal-backdrop').not('.yuju-inline-category-mapping-backdrop').each(function () {
+                    this.classList.add('yuju-product-info-backdrop');
+                    this.style.setProperty('z-index', '1040', 'important');
                 });
-            }
-            $backdrops.last().addClass('yuju-inline-category-mapping-backdrop').each(function () {
-                this.style.setProperty('z-index', '1060', 'important');
+
+                this.style.setProperty('z-index', '1070', 'important');
+            })
+            .on('shown.bs.modal.yujuInlineMapStack', function () {
+                var $mappingBackdrop = $('body > .modal-backdrop')
+                    .not('.yuju-product-info-backdrop')
+                    .not('.yuju-inline-category-mapping-backdrop')
+                    .last();
+
+                if ($mappingBackdrop.length) {
+                    $mappingBackdrop.addClass('yuju-inline-category-mapping-backdrop');
+                    $mappingBackdrop[0].style.setProperty('z-index', '1060', 'important');
+                }
+
+                this.style.setProperty('z-index', '1070', 'important');
+                $('body').addClass('modal-open yuju-inline-category-mapping-open');
+            })
+            .on('hidden.bs.modal.yujuInlineMapStack', function () {
+                $('body').removeClass('yuju-inline-category-mapping-open');
+                $('body > .modal-backdrop.yuju-inline-category-mapping-backdrop').remove();
+
+                var productModal = document.getElementById('productInfoModal');
+                var $productModal = $(productModal);
+                var productStillOpen = !!(productModal && ($productModal.hasClass('in') || $productModal.is(':visible')));
+
+                if (productStillOpen) {
+                    productModal.style.removeProperty('z-index');
+                    $('body').addClass('modal-open');
+
+                    // Bootstrap 3 reemplaza el manejador de foco al abrir el segundo modal.
+                    var instance = $productModal.data('bs.modal');
+                    if (instance && typeof instance.enforceFocus === 'function') {
+                        instance.enforceFocus();
+                    }
+                    $productModal.trigger('focus');
+                } else if (!$('body > .modal.in:visible').length) {
+                    $('body').removeClass('modal-open');
+                }
+
+                $('body > .modal-backdrop.yuju-product-info-backdrop').each(function () {
+                    this.classList.remove('yuju-product-info-backdrop');
+                    this.style.removeProperty('z-index');
+                });
             });
-            this.style.setProperty('z-index', '1070', 'important');
-            $('body').addClass('modal-open yuju-inline-category-mapping-open');
-        });
-        $modal.on('hidden.bs.modal.yujuInlineMap', function () {
-            $('body').removeClass('yuju-inline-category-mapping-open');
-            var productModal = document.getElementById('productInfoModal');
-            if (productModal && (productModal.classList.contains('in') || $(productModal).is(':visible'))) {
-                productModal.style.removeProperty('z-index');
-                $('body').addClass('modal-open');
-            }
-            $('body > .modal-backdrop.yuju-inline-category-mapping-backdrop').remove();
-        });
+
         return $modal;
     }
 
