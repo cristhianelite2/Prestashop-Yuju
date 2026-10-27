@@ -173,6 +173,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
 
     public function renderList()
     {
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
         // Add toolbar buttons
         $this->toolbar_btn['sync_all'] = [
         'href' => self::$currentIndex . '&action=syncAll&token=' . $this->token,
@@ -255,6 +256,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
         'token' => $this->token,
         'yuju_product_info_ajax_url' => $ajax_url,
         'yuju_product_info_token' => $this->token,
+        'yuju_category_options' => YujuCategoryMapping::getYujuCategoryOptions(),
         'product_admin_url' => $this->context->link->getAdminLink('AdminProducts', true),
         'yuju_sync_history_table_missing' => !$this->isYujuProductSyncHistoryTablePresent(),
         'yuju_sync_history_table_name' => _DB_PREFIX_ . 'yuju_product_sync_history',
@@ -3001,6 +3003,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
      */
     protected function ajaxProcessGetInlineCategoryMappingOptions()
     {
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
         header('Content-Type: application/json; charset=utf-8');
         $productId = (int) Tools::getValue('product_id');
         if ($productId <= 0 || !Validate::isLoadedObject(new Product($productId))) {
@@ -3025,26 +3028,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
                  ORDER BY cl.name ASC'
             ) ?: [];
 
-            $yujuCategories = [];
-            $cacheTable = _DB_PREFIX_ . 'yuju_categories_cache';
-            $tableExists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($cacheTable) . '"');
-            if (!empty($tableExists)) {
-                $yujuCategories = Db::getInstance()->executeS(
-                    'SELECT yuju_category_id AS id, name
-                     FROM ' . $cacheTable . '
-                     WHERE yuju_category_id IS NOT NULL AND yuju_category_id <> ""
-                     ORDER BY name ASC'
-                ) ?: [];
-            }
-            if (!$yujuCategories) {
-                $yujuCategories = Db::getInstance()->executeS(
-                    'SELECT DISTINCT yuju_category_id AS id, yuju_category_name AS name
-                     FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-                     WHERE yuju_category_id IS NOT NULL AND yuju_category_id <> ""
-                     ORDER BY yuju_category_name ASC'
-                ) ?: [];
-            }
-
             $existing = Db::getInstance()->executeS(
                 'SELECT prestashop_category_id, yuju_category_id, yuju_category_name, sync_enabled
                  FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
@@ -3055,7 +3038,6 @@ class AdminYujuProductStatusController extends ModuleAdminController
                 'success' => true,
                 'product_id' => $productId,
                 'prestashop_categories' => $psCategories,
-                'yuju_categories' => $yujuCategories,
                 'existing_mappings' => $existing,
             ], JSON_UNESCAPED_UNICODE));
         } catch (Throwable $e) {
@@ -3069,75 +3051,20 @@ class AdminYujuProductStatusController extends ModuleAdminController
      */
     protected function ajaxProcessSaveInlineCategoryMapping()
     {
+        require_once _PS_MODULE_DIR_ . 'yuju/classes/YujuCategoryMapping.php';
         header('Content-Type: application/json; charset=utf-8');
         $productId = (int) Tools::getValue('product_id');
         $psCategoryId = (int) Tools::getValue('prestashop_category_id');
-        $yujuCategoryId = trim((string) Tools::getValue('yuju_category_id'));
-
-        if ($productId <= 0 || $psCategoryId <= 0 || $yujuCategoryId === '') {
-            die(json_encode(['success' => false, 'message' => 'Selecciona una categoría PrestaShop y una categoría Yuju.'], JSON_UNESCAPED_UNICODE));
-        }
-
         $product = new Product($productId);
-        if (!Validate::isLoadedObject($product)) {
+        if ($productId <= 0 || !Validate::isLoadedObject($product)) {
             die(json_encode(['success' => false, 'message' => 'El producto ya no existe en PrestaShop.'], JSON_UNESCAPED_UNICODE));
         }
-
         $productCategories = array_map('intval', (array) Product::getProductCategories($productId));
         if (!in_array($psCategoryId, $productCategories, true)) {
             die(json_encode(['success' => false, 'message' => 'La categoría seleccionada no está asignada a este producto.'], JSON_UNESCAPED_UNICODE));
         }
-
         try {
-            $yujuCategory = false;
-            $cacheTable = _DB_PREFIX_ . 'yuju_categories_cache';
-            $cacheExists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($cacheTable) . '"');
-            if (!empty($cacheExists)) {
-                $yujuCategory = Db::getInstance()->getRow(
-                    'SELECT name FROM ' . $cacheTable . '
-                     WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"'
-                );
-            }
-            if (!$yujuCategory) {
-                $yujuCategory = Db::getInstance()->getRow(
-                    'SELECT yuju_category_name AS name FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-                     WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"
-                     LIMIT 1'
-                );
-            }
-            if (!$yujuCategory || trim((string) $yujuCategory['name']) === '') {
-                die(json_encode(['success' => false, 'message' => 'La categoría Yuju elegida no existe en la caché local. Actualiza las categorías Yuju e inténtalo de nuevo.'], JSON_UNESCAPED_UNICODE));
-            }
-
-            YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
-            $existingId = (int) Db::getInstance()->getValue(
-                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
-                 WHERE prestashop_category_id = ' . $psCategoryId
-            );
-            $data = [
-                'yuju_category_id' => pSQL($yujuCategoryId),
-                'yuju_category_name' => pSQL((string) $yujuCategory['name']),
-                'sync_enabled' => 1,
-                'updated_at' => date('Y-m-d H:i:s'),
-            ];
-            if ($existingId > 0) {
-                $saved = Db::getInstance()->update('yuju_category_mapping', $data, 'id = ' . $existingId);
-            } else {
-                $data['prestashop_category_id'] = $psCategoryId;
-                $data['created_at'] = date('Y-m-d H:i:s');
-                $saved = Db::getInstance()->insert('yuju_category_mapping', $data);
-            }
-            if (!$saved) {
-                die(json_encode(['success' => false, 'message' => 'No se pudo guardar el mapeo: ' . Db::getInstance()->getMsgError()], JSON_UNESCAPED_UNICODE));
-            }
-
-            die(json_encode([
-                'success' => true,
-                'message' => 'Mapeo guardado y sincronización habilitada. Ya puedes reintentar el envío del producto.',
-                'prestashop_category_id' => $psCategoryId,
-                'yuju_category_id' => $yujuCategoryId,
-                'yuju_category_name' => (string) $yujuCategory['name'],
-            ], JSON_UNESCAPED_UNICODE));
+            die(json_encode(YujuCategoryMapping::saveInline($psCategoryId, (string) Tools::getValue('yuju_category_id', '')), JSON_UNESCAPED_UNICODE));
         } catch (Throwable $e) {
             die(json_encode(['success' => false, 'message' => 'Error al guardar el mapeo: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE));
         }
@@ -3297,6 +3224,7 @@ class AdminYujuProductStatusController extends ModuleAdminController
             $this->addCSS($this->module->getPathUri() . 'views/css/admin.css');
             $this->addJS($this->module->getPathUri() . 'views/js/admin.js');
             $this->addJS($this->module->getPathUri() . 'views/js/yuju_product_info_modal.js?v=' . (int) @filemtime(_PS_MODULE_DIR_ . 'yuju/views/js/yuju_product_info_modal.js'));
+            $this->addJS($this->module->getPathUri() . 'views/js/yuju_inline_category_map.js?v=' . (int) @filemtime(_PS_MODULE_DIR_ . 'yuju/views/js/yuju_inline_category_map.js'));
         }
     }
 }
