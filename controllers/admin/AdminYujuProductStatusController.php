@@ -3083,10 +3083,15 @@ class AdminYujuProductStatusController extends ModuleAdminController
         }
 
         try {
-            $yujuCategory = Db::getInstance()->getRow(
-                'SELECT name FROM ' . _DB_PREFIX_ . 'yuju_categories_cache
-                 WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"'
-            );
+            $yujuCategory = false;
+            $cacheTable = _DB_PREFIX_ . 'yuju_categories_cache';
+            $cacheExists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($cacheTable) . '"');
+            if (!empty($cacheExists)) {
+                $yujuCategory = Db::getInstance()->getRow(
+                    'SELECT name FROM ' . $cacheTable . '
+                     WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"'
+                );
+            }
             if (!$yujuCategory) {
                 $yujuCategory = Db::getInstance()->getRow(
                     'SELECT yuju_category_name AS name FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
