@@ -12,19 +12,55 @@
 $moduleDir = __DIR__;
 $documentRoot = dirname($moduleDir, 2);
 
-// Soporta ambas ubicaciones:
-// 1. /public_html/modules/yuju + PrestaShop en /public_html/shop
-// 2. /public_html/shop/modules/yuju + PrestaShop en /public_html/shop
-$possibleRoots = [
-    $documentRoot . '/shop',
-    dirname($moduleDir, 2),
-];
+/**
+ * Localiza la raíz real de PrestaShop sin asumir que el subdirectorio se llame
+ * "shop". Primero revisa los ancestros del módulo y después los directorios
+ * inmediatos del document root (caso en que el módulo esté fuera de PrestaShop).
+ */
+$possibleRoots = [];
+$addCandidate = static function ($path) use (&$possibleRoots) {
+    if (!is_string($path) || $path === '') {
+        return;
+    }
+
+    $realPath = realpath($path);
+    if ($realPath !== false && !in_array($realPath, $possibleRoots, true)) {
+        $possibleRoots[] = $realPath;
+    }
+};
+
+// Funciona cuando el módulo está dentro de la instalación de PrestaShop.
+$ancestor = $moduleDir;
+while (is_string($ancestor) && $ancestor !== '' && $ancestor !== dirname($ancestor)) {
+    $addCandidate($ancestor);
+    $ancestor = dirname($ancestor);
+}
+$addCandidate($ancestor);
+
+// Funciona cuando /modules/yuju está fuera de la raíz de PrestaShop y esta
+// se encuentra en un subdirectorio del document root, cualquiera que sea su nombre.
+$addCandidate($documentRoot);
+if (is_dir($documentRoot) && is_readable($documentRoot)) {
+    $entries = @scandir($documentRoot);
+    if (is_array($entries)) {
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $candidate = $documentRoot . DIRECTORY_SEPARATOR . $entry;
+            if (is_dir($candidate)) {
+                $addCandidate($candidate);
+            }
+        }
+    }
+}
 
 $prestashopRoot = null;
 foreach ($possibleRoots as $candidate) {
     if (is_file($candidate . '/config/config.inc.php')
         && is_file($candidate . '/index.php')) {
-        $prestashopRoot = realpath($candidate);
+        $prestashopRoot = $candidate;
         break;
     }
 }
