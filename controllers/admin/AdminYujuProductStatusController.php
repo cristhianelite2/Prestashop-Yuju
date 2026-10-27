@@ -2989,6 +2989,149 @@ class AdminYujuProductStatusController extends ModuleAdminController
     }
 
     /**
+     * AJAX: obtiene las categorías del producto y las categorías Yuju para crear
+     * un mapeo sin salir del modal de información.
+     */
+    protected function ajaxProcessGetInlineCategoryMappingOptions()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $productId = (int) Tools::getValue('product_id');
+        if ($productId <= 0 || !Validate::isLoadedObject(new Product($productId))) {
+            die(json_encode(['success' => false, 'message' => 'Producto no válido.'], JSON_UNESCAPED_UNICODE));
+        }
+
+        try {
+            $langId = (int) $this->context->language->id;
+            $productCategories = Product::getProductCategories($productId);
+            $categoryIds = array_values(array_unique(array_filter(array_map('intval', (array) $productCategories))));
+            if (!$categoryIds) {
+                die(json_encode(['success' => false, 'message' => 'El producto no tiene categorías asignadas en PrestaShop.'], JSON_UNESCAPED_UNICODE));
+            }
+
+            $idList = implode(',', $categoryIds);
+            $psCategories = Db::getInstance()->executeS(
+                'SELECT c.id_category, cl.name
+                 FROM ' . _DB_PREFIX_ . 'category c
+                 INNER JOIN ' . _DB_PREFIX_ . 'category_lang cl
+                    ON cl.id_category = c.id_category AND cl.id_lang = ' . $langId . '
+                 WHERE c.id_category IN (' . $idList . ')
+                 ORDER BY cl.name ASC'
+            ) ?: [];
+
+            $yujuCategories = [];
+            $cacheTable = _DB_PREFIX_ . 'yuju_categories_cache';
+            $tableExists = Db::getInstance()->executeS('SHOW TABLES LIKE "' . pSQL($cacheTable) . '"');
+            if (!empty($tableExists)) {
+                $yujuCategories = Db::getInstance()->executeS(
+                    'SELECT yuju_category_id AS id, name
+                     FROM ' . $cacheTable . '
+                     WHERE yuju_category_id IS NOT NULL AND yuju_category_id <> ""
+                     ORDER BY name ASC'
+                ) ?: [];
+            }
+            if (!$yujuCategories) {
+                $yujuCategories = Db::getInstance()->executeS(
+                    'SELECT DISTINCT yuju_category_id AS id, yuju_category_name AS name
+                     FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                     WHERE yuju_category_id IS NOT NULL AND yuju_category_id <> ""
+                     ORDER BY yuju_category_name ASC'
+                ) ?: [];
+            }
+
+            $existing = Db::getInstance()->executeS(
+                'SELECT prestashop_category_id, yuju_category_id, yuju_category_name, sync_enabled
+                 FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                 WHERE prestashop_category_id IN (' . $idList . ')'
+            ) ?: [];
+
+            die(json_encode([
+                'success' => true,
+                'product_id' => $productId,
+                'prestashop_categories' => $psCategories,
+                'yuju_categories' => $yujuCategories,
+                'existing_mappings' => $existing,
+            ], JSON_UNESCAPED_UNICODE));
+        } catch (Throwable $e) {
+            die(json_encode(['success' => false, 'message' => 'No se pudieron cargar las categorías: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE));
+        }
+    }
+
+    /**
+     * AJAX: guarda inmediatamente el mapeo de una categoría desde el modal del producto.
+     * Solo escribe en la tabla local ps_yuju_category_mapping.
+     */
+    protected function ajaxProcessSaveInlineCategoryMapping()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $productId = (int) Tools::getValue('product_id');
+        $psCategoryId = (int) Tools::getValue('prestashop_category_id');
+        $yujuCategoryId = trim((string) Tools::getValue('yuju_category_id'));
+
+        if ($productId <= 0 || $psCategoryId <= 0 || $yujuCategoryId === '') {
+            die(json_encode(['success' => false, 'message' => 'Selecciona una categoría PrestaShop y una categoría Yuju.'], JSON_UNESCAPED_UNICODE));
+        }
+
+        $product = new Product($productId);
+        if (!Validate::isLoadedObject($product)) {
+            die(json_encode(['success' => false, 'message' => 'El producto ya no existe en PrestaShop.'], JSON_UNESCAPED_UNICODE));
+        }
+
+        $productCategories = array_map('intval', (array) Product::getProductCategories($productId));
+        if (!in_array($psCategoryId, $productCategories, true)) {
+            die(json_encode(['success' => false, 'message' => 'La categoría seleccionada no está asignada a este producto.'], JSON_UNESCAPED_UNICODE));
+        }
+
+        try {
+            $yujuCategory = Db::getInstance()->getRow(
+                'SELECT name FROM ' . _DB_PREFIX_ . 'yuju_categories_cache
+                 WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"'
+            );
+            if (!$yujuCategory) {
+                $yujuCategory = Db::getInstance()->getRow(
+                    'SELECT yuju_category_name AS name FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                     WHERE yuju_category_id = "' . pSQL($yujuCategoryId) . '"
+                     LIMIT 1'
+                );
+            }
+            if (!$yujuCategory || trim((string) $yujuCategory['name']) === '') {
+                die(json_encode(['success' => false, 'message' => 'La categoría Yuju elegida no existe en la caché local. Actualiza las categorías Yuju e inténtalo de nuevo.'], JSON_UNESCAPED_UNICODE));
+            }
+
+            YujuCategoryMapping::ensureSharedYujuCategoryAllowed();
+            $existingId = (int) Db::getInstance()->getValue(
+                'SELECT id FROM ' . _DB_PREFIX_ . 'yuju_category_mapping
+                 WHERE prestashop_category_id = ' . $psCategoryId
+            );
+            $data = [
+                'yuju_category_id' => pSQL($yujuCategoryId),
+                'yuju_category_name' => pSQL((string) $yujuCategory['name']),
+                'sync_enabled' => 1,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            if ($existingId > 0) {
+                $saved = Db::getInstance()->update('yuju_category_mapping', $data, 'id = ' . $existingId);
+            } else {
+                $data['prestashop_category_id'] = $psCategoryId;
+                $data['created_at'] = date('Y-m-d H:i:s');
+                $saved = Db::getInstance()->insert('yuju_category_mapping', $data);
+            }
+            if (!$saved) {
+                die(json_encode(['success' => false, 'message' => 'No se pudo guardar el mapeo: ' . Db::getInstance()->getMsgError()], JSON_UNESCAPED_UNICODE));
+            }
+
+            die(json_encode([
+                'success' => true,
+                'message' => 'Mapeo guardado y sincronización habilitada. Ya puedes reintentar el envío del producto.',
+                'prestashop_category_id' => $psCategoryId,
+                'yuju_category_id' => $yujuCategoryId,
+                'yuju_category_name' => (string) $yujuCategory['name'],
+            ], JSON_UNESCAPED_UNICODE));
+        } catch (Throwable $e) {
+            die(json_encode(['success' => false, 'message' => 'Error al guardar el mapeo: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE));
+        }
+    }
+
+    /**
      * AJAX: Reintenta un producto atascado en cola desde el modal.
      */
     protected function ajaxProcessRetryQueuedProduct()
