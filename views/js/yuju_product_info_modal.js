@@ -836,6 +836,137 @@
         });
     }
 
+    function isMissingCategoryMappingError(message) {
+        var value = String(message || '').toLowerCase();
+        return value.indexOf('ninguna de las categorías') !== -1
+            || value.indexOf('ninguna categoria') !== -1
+            || value.indexOf('ninguna categoría') !== -1
+            || (value.indexOf('categorías revisadas:') !== -1 && value.indexOf('mapead') !== -1);
+    }
+
+    function ensureInlineCategoryMappingModal() {
+        if ($('#yuju-inline-category-mapping-modal').length) {
+            return $('#yuju-inline-category-mapping-modal');
+        }
+        var html = '<div class="modal fade" id="yuju-inline-category-mapping-modal" tabindex="-1" role="dialog" aria-hidden="true" style="z-index:1065;">'
+            + '<div class="modal-dialog modal-lg" role="document"><div class="modal-content">'
+            + '<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">&times;</button>'
+            + '<h4 class="modal-title"><i class="icon-sitemap"></i> Mapear categoría a Yuju</h4></div>'
+            + '<div class="modal-body"><p class="text-muted">Selecciona una categoría de PrestaShop del producto y la categoría equivalente de Yuju. El mapeo se guardará con la sincronización habilitada.</p>'
+            + '<div class="alert alert-danger yuju-inline-map-error" style="display:none;"></div>'
+            + '<div class="alert alert-success yuju-inline-map-success" style="display:none;"></div>'
+            + '<div class="form-group"><label for="yuju-inline-map-ps-category">Categoría PrestaShop</label><select class="form-control" id="yuju-inline-map-ps-category"><option value="">Cargando categorías…</option></select></div>'
+            + '<div class="form-group"><label for="yuju-inline-map-yuju-category">Categoría Yuju</label><select class="form-control" id="yuju-inline-map-yuju-category"><option value="">Cargando categorías…</option></select>'
+            + '<p class="help-block">Si no aparecen categorías Yuju, actualiza/sincroniza primero las categorías desde Mapeo de Categorías.</p></div></div>'
+            + '<div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>'
+            + '<button type="button" class="btn btn-primary" id="yuju-inline-map-save"><i class="icon-save"></i> Guardar mapeo</button></div>'
+            + '</div></div></div>';
+        $('body').append(html);
+        var $modal = $('#yuju-inline-category-mapping-modal');
+        $modal.on('show.bs.modal', function () {
+            setTimeout(function () { $modal.css('z-index', 1065); $('.modal-backdrop').last().css('z-index', 1060); }, 0);
+        });
+        return $modal;
+    }
+
+    function openInlineCategoryMapping(productId) {
+        productId = parseInt(productId, 10) || 0;
+        if (!productId) return;
+        var $modal = ensureInlineCategoryMappingModal();
+        $modal.data('product-id', productId);
+        $modal.find('.yuju-inline-map-error,.yuju-inline-map-success').hide().text('');
+        $('#yuju-inline-map-ps-category').html('<option value="">Cargando categorías…</option>');
+        $('#yuju-inline-map-yuju-category').html('<option value="">Cargando categorías…</option>');
+        $('#yuju-inline-map-save').prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Cargando…');
+        $modal.modal({ backdrop: 'static', keyboard: true, show: true });
+        $.ajax({
+            url: ajaxUrl(),
+            method: 'POST',
+            dataType: 'json',
+            data: { ajax: true, action: 'getInlineCategoryMappingOptions', token: ajaxToken(), product_id: productId }
+        }).done(function (response) {
+            if (!response || !response.success) {
+                $modal.find('.yuju-inline-map-error').text((response && response.message) || 'No se pudieron cargar las categorías.').show();
+                return;
+            }
+            var psOptions = '<option value="">Selecciona categoría PrestaShop…</option>';
+            $.each(response.prestashop_categories || [], function (_, cat) {
+                var mapped = (response.existing_mappings || []).some(function (m) {
+                    return String(m.prestashop_category_id) === String(cat.id_category)
+                        && String(m.sync_enabled) === '1';
+                });
+                psOptions += '<option value="' + escapeHtml(String(cat.id_category)) + '">'
+                    + escapeHtml(String(cat.name || ('Categoría ' + cat.id_category)))
+                    + ' (ID ' + escapeHtml(String(cat.id_category)) + (mapped ? ' · ya mapeada' : '') + ')</option>';
+            });
+            $('#yuju-inline-map-ps-category').html(psOptions);
+            var yujuOptions = '<option value="">Selecciona categoría Yuju…</option>';
+            $.each(response.yuju_categories || [], function (_, cat) {
+                if (cat.id == null || String(cat.id) === '') return;
+                yujuOptions += '<option value="' + escapeHtml(String(cat.id)) + '">'
+                    + escapeHtml(String(cat.name || ('Categoría Yuju ' + cat.id))) + ' (ID ' + escapeHtml(String(cat.id)) + ')</option>';
+            });
+            $('#yuju-inline-map-yuju-category').html(yujuOptions);
+            if (!(response.yuju_categories || []).length) {
+                $modal.find('.yuju-inline-map-error').text('No hay categorías Yuju disponibles en la caché local. Ve a Mapeo de Categorías y pulsa «Sincronizar categorías»; después podrás volver aquí.').show();
+            }
+            $('#yuju-inline-map-save').prop('disabled', !(response.prestashop_categories || []).length || !(response.yuju_categories || []).length)
+                .html('<i class="icon-save"></i> Guardar mapeo');
+        }).fail(function () {
+            $modal.find('.yuju-inline-map-error').text('Error de conexión al cargar las categorías.').show();
+        }).always(function () {
+            if ($('#yuju-inline-map-save').text().indexOf('Guardar') === -1) {
+                $('#yuju-inline-map-save').prop('disabled', false).html('<i class="icon-save"></i> Guardar mapeo');
+            }
+        });
+    }
+
+    function saveInlineCategoryMapping() {
+        var $modal = $('#yuju-inline-category-mapping-modal');
+        var productId = parseInt($modal.data('product-id'), 10) || 0;
+        var psCategoryId = parseInt($('#yuju-inline-map-ps-category').val(), 10) || 0;
+        var yujuCategoryId = String($('#yuju-inline-map-yuju-category').val() || '');
+        var $btn = $('#yuju-inline-map-save');
+        $modal.find('.yuju-inline-map-error,.yuju-inline-map-success').hide().text('');
+        if (!productId || !psCategoryId || !yujuCategoryId) {
+            $modal.find('.yuju-inline-map-error').text('Selecciona ambas categorías antes de guardar.').show();
+            return;
+        }
+        $btn.prop('disabled', true).html('<i class="icon-spinner icon-spin"></i> Guardando…');
+        $.ajax({
+            url: ajaxUrl(),
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                ajax: true,
+                action: 'saveInlineCategoryMapping',
+                token: ajaxToken(),
+                product_id: productId,
+                prestashop_category_id: psCategoryId,
+                yuju_category_id: yujuCategoryId
+            }
+        }).done(function (response) {
+            if (response && response.success) {
+                $modal.find('.yuju-inline-map-success').text(response.message || 'Mapeo guardado.').show();
+                $('#modal-product-last-error-text').text('Mapeo de categoría guardado: ' + response.prestashop_category_id
+                    + ' → Yuju ' + response.yuju_category_name + ' (' + response.yuju_category_id + '). Puedes reintentar el envío.');
+                if ($('#modal-product-queue-retry-wrap').length) {
+                    $('#modal-product-queue-retry-wrap').show();
+                }
+                if (typeof onChangedCb === 'function') {
+                    onChangedCb({ action: 'category_mapping_saved', product_id: productId });
+                }
+                $btn.prop('disabled', false).html('<i class="icon-save"></i> Guardar mapeo');
+            } else {
+                $modal.find('.yuju-inline-map-error').text((response && response.message) || 'No se pudo guardar el mapeo.').show();
+                $btn.prop('disabled', false).html('<i class="icon-save"></i> Guardar mapeo');
+            }
+        }).fail(function () {
+            $modal.find('.yuju-inline-map-error').text('Error de conexión al guardar el mapeo.').show();
+            $btn.prop('disabled', false).html('<i class="icon-save"></i> Guardar mapeo');
+        });
+    }
+
     function open(product, options) {
         options = options || {};
         product = product || {};
@@ -887,6 +1018,13 @@
 
         if (lastError) {
             $('#modal-product-last-error-text').text(lastError);
+            $('#yuju-inline-category-map-trigger').remove();
+            if (isMissingCategoryMappingError(lastError)) {
+                $('#modal-product-last-error-text').after(
+                    '<div style="margin-top:8px;"><button type="button" class="btn btn-primary btn-xs" id="yuju-inline-category-map-trigger">'
+                    + '<i class="icon-sitemap"></i> Mapear categoría ahora</button></div>'
+                );
+            }
             $('#modal-product-last-error')
                 .removeClass('alert-danger alert-warning')
                 .addClass(yujuProductId ? 'alert-warning' : 'alert-danger')
@@ -975,6 +1113,16 @@
             var $btn = $(this);
             resendPending($btn.data('product-id') || $btn.attr('data-product-id'), $btn);
             return false;
+        });
+
+        $(document).on('click.yujuInlineCategoryMap', '#yuju-inline-category-map-trigger', function (e) {
+            e.preventDefault();
+            openInlineCategoryMapping(parseInt($('#modal-product-id').text(), 10) || 0);
+        });
+
+        $(document).on('click.yujuInlineCategoryMap', '#yuju-inline-map-save', function (e) {
+            e.preventDefault();
+            saveInlineCategoryMapping();
         });
 
         $(document).on('click.yujuQueueRetry', '#modal-product-queue-retry', function (e) {
