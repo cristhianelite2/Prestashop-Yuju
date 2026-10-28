@@ -1981,20 +1981,39 @@ class YujuOrderManager
                 continue;
             }
 
-            // Intentar agregar producto al carrito
+            // Pedido originado en Yuju: el stock de PrestaShop puede estar desactualizado
+            // respecto al marketplace. Omitir solo el bloqueo por stock insuficiente;
+            // mantener las validaciones de producto, combinación y cantidad mínima.
+            // Los argumentos opcionales usados aquí son compatibles con PrestaShop 8.2 y 9.
             $qty_added = $cart->updateQty(
                 (int) $item['quantity'],
                 $product_id,
                 isset($item['product_attribute_id']) ? (int) $item['product_attribute_id'] : null,
                 false,
-                'up'
+                'up',
+                0,
+                null,
+                true,
+                true
             );
-            
-            if ($qty_added) {
+
+            if ($qty_added === true || (int) $qty_added > 0) {
                 $products_added++;
                 $this->logger->log('Product added to cart: ID=' . $product_id . ', SKU=' . ($item['sku'] ?? 'N/A') . ', Qty=' . $item['quantity'], 'info');
             } else {
-                $error_detail = 'Failed to add product to cart: ID=' . $product_id . ', SKU=' . ($item['sku'] ?? 'N/A') . ' - Cart->updateQty() returned false';
+                $product_check = new Product((int) $product_id, false, (int) Configuration::get('PS_LANG_DEFAULT'), (int) $this->context->shop->id);
+                $reason = ($qty_added === -1)
+                    ? 'minimum quantity not met'
+                    : (!$product_check->available_for_order
+                        ? 'product is not available for order'
+                        : 'Cart->updateQty() returned false (check product combination, cart/database errors, or catalog mode)');
+                $error_detail = 'Failed to add product to cart: ID=' . $product_id
+                    . ', SKU=' . ($item['sku'] ?? 'N/A')
+                    . ', Qty=' . (int) ($item['quantity'] ?? 0)
+                    . ', Reason=' . $reason
+                    . ', ProductActive=' . (int) $product_check->active
+                    . ', AvailableForOrder=' . (int) $product_check->available_for_order
+                    . ', ProductAttributeID=' . (int) ($item['product_attribute_id'] ?? 0);
                 $products_failed[] = $error_detail;
                 $this->logger->log($error_detail, 'error');
             }
